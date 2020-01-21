@@ -1,6 +1,8 @@
 .backup/
 .deps/
 .idea/
+
+# files created by autotools
 COPYING
 INSTALL
 Makefile
@@ -12,15 +14,28 @@ config.h.in
 config.log
 config.status
 configure
-jansson-*
-jekyll/_site
-jekyll/.sass-cache
-jekyll/.jekyll-cache
-jekyll/.jekyll-metadata
-jekyll/vendor
 libtool
 m4/
 stamp-h1
+
+# files created by jekyll
+jekyll/.gitignore
+jekyll/.jekyll-cache/
+jekyll/.jekyll-metadata
+jekyll/.sass-cache
+jekyll/_config.yml
+jekyll/_drafts/
+jekyll/_site/
+jekyll/404.html
+jekyll/Gemfile
+jekyll/Gemfile.lock
+jekyll/about.markdown
+jekyll/index.markdown
+jekyll/vendor
+
+# jansson might be build in-project
+jansson-*
+
 *.bak
 *.dat
 *.db

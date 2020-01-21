@@ -15,7 +15,7 @@ Serial-orientated documentation and historic archives will not be made available
 
 *   64-bits CPU architecture
 *   SSE4.2 CRC assembler instruction 
-*   ~40G physical memory
+*   32G-40G physical memory
 *   200G SSD storage (expect files upto 24G large)
 *   autotools
 *   jansson http://www.digip.org/jansson
