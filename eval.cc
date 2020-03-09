@@ -10,13 +10,12 @@
  * `eval` is the reference implementation of the basic concepts of this project
  * and is therefore the authoritative outcome in cases of dispute during regression testing.
  *
- * Hardcoded for 9 endpoints (a-i) and 128 nodes.
- *
  * It demonstrates:
- *   - The parsing of postfix notations
- *   - Constructing Level-1 normalised trees
+ *   - Decoding en encoding of postfix notations
+ *   - Constructing trees
+ *   - Normalisations: inverting, function grouping, dyadic ordering
+ *   - Caching
  *   - Evaluating
- *   - Composing postfix notations
  *
  * @date 2020-03-06 16:56:25
  */
@@ -55,15 +54,9 @@
 int main() {
     for (unsigned a=0; a<2; a++)
     for (unsigned b=0; b<2; b++)
-    for (unsigned c=0; c<2; c++)
-    for (unsigned d=0; d<2; d++)
-    for (unsigned e=0; e<2; e++)
-    for (unsigned f=0; f<2; f++)
-    for (unsigned g=0; g<2; g++)
-    for (unsigned h=0; h<2; h++)
-    for (unsigned i=0; i<2; i++) {
+    for (unsigned c=0; c<2; c++) {
 
-	int bit = ({ unsigned _[] = {0,a,b,c,d,e,f,g,h,i,_[1]?_[2]:!_[3],};!_[10];});
+	int bit = ({ unsigned _[] = {0,a,b,c, _[1]?_[2]:!_[3] }; !_[4];});
 
 	printf("%d", bit);
     }
@@ -99,11 +92,11 @@ int main() {
 
 unsigned opt_quiet = 0;     /** @global {number} opt_quiet - --quiet */
 unsigned opt_verbose = 0;   /** @global {number} opt_verbose - --verbose */
-unsigned opt_normalise = 0; /** @global {number} opt_normalise - --normalise, display notation as normalised endpoints with explicit permutation mapping */
+unsigned opt_normalise = 0; /** @global {number} opt_normalise - --normalise, display notation with placeholders as endpoints and transform mapping */
 unsigned opt_code = 0;      /** @global {number} opt_code - --code, output tree as gcc statement expression */
-unsigned opt_fast = 0;      /** @global {number} opt_fast - --fast, do not unnormalised input */
+unsigned opt_raw = 0;       /** @global {number} opt_raw - --raw, do not normalised input */
 unsigned opt_qntf = 0;      /** @global {number} opt_qntf - --qntf, output exclusively as QnTF */
-unsigned opt_seed = 0;      /** @global {number} opt_seed - --seed=n, Random seed to generate evaluator test pattern */
+unsigned opt_seed = 1;      /** @global {number} opt_seed - --seed=n, Random seed to generate evaluator test pattern */
 unsigned opt_Q = 0;         /** @global {number} opt_Q - --Q, Select the `"question"` part of the top-level node */
 unsigned opt_T = 0;         /** @global {number} opt_T - --T, Select the `"when-true"` part of the top-level node */
 unsigned opt_F = 0;         /** @global {number} opt_F - --F, Select the `"when-false"` part of the top-level node */
@@ -120,20 +113,22 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t-n --normalise  Display notation as normalised endpoints with permutation mapping\n");
-		fprintf(stderr, "\t-C --code       Output tree as gcc statement expression\n");
-		fprintf(stderr, "\t-f --fast       Do not normalise input\n");
-		fprintf(stderr, "\t-r --qntf       Output exclusively as QnTF\n");
+		fprintf(stderr, "\t-n --normalise  Display notation with placeholders as endpoints and transform mapping\n");
+		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
+		fprintf(stderr, "\t   --raw        Do not normalise input\n");
+		fprintf(stderr, "\t   --qntf       Output exclusively as QnTF\n");
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
-		fprintf(stderr, "\t-Q              Select top-level Q\n");
-		fprintf(stderr, "\t-T              Select top-level T\n");
-		fprintf(stderr, "\t-F              Select top-level F\n");
+		fprintf(stderr, "\t-Q --Q          Select top-level Q\n");
+		fprintf(stderr, "\t-T --T          Select top-level T\n");
+		fprintf(stderr, "\t-F --F          Select top-level F\n");
 	}
 }
 
 /**
  * struct representing a 512 bit vector, each bit representing the outcome of the unified operator for every possible state 9 variables can take
  * The vector is split into a collection of 64bit wide words.
+ *
+ * Test vectors are also used to compare equality of two trees
  *
  * As this is a reference implementation, `SIMD` instructions should be avoided.
  *
@@ -149,9 +144,9 @@ struct footprint_t {
  * @date 2020-03-06 21:14:47
  */
 struct node_t {
-	uint32_t Q; /** @property {number} - tree index to `"question"` */
-	uint32_t T; /** @property {number} - tree index to `"when-true"` */
-	uint32_t F; /** @property {number} - tree index to `"when-false"` */
+	uint32_t Q; /** @var {number} Q - tree index to `"question"` */
+	uint32_t T; /** @var {number} T - tree index to `"when-true"` */
+	uint32_t F; /** @var {number} F - tree index to `"when-false"` */
 };
 
 /**
@@ -161,12 +156,12 @@ struct node_t {
  */
 struct tree_t {
 
-	uint32_t kstart; /** @property {number} - index of first endpoint */
-	uint32_t nstart; /** @property {number} - index of first node */
-	uint32_t count;  /** @property {number} - first free index */
+	uint32_t kstart; /** @var {number} - index of first endpoint */
+	uint32_t nstart; /** @var {number} - index of first node */
+	uint32_t count;  /** @var {number} - first free index */
 
-	node_t N[NUMNODES];  /** @property {object[]} - array of unified operators */
-	uint32_t root;   /** @property {number} - entrypoint/index where the result can be found */
+	node_t N[NUMNODES];  /** @var {object[]} - array of unified operators */
+	uint32_t root;   /** @var {number} - entrypoint/index where the result can be found */
 
 	/**
 	 * Constructor
@@ -177,7 +172,7 @@ struct tree_t {
  	 * @date 2020-03-06 21:46:08
 	 */
 
-	inline tree_t(uint32_t kstart, uint32_t nstart, uint32_t nend)
+	inline tree_t(uint32_t kstart, uint32_t nstart)
 		: kstart(kstart), nstart(nstart), count(nstart) {
 	}
 
@@ -228,27 +223,378 @@ struct tree_t {
 	}
 
 	/**
+	 * scan notation, find highest endpoint and decode optional transform
+	 *
+	 * @param {string} pPattern - notation and transform separated by '/'
+	 * @param {number[1]} pHighestEndpoint - return highest found endpoint in either notation or transform
+	 * @param {number[1]} pNumTransform - return number of transforms. This might be higher than the number of placeholder endpoints
+	 * @param {number[]} pTransform - decoded list transforms
+	 * @date 2020-03-09 10:31:50
+	 */
+	void decodeHighestEndpoint(const char *pPattern, uint32_t *pHighestEndpoint, uint32_t *pNumTransform, uint32_t *pTransform) const {
+
+		uint32_t prefix = 0; // current prefix
+		uint32_t highestEndpoint = 0; // highest endpoints
+		uint32_t numTransform = 0; // number of transforms
+
+		/*
+		 * walk through the notation until end or until pattern/transform separator
+		 */
+		for (; *pPattern != 0 && *pPattern != '/'; pPattern++) {
+
+			// skip spaces
+			if (isspace(*pPattern))
+				continue;
+
+			// test for prefix/endpoint
+			if (isupper(*pPattern)) {
+				// expand prefix
+				prefix = prefix * 26 + *pPattern - 'A';
+
+			} else if (islower(*pPattern)) {
+				// endpoint
+				uint32_t ep = prefix * 26 + *pPattern - 'a';
+
+				// remember highest
+				if (ep > highestEndpoint)
+					highestEndpoint = ep;
+
+				// reset prefix
+				prefix = 0;
+
+			} else {
+				// something else
+				prefix = 0;
+			}
+		}
+
+		/*
+		 * test for separator
+		 */
+		if (*pPattern != '/') {
+			// missing separator
+			*pHighestEndpoint = highestEndpoint; // highest endpoint in basic notation
+			*pNumTransform = 0; // no transform
+			return;
+		}
+
+		/*
+		 * decode the transform
+		 */
+
+		// skip separator
+		pPattern++;
+		// transform contains the final endpoints, reset highest
+		highestEndpoint = 0;
+
+		// walk through the notation until end
+		for (; *pPattern != 0; pPattern++) {
+
+			// skip spaces
+			if (isspace(*pPattern))
+				continue;
+
+			// test for prefix/endpoint
+			if (isupper(*pPattern)) {
+				// expand prefix
+				prefix = prefix * 26 + *pPattern - 'A';
+
+			} else if (islower(*pPattern)) {
+				// endpoint
+				uint32_t ep = prefix * 26 + *pPattern - 'a';
+
+				// store in binary transform map
+				pTransform[numTransform++] = ep;
+
+				// remember highest
+				if (ep > highestEndpoint)
+					highestEndpoint = ep;
+
+				// reset prefix
+				prefix = 0;
+
+			} else {
+				// something else
+				prefix = 0;
+			}
+		}
+
+		// return result
+		*pHighestEndpoint = highestEndpoint; // highest endpoint in transform
+		*pNumTransform = numTransform; // number of transforms
+	}
+
+	/**
+	 * Perform level 1 normalisation on q `"Q,T,F"` triplet and add to the tree only when unique.
+	 *
+	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
+	 *
+	 * @param {number} Q
+	 * @param {number} T
+	 * @param {number} F
+	 * @return {number} - index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
+	 * @date 2020-03-09 16:27:10
+	 */
+	uint32_t normaliseQTF(uint32_t Q, uint32_t T, uint32_t F) {
+
+		/*
+		 * Level 1a - Inverts
+		 *
+		 * ~q ?  t :  f  ->  q ? f : t
+		 *  0 ?  t :  f  ->  f
+		 *  q ?  t : ~f  ->  ~(q ? ~t : f)
+		 */
+
+		if (Q & IBIT) {
+			// "~Q?T:F" -> "Q?F:T"
+			uint32_t savT = T;
+			T = F;
+			F = savT;
+			Q ^= IBIT;
+		}
+		if (Q == 0) {
+			// "0?T:F" -> "F"
+			return F;
+		}
+
+		// ibit indicates the result should be inverted
+		uint32_t ibit = 0;
+
+		if (F & IBIT) {
+			// "Q?T:~F" -> "~(Q?~T:F)"
+			F ^= IBIT;
+			T ^= IBIT;
+			ibit ^= IBIT;
+		}
+
+		/*
+		 * Level 1b: Function grouping
+		 *
+		 * appreciated:
+		 *
+		 *  [ 0] a ? ~0 : 0  ->  a
+		 *  [ 1] a ? ~0 : a  ->  a ? ~0 : 0
+		 *  [ 2] a ? ~0 : b                  "+" or
+		 *  [ 3] a ? ~a : 0  ->  0
+		 *  [ 4] a ? ~a : a  ->  a ? ~a : 0
+		 *  [ 5] a ? ~a : b  ->  b ? ~a : b
+		 *  [ 6] a ? ~b : 0                  ">" greater-than
+		 *  [ 7] a ? ~b : a  ->  a ? ~b : 0
+		 *  [ 8] a ? ~b : b                  "^" xor/not-equal
+		 *  [ 9] a ? ~b : c                  "!" QnTF
+		 *
+		 * depreciated:
+		 *  [10] a ?  0 : 0 -> 0
+		 *  [11] a ?  0 : a -> 0
+		 *  [12] a ?  0 : b -> b ? ~a : 0    "<" less-than
+		 *  [13] a ?  a : 0 -> a
+		 *  [14] a ?  a : a -> a ?  a : 0
+		 *  [15] a ?  a : b -> a ? ~0 : b
+		 *  [16] a ?  b : 0                  "&" and
+		 *  [17] a ?  b : a -> a ?  b : 0
+		 *  [18] a ?  b : b -> b
+		 *  [19] a ?  b : c                  "?" QTF
+		 *
+		 * ./eval --raw 'a00!' 'a0a!' 'a0b!' 'aa0!' 'aaa!' 'aab!' 'ab0!' 'aba!' 'abb!' 'abc!' 'a00?' 'a0a?' 'a0b?' 'aa0?' 'aaa?' 'aab?' 'ab0?' 'aba?' 'abb?' 'abc?'
+		 */
+
+		if (T & IBIT) {
+
+			if (T == IBIT) {
+				if (F == Q || F == 0) {
+					// SELF
+					// "Q?~0:Q" [1] -> "Q?~0:0" [0] -> Q
+					return Q ^ ibit;
+				} else {
+					// OR
+					// "Q?~0:F" [2]
+					if (Q > F) {
+						// swap
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+					}
+				}
+			} else if ((T & ~IBIT) == Q) {
+				if (F == Q || F == 0) {
+					// ZERO
+					// "Q?~Q:Q" [4] -> "Q?~Q:0" [3] -> "0"
+					return 0 ^ ibit;
+				} else {
+					// LESS-THAN
+					// "Q?~Q:F" [5] -> "F?~Q:F" -> "F?~Q:0"
+					Q = F;
+					F = 0;
+				}
+			} else {
+				if (F == Q || F == 0) {
+					// GREATER-THAN
+					// "Q?~T:Q" [7] -> "Q?~T:0" [6]
+					F = 0;
+				} else if ((T & ~IBIT) == F) {
+					// XOR/NOT-EQUAL
+					// "Q?~F:F" [8]
+				} else {
+					// QnTF
+					// "Q?~T:F" [9]
+				}
+			}
+
+		} else {
+
+			if (T == 0) {
+				if (F == Q || F == 0) {
+					// ZERO
+					// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
+					return 0 ^ ibit;
+				} else {
+					// LESS-THAN
+					// "Q?0:F" [12] -> "F?~Q:0" [6]
+					T = Q ^ IBIT;
+					Q = F;
+					F = 0;
+				}
+
+			} else if (T == Q) {
+				if (F == Q || F == 0) {
+					// SELF
+					// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
+					return Q ^ ibit;
+				} else {
+					// OR
+					// "Q?Q:F" [15] -> "Q?~0:F" [2]
+					T = 0 ^ IBIT;
+				}
+			} else {
+				if (F == Q || F == 0) {
+					// AND
+					// "Q?T:Q" [17] -> "Q?T:0" [16]
+					F = 0;
+				} else if (T == F) {
+					// SELF
+					// "Q?F:F" [18] -> "F"
+					return F ^ ibit;
+				} else {
+					// QTF
+					// "Q?T:F" [19]
+				}
+			}
+		}
+
+		/*
+		 * Level 1c - dyadic ordering
+		 *
+		 */
+
+		// `AND` `Q?T:0` where Q>T
+		if ((~T & IBIT) && F == 0 && Q > T) {
+			// swap
+			uint32_t savQ = Q;
+			Q = T;
+			T = savQ;
+		}
+
+		// `OR` `Q?~0:F` where Q>F
+		if (T == IBIT && Q > F) {
+			// swap
+			uint32_t savQ = Q;
+			Q = F;
+			F = savQ;
+		}
+
+		// `XOR` `Q?~F:F` where Q>F
+		if ((T ^ IBIT) == F && Q > F) {
+			// swap
+			uint32_t savQ = Q;
+			Q = F;
+			F = savQ;
+			T = savQ ^ IBIT;
+		}
+
+		/*
+		 * level 1d+ - This is where you would put additional normalisations
+		 */
+
+
+		/*
+		 * Directly before caching, rewrite `QTF` to `QnTF`
+		 *
+		 * a ?  b : c -> a?~(a?~b:c):c  "?" QTF
+		 *
+		 * ./eval --qntf 'ab&' 'abc?'
+		 */
+
+		if (opt_qntf && (~T & IBIT)) {
+			// QTF
+			// Q?T:F -> Q?~(Q?~T:F):F)
+			T = normaliseQTF(Q, T ^ IBIT, F) ^ IBIT;
+		}
+
+		// sanity checking
+		if (true) {
+			assert(~Q & IBIT);            // Q not inverted
+			assert(~F & IBIT);            // F not inverted
+			assert(Q != 0);               // Q not zero
+			assert(T != 0);               // Q?0:F -> F?!Q:0
+			assert(T != IBIT || F != 0);  // Q?!0:0 -> Q
+			assert(Q != (T & ~IBIT));     // Q/T collapse
+			assert(Q != F);               // Q/F collapse
+			assert(T != F);               // T/F collapse
+		}
+
+		/*
+		 * Extremely simple and slow sequential cache lookup
+		 */
+
+		// test if already cached
+		for (uint32_t i = this->nstart; i < this->count; i++) {
+			node_t *pNode = this->N + i;
+			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
+				return i ^ ibit;
+		}
+
+		// create new entry
+		uint32_t nid = this->count++;
+		node_t *pNode = this->N + nid;
+
+		// populate
+		pNode->Q = Q;
+		pNode->T = T;
+		pNode->F = F;
+
+		return nid ^ ibit;
+	}
+
+	/**
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
 	 * Do not spend too much effort on detailing errors
 	 *
 	 * @param {string} pPattern - The notation describing the tree
-	 * @param {string} pTransform - Optional input endpoint permutation mapping.
+	 * @param {number} numTransform - size of `pTransform[]`
+	 * @param {number[]}} pTransform - zero based list of endpoint transforms
 	 * @return non-zero when parsing failed
-	 * @date 2020-03-07 00:12:44
+	 * @date 2020-03-09 17:05:36
 	 */
-	int decodeFast(const char *pPattern, const char *pTransform = "abcdefghi") {
+	int decode(const char *pPattern, uint32_t numTransform, const uint32_t *pTransform) {
+
 		// initialise tree
 		this->count = this->nstart;
 		this->root = 0;
 
+		// initialise state
+		nextNode = this->nstart;
+
 		// temporary stack storage for postfix notation
 		uint32_t stack[NUMNODES];
-		int stackpos = 0;
+		int stackPos = 0;
 		uint32_t prefix = 0;
+		uint32_t nestStack[16];
+		uint32_t nestStackPos = 0;
 
-		// walk through the string until end or until pattern/transform separator
+
+		// walk through the notation until end or until pattern/transform separator
 		for (const char *pattern = pPattern; *pattern != 0 && *pattern != '/'; pattern++) {
 
 			// skip spaces
@@ -263,31 +609,44 @@ struct tree_t {
 
 			// test for endpoint
 			if (islower(*pattern)) {
-				uint32_t nid; // node id
+				// determine endpoint value
+				uint32_t ep = prefix * 26 + *pattern - 'a'; // endpoint
 
-				// determine final value
-				nid = this->kstart + prefix * 26 + *pattern - 'a';
+				// test if placeholder
+				if (numTransform != 0) {
+					// range check
+					if (ep >= numTransform) {
+						printf("[placeholder out-of-range: %d]\n", ep);
+						return 1;
+					}
 
-				// reset prefix
-				prefix = 0;
+					// dereference placeholder
+					ep = pTransform[ep];
+				}
+
+				// get final nodeId
+				uint32_t nid = this->kstart + ep; // nodeId is endpoint relative to kstart
 
 				// range check
 				if (nid >= this->nstart) {
-					printf("[endpoint out-of-range: %d]\n", nid);
+					printf("[endpoint out-of-range. nid=%d]\n", nid);
 					return 1;
 				}
 
-				if (stackpos >= NUMNODES) {
+				if (stackPos >= NUMNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
 
+				// reset prefix
+				prefix = 0;
+
 				// Push the index of the endpoint onto the stack
-				stack[stackpos++] = nid;
+				stack[stackPos++] = nid;
 				continue;
 			}
 
-			// test for backreference
+			// test for back-reference
 			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
 			if (isdigit(*pattern)) {
 				uint32_t nid; // node id
@@ -299,14 +658,385 @@ struct tree_t {
 				prefix = 0;
 
 				// range check
-				if (stackpos >= NUMNODES) {
+				if (stackPos >= NUMNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
 
 				// special case: '0' is actually zero
 				if (nid == 0) {
-					stack[stackpos++] = 0;
+					stack[stackPos++] = 0;
+					continue;
+				}
+
+				// convert visual relative to visual absolute index
+				nid = nextNode - nid;
+
+				// rangecheck
+				if (nid < this->nstart || nid >= nextNode) {
+					printf("[back reference out-of-range. nid=%d]\n", nid);
+					return 1;
+				}
+
+				/*
+				 * NOTE: nid is the 'visual' back-reference.
+				 * Node normalisation may effectively add/remove nodes runtime.
+				 * `beenThere[]` maps visual id's to actual id's
+				 */
+				nid = beenThere[nid];
+
+				// Push the index of the back reference onto the stack
+				stack[stackPos++] = nid;
+				continue;
+			}
+
+			// prefix must be zero
+			if (prefix) {
+				printf("[non-zero prefix]\n");
+				return 1;
+			}
+
+			/*
+			 * non-documented feature: opcodes `"("` and "`)"` to allow manual sub-tree substitution.
+			 * It is not documented because it has no checks on validity.
+			 *
+			 * Given the tree `"ab+c&2>"`, the back-reference `"2"` points to `"ab+"`
+			 *
+			 * However, if `"c"` would be manually replaced by a smaller tree, the notation would break
+			 * because the relative back-reference did not take into account the extra nodes.
+			 *
+			 * This is solved by placing the substition within parenthesis which restores back-reference offsets.
+			 */
+			if (*pattern == '(') {
+				nestStack[nestStackPos++] = nextNode;
+				continue;
+			} else if (*pattern == ')') {
+				nextNode = nestStack[--nestStackPos];
+				continue;
+			}
+
+			// test if new operator will fit
+			if (this->count >= NUMNODES) {
+				printf("[tree too large]\n");
+				return 1;
+			}
+
+			switch (*pattern) {
+				case '>': {
+					// GT (appreciated)
+					if (stackPos < 2) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					//pop operands
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
+
+					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(L, R ^ IBIT, 0);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '^': {
+					// XOR (appreciated)
+					if (stackPos < 2) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					//pop operands
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
+
+					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(L, R ^ IBIT, R);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '+': {
+					// OR (appreciated)
+					if (stackPos < 2) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					// pop operands
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
+
+					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(L, 0 ^ IBIT, R);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '!': {
+					// QnTF (appreciated)
+					if (stackPos < 3) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					// pop operands
+					uint32_t F = stack[--stackPos];
+					uint32_t T = stack[--stackPos];
+					uint32_t Q = stack[--stackPos];
+
+					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(Q, T ^ IBIT, F);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '&': {
+					// AND (depreciated)
+					if (stackPos < 2) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					// pop operands
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
+
+					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(L, R, 0);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '?': {
+					// QTF (depreciated)
+					if (stackPos < 3) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					// pop operands
+					uint32_t F = stack[--stackPos];
+					uint32_t T = stack[--stackPos];
+					uint32_t Q = stack[--stackPos];
+
+					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(Q, T, F);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				case '~': {
+					// NOT (support)
+					if (stackPos < 1) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					// invert top-of-stack
+					stack[stackPos - 1] ^= IBIT;
+
+					break;
+				}
+
+				case '<': {
+					// LT (support)
+					if (stackPos < 2) {
+						printf("[stack underflow]\n");
+						return 1;
+					}
+
+					//pop operands
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
+
+					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+						printf("[operand out-of-range]\n");
+						return 1;
+					}
+
+					// create operator
+					uint32_t nid = normaliseQTF(L, 0, R);
+
+					// push
+					stack[stackPos++] = nid;
+
+					// save actual index for back references
+					beenThere[nextNode++] = nid;
+					break;
+				}
+
+				default:
+					printf("[bad token: %c]\n", *pattern);
+					return 1;
+			}
+		}
+
+		if (stackPos != 1) {
+			printf("[unbalanced]\n");
+			return 1;
+		}
+
+		// store result into root
+		this->root = stack[stackPos - 1];
+		return 0;
+	}
+
+	/**
+	 * Parse notation and construct tree accordingly.
+	 * Notation is taken literally and not normalised
+	 *
+	 * Do not spend too much effort on detailing errors
+	 *
+	 * @param {string} pPattern - The notation describing the tree
+	 * @param {number} numTransform - size of `pTransform[]`
+	 * @param {number[]}} pTransform - zero based list of endpoint transforms
+	 * @return non-zero when parsing failed
+	 * @date 2020-03-07 00:12:44
+	 */
+	int decodeRaw(const char *pPattern, uint32_t numTransform, const uint32_t *pTransform) {
+
+		// initialise tree
+		this->count = this->nstart;
+		this->root = 0;
+
+		// temporary stack storage for postfix notation
+		uint32_t stack[NUMNODES];
+		int stackPos = 0;
+		uint32_t prefix = 0;
+
+		// walk through the notation until end or until pattern/transform separator
+		for (const char *pattern = pPattern; *pattern != 0 && *pattern != '/'; pattern++) {
+
+			// skip spaces
+			if (isspace(*pattern))
+				continue;
+
+			// test for prefix
+			if (isupper(*pattern)) {
+				prefix = prefix * 26 + *pattern - 'A';
+				continue;
+			}
+
+			// test for endpoint
+			if (islower(*pattern)) {
+				// determine endpoint value
+				uint32_t ep = prefix * 26 + *pattern - 'a'; // endpoint
+
+				// test if placeholder
+				if (numTransform != 0) {
+					// range check
+					if (ep >= numTransform) {
+						printf("[placeholder out-of-range: %d]\n", ep);
+						return 1;
+					}
+
+					// dereference placeholder
+					ep = pTransform[ep];
+				}
+
+				// get final nodeId
+				uint32_t nid = this->kstart + ep; // nodeId is endpoint relative to kstart
+
+				// range check
+				if (nid >= this->nstart) {
+					printf("[endpoint out-of-range. nid=%d]\n", nid);
+					return 1;
+				}
+
+				if (stackPos >= NUMNODES) {
+					printf("[stack overflow]\n");
+					return 1;
+				}
+
+				// reset prefix
+				prefix = 0;
+
+				// Push the index of the endpoint onto the stack
+				stack[stackPos++] = nid;
+				continue;
+			}
+
+			// test for back-reference
+			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
+			if (isdigit(*pattern)) {
+				uint32_t nid; // node id
+
+				// determine final value
+				nid = prefix * 10 + *pattern - '0';
+
+				// reset prefix
+				prefix = 0;
+
+				// range check
+				if (stackPos >= NUMNODES) {
+					printf("[stack overflow]\n");
+					return 1;
+				}
+
+				// special case: '0' is actually zero
+				if (nid == 0) {
+					stack[stackPos++] = 0;
 					continue;
 				}
 
@@ -315,12 +1045,12 @@ struct tree_t {
 
 				// rangecheck
 				if (nid < this->nstart || nid >= this->count) {
-					printf("[back reference out-of-range]\n");
+					printf("[back reference out-of-range. nid=%d]\n", nid);
 					return 1;
 				}
 
 				// Push the index of the back reference onto the stack
-				stack[stackpos++] = nid;
+				stack[stackPos++] = nid;
 				continue;
 			}
 
@@ -332,21 +1062,21 @@ struct tree_t {
 
 			// test if new operator will fit
 			if (this->count >= NUMNODES) {
-				printf("[too large]\n");
+				printf("[tree too large]\n");
 				return 1;
 			}
 
 			switch (*pattern) {
 				case '>': {
 					// GT (appreciated)
-					if (stackpos < 2) {
+					if (stackPos < 2) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackpos]; // right hand side
-					uint32_t L = stack[--stackpos]; // left hand side
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -363,20 +1093,20 @@ struct tree_t {
 					this->N[this->count].F = 0;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '^': {
 					// XOR (appreciated)
-					if (stackpos < 2) {
+					if (stackPos < 2) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackpos]; // right hand side
-					uint32_t L = stack[--stackpos]; // left hand side
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -393,20 +1123,20 @@ struct tree_t {
 					this->N[this->count].F = R;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '+': {
 					// OR (appreciated)
-					if (stackpos < 2) {
+					if (stackPos < 2) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackpos]; // right hand side
-					uint32_t L = stack[--stackpos]; // left hand side
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -423,21 +1153,21 @@ struct tree_t {
 					this->N[this->count].F = R;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '!': {
 					// QnTF (appreciated)
-					if (stackpos < 3) {
+					if (stackPos < 3) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackpos];
-					uint32_t T = stack[--stackpos];
-					uint32_t Q = stack[--stackpos];
+					uint32_t F = stack[--stackPos];
+					uint32_t T = stack[--stackPos];
+					uint32_t Q = stack[--stackPos];
 
 					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -454,20 +1184,20 @@ struct tree_t {
 					this->N[this->count].F = F;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '&': {
 					// AND (depreciated)
-					if (stackpos < 2) {
+					if (stackPos < 2) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackpos]; // right hand side
-					uint32_t L = stack[--stackpos]; // left hand side
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -484,21 +1214,21 @@ struct tree_t {
 					this->N[this->count].F = 0;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '?': {
 					// QTF (depreciated)
-					if (stackpos < 3) {
+					if (stackPos < 3) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackpos];
-					uint32_t T = stack[--stackpos];
-					uint32_t Q = stack[--stackpos];
+					uint32_t F = stack[--stackPos];
+					uint32_t T = stack[--stackPos];
+					uint32_t Q = stack[--stackPos];
 
 					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -514,33 +1244,33 @@ struct tree_t {
 					this->N[this->count].F = F;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
 				case '~': {
 					// NOT (support)
-					if (stackpos < 1) {
+					if (stackPos < 1) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					// invert top-of-stack
-					stack[stackpos - 1] ^= IBIT;
+					stack[stackPos - 1] ^= IBIT;
 
 					break;
 				}
 
 				case '<': {
 					// LT (support)
-					if (stackpos < 2) {
+					if (stackPos < 2) {
 						printf("[stack underflow]\n");
 						return 1;
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackpos]; // right hand side
-					uint32_t L = stack[--stackpos]; // left hand side
+					uint32_t R = stack[--stackPos]; // right hand side
+					uint32_t L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -557,7 +1287,7 @@ struct tree_t {
 					this->N[this->count].F = R;
 
 					// push
-					stack[stackpos++] = this->count++;
+					stack[stackPos++] = this->count++;
 					break;
 				}
 
@@ -567,49 +1297,33 @@ struct tree_t {
 			}
 		}
 
-		if (stackpos != 1) {
+		if (stackPos != 1) {
 			printf("[unbalanced]\n");
 			return 1;
 		}
 
 		// store result into root
-		this->root = stack[stackpos - 1];
+		this->root = stack[stackPos - 1];
 		return 0;
 	}
 
-	/**
-	 * Parse and given notation and create a tree accordingly
-	 *
-	 * This is a generic function.
-	 * The actual implementation is determined by the program option `opt_fast`
-	 *
-	 * @param {string} pPattern - The notation describing the tree
-	 * @param {string} pTransform - Optional input endpoint permutation mapping.
-	 * @return non-zero when parsing failed
-	 * @date
-	 */
-//	int decode(const char *pPattern, const char *pTransform = "abcdefghi") {
-//		if (opt_fast)
-//			return loadStringFast(pPattern, pTransform);
-//		else
-//			return loadStringSlow(pPattern, pTransform);
-//	}
 
 	/**
 	 * Composing the tree notation requires state information
 	 *
 	 * @date 2020-03-07 15:31:50
          */
-	uint8_t nextPlaceholder;            /** @var {number} nextSlot - First free placeholder */
-	uint8_t nextNode;                   /** @var {number} nextLink - First free node */
+	uint32_t nextPlaceholder;           /** @var {number} nextSlot - First free placeholder, or zero for no placeholder/transform mapping */
+	uint32_t nextNode;                  /** @var {number} nextLink - First free node */
 	char sbuf[SBUFMAX];                 /** @var {string} sbuf - Storage for notation */
 	unsigned spos;                      /** @var {number} spos - length of notation */
 	uint32_t beenThere[NUMNODES];       /** @var {number[]} beenThere - for endpoints the placeholder/transform index, for nodes the nodeId of already emitted notations */
 	uint32_t beenPlaceholder[NUMNODES]; /** @var {number[]} beenMap - the actual nodeId indexed by endpoint placeholder */
+	bool placeholdersInSync;            /** @var {boolean} placeholderInSync - non-zero if placeholders are in sync with transform */
 
 	/**
 	 * Encode the tree index of a given node in "base/transform" notation.
-	 * for endpoints (id < nstart) emit base endpoint as index to `pTransform` containing actual endpoint
+	 * for endpoints (id < nstart) emit placeholder as index to `pTransform` containing actual endpoint
 	 * for nodes (id >= nstart) emit back reference reflecting the relative distance
 	 *
 	 * Optionally prefix endpoint/node with base26 prefix consisting of capital letters
@@ -619,9 +1333,14 @@ struct tree_t {
 	 * @param {number} id - index of node to encode
 	 * @date 2020-03-08 22:26:23
 	 */
-	void encodeTransformOperand(uint32_t id) {
+	void encodeOperand(uint32_t id) {
 
-		if (id < KSTART) {
+		if (id == 0) {
+			// may happen with non-normalised nodes like `"q?~0:0"`
+			assert(spos + 1 < SBUFMAX - 1);
+			sbuf[spos++] = '0';
+
+		} else if (id < this->kstart) {
 			// all operands must be >= KSTART
 			assert(0);
 
@@ -629,10 +1348,20 @@ struct tree_t {
 
 			// On first encounter assign new placeholder
 			if (beenThere[id] == 0) {
-				// save nodeId in transform
-				beenPlaceholder[nextPlaceholder] = id;
-				// save transform index as endpoint placeholder
-				beenThere[id] = nextPlaceholder++;
+				if (nextPlaceholder == 0) {
+					// no placeholder/transform
+					beenThere[id] = id;
+				} else {
+					// save nodeId in transform
+					beenPlaceholder[nextPlaceholder] = id;
+
+					// test if placeholders are still in sync
+					if (id != nextPlaceholder)
+						placeholdersInSync = false; // out of sync
+
+					// save transform index as endpoint placeholder
+					beenThere[id] = nextPlaceholder++;
+				}
 			}
 
 			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
@@ -640,17 +1369,17 @@ struct tree_t {
 			int prefixStackPos = 0;
 
 			// zero-based copy of placeholder
-			uint32_t v = beenThere[id] - KSTART;
+			uint32_t v = beenThere[id] - this->kstart;
 
-			// base26 encode endpoint
+			// base26 encoded endpoint
 			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
 			v /= 26;
-			// base26 encode prefix
+			// base26 encoded prefix
 			while (v) {
 				prefixStack[prefixStackPos++] = (char) ('A' + (v % 26));
 				v /= 26;
 			}
-			
+
 			// test if fits
 			assert(spos + prefixStackPos + 1 < SBUFMAX - 1);
 
@@ -659,7 +1388,7 @@ struct tree_t {
 				sbuf[spos++] = prefixStack[--prefixStackPos];
 
 		} else if (beenThere[id] != 0) {
-			
+
 			// already been there. Calculate the back-reference
 			uint32_t v = nextNode - beenThere[id];
 
@@ -667,10 +1396,10 @@ struct tree_t {
 			char prefixStack[16];
 			int prefixStackPos = 0;
 
-			// base10 encode back-reference
+			// base10 encoded back-reference
 			prefixStack[prefixStackPos++] = (char) ('0' + (v % 10));
 			v /= 10;
-			// base26 encode prefix
+			// base26 encoded prefix
 			while (v) {
 				prefixStack[prefixStackPos++] = (char) ('A' + (v % 26));
 				v /= 26;
@@ -686,7 +1415,7 @@ struct tree_t {
 		} else {
 
 			// call recursive encode for node
-			encodeTransformQTF(id);
+			encodeQTF(id);
 
 		}
 	}
@@ -697,14 +1426,14 @@ struct tree_t {
 	 * @param {number} id - index of node to encode
 	 * @date 2020-03-08 20:52:41
 	 */
-	void encodeTransformQTF(uint32_t id) {
+	void encodeQTF(uint32_t id) {
 
 		// extract all parts of the node
-		uint32_t T  = this->N[id].T;
+		uint32_t T = this->N[id].T;
 		uint32_t Ti = T & IBIT; // non-zero if result of `T` should be inverted
 		uint32_t Tu = T & ~IBIT; // index to `T` operand
-		uint32_t Q  = this->N[id].Q;
-		uint32_t F  = this->N[id].F;
+		uint32_t Q = this->N[id].Q;
+		uint32_t F = this->N[id].F;
 
 		// assert node is invert normalised
 		assert((~Q & IBIT) && (~F & IBIT));
@@ -712,51 +1441,59 @@ struct tree_t {
 		// decode
 		if (T == 0 && F != 0) {
 			// LT `"L?0:R"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(F);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(F);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '<';
-		} else 	if (T == IBIT && F != 0) {
+		} else if (T == IBIT && F != 0) {
 			// OR `"L?~0:R"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(F);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(F);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '+';
-		} else 	if (!Ti && Tu != 0 && F == 0) {
+		} else if (!Ti && Tu != 0 && F == 0) {
 			// AND `"L?R:0"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(Tu);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(Tu);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '&';
-		} else 	if (Ti && Tu != 0 && F == 0) {
+		} else if (Ti && Tu != 0 && F == 0) {
 			// GT `"L?~R:0"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(Tu);
-			assert(spos < SBUFMAX-1);
-			sbuf[spos++] = '+';
-		} else 	if (Ti && Tu != 0 && Tu == F) {
+			encodeOperand(Q);
+			encodeOperand(Tu);
+			assert(spos < SBUFMAX - 1);
+			sbuf[spos++] = '>';
+		} else if (Ti && Tu != 0 && Tu == F) {
 			// XOR `"L?~R:R"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(F);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(F);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '^';
-		} else 	if (Ti) {
+		} else if (Ti) {
 			// QnTF `"Q?~T:F"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(T);
-			encodeTransformOperand(F);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(Tu);
+			encodeOperand(F);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '!';
 		} else {
 			// QnTF `"Q?T:F"`
-			encodeTransformOperand(Q);
-			encodeTransformOperand(T);
-			encodeTransformOperand(F);
-			assert(spos < SBUFMAX-1);
+			encodeOperand(Q);
+			encodeOperand(Tu);
+			encodeOperand(F);
+			assert(spos < SBUFMAX - 1);
 			sbuf[spos++] = '?';
 		}
 
 		// mark been there
+		/*
+		 * @date 2020-03-09 01:54:26
+		 *
+		 * id and nextNode will be different when the initial call is called with a different entrypoint than the root.
+		 * `beenThere[]` is used to calculate back-references.
+		 * `beenThere[]` points to the `nodeId` of the source `N[]`
+		 * `nextNode` is value it would have when decoding the notation.
+		 */
 		beenThere[id] = nextNode++;
 	}
 
@@ -768,9 +1505,9 @@ struct tree_t {
 	 * @param {character[]} pTransform - output map of endpoint placeholders to actual endpoints.
 	 * @param {number} transformSize - maximum size of pTransform including string terminator
 	 * @return {string} - Constructed notation. State information so no multiple calls with `printf()`.
-	 * @date
+	 * @date 2020-03-08 20:52:41
 	 */
-	const char *encodeTransform(uint32_t id) {
+	const char *encode(uint32_t id, bool withPlaceholders) {
 
 		// special case
 		if (id == 0) {
@@ -786,19 +1523,20 @@ struct tree_t {
 		}
 
 		// setup state
-		nextPlaceholder = KSTART;
+		nextPlaceholder = withPlaceholders ? this->kstart : 0;
 		nextNode = this->nstart;
 		spos = 0;
 		memset(beenThere, 0, sizeof(beenThere[0]) * this->count);
-		memset(beenPlaceholder, 0, sizeof(beenPlaceholder[0]) * this->nstart);
+		// `beenPlaceholder[]` is a list sized by nextPlaceholder
+		placeholdersInSync = true; // assume placeholders are in sync. Implying that no explicit transform is needed
 
 		// encode notation with placeholders
 		if ((id & ~IBIT) < this->nstart) {
 			// encode endpoint
-			encodeTransformOperand(id & ~IBIT);
+			encodeOperand(id & ~IBIT);
 		} else {
 			// encode node
-			encodeTransformQTF(id & ~IBIT);
+			encodeQTF(id & ~IBIT);
 
 		}
 
@@ -808,36 +1546,40 @@ struct tree_t {
 			sbuf[spos++] = '~';
 		}
 
-		// append delimiter
-		assert(spos < SBUFMAX - 1);
-		sbuf[spos++] = '/';
+		// if placeholders are in sync with endpoints then transform is redundant
+		if (nextPlaceholder > 0 && !placeholdersInSync) {
+			// append delimiter
+			assert(spos < SBUFMAX - 1);
+			sbuf[spos++] = '/';
 
-		// append contents of placeholders
-		for (uint32_t ph = KSTART; ph < nextPlaceholder; ph++) {
+			// append contents of placeholders
+			for (uint32_t ph = this->kstart; ph < nextPlaceholder; ph++) {
 
-			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
-			char prefixStack[16];
-			int prefixStackPos = 0;
+				// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
+				char prefixStack[16];
+				int prefixStackPos = 0;
 
-			// zero-based copy of placeholder
-			uint32_t v = beenPlaceholder[ph] - KSTART;
+				// zero-based copy of placeholder
+				uint32_t v = beenPlaceholder[ph] - this->kstart;
 
-			// base26 encode endpoint
-			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
-			v /= 26;
-			// base26 encode prefix
-			while (v) {
-				prefixStack[prefixStackPos++] = (char) ('A' + (v % 26));
+				// base26 encoded endpoint
+				prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
 				v /= 26;
+				// base26 encoded prefix
+				while (v) {
+					prefixStack[prefixStackPos++] = (char) ('A' + (v % 26));
+					v /= 26;
+				}
+
+				// test if fits
+				assert(spos + prefixStackPos + 1 < SBUFMAX - 1);
+
+				// add to notation
+				while (prefixStackPos)
+					sbuf[spos++] = prefixStack[--prefixStackPos];
 			}
-
-			// test if fits
-			assert(spos + prefixStackPos + 1 < SBUFMAX - 1);
-
-			// add to notation
-			while (prefixStackPos)
-				sbuf[spos++] = prefixStack[--prefixStackPos];
 		}
+
 		// append string terminator
 		sbuf[spos++] = 0;
 
@@ -860,7 +1602,7 @@ struct tree_t {
          * As this is a reference implementation, `SIMD` instructions should be avoided.
          *
 	 * @param {vector[]} v - the evaluated result of the unified operators
-	 * @date
+	 * @date 2020-03-09 19:36:17
 	 */
 	inline void eval(footprint_t *v) const {
 		// for all operators eligible for evaluation...
@@ -891,12 +1633,267 @@ struct tree_t {
 
 };
 
+tree_t *gTree;                    /** @global {tree_t} gTree - worker tree */
+footprint_t evalData64[NUMNODES]; /** @global {footprint_t[]} evalData64 - vector data containing results of node operationa */
+
+/**
+ * Mainloop called for each program argument
+ *
+ * @param {string} origPattern - argument to process
+ * @return {number} - 0 if something failed, otherwise crc of result
+ */
+uint32_t mainloop(const char *origPattern) {
+
+	/*
+	 * Load notation
+	 */
+	{
+		uint32_t highestEndpoint, numTransform;
+
+		// get visual hiest nstart
+		gTree->decodeHighestEndpoint(origPattern, &highestEndpoint, &numTransform, gTree->beenPlaceholder);
+		gTree->kstart = KSTART;
+		gTree->nstart = gTree->kstart + highestEndpoint + 1;
+
+		// decode with explicit temporary storage for `pTransform`
+		if (opt_raw) {
+			if (gTree->decodeRaw(origPattern, numTransform, gTree->beenPlaceholder))
+				return 0; // decoding failed
+		} else {
+			if (gTree->decode(origPattern, numTransform, gTree->beenPlaceholder))
+				return 0; // decoding failed
+		}
+	}
+
+	/*
+ 	 * Extract one of the Q/T/F components
+ 	 */
+	if (opt_Q) {
+		if ((gTree->root & ~IBIT) < gTree->nstart) {
+			gTree->root = 0; // treee had no nodes
+		} else {
+			gTree->root = gTree->N[gTree->root & ~IBIT].Q;
+			// NOTE: root `IBIT` only applies to `T` and `F`
+		}
+	} else if (opt_T) {
+		if ((gTree->root & ~IBIT) < gTree->nstart) {
+			gTree->root = 0; // treee had no nodes
+		} else {
+			gTree->root = gTree->N[gTree->root & ~IBIT].T ^ (gTree->root & IBIT);
+		}
+	} else if (opt_F) {
+		if ((gTree->root & ~IBIT) < gTree->nstart) {
+			gTree->root = 0; // treee had no nodes
+		} else {
+			gTree->root = gTree->N[gTree->root & ~IBIT].F ^ (gTree->root & IBIT);
+		}
+	}
+
+	/*
+	 * Emit tree as code
+	 */
+	if (opt_code) {
+		printf("({ unsigned _[] = {0U,");
+
+		char prefixStack[16];
+		int prefixStackPos = 0;
+
+		/*
+		 * emit endpoints
+		 */
+		for (unsigned i = gTree->kstart; i < gTree->nstart; i++) {
+			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
+
+			// zero-based copy of endpoint
+			uint32_t v = i - gTree->kstart;
+
+			// base26 encoded endpoint
+			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
+			v /= 26;
+			// base26 encoded prefix
+			while (v) {
+				prefixStack[prefixStackPos++] = (char) ('A' + (v % 26));
+				v /= 26;
+			}
+
+			// add to notation
+			while (prefixStackPos) {
+				putchar(prefixStack[--prefixStackPos]);
+				putchar(',');
+			}
+		}
+
+		/*
+		 * Emit nodes
+		 */
+		for (unsigned i = gTree->nstart; i < gTree->count; i++) {
+			if (gTree->N[i].T & IBIT)
+				printf("  _[%d]?!_[%d]:_[%d],", gTree->N[i].Q, gTree->N[i].T ^ IBIT, gTree->N[i].F);
+			else
+				printf("  _[%d]? _[%d]:_[%d],", gTree->N[i].Q, gTree->N[i].T, gTree->N[i].F);
+		}
+
+		/*
+		 * Emit root
+		 */
+		if (gTree->root & IBIT)
+			printf("}; !_[%d];}) // ", gTree->root & ~IBIT);
+		else
+			printf("};  _[%d];}) // ", gTree->root);
+
+		/*
+		 * Emit notation
+		 */
+
+		printf("%s\n", gTree->encode(gTree->root, opt_normalise ? true : false));
+		return 0;
+	}
+
+	/*
+	 * Initialise test vector.
+	 *
+	 * Example expression stored in tree
+	 *
+	 * v[0]          | 0b00000000 | null/zero/false
+	 * v[1=KSTART+0] | 0b10101010 | `a`
+	 * v[2=KSTART+1] | 0b11001100 | `b`
+	 * v[3=KSTART+2] | 0b11110000 | `c`
+	 * v[4=NSTART+0] | 0b10001000 | ab&
+	 * v[5=NSTART+1] | 0b01111000 | ab&c^
+	 *
+	 * Test vector inputs are in range kstart..nstart and contain all possible states on the input endpoints.
+	 * With 512 bit vectors this allows for 9 (`MAXSLOTS`).
+	 *
+	 * For trees with more endpoints, populate the vector with random values.
+	 * If you suspect that that the evaluation result is a false-positive, rerun with a different seed
+	 */
+
+	if (gTree->nstart <= (KSTART + MAXSLOTS)) {
+
+		uint64_t *v = (uint64_t *) evalData64;
+
+		// set 64bit slice to zero
+		for (int i = 0; i < QUADPERFOOTPRINT * (1 + MAXSLOTS); i++)
+			v[i] = 0;
+
+		// set footprint for 64bit slice
+		assert(MAXSLOTS == 9);
+		for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
+			// v[(i/64)+0*4] should be 0
+			if (i & (1 << 0)) v[(i / 64) + 1 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 1)) v[(i / 64) + 2 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 2)) v[(i / 64) + 3 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 3)) v[(i / 64) + 4 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 4)) v[(i / 64) + 5 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 5)) v[(i / 64) + 6 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 6)) v[(i / 64) + 7 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 7)) v[(i / 64) + 8 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 8)) v[(i / 64) + 9 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+		}
+
+	} else {
+		srand(opt_seed);
+
+		uint64_t *v = (uint64_t *) evalData64;
+
+		// craptastic random fill
+		for (unsigned i = 0; i < QUADPERFOOTPRINT * gTree->nstart; i++) {
+			v[i] = (uint64_t) rand();
+			v[i] = (v[i] << 16) ^ (uint64_t) rand();
+			v[i] = (v[i] << 16) ^ (uint64_t) rand();
+			v[i] = (v[i] << 16) ^ (uint64_t) rand();
+		}
+	}
+
+#if 0
+	for (unsigned j = 0; j < gTree->nstart; j++) {
+		printf("%2d: ", j);
+		for (int i = 0; i < QUADPERFOOTPRINT; i++)
+			printf("%016lx ", evalData64[j].bits[i]);
+		printf("\n");
+	}
+#endif
+
+	/*
+	 * Evaluate tree
+	 */
+	gTree->eval(evalData64);
+
+	/*
+	 * Calculate crc of entry point
+	 */
+	uint64_t crc64 = 0;
+	if (gTree->root & IBIT) {
+		for (int i = 0; i < QUADPERFOOTPRINT; i++)
+			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(evalData64[gTree->root & ~IBIT].bits[i] ^ ~0LL));
+	} else {
+		for (int i = 0; i < QUADPERFOOTPRINT; i++)
+			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(evalData64[gTree->root].bits[i]));
+	}
+
+	/*
+	 * if quiet only return crc
+	 */
+	if (opt_quiet)
+		return (uint32_t) (crc64 & 0xffffffff);
+
+	/*
+	 * Output result of test vector prefixed with sign indicating if root is inverted
+	 */
+	printf("%c", (gTree->root & IBIT) ? '-' : '+');
+	for (int i = 0; i < QUADPERFOOTPRINT; i++)
+		printf("%016lx ", evalData64[gTree->root & ~IBIT].bits[i]);
+
+	printf("{%08lx} ", crc64);
+
+	/*
+	 * Output tree
+	 */
+	printf(": %16s", gTree->encode(gTree->root, opt_normalise ? true : false));
+
+	/*
+	 * Output number of nodes and determine how many nodes if tree were flat
+	 */
+	printf(" [NUMEL=%d]", gTree->count - gTree->nstart);
+
+	{
+		// sum weights of roots
+		double *weight = (double *) malloc(sizeof(double) * gTree->count);
+		assert(weight);
+
+		/*
+		 * Collect data
+		 */
+		for (uint32_t i = 0; i < gTree->nstart; i++)
+			weight[i] = 0;
+		for (uint32_t i = gTree->nstart; i < gTree->count; i++) {
+			uint32_t Q = gTree->N[i].Q;
+			uint32_t T = gTree->N[i].T & ~IBIT; // IBIT removed
+			uint32_t F = gTree->N[i].F;
+
+			// weight = node plus weight of subtrees. Terminals count as 0
+			weight[i] = 1 + weight[Q];
+			if (T != Q)
+				weight[i] += weight[T];
+			if (F != Q && F != T)
+				weight[i] += weight[F]; // xor counts once
+		}
+
+		printf(" [VCOUNT=%f]", weight[gTree->root & ~IBIT]);
+
+		free(weight);
+	}
+
+	printf("\n");
+	return (uint32_t) (crc64 & 0xffffffff);
+}
+
 /**
  * Program main entry point
  *
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
- * @return 0 on normal return, non-zero when attention is required
+ * @return {number} - 0 on normal return, non-zero when attention is required
  * @date   2020-03-06 20:22:23
  */
 int main(int argc, char *const *argv) {
@@ -910,14 +1907,14 @@ int main(int argc, char *const *argv) {
 		enum {
 			// short opts
 			LO_SEED = 1,
+			LO_QNTF,
+			LO_RAW,
 			// long opts
 			LO_HELP = 'h',
 			LO_QUIET = 'q',
 			LO_VERBOSE = 'v',
 			LO_NORMALISE = 'n',
-			LO_CODE = 'C',
-			LO_FAST = 'f',
-			LO_QNTF = 'r',
+			LO_CODE = 'c',
 			LO_Q = 'Q',
 			LO_T = 'T',
 			LO_F = 'F',
@@ -931,7 +1928,7 @@ int main(int argc, char *const *argv) {
 			{"verbose",   0, 0, LO_VERBOSE},
 			{"normalise", 0, 0, LO_NORMALISE},
 			{"code",      0, 0, LO_CODE},
-			{"fast",      0, 0, LO_FAST},
+			{"raw",       0, 0, LO_RAW},
 			{"qntf",      0, 0, LO_QNTF},
 			{"seed",      1, 0, LO_SEED},
 			{"Q",         0, 0, LO_Q},
@@ -979,8 +1976,8 @@ int main(int argc, char *const *argv) {
 			case LO_CODE:
 				opt_code++;
 				break;
-			case LO_FAST:
-				opt_fast++;
+			case LO_RAW:
+				opt_raw++;
 				break;
 			case LO_QNTF:
 				opt_qntf++;
@@ -1014,8 +2011,12 @@ int main(int argc, char *const *argv) {
 		exit(1);
 	}
 
-	// test
-	tree_t tree(1, 100, 0);
+	// create tree.
+	gTree = new tree_t(KSTART, KSTART);
+
+	// storage for testing difference between arguments
+	uint32_t crc32;
+	bool differ = false;
 
 	for (int iArg = optind; iArg < argc; iArg++) {
 		const char *pName = argv[iArg];
@@ -1023,7 +2024,9 @@ int main(int argc, char *const *argv) {
 		if (pName[0] != '-' || pName[1] != 0) {
 			// read from arg
 			if (iArg == optind)
-				tree.decodeFast(pName);
+				crc32 = mainloop(pName);
+			else
+				differ |= (crc32 != mainloop(pName));
 		} else {
 			// read from stdin
 			char *pBuffer = (char *) malloc(10000000);
@@ -1033,11 +2036,20 @@ int main(int argc, char *const *argv) {
 				exit(1);
 			}
 			pBuffer[rval] = 0;
-			tree.decodeFast(pBuffer);
+			mainloop(pBuffer);
 			free(pBuffer);
 		}
 
-		printf("=%d [%s]\n", tree.count, tree.encodeTransform(tree.root));
+	}
+
+	// compare crc is multiple patterns given
+	if (argc - optind > 1) {
+		if (differ) {
+			fprintf(stderr, "crc DIFFER\n");
+			exit(1);
+		} else if (!opt_quiet) {
+			fprintf(stderr, "crc same\n");
+		}
 	}
 
 	return 0;
