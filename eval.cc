@@ -1340,7 +1340,6 @@ struct tree_t {
 		// get visual highest nstart
 		this->decodeEndpoints(pPattern, &highestEndpoint, &numSkin, this->skin);
 
-		this->kstart = KSTART;
 		this->nstart = this->kstart + highestEndpoint + 1;
 		if (!shrinkwrap) {
 			// normally this program is used to test `Xn9` datasets.
@@ -1657,9 +1656,9 @@ struct tree_t {
 			// ordered/skin
 			if ((id & ~IBIT) < this->nstart) {
 				// 'a/<id>'
-				beenThere[id & ~IBIT] = KSTART;
+				beenThere[id & ~IBIT] = this->kstart;
 				skin[nextPlaceholder++] = id & ~IBIT;
-				if ((id & ~IBIT) != KSTART)
+				if ((id & ~IBIT) != this->kstart)
 					placeholdersInSync = false;
 
 				assert(spos < SBUFMAX - 1);
@@ -1793,9 +1792,9 @@ struct tree_t {
  * @param {footprint_t) numRows - number of rows to initialise
  * @date 2020-03-10 21:25:24
  */
-void initialiseVector(footprint_t *footprint, uint32_t numRows) {
+void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) {
 
-	if (numRows <= (KSTART + MAXSLOTS)) {
+	if (kstart == 1 && nstart <= kstart + MAXSLOTS) {
 
 		uint64_t *v = (uint64_t *) footprint;
 
@@ -1824,7 +1823,7 @@ void initialiseVector(footprint_t *footprint, uint32_t numRows) {
 		uint64_t *v = (uint64_t *) footprint;
 
 		// craptastic random fill
-		for (unsigned i = 0; i < QUADPERFOOTPRINT * numRows; i++) {
+		for (unsigned i = 0; i < QUADPERFOOTPRINT * nstart; i++) {
 			v[i] = (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -1934,7 +1933,7 @@ uint32_t mainloop(const char *origPattern) {
 	}
 
 	// Initialise test vector.
-	initialiseVector(evalData64, gTree->nstart);
+	initialiseVector(evalData64, gTree->kstart, gTree->nstart);
 
 #if 0
 	for (unsigned j = 0; j < gTree->nstart; j++) {
@@ -2034,7 +2033,7 @@ uint32_t mainloop(const char *origPattern) {
  *
  * @date 2020-03-10 21:46:10
  */
-void doSelftest(void) {
+void performSelfTest(void) {
 
 	// create an empty tree
 	tree_t *pTree = new tree_t(KSTART, KSTART);
@@ -2044,10 +2043,9 @@ void doSelftest(void) {
 	/*
 	 * Self-test prefix handling
 	 */
-	for (uint32_t r = KSTART; r < NUMNODES; r++) {
+	for (uint32_t r = pTree->kstart; r < NUMNODES; r++) {
 
 		// load tree
-		pTree->kstart = KSTART;
 		pTree->nstart = r + 1;
 		pTree->count = pTree->nstart;
 		pTree->root = r;
@@ -2078,7 +2076,7 @@ void doSelftest(void) {
 		assert(KSTART == 1);
 
 		// @formatter:off
-		for (uint32_t Fo = 0; Fo < KSTART + 3; Fo++) // operand of F
+		for (uint32_t Fo = 0; Fo < KSTART + 3; Fo++) // operand of F: 0, a, b, c
 		for (uint32_t Fi = 0; Fi < 2; Fi++)          // inverting of F
 		for (uint32_t To = 0; To < KSTART + 3; To++)
 		for (uint32_t Ti = 0; Ti < 2; Ti++)
@@ -2092,6 +2090,7 @@ void doSelftest(void) {
 			/*
 			 * Load the tree
 			 */
+			pTree->nstart = pTree->kstart + 3;
 			pTree->count = pTree->nstart;
 			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
@@ -2300,7 +2299,7 @@ int main(int argc, char *const *argv) {
 				break;
 
 			case LO_SELFTEST:
-				doSelftest();
+				performSelfTest();
 				break;
 
 			case '?':
