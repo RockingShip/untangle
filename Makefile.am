@@ -10,7 +10,10 @@ BUILT_SOURCES =
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval
+	eval genskin
 
 eval_LDADD = 
 eval_SOURCES = eval.cc
+
+genskin_LDADD = 
+genskin_SOURCES = genskin.cc

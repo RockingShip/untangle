@@ -18,7 +18,6 @@
  *   - Normalisations: inverting, function grouping, dyadic ordering
  *   - Caching
  *   - Evaluating
- *
  */
 
 /*
@@ -90,17 +89,28 @@ int main() {
  * User specified program options
  */
 
-unsigned opt_quiet = 0;      /** @global {number} opt_quiet - --quiet */
-unsigned opt_verbose = 0;    /** @global {number} opt_verbose - --verbose */
-unsigned opt_skin = 0;       /** @global {number} opt_skin - --skin, display notation with placeholders and skin */
-unsigned opt_code = 0;       /** @global {number} opt_code - --code, output tree as gcc statement expression */
-unsigned opt_raw = 0;        /** @global {number} opt_raw - --raw, do not normalised input */
-unsigned opt_qntf = 0;       /** @global {number} opt_qntf - --qntf, output exclusively as QnTF */
-unsigned opt_seed = 1;       /** @global {number} opt_seed - --seed=n, Random seed to generate evaluator test pattern */
-unsigned opt_shrinkwrap = 0; /** @global {number} opt_shrinkwrap - --shrinkwrap, Adjust nstart to highest found endpount */
-unsigned opt_Q = 0;          /** @global {number} opt_Q - --Q, Select the `"question"` part of the top-level node */
-unsigned opt_T = 0;          /** @global {number} opt_T - --T, Select the `"when-true"` part of the top-level node */
-unsigned opt_F = 0;          /** @global {number} opt_F - --F, Select the `"when-false"` part of the top-level node */
+/// @global {number} --quiet
+unsigned opt_quiet = 0;
+/// @global {number} --verbose
+unsigned opt_verbose = 0;
+/// @global {number} --skin, display notation with placeholders and skin
+unsigned opt_skin = 0;
+/// @global {number} --code, output tree as gcc statement expression
+unsigned opt_code = 0;
+/// @global {number} --raw, do not normalised input
+unsigned opt_raw = 0;
+/// @global {number} --qntf, output exclusively as QnTF
+unsigned opt_qntf = 0;
+/// @global {number} --seed=n, Random seed to generate evaluator test pattern
+unsigned opt_seed = 1;
+/// @global {number} --shrinkwrap, Adjust nstart to highest found endpount
+unsigned opt_shrinkwrap = 0;
+/// @global {number} --Q, Select the `"question"` part of the top-level node
+unsigned opt_Q = 0;
+/// @global {number} --T, Select the `"when-true"` part of the top-level node
+unsigned opt_T = 0;
+/// @global {number} --F, Select the `"when-false"` part of the top-level node
+unsigned opt_F = 0;
 
 /**
  * Program usage. Keep high in source code for easy reference
@@ -112,8 +122,8 @@ unsigned opt_F = 0;          /** @global {number} opt_F - --F, Select the `"when
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
-		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t-v --verbose\n");
+		fprintf(stderr, "\t-q --quiet      Say more\n");
+		fprintf(stderr, "\t-v --verbose    Say less\n");
 		fprintf(stderr, "\t-n --skin       Display notation with placeholders and skin mapping\n");
 		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
 		fprintf(stderr, "\t   --raw        Do not normalise input\n");
@@ -158,19 +168,23 @@ struct node_t {
  */
 struct tree_t {
 
-	uint32_t kstart; /** @var {number} - index of first endpoint */
-	uint32_t nstart; /** @var {number} - index of first node */
-	uint32_t count;  /** @var {number} - first free index */
+	/// @var {number} index of first endpoint
+	uint32_t kstart;
+	/// @var {number} index of first node
+	uint32_t nstart;
+	/// @var {number} first free index
+	uint32_t count;
 
-	node_t N[NUMNODES];  /** @var {object[]} - array of unified operators */
-	uint32_t root;   /** @var {number} - entrypoint/index where the result can be found */
+	/// @var {node_t[]} array of unified operators
+	node_t N[NUMNODES];
+	// @var {number} entrypoint/index where the result can be found
+	uint32_t root;
 
 	/**
 	 * Constructor
 	 *
 	 * @param {number} kstart - index of first endpoint
  	 * @param {number} kstart - nstart of first node
-	 * @param {number} nend - size of tree (depreciated)
  	 * @date 2020-03-06 21:46:08
 	 */
 
@@ -181,8 +195,8 @@ struct tree_t {
 	/**
 	 * Copy constructor
 	 *
-	 * @param {object} rhs - right hans side of assignment
-	 * @return {object} deep copy of object
+	 * @param {tree_t} rhs - right hans side of assignment
+	 * @return {tree_t} deep copy of object
 	 * @date 2020-03-06 22:30:00
 	 */
 	inline tree_t(const tree_t &rhs) {
@@ -192,8 +206,8 @@ struct tree_t {
 	/**
 	 * Assignment operator
 	 *
-	 * @param {object} rhs - right hans side of assignment
-	 * @return {object} deep copy of object
+	 * @param {tree_t} rhs - right hans side of assignment
+	 * @return {tree_t} deep copy of object
 	 * @date 2020-03-06 21:47:08
 	 */
 	inline tree_t &operator=(const tree_t &rhs) {
@@ -334,7 +348,7 @@ struct tree_t {
 	 * @param {number} Q
 	 * @param {number} T
 	 * @param {number} F
-	 * @return {number} - index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
+	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 * @date 2020-03-09 16:27:10
 	 */
 	uint32_t normaliseQTF(uint32_t Q, uint32_t T, uint32_t F) {
@@ -1360,18 +1374,26 @@ struct tree_t {
 		return 0;
 	}
 
-	/**
-	 * Composing the tree notation requires state information
-	 *
+	/*
 	 * @date 2020-03-07 15:31:50
+	 *
+	 * Composing the tree notation requires state information
          */
-	uint32_t nextPlaceholder;           /** @var {number} nextSlot - First free placeholder, or zero for no placeholder/skin mapping */
-	uint32_t nextNode;                  /** @var {number} nextLink - First free node */
-	char sbuf[SBUFMAX];                 /** @var {string} sbuf - Storage for notation */
-	unsigned spos;                      /** @var {number} spos - length of notation */
-	uint32_t beenThere[NUMNODES];       /** @var {number[]} beenThere - for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations */
-	uint32_t skin[NUMNODES];            /** @var {number[]} skin - the actual nodeId indexed by endpoint placeholder */
-	bool placeholdersInSync;            /** @var {boolean} placeholderInSync - non-zero if placeholders are in sync with skin */
+
+	/// @var {number} First free placeholder, or zero for no placeholder/skin mapping
+	uint32_t nextPlaceholder;
+	/// @var {number} First free node
+	uint32_t nextNode;
+	/// @var {string} Storage for notation
+	char sbuf[SBUFMAX];
+	/// @var {number} length of notation
+	unsigned spos;
+	/// @var {number[]} for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations
+	uint32_t beenThere[NUMNODES];
+	/// @var {number[]} the actual nodeId indexed by endpoint placeholder
+	uint32_t skin[NUMNODES];
+	/// @var {boolean} non-zero if placeholders are in sync with skin
+	bool placeholdersInSync;
 
 	/**
 	 * Encoding with placeholders is two-pass.
@@ -1612,9 +1634,8 @@ struct tree_t {
 	 * Within the placeholders, endpoints are assigned in order of natural path which can be used as index for the skin to determine the actual endpoint.
 	 *
 	 * @param {number} id - entrypoint
-	 * @param {character[]} pSkin - output map of endpoint placeholders to actual endpoints.
-	 * @param {number} skinSize - maximum size of pSkin including string terminator
-	 * @return {string} - Constructed notation. State information so no multiple calls with `printf()`.
+	 * @param {boolean} withPlaceholders - true for "ordered/skin" notation
+	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
 	 * @date 2020-03-08 20:52:41
 	 */
 	const char *encode(uint32_t id, bool withPlaceholders) {
@@ -1832,43 +1853,42 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 	}
 }
 
-tree_t *gTree;                    /** @global {tree_t} gTree - worker tree */
-footprint_t evalData64[NUMNODES]; /** @global {footprint_t[]} evalData64 - vector data containing results of node operationa */
-
 /**
  * Mainloop called for each program argument
  *
  * @param {string} origPattern - argument to process
- * @return {number} - 0 if something failed, otherwise crc of result
+ * @param {tree_t} pTree - worker tree
+ * @param {footprint_t} pEval - evaluation vector
+ * @return {number} 0 if something failed, otherwise crc of result
  */
-uint32_t mainloop(const char *origPattern) {
+uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 
 	/*
 	 * Load shrink-wrapped notation
 	 */
-	gTree->decode(origPattern, opt_shrinkwrap ? 1 : 0);
+	pTree->decode(origPattern, opt_shrinkwrap ? 1 : 0);
 
 	/*
  	 * Extract one of the Q/T/F components
  	 */
 	if (opt_Q) {
-		if ((gTree->root & ~IBIT) < gTree->nstart) {
-			gTree->root = 0; // treee had no nodes
+		if ((pTree->root & ~IBIT) < pTree->nstart) {
+			pTree->root = 0; // treee had no nodes
 		} else {
-			gTree->root = gTree->N[gTree->root & ~IBIT].Q;
+			pTree->root = pTree->N[pTree->root & ~IBIT].Q;
 			// NOTE: root `IBIT` only applies to `T` and `F`
 		}
 	} else if (opt_T) {
-		if ((gTree->root & ~IBIT) < gTree->nstart) {
-			gTree->root = 0; // treee had no nodes
+		if ((pTree->root & ~IBIT) < pTree->nstart) {
+			pTree->root = 0; // treee had no nodes
 		} else {
-			gTree->root = gTree->N[gTree->root & ~IBIT].T ^ (gTree->root & IBIT);
+			pTree->root = pTree->N[pTree->root & ~IBIT].T ^ (pTree->root & IBIT);
 		}
 	} else if (opt_F) {
-		if ((gTree->root & ~IBIT) < gTree->nstart) {
-			gTree->root = 0; // treee had no nodes
+		if ((pTree->root & ~IBIT) < pTree->nstart) {
+			pTree->root = 0; // treee had no nodes
 		} else {
-			gTree->root = gTree->N[gTree->root & ~IBIT].F ^ (gTree->root & IBIT);
+			pTree->root = pTree->N[pTree->root & ~IBIT].F ^ (pTree->root & IBIT);
 		}
 	}
 
@@ -1876,7 +1896,7 @@ uint32_t mainloop(const char *origPattern) {
 	 * Emit tree as code
 	 */
 	if (opt_code) {
-		printf("({ unsigned _[] = {0,");
+		printf("({ unsigned kstart=%d, nstart=%d, _[] = {0,", pTree->kstart, pTree->nstart);
 
 		char prefixStack[16];
 		int prefixStackPos = 0;
@@ -1884,11 +1904,11 @@ uint32_t mainloop(const char *origPattern) {
 		/*
 		 * emit endpoints
 		 */
-		for (unsigned i = gTree->kstart; i < gTree->nstart; i++) {
+		for (unsigned i = pTree->kstart; i < pTree->nstart; i++) {
 			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
 
 			// zero-based copy of endpoint
-			uint32_t v = i - gTree->kstart;
+			uint32_t v = i - pTree->kstart;
 
 			// base26 encoded endpoint
 			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
@@ -1909,34 +1929,34 @@ uint32_t mainloop(const char *origPattern) {
 		/*
 		 * Emit nodes
 		 */
-		for (unsigned i = gTree->nstart; i < gTree->count; i++) {
-			if (gTree->N[i].T & IBIT)
-				printf("  _[%d]?!_[%d]:_[%d],", gTree->N[i].Q, gTree->N[i].T ^ IBIT, gTree->N[i].F);
+		for (unsigned i = pTree->nstart; i < pTree->count; i++) {
+			if (pTree->N[i].T & IBIT)
+				printf("  _[%d]?!_[%d]:_[%d],", pTree->N[i].Q, pTree->N[i].T ^ IBIT, pTree->N[i].F);
 			else
-				printf("  _[%d]? _[%d]:_[%d],", gTree->N[i].Q, gTree->N[i].T, gTree->N[i].F);
+				printf("  _[%d]? _[%d]:_[%d],", pTree->N[i].Q, pTree->N[i].T, pTree->N[i].F);
 		}
 
 		/*
 		 * Emit root
 		 */
-		if (gTree->root & IBIT)
-			printf("}; !_[%d];}) // ", gTree->root & ~IBIT);
+		if (pTree->root & IBIT)
+			printf("}; !_[%d];}) // ", pTree->root & ~IBIT);
 		else
-			printf("};  _[%d];}) // ", gTree->root);
+			printf("};  _[%d];}) // ", pTree->root);
 
 		/*
 		 * Emit notation
 		 */
 
-		printf("%s\n", gTree->encode(gTree->root, opt_skin ? true : false));
+		printf("%s\n", pTree->encode(pTree->root, opt_skin ? true : false));
 		return 0;
 	}
 
 	// Initialise test vector.
-	initialiseVector(evalData64, gTree->kstart, gTree->nstart);
+	initialiseVector(pEval, pTree->kstart, pTree->nstart);
 
 #if 0
-	for (unsigned j = 0; j < gTree->nstart; j++) {
+	for (unsigned j = 0; j < pTree->nstart; j++) {
 		printf("%2d: ", j);
 		for (int i = 0; i < QUADPERFOOTPRINT; i++)
 			printf("%016lx ", evalData64[j].bits[i]);
@@ -1947,18 +1967,18 @@ uint32_t mainloop(const char *origPattern) {
 	/*
 	 * Evaluate tree
 	 */
-	gTree->eval(evalData64);
+	pTree->eval(pEval);
 
 	/*
 	 * Calculate crc of entry point
 	 */
 	uint64_t crc64 = 0;
-	if (gTree->root & IBIT) {
+	if (pTree->root & IBIT) {
 		for (int i = 0; i < QUADPERFOOTPRINT; i++)
-			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(evalData64[gTree->root & ~IBIT].bits[i] ^ ~0LL));
+			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root & ~IBIT].bits[i] ^ ~0LL));
 	} else {
 		for (int i = 0; i < QUADPERFOOTPRINT; i++)
-			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(evalData64[gTree->root].bits[i]));
+			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root].bits[i]));
 	}
 
 	/*
@@ -1970,36 +1990,36 @@ uint32_t mainloop(const char *origPattern) {
 	/*
 	 * Output result of test vector prefixed with sign indicating if root is inverted
 	 */
-	printf("%c", (gTree->root & IBIT) ? '-' : '+');
+	printf("%c", (pTree->root & IBIT) ? '-' : '+');
 	for (int i = 0; i < QUADPERFOOTPRINT; i++)
-		printf("%016lx ", evalData64[gTree->root & ~IBIT].bits[i]);
+		printf("%016lx ", pEval[pTree->root & ~IBIT].bits[i]);
 
 	printf("{%08lx} ", crc64);
 
 	/*
 	 * Output tree
 	 */
-	printf(": %16s", gTree->encode(gTree->root, opt_skin ? true : false));
+	printf(": %16s", pTree->encode(pTree->root, opt_skin ? true : false));
 
 	/*
 	 * Output number of nodes and determine how many nodes if tree were flat
 	 */
-	printf(" [NUMEL=%d]", gTree->count - gTree->nstart);
+	printf(" [NUMEL=%d]", pTree->count - pTree->nstart);
 
 	{
 		// sum weights of roots
-		double *weight = (double *) malloc(sizeof(double) * gTree->count);
+		double *weight = (double *) malloc(sizeof(double) * pTree->count);
 		assert(weight);
 
 		/*
 		 * Collect data
 		 */
-		for (uint32_t i = 0; i < gTree->nstart; i++)
+		for (uint32_t i = 0; i < pTree->nstart; i++)
 			weight[i] = 0;
-		for (uint32_t i = gTree->nstart; i < gTree->count; i++) {
-			uint32_t Q = gTree->N[i].Q;
-			uint32_t T = gTree->N[i].T & ~IBIT; // IBIT removed
-			uint32_t F = gTree->N[i].F;
+		for (uint32_t i = pTree->nstart; i < pTree->count; i++) {
+			uint32_t Q = pTree->N[i].Q;
+			uint32_t T = pTree->N[i].T & ~IBIT; // IBIT removed
+			uint32_t F = pTree->N[i].F;
 
 			// weight = node plus weight of subtrees. Terminals count as 0
 			weight[i] = 1 + weight[Q];
@@ -2009,7 +2029,7 @@ uint32_t mainloop(const char *origPattern) {
 				weight[i] += weight[F]; // xor counts once
 		}
 
-		printf(" [VCOUNT=%f]", weight[gTree->root & ~IBIT]);
+		printf(" [VCOUNT=%f]", weight[pTree->root & ~IBIT]);
 
 		free(weight);
 	}
@@ -2031,12 +2051,11 @@ uint32_t mainloop(const char *origPattern) {
  *  - Evaluate
  *  - Compare with independent generated result
  *
+ * @param {tree_t} pTree - worker tree
+ * @param {footprint_t} pEval - evaluation vector
  * @date 2020-03-10 21:46:10
  */
-void performSelfTest(void) {
-
-	// create an empty tree
-	tree_t *pTree = new tree_t(KSTART, KSTART);
+void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 	unsigned testNr = 0;
 
@@ -2105,13 +2124,13 @@ void performSelfTest(void) {
 			 */
 
 			// load test vector
-			evalData64[0].bits[0] = 0b00000000; // v[0]
-			evalData64[1].bits[0] = 0b10101010; // v[1]
-			evalData64[2].bits[0] = 0b11001100; // v[2]
-			evalData64[3].bits[0] = 0b11110000; // v[3]
+			pEval[0].bits[0] = 0b00000000; // v[0]
+			pEval[1].bits[0] = 0b10101010; // v[1]
+			pEval[2].bits[0] = 0b11001100; // v[2]
+			pEval[3].bits[0] = 0b11110000; // v[3]
 
 			// evaluate
-			pTree->eval(evalData64);
+			pTree->eval(pEval);
 
 			/*
 			 * The footprint contains the tree outcome for every possible value combination the endpoints can have
@@ -2165,7 +2184,7 @@ void performSelfTest(void) {
 
 				// extract encountered from footprint.
 				uint32_t ix = c << 2 | b << 1 | a;
-				uint32_t encountered = evalData64[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+				uint32_t encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
 				if (pTree->root & IBIT)
 					encountered ^= 1; // invert result
 
@@ -2188,11 +2207,16 @@ void performSelfTest(void) {
  *
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
- * @return {number} - 0 on normal return, non-zero when attention is required
+ * @return {number} 0 on normal return, non-zero when attention is required
  * @date   2020-03-06 20:22:23
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);
+
+	// create an empty tree
+	tree_t *pTree = new tree_t(KSTART, KSTART);
+	// create an evaluation vector
+	footprint_t *pFootprints = new footprint_t[MAXSLOTS];
 
 	/*
 	 *  Process program options
@@ -2200,13 +2224,13 @@ int main(int argc, char *const *argv) {
 	for (;;) {
 		// Long option shortcuts
 		enum {
-			// short opts
+			// long-only opts
 			LO_SEED = 1,
 			LO_QNTF,
 			LO_RAW,
 			LO_SELFTEST,
 			LO_SHRINKWRAP,
-			// long opts
+			// short opts
 			LO_HELP = 'h',
 			LO_QUIET = 'q',
 			LO_VERBOSE = 'v',
@@ -2233,7 +2257,7 @@ int main(int argc, char *const *argv) {
 			{"Q",          0, 0, LO_Q},
 			{"T",          0, 0, LO_T},
 			{"F",          0, 0, LO_F},
-
+			//
 			{NULL,         0, 0, 0}
 		};
 
@@ -2299,7 +2323,7 @@ int main(int argc, char *const *argv) {
 				break;
 
 			case LO_SELFTEST:
-				performSelfTest();
+				performSelfTest(pTree, pFootprints);
 				break;
 
 			case '?':
@@ -2317,9 +2341,6 @@ int main(int argc, char *const *argv) {
 		exit(1);
 	}
 
-	// create tree.
-	gTree = new tree_t(KSTART, KSTART);
-
 	// storage for testing difference between arguments
 	uint32_t crc32;
 	bool differ = false;
@@ -2330,9 +2351,9 @@ int main(int argc, char *const *argv) {
 		if (pName[0] != '-' || pName[1] != 0) {
 			// read from arg
 			if (iArg == optind)
-				crc32 = mainloop(pName);
+				crc32 = mainloop(pName, pTree, pFootprints);
 			else
-				differ |= (crc32 != mainloop(pName));
+				differ |= (crc32 != mainloop(pName, pTree, pFootprints));
 		} else {
 			// read from stdin
 			char *pBuffer = (char *) malloc(10000000);
@@ -2342,7 +2363,7 @@ int main(int argc, char *const *argv) {
 				exit(1);
 			}
 			pBuffer[rval] = 0;
-			mainloop(pBuffer);
+			mainloop(pBuffer, pTree, pFootprints);
 			free(pBuffer);
 		}
 
