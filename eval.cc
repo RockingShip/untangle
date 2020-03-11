@@ -81,7 +81,7 @@ int main() {
 
 #define MAXSLOTS 9               /** @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator */
 #define IBIT 0x80000000          /** @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted */
-#define NUMNODES 999             /** @constant {number} NUMNODES - Maximum number of nodes the tree can contain */
+#define NUMNODES 20000           /** @constant {number} NUMNODES - Maximum number of nodes the tree can contain */
 #define KSTART 1                 /** @constant {number} KSTART - Starting index in tree where to find the input endpoints. */
 #define SBUFMAX (10 * NUMNODES)  /** @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator */
 #define QUADPERFOOTPRINT ((1 << MAXSLOTS) / 64) /** @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t */
@@ -233,7 +233,7 @@ struct tree_t {
 	 * @param {number[]} pSkin - decoded list skins elements
 	 * @date 2020-03-09 10:31:50
 	 */
-	void decodeHighestEndpoint(const char *pPattern, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
+	void decodeEndpoints(const char *pPattern, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
 
 		uint32_t prefix = 0; // current prefix
 		uint32_t highestEndpoint = 0; // highest endpoints
@@ -962,42 +962,6 @@ struct tree_t {
 
 	/**
 	 * Parse notation and construct tree accordingly.
-	 * Notation is assumed to be normalised.
-	 *
-	 * @param {string} pPattern - The notation describing the tree
-	 * @param {boolean} shrinkwrap - Shrinkwrap nstart
-	 * @return non-zero when parsing failed
-	 * @date 2020-03-10 22:22:33
-	 */
-	int decode(const char *pPattern, bool shrinkwrap) {
-		uint32_t highestEndpoint, numSkin;
-
-		// get visual highest nstart
-		this->decodeHighestEndpoint(pPattern, &highestEndpoint, &numSkin, this->beenPlaceholder);
-
-		this->kstart = KSTART;
-		this->nstart = this->kstart + highestEndpoint + 1;
-		if (!shrinkwrap) {
-			// normally this program is used to test `Xn9` datasets.
-			// assume trees have at least 9 endpoints
-			if (this->kstart + MAXSLOTS > this->nstart)
-				this->nstart = this->kstart + MAXSLOTS;
-		}
-
-		// decode with explicit temporary storage for `pSkin`
-		if (opt_raw) {
-			if (this->decodeRaw(pPattern, numSkin, this->beenPlaceholder))
-				return 1; // decoding failed
-		} else {
-			if (this->decodeNormalised(pPattern, numSkin, this->beenPlaceholder))
-				return 1; // decoding failed
-		}
-
-		return 0;
-	}
-
-	/**
-	 * Parse notation and construct tree accordingly.
 	 * Notation is taken literally and not normalised
 	 *
 	 * Do not spend too much effort on detailing errors
@@ -1361,6 +1325,41 @@ struct tree_t {
 		return 0;
 	}
 
+	/**
+	 * Parse notation and construct tree accordingly.
+	 * Notation is assumed to be normalised.
+	 *
+	 * @param {string} pPattern - The notation describing the tree
+	 * @param {boolean} shrinkwrap - Shrinkwrap nstart
+	 * @return non-zero when parsing failed
+	 * @date 2020-03-10 22:22:33
+	 */
+	int decode(const char *pPattern, bool shrinkwrap) {
+		uint32_t highestEndpoint, numSkin;
+
+		// get visual highest nstart
+		this->decodeEndpoints(pPattern, &highestEndpoint, &numSkin, this->skin);
+
+		this->kstart = KSTART;
+		this->nstart = this->kstart + highestEndpoint + 1;
+		if (!shrinkwrap) {
+			// normally this program is used to test `Xn9` datasets.
+			// assume trees have at least 9 endpoints
+			if (this->kstart + MAXSLOTS > this->nstart)
+				this->nstart = this->kstart + MAXSLOTS;
+		}
+
+		// decode with explicit temporary storage for `pSkin`
+		if (opt_raw) {
+			if (this->decodeRaw(pPattern, numSkin, this->skin))
+				return 1; // decoding failed
+		} else {
+			if (this->decodeNormalised(pPattern, numSkin, this->skin))
+				return 1; // decoding failed
+		}
+
+		return 0;
+	}
 
 	/**
 	 * Composing the tree notation requires state information
@@ -1372,7 +1371,7 @@ struct tree_t {
 	char sbuf[SBUFMAX];                 /** @var {string} sbuf - Storage for notation */
 	unsigned spos;                      /** @var {number} spos - length of notation */
 	uint32_t beenThere[NUMNODES];       /** @var {number[]} beenThere - for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations */
-	uint32_t beenPlaceholder[NUMNODES]; /** @var {number[]} beenMap - the actual nodeId indexed by endpoint placeholder */
+	uint32_t skin[NUMNODES];            /** @var {number[]} skin - the actual nodeId indexed by endpoint placeholder */
 	bool placeholdersInSync;            /** @var {boolean} placeholderInSync - non-zero if placeholders are in sync with skin */
 
 	/**
@@ -1409,7 +1408,7 @@ struct tree_t {
 		 */
 		if (Q >= this->kstart && Q < this->nstart && beenThere[Q] == 0) {
 			// save nodeId in skin
-			beenPlaceholder[nextPlaceholder] = Q;
+			skin[nextPlaceholder] = Q;
 
 			// test if placeholders are still in sync
 			if (Q != nextPlaceholder)
@@ -1420,7 +1419,7 @@ struct tree_t {
 		}
 		if (Tu >= this->kstart && Tu < this->nstart && beenThere[Tu] == 0) {
 			// save nodeId in skin
-			beenPlaceholder[nextPlaceholder] = Tu;
+			skin[nextPlaceholder] = Tu;
 
 			// test if placeholders are still in sync
 			if (Tu != nextPlaceholder)
@@ -1431,7 +1430,7 @@ struct tree_t {
 		}
 		if (F >= this->kstart && F < this->nstart && beenThere[F] == 0) {
 			// save nodeId in skin
-			beenPlaceholder[nextPlaceholder] = F;
+			skin[nextPlaceholder] = F;
 
 			// test if placeholders are still in sync
 			if (F != nextPlaceholder)
@@ -1639,7 +1638,7 @@ struct tree_t {
 		nextNode = this->nstart;
 		spos = 0;
 		memset(beenThere, 0, sizeof(beenThere[0]) * this->count);
-		// `beenPlaceholder[]` is a list sized by nextPlaceholder
+		// `skin[]` is a list sized by nextPlaceholder
 		placeholdersInSync = true; // assume placeholders are in sync. Implying that no explicit skin is needed
 
 		if (!withPlaceholders) {
@@ -1659,7 +1658,7 @@ struct tree_t {
 			if ((id & ~IBIT) < this->nstart) {
 				// 'a/<id>'
 				beenThere[id & ~IBIT] = KSTART;
-				beenPlaceholder[nextPlaceholder++] = id & ~IBIT;
+				skin[nextPlaceholder++] = id & ~IBIT;
 				if ((id & ~IBIT) != KSTART)
 					placeholdersInSync = false;
 
@@ -1699,7 +1698,7 @@ struct tree_t {
 				int prefixStackPos = 0;
 
 				// zero-based copy of placeholder
-				uint32_t v = beenPlaceholder[ph] - this->kstart;
+				uint32_t v = skin[ph] - this->kstart;
 
 				// base26 encoded endpoint
 				prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
@@ -2033,123 +2032,156 @@ uint32_t mainloop(const char *origPattern) {
  *  - Evaluate
  *  - Compare with independent generated result
  *
- * @param {tree_t} pTree - test tree
  * @date 2020-03-10 21:46:10
  */
-void doSelftest(tree_t *pTree) {
+void doSelftest(void) {
 
-	// Initialise test vector.
-	initialiseVector(evalData64, gTree->nstart);
-
-	/*
-	 * All 8 possible operand values. Zero, 3 variables and their inverts
-	 */
-	static uint32_t args[] = {0, 0 ^ IBIT, (KSTART + 0), (KSTART + 0) ^ IBIT, (KSTART + 1), (KSTART + 1) ^ IBIT, (KSTART + 2), (KSTART + 2) ^ IBIT};
+	// create an empty tree
+	tree_t *pTree = new tree_t(KSTART, KSTART);
 
 	unsigned testNr = 0;
 
 	/*
-	 * Test all 512 combinations
+	 * Self-test prefix handling
 	 */
-	for (int Fi = 0; Fi < 8; Fi++) {
-		for (int Ti = 0; Ti < 8; Ti++) {
-			for (int Qi = 0; Qi < 8; Qi++) {
+	for (uint32_t r = KSTART; r < NUMNODES; r++) {
+
+		// load tree
+		pTree->kstart = KSTART;
+		pTree->nstart = r + 1;
+		pTree->count = pTree->nstart;
+		pTree->root = r;
+
+		// convert to prefix and back
+		const char *treeName = pTree->encode(pTree->root, false);
+		assert(pTree->decode(treeName, false) == 0);
+
+		if (pTree->root != r) {
+			fprintf(stderr, "prefix fail: expected=%d encountered:%d %s\n", r, pTree->root, treeName);
+			exit(1);
+		}
+	}
+
+	/*
+	 * self-test with different program settings
+	 */
+	// @formatter:off
+	for (opt_raw=0; opt_raw<2; opt_raw++) // decode notation in raw mode
+	for (opt_skin=0; opt_skin<2; opt_skin++) // split into ordered/skin notation
+	for (opt_qntf=0; opt_qntf<2; opt_qntf++) { // force `QnTF` rewrites
+	// @formatter:on
+
+		/*
+		 * Test all 512 operand combinations. Zero, 3 endpoints and their 4 inverts (8*8*8=512)
+		 */
+
+		assert(KSTART == 1);
+
+		// @formatter:off
+		for (uint32_t Fo = 0; Fo < KSTART + 3; Fo++) // operand of F
+		for (uint32_t Fi = 0; Fi < 2; Fi++)          // inverting of F
+		for (uint32_t To = 0; To < KSTART + 3; To++)
+		for (uint32_t Ti = 0; Ti < 2; Ti++)
+		for (uint32_t Qo = 0; Qo < KSTART + 3; Qo++)
+		for (uint32_t Qi = 0; Qi < 2; Qi++) {
+		// @formatter:on
+
+			// bump test number
+			testNr++;
+
+			/*
+			 * Load the tree
+			 */
+			pTree->count = pTree->nstart;
+			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+
+			/*
+			 * save with placeholders and reload
+			 */
+			const char *treeName = pTree->encode(pTree->root, opt_skin ? true : false);
+			assert(pTree->decode(treeName, false) == 0);
+
+			/*
+			 * Evaluate tree
+			 */
+
+			// load test vector
+			evalData64[0].bits[0] = 0b00000000; // v[0]
+			evalData64[1].bits[0] = 0b10101010; // v[1]
+			evalData64[2].bits[0] = 0b11001100; // v[2]
+			evalData64[3].bits[0] = 0b11110000; // v[3]
+
+			// evaluate
+			pTree->eval(evalData64);
+
+			/*
+			 * The footprint contains the tree outcome for every possible value combination the endpoints can have
+			 * Loop through every state and verify the foorptint is correct
+			 */
+			// @formatter:off
+			for (unsigned c = 0; c < 2; c++)
+			for (unsigned b = 0; b < 2; b++)
+			for (unsigned a = 0; a < 2; a++) {
+			// @formatter:on
 
 				// bump test number
 				testNr++;
 
-				/*
-				 * get operands for Q, T, F
-				 */
-				uint32_t Q = args[Qi];
-				uint32_t T = args[Ti];
-				uint32_t F = args[Fi];
+				uint32_t q, t, f;
 
 				/*
-				 * Load the tree
+				 * Substitute endpoints `a-c` with their actual values.
 				 */
-				pTree->count = pTree->nstart;
-				pTree->root = pTree->normaliseQTF(Q, T, F);
+				// @formatter:off
+				switch (Qo) {
+					case 0:            q = 0; break;
+					case (KSTART + 0): q = a; break;
+					case (KSTART + 1): q = b; break;
+					case (KSTART + 2): q = c; break;
+				}
+				if (Qi) q ^= 1;
+
+				switch (To) {
+					case 0:            t = 0; break;
+					case (KSTART + 0): t = a; break;
+					case (KSTART + 1): t = b; break;
+					case (KSTART + 2): t = c; break;
+				}
+				if (Ti) t ^= 1;
+
+				switch (Fo) {
+					case 0:            f = 0; break;
+					case (KSTART + 0): f = a; break;
+					case (KSTART + 1): f = b; break;
+					case (KSTART + 2): f = c; break;
+				}
+				if (Fi) f ^= 1;
+				// @formatter:on
 
 				/*
-				 * save with placeholders and reload
+				 * `normaliseNode()` creates a tree with the expression `Q?T:F"`
+				 * Calculate the outcome without using the tree.
 				 */
-				const char *treeName = pTree->encode(pTree->root, opt_skin ? true : false);
-				assert(pTree->decode(treeName, false) == 0);
+				unsigned expected = q ? t : f;
 
-				/*
-				 * Evaluate tree
-				 */
-				pTree->eval(evalData64);
-
-				/*
-				 * The footprint contains the tree outcome for every possible value combination the endpoints can have
-				 * Loop through every state and verify the foorptint is correct
-				 */
-				for (unsigned c = 0; c < 2; c++) {
-					for (unsigned b = 0; b < 2; b++) {
-						for (unsigned a = 0; a < 2; a++) {
-
-							// bump test number
-							testNr++;
-
-							uint32_t q, t, f;
-
-							/*
-							 * Substitute endpoints `a-c` with their actual values.
-							 */
-
-							// @formatter:off
-							switch (Q & ~IBIT) {
-								case 0:            q = 0; break;
-								case (KSTART + 0): q = a; break;
-								case (KSTART + 1): q = b; break;
-								case (KSTART + 2): q = c; break;
-							}
-							if (Q & IBIT) q ^= 1;
-
-							switch (T & ~IBIT) {
-								case 0:            t = 0; break;
-								case (KSTART + 0): t = a; break;
-								case (KSTART + 1): t = b; break;
-								case (KSTART + 2): t = c; break;
-							}
-							if (T & IBIT) t ^= 1;
-
-							switch (args[Fi] & ~IBIT) {
-								case 0:            f = 0; break;
-								case (KSTART + 0): f = a; break;
-								case (KSTART + 1): f = b; break;
-								case (KSTART + 2): f = c; break;
-							}
-							if (F & IBIT) f ^= 1;
-							// @formatter:off
-
-							/*
-							 * `normaliseNode()` creates a tree with the expression `Q?T:F"`
-							 * Calculate the outcome without using the tree.
-							 */
-							unsigned expected = q ? t : f;
-
-							// extract encountered from footprint.
-							uint32_t ix = c << 2 | b << 1 | a;
-							uint32_t encountered = evalData64[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
-							if (pTree->root & IBIT)
-								encountered ^= 1; // invert result
+				// extract encountered from footprint.
+				uint32_t ix = c << 2 | b << 1 | a;
+				uint32_t encountered = evalData64[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+				if (pTree->root & IBIT)
+					encountered ^= 1; // invert result
 
 
-							if (expected != encountered) {
-								fprintf(stderr,"fail: testNr=%u qntf=%d skin=%d expected=%x encountered:%x Q=%08x T=%08X F=%08x q=%x t=%x f=%x c=%x b=%x a=%x %s\n",
-								        testNr, opt_qntf, opt_skin, expected, encountered, Q, T, F, q, t, f, c, b, a, treeName);
-								exit(1);
-							}
-
-						}
-					}
+				if (expected != encountered) {
+					fprintf(stderr, "fail: testNr=%u raw=%d qntf=%d skin=%d expected=%x encountered:%x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
+					        testNr, opt_raw, opt_qntf, opt_skin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+					exit(1);
 				}
 			}
 		}
 	}
+
+	printf("selftest passed\n");
+	exit(0);
 }
 
 /**
@@ -2268,16 +2300,7 @@ int main(int argc, char *const *argv) {
 				break;
 
 			case LO_SELFTEST:
-				// need to run this 4 times
-				opt_raw = 0; // normal decoding
-				// create a tree with 3 variables
-				gTree = new tree_t(KSTART, KSTART + 3);
-				// selftest with different program settings
-				for (opt_skin=0; opt_skin<2; opt_skin++) // split into ordered/skin notation
-					for (opt_qntf=0; opt_qntf<2; opt_qntf++) // force `QnTF` rewrites
-						doSelftest(gTree);
-				printf("selftest passed\n");
-				exit(0);
+				doSelftest();
 				break;
 
 			case '?':
