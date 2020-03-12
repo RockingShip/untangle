@@ -78,12 +78,18 @@ int main() {
  * Constants
  */
 
-#define MAXSLOTS 9               /** @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator */
-#define IBIT 0x80000000          /** @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted */
-#define NUMNODES 20000           /** @constant {number} NUMNODES - Maximum number of nodes the tree can contain */
-#define KSTART 1                 /** @constant {number} KSTART - Starting index in tree where to find the input endpoints. */
-#define SBUFMAX (10 * NUMNODES)  /** @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator */
-#define QUADPERFOOTPRINT ((1 << MAXSLOTS) / 64) /** @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t */
+/// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
+#define IBIT 0x80000000
+/// @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator
+#define MAXSLOTS 9
+/// @constant {number} NUMNODES - Maximum number of nodes the tree can contain. Keep large for selftest
+#define NUMNODES 20000
+/// @constant {number} KSTART - Starting index in tree where to find the input endpoints.
+#define KSTART 1
+/// @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator
+#define SBUFMAX (10 * NUMNODES)
+/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
+#define QUADPERFOOTPRINT ((1 << MAXSLOTS) / 64)
 
 /**
  * User specified program options
@@ -122,14 +128,16 @@ unsigned opt_F = 0;
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
-		fprintf(stderr, "\t-q --quiet      Say more\n");
-		fprintf(stderr, "\t-v --verbose    Say less\n");
-		fprintf(stderr, "\t-n --skin       Display notation with placeholders and skin mapping\n");
 		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
-		fprintf(stderr, "\t   --raw        Do not normalise input\n");
+		fprintf(stderr, "\t-h --help       This list\n");
 		fprintf(stderr, "\t   --qntf       Output exclusively as QnTF\n");
+		fprintf(stderr, "\t-q --quiet      Say more\n");
+		fprintf(stderr, "\t   --raw        Do not normalise input\n");
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
+		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
 		fprintf(stderr, "\t   --shrinkwrap Adjust nstart to highest found endpount\n");
+		fprintf(stderr, "\t-n --skin       Display notation with placeholders and skin mapping\n");
+		fprintf(stderr, "\t-v --verbose    Say less\n");
 		fprintf(stderr, "\t-Q --Q          Select top-level Q\n");
 		fprintf(stderr, "\t-T --T          Select top-level T\n");
 		fprintf(stderr, "\t-F --F          Select top-level F\n");
@@ -144,6 +152,7 @@ void usage(char *const *argv, bool verbose) {
  *
  * As this is a reference implementation, `SIMD` instructions should be avoided.
  *
+ * @typedef {number[]}
  * @date 2020-03-06 23:23:32
  */
 struct footprint_t {
@@ -153,6 +162,7 @@ struct footprint_t {
 /**
  * Language structure representing the unified operator
  *
+ * @typedef {object}
  * @date 2020-03-06 21:14:47
  */
 struct node_t {
@@ -164,6 +174,7 @@ struct node_t {
 /**
  * Language structure representing the fractal tree
  *
+ * @typedef {object}
  * @date 2020-03-06 21:45:08
  */
 struct tree_t {
@@ -2058,6 +2069,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 	unsigned testNr = 0;
+	unsigned numPassed = 0;
 
 	/*
 	 * Self-test prefix handling
@@ -2190,15 +2202,16 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 
 				if (expected != encountered) {
-					fprintf(stderr, "fail: testNr=%u raw=%d qntf=%d skin=%d expected=%x encountered:%x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
+					fprintf(stderr, "fail: testNr=%u raw=%d qntf=%d skin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
 					        testNr, opt_raw, opt_qntf, opt_skin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
+				numPassed++;
 			}
 		}
 	}
 
-	printf("selftest passed\n");
+	printf("selftest passed %d tests\n", numPassed);
 	exit(0);
 }
 
@@ -2225,20 +2238,20 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_SEED = 1,
-			LO_QNTF,
+			LO_QNTF = 1,
 			LO_RAW,
+			LO_SEED,
 			LO_SELFTEST,
 			LO_SHRINKWRAP,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
-			LO_VERBOSE = 'v',
-			LO_SKIN = 's',
 			LO_CODE = 'c',
-			LO_Q = 'Q',
-			LO_T = 'T',
 			LO_F = 'F',
+			LO_HELP = 'h',
+			LO_Q = 'Q',
+			LO_QUIET = 'q',
+			LO_SKIN = 's',
+			LO_T = 'T',
+			LO_VERBOSE = 'v',
 		};
 
 		// long option descriptions
@@ -2284,48 +2297,45 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_QUIET:
-				opt_quiet++;
-				break;
-			case LO_VERBOSE:
-				opt_verbose++;
-				break;
-			case LO_SKIN:
-				opt_skin++;
-				break;
 			case LO_CODE:
 				opt_code++;
-				break;
-			case LO_RAW:
-				opt_raw++;
-				break;
-			case LO_QNTF:
-				opt_qntf++;
-				break;
-			case LO_SEED:
-				opt_seed = strtoul(optarg, NULL, 10);
-				break;
-			case LO_SHRINKWRAP:
-				opt_shrinkwrap++;
-				break;
-
-			case LO_Q:
-				opt_Q++;
-				break;
-			case LO_T:
-				opt_T++;
 				break;
 			case LO_F:
 				opt_F++;
 				break;
-
+			case LO_HELP:
+				usage(argv, true);
+				exit(0);
+			case LO_Q:
+				opt_Q++;
+				break;
+			case LO_QNTF:
+				opt_qntf++;
+				break;
+			case LO_QUIET:
+				opt_quiet++;
+				break;
+			case LO_RAW:
+				opt_raw++;
+				break;
+			case LO_SEED:
+				opt_seed = strtoul(optarg, NULL, 10);
+				break;
 			case LO_SELFTEST:
 				performSelfTest(pTree, pFootprints);
 				break;
-
+			case LO_SHRINKWRAP:
+				opt_shrinkwrap++;
+				break;
+			case LO_SKIN:
+				opt_skin++;
+				break;
+			case LO_T:
+				opt_T++;
+				break;
+			case LO_VERBOSE:
+				opt_verbose++;
+				break;
 			case '?':
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
