@@ -53,6 +53,12 @@
 #include <sys/mman.h>
 #include "context.h"
 
+#include "config.h"
+
+#if defined(ENABLE_JANSSON)
+#include "jansson.h"
+#endif
+
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
 #define FILE_MAGIC        0x20200312
 
@@ -617,7 +623,7 @@ struct database_t {
 	 *
 	 * Transform store
 	 */
-#if 0
+#if defined(ENABLE_JANSSON)
 	static json_t *headerInfo(json_t *jResult, const FileHeader_t *header) {
 		if (jResult == NULL)
 			jResult = json_object();

@@ -799,5 +799,14 @@ int main(int argc, char *const *argv) {
 
 	store.save(app.arg_outputDatabase);
 
+#if defined(ENABLE_JANSSON)
+	if (app.opt_verbose >= app.VERBOSE_SUMMARY) {
+		json_t *jResult = json_object();
+		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
+		store.headerInfo(jResult, store.dbHeader);
+		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+	}
+#endif
+
 	return 0;
 }

@@ -12,11 +12,14 @@ noinst_PROGRAMS =
 bin_PROGRAMS = \
 	eval gentransform tlookup
 
+CPPFLAGS = $(LIBJANSSON_CFLAGS)
+LDADD = $(LIBJANSSON_LIBS)
+
 eval_LDADD = 
 eval_SOURCES = eval.cc
 
-gentransform_LDADD =
+gentransform_LDADD = $(LDADD)
 gentransform_SOURCES = gentransform.cc context.h database.h
 
-tlookup_LDADD =
+tlookup_LDADD = $(LDADD)
 tlookup_SOURCES = tlookup.cc context.h database.h
