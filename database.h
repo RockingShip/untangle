@@ -552,6 +552,67 @@ struct database_t {
 	}
 
 	/*
+	 * Transform store
+	 */
+
+	/**
+	 * Lookup a transform name and return its matching enumeration id.
+	 * Transform names can be short meaning that trailing endpoints which are in sync can be omitted.
+	 * Example: For `"bdacefghi"`, `"bdac"` is the minimum transform name and `"efghi"` is the "long" part.
+	 *
+	 * NOTE: Transform names must be syntactically correct:
+	 *  - No longer than `MAXSLOTS` characters
+	 *  - Consisting of exclusively the lowercase letters `'a'` to `'i'` (for `MAXSLOTS`==9)
+	 *
+	 * @param {string} pName - Transform name
+	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
+	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+	 * @date 2020-03-12 10:28:05
+	 */
+	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
+		assert(pIndex);
+
+		// starting position in index
+		uint32_t pos = MAXSLOTS + 1;
+
+		// walk through states
+		while (*pName) {
+			pos = pIndex[pos + *pName - 'a'];
+			pName++;
+		}
+
+		// what to return
+		if (pos == 0)
+			return IBIT; // "not-found"
+		else if (~pos & IBIT)
+			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
+		else
+			return pos & ~IBIT; // long name
+	}
+
+	/**
+	 * Lookup a forward transform name and return its matching enumeration id.
+ 	 *
+	 * @param {string} pName - Transform name
+ 	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+ 	 * @date 2020-03-13 14:20:29
+ 	 */
+	inline uint32_t lookupFwdTransform(const char *pName) {
+		return lookupTransform(pName, this->fwdTransformNameIndex);
+	}
+
+	/**
+	 * Lookup a reverse transform name and return its matching enumeration id.
+  	 *
+ 	 * @param {string} pName - Transform name
+  	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+  	 * @date 2020-03-13 14:20:29
+  	 */
+	inline uint32_t lookupRevTransform(const char *pName) {
+		return lookupTransform(pName, this->revTransformNameIndex);
+	}
+
+	/*
 	 * @date 2020-03-12 19:36:56
 	 *
 	 * Transform store

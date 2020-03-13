@@ -66,9 +66,6 @@
 /// @constant {number} MAXTRANSFORMINDEX - Number of blocks times block size
 #define MAXTRANSFORMINDEX ((MAXSLOTS + 1) + (1 + (1 + (1 + (1 + (1 + (1 + (1 + (1 + 2) * 3) * 4) * 5) * 6) * 7) * 8) * 9) * (MAXSLOTS + 1))
 
-/// @typedef {char[]} fixed size string containing transform
-typedef char transformName_t[MAXSLOTS + 1];
-
 /**
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
@@ -621,8 +618,7 @@ void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
 
 /**
  * Program main entry point
- * Process all user supplied arguments to construct a argument context.
- * Create application context using argument context.
+ * Process all user supplied arguments to construct a application context.
  * Activate application context.
  *
  * @param  {number} argc - number of arguments
@@ -691,6 +687,9 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
+			case LO_DEBUG:
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				break;
 			case LO_FORCE:
 				app.opt_force++;
 				break;
@@ -716,11 +715,6 @@ int main(int argc, char *const *argv) {
 			}
 			case LO_TEXT:
 				app.opt_text++;
-				break;
-
-				// part of `context_t`
-			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 				break;
 			case LO_TIMER:
 				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
