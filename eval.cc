@@ -74,7 +74,7 @@ int main() {
 #include <string.h>
 #include <getopt.h>
 
-/**
+/*
  * Constants
  */
 
@@ -91,7 +91,7 @@ int main() {
 /// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
 #define QUADPERFOOTPRINT ((1 << MAXSLOTS) / 64)
 
-/**
+/*
  * User specified program options
  */
 

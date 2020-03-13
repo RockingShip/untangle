@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-11 21:53:16
@@ -21,6 +21,11 @@
  *
  * Skins are stored as LSB hexadecimal words where each nibble represents an endpoint
  * and a textual string.
+ *
+ * Basically, `gentransform` provides answers to <<3>> types of questions:
+ * - Given a structure and skin, how would the result look like?
+ * - How would a structure look like before a given skin was applied?
+ * - Which skin should be put around a structure so that the structure looks ordered?
  */
 
 /*
@@ -50,15 +55,12 @@
 #include <getopt.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include "database.h"
 
-/**
+/*
  * Constants
  */
 
-/// @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator
-#define MAXSLOTS 9
-/// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
-#define IBIT 0x80000000
 /// @constant {number} MAXTRANSFORM - Number of transforms (`MAXSLOTS!`=9!)
 #define MAXTRANSFORM (1*2*3*4*5*6*7*8*9)
 /// @constant {number} MAXTRANSFORMINDEX - Number of blocks times block size
@@ -68,26 +70,23 @@
 typedef char transformName_t[MAXSLOTS + 1];
 
 /**
- * User specified program options as argument context
+ * Main program logic as application context
+ * It is contained as an independent `struct` so it can be easily included into projects/code
  *
- * The main program is namespaced and scoped in its own `struct`.
- * This `struct` contains all user options
- *
- * @typedef {object} gentransformArguments_t
- * @date 2020-03-11 22:36:29
+ * @typedef {object}
+ * @date 2020-03-11 22:53:39
  */
-typedef struct gentransformArguments_t {
+struct gentransformContext_t : context_t {
+
+	/*
+	 * User specified program arguments and options
+	 */
+
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 
 	/// @var {number} database compatibility and settings
 	uint32_t opt_flags;
-	/// @var {number} intentionally undocumented
-	uint32_t opt_debug;
-	/// @var {number} --verbose, level of explanations
-	unsigned opt_verbose;
-	/// @var {number} --timer, interval timer for verbose updates
-	unsigned opt_timer;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} --keep, do not delete output database in case of errors
@@ -95,69 +94,16 @@ typedef struct gentransformArguments_t {
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
 
-	gentransformArguments_t() {
-		arg_outputDatabase = NULL;
-		opt_flags          = 0;
-		opt_debug          = 0;
-		opt_verbose        = 0;
-		opt_timer          = 0;
-		opt_force          = 0;
-		opt_keep           = 0;
-		opt_text           = 0;
-	}
-
-} userArguments_t;
-
-
-/**
- * Program usage. Keep high in source code for easy reference
- *
- * @param {string[]} argv - program arguments
- * @param {boolean} verbose - set to true for option descriptions
- * @param {userArguments_t} args - argument context
- * @date  2020-03-11 22:30:36
- */
-void usage(char *const *argv, bool verbose, const userArguments_t *args) {
-	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
-	if (verbose) {
-		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t-h --help            This list\n");
-		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t-q --quiet           Say more\n");
-		fprintf(stderr, "\t   --selftest        Validate proper operation\n");
-		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", args->opt_timer);
-		fprintf(stderr, "\t-v --verbose         Say less\n");
-
-	}
-}
-
-/**
- * Main program logic as application context
- * It is contained as an independent `struct` so it can be easily included into projects/code
- *
- * @typedef {object}
- * @date 2020-03-11 22:53:39
- */
-struct gentransformContext_t {
-
-	gentransformArguments_t &args;
-
 	/**
 	 * Constructor
-	 *
-	 * @param {gentransformArguments_t} userArguments - Settings to activate/deactivate functionality
 	 */
-	gentransformContext_t(gentransformArguments_t &userArguments)
-	/*
-	 * initialize fields using initializer lists
-	 */
-		:
-		args(userArguments)
-	/*
-	 * test all allocations succeeded
-	 */
-	{
+	gentransformContext_t() {
+		// arguments and options
+		arg_outputDatabase = NULL;
+		opt_flags = 0;
+		opt_force = 0;
+		opt_keep = 0;
+		opt_text = 0;
 	}
 
 	/**
@@ -172,7 +118,6 @@ struct gentransformContext_t {
 	 * @param {boolean} isForward - `true` for forward mapping and `false` for reverse mapping
 	 * @date 2020-03-12 00:39:44
 	 */
-
 	void createTransforms(uint64_t *pData, transformName_t *pNames, uint32_t *pIndex, bool isForward) {
 
 		/*
@@ -276,7 +221,7 @@ struct gentransformContext_t {
 											// decode binary into a string
 
 											for (unsigned k = 0; k < MAXSLOTS; k++) {
-												pNames[iTransform][0] = "abcdefghi"[data & 15];
+												pNames[iTransform][k] = "abcdefghi"[data & 15];
 												data >>= 4;
 											}
 											pNames[iTransform][MAXSLOTS] = 0;
@@ -409,7 +354,7 @@ struct gentransformContext_t {
 	 *
 	 * @param {string} pName - Transform name
   	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
-	 * @return {number} - Transform enumeration id or IBIT if "not-found"
+	 * @return {uint32_t} - Transform enumeration id or IBIT if "not-found"
 	 * @date 2020-03-12 10:28:05
 	 */
 	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
@@ -435,24 +380,48 @@ struct gentransformContext_t {
 
 	/**
 	 * Main entrypoint
+	 *
+	 * @param {database_t} pStore - data store
+	 * @date 2020-03-12 19:58:14
 	 */
-	void main(void) {
+	void main(database_t *pStore) {
+		/*
+		 * generate datasets
+		 */
+		this->createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward
+		this->createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse
 
+		/*
+		 * Reverse Id's are the lookups of reverse names
+		 */
+		for (uint32_t t = 0; t < MAXTRANSFORM; t++)
+			pStore->revTransformIds[t] = lookupTransform(pStore->revTransformNames[t], pStore->fwdTransformNameIndex);
+
+		/*
+		 * dump contents on request
+		 */
+		if (opt_text) {
+			for (uint32_t t = 0; t < pStore->numTransform; t++)
+				printf("%d: %s %s %d\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
+		}
+
+		if (opt_verbose >= VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Generated %d transforms\n", timeAsString(), pStore->numTransform);
 	}
 
 };
 
 /**
- * Perform a selftest.
+ * Perform a selftest. Keep separate of `gentransformContext_t`
  *
  * - Test the index by performing lookups on all `MAXSLOT==9` transforms
  * - Lookup of `""` should return the transparent transform
  * - Verify that forward/reverse substitution counter each other
  *
- * @param {gentransformContext_t} pCtx - program context
+ * @param {gentransformContext_t} pApp - program context
  * @date 2020-03-12 00:26:06
  */
-void performSelfTest(gentransformContext_t *pCtx) {
+void performSelfTest(gentransformContext_t *pApp) {
 	// allocate storage
 	uint64_t *pFwdData = new uint64_t[MAXTRANSFORM];
 	uint64_t *pRevData = new uint64_t[MAXTRANSFORM];
@@ -462,15 +431,15 @@ void performSelfTest(gentransformContext_t *pCtx) {
 	uint32_t *pRevIndex = new uint32_t[MAXTRANSFORMINDEX];
 	unsigned numPassed = 0;
 
-	// generate dataset
-	pCtx->createTransforms(pFwdData, pFwdNames, pFwdIndex, true); // forward
-	pCtx->createTransforms(pRevData, pRevNames, pRevIndex, false); // reverse
+	// generate datasets
+	pApp->createTransforms(pFwdData, pFwdNames, pFwdIndex, true); // forward transform
+	pApp->createTransforms(pRevData, pRevNames, pRevIndex, false); // reverse transform
 
 	/*
 	 * Test empty name
 	 */
 	{
-		uint32_t tid = pCtx->lookupTransform("", pFwdIndex);
+		uint32_t tid = pApp->lookupTransform("", pFwdIndex);
 
 		// test empty name is transparent skin
 		if (tid != 0) {
@@ -479,12 +448,12 @@ void performSelfTest(gentransformContext_t *pCtx) {
 		}
 
 		// test transparent transform is transparent
-		for (unsigned k=0; k<MAXSLOTS; k++) {
-			if (pFwdNames[0][k] != (char)('a' + k)) {
+		for (unsigned k = 0; k < MAXSLOTS; k++) {
+			if (pFwdNames[0][k] != (char) ('a' + k)) {
 				fprintf(stderr, "fail: transparent forward %s\n", pFwdNames[0]);
 				exit(1);
 			}
-			if (pRevNames[0][k] != (char)('a' + k)) {
+			if (pRevNames[0][k] != (char) ('a' + k)) {
 				fprintf(stderr, "fail: transparent forward %s\n", pRevNames[0]);
 				exit(1);
 			}
@@ -494,7 +463,7 @@ void performSelfTest(gentransformContext_t *pCtx) {
 	/*
 	 * Perform two rounds, first with forward transform, then with reverse transform
 	 */
-	for (unsigned round=0; round<2; round++) {
+	for (unsigned round = 0; round < 2; round++) {
 		// setup data for this round
 		transformName_t *pNames;
 		uint32_t *pIndex;
@@ -531,13 +500,13 @@ void performSelfTest(gentransformContext_t *pCtx) {
 				pNames[iTransform][iLen] = 0;
 
 				// lookup name
-				uint32_t encountered = pCtx->lookupTransform(pNames[iTransform], pIndex);
+				uint32_t encountered = pApp->lookupTransform(pNames[iTransform], pIndex);
 
 				// undo truncation
 				pNames[iTransform][iLen] = 'a' + iLen;
 
 				if (iTransform != encountered) {
-					fprintf(stderr, "fail: encountered=%08x round=%d iTransform=%08x iLen=%d name=%s\n", encountered, round, iTransform, iLen, pNames[iTransform]);
+					fprintf(stderr, "fail lookup: encountered=%08x round=%d iTransform=%08x iLen=%d name=%s\n", encountered, round, iTransform, iLen, pNames[iTransform]);
 					exit(1);
 				}
 
@@ -589,27 +558,65 @@ void performSelfTest(gentransformContext_t *pCtx) {
 	exit(0);
 }
 
-/**
- * Argument context.
- * Needs to be global to be accessable to signal handlers.
+/*
+ * I/O and Application context.
+ * Needs to be global to be accessible by signal handlers.
  *
- * @global {gentransformArguments_t}
+ * @global {gentransformContext_t} Application
  */
-gentransformArguments_t userArgs;
+gentransformContext_t app;
 
 /**
- * Delete partially created database unless explicitly requested
+ * Signal handler
  *
- * Called in case of error or by signal handler
+ * Delete partially created database unless explicitly requested
  *
  * @param {number} sig - signal (ignored)
  * @date 2020-03-11 23:06:35
  */
-void unlinkAndErrorExit(int sig) {
-	if (!userArgs.opt_keep) {
-		remove(userArgs.arg_outputDatabase);
+void sigintHandler(int sig) {
+	if (!app.opt_keep) {
+		remove(app.arg_outputDatabase);
 	}
 	exit(1);
+}
+
+/**
+ * Signal handlers
+ *
+ * Bump interval timer
+ *
+ * @param {number} sig - signal (ignored)
+ * @date 2020-03-11 23:06:35
+ */
+void sigalrmHandler(int sig) {
+	if (app.opt_timer) {
+		app.tick++;
+		alarm(app.opt_timer);
+	}
+}
+
+/**
+ * Program usage. Keep this directly above `main()`
+ *
+ * @param {string[]} argv - program arguments
+ * @param {boolean} verbose - set to true for option descriptions
+ * @param {userArguments_t} args - argument context
+ * @date  2020-03-11 22:30:36
+ */
+void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
+	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
+	if (verbose) {
+		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t-h --help            This list\n");
+		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t-q --quiet           Say more\n");
+		fprintf(stderr, "\t   --selftest        Validate proper operation\n");
+		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t-v --verbose         Say less\n");
+
+	}
 }
 
 /**
@@ -684,39 +691,42 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				userArgs.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-				break;
 			case LO_FORCE:
-				userArgs.opt_force++;
+				app.opt_force++;
 				break;
 			case LO_HELP:
-				usage(argv, true, &userArgs);
+				usage(argv, true, &app);
 				exit(0);
 			case LO_KEEP:
-				userArgs.opt_keep++;
+				app.opt_keep++;
 				break;
 			case LO_QUIET:
-				userArgs.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : userArgs.opt_verbose - 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
 				break;
 			case LO_SELFTEST: {
-				// create default argument context
-				gentransformArguments_t args;
-				// create default program context
-				gentransformContext_t ctx(args);
+				// register timer handler
+				if (app.opt_timer) {
+					signal(SIGALRM, sigalrmHandler);
+					::alarm(app.opt_timer);
+				}
 
 				// perform selfcheck
-				performSelfTest(&ctx);
+				performSelfTest(&app);
 				break;
 			}
 			case LO_TEXT:
-				userArgs.opt_text++;
+				app.opt_text++;
+				break;
+
+				// part of `context_t`
+			case LO_DEBUG:
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 				break;
 			case LO_TIMER:
-				userArgs.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
 				break;
 			case LO_VERBOSE:
-				userArgs.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : userArgs.opt_verbose + 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -732,31 +742,68 @@ int main(int argc, char *const *argv) {
 	 * Program has one argument, the output database
 	 */
 	if (argc - optind >= 1) {
-		userArgs.arg_outputDatabase = argv[optind++];
+		app.arg_outputDatabase = argv[optind++];
 	} else {
-		usage(argv, false, &userArgs);
+		usage(argv, false, &app);
 		exit(1);
 	}
 
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!userArgs.opt_force) {
+	if (!app.opt_force) {
 		struct stat sbuf;
 
-		if (!stat(userArgs.arg_outputDatabase, &sbuf)) {
-			fprintf(stderr, "%s already exists. Use --force to overwrite\n", userArgs.arg_outputDatabase);
+		if (!stat(app.arg_outputDatabase, &sbuf)) {
+			fprintf(stderr, "%s already exists. Use --force to overwrite\n", app.arg_outputDatabase);
 			exit(1);
 		}
 	}
 
-	// create application context
-	gentransformContext_t ctx(userArgs);
+	// register timer handler
+	if (app.opt_timer) {
+		signal(SIGALRM, sigalrmHandler);
+		::alarm(app.opt_timer);
+	}
+
+	/*
+	 * Create database
+	 */
+
+	database_t store(app);
+
+	// set section sizes to be created
+	store.numTransform = MAXTRANSFORM;
+	store.transformIndexSize = MAXTRANSFORMINDEX;
+	// additional creation flags
+	store.flags = app.opt_flags;
+
+	// create memory-based store
+	store.create();
+
+	/*
+	 * Statistics
+	 */
+
+	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
+		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
+	if (app.totalAllocated >= 30000000000)
+		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
 
 	/*
 	 * Invoke main entrypoint of application context
 	 */
-	ctx.main();
+	app.main(&store);
+
+	/*
+	 * Save the database
+	 */
+
+	// unexpected termination should unlink the outputs
+	signal(SIGINT, sigintHandler);
+	signal(SIGHUP, sigintHandler);
+
+	store.save(app.arg_outputDatabase);
 
 	return 0;
 }

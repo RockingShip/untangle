@@ -16,4 +16,5 @@ eval_LDADD =
 eval_SOURCES = eval.cc
 
 gentransform_LDADD =
-gentransform_SOURCES = gentransform.cc
+gentransform_SOURCES = gentransform.cc context.h database.h
+
