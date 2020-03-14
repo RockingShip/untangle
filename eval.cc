@@ -12,7 +12,7 @@
  * `eval` is the reference implementation of the basic concepts of this project
  * and is therefore the authoritative outcome in cases of dispute during regression testing.
  *
- * It demonstrates:
+ *  `eval` self-test demonstrates:
  *   - Decoding and encoding of postfix notations
  *   - Constructing trees
  *   - Normalisations: inverting, function grouping, dyadic ordering
@@ -101,8 +101,8 @@ unsigned opt_verbose = 0;
 unsigned opt_skin = 0;
 /// @global {number} --code, output tree as gcc statement expression
 unsigned opt_code = 0;
-/// @global {number} --raw, do not normalised input
-unsigned opt_raw = 0;
+/// @global {number} --fast, do not normalise input
+unsigned opt_fast = 0;
 /// @global {number} --qntf, output exclusively as QnTF
 unsigned opt_qntf = 0;
 /// @global {number} --seed=n, Random seed to generate evaluator test pattern
@@ -127,10 +127,10 @@ void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
+		fprintf(stderr, "\t   --fast       Do not normalise input\n");
 		fprintf(stderr, "\t-h --help       This list\n");
 		fprintf(stderr, "\t   --qntf       Output exclusively as QnTF\n");
 		fprintf(stderr, "\t-q --quiet      Say more\n");
-		fprintf(stderr, "\t   --raw        Do not normalise input\n");
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
 		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
 		fprintf(stderr, "\t   --shrinkwrap Adjust nstart to highest found endpount\n");
@@ -333,7 +333,7 @@ struct tree_t {
 		 *  [18] a ?  b : b -> b
 		 *  [19] a ?  b : c                  "?" QTF
 		 *
-		 * ./eval --raw 'a00!' 'a0a!' 'a0b!' 'aa0!' 'aaa!' 'aab!' 'ab0!' 'aba!' 'abb!' 'abc!' 'a00?' 'a0a?' 'a0b?' 'aa0?' 'aaa?' 'aab?' 'ab0?' 'aba?' 'abb?' 'abc?'
+		 * ./eval --fast 'a00!' 'a0a!' 'a0b!' 'aa0!' 'aaa!' 'aab!' 'ab0!' 'aba!' 'abb!' 'abc!' 'a00?' 'a0a?' 'a0b?' 'aa0?' 'aaa?' 'aab?' 'ab0?' 'aba?' 'abb?' 'abc?'
 		 */
 
 		if (T & IBIT) {
@@ -624,7 +624,7 @@ struct tree_t {
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-09 17:05:36
 	 */
-	int decodeNormalised(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeSafe(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -1001,7 +1001,7 @@ struct tree_t {
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-07 00:12:44
 	 */
-	int decodeRaw(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeFast(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -1378,11 +1378,11 @@ struct tree_t {
 		}
 
 		// decode with explicit temporary storage for `pSkin`
-		if (opt_raw) {
-			if (this->decodeRaw(pName, numSkin, this->skin))
+		if (opt_fast) {
+			if (this->decodeFast(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		} else {
-			if (this->decodeNormalised(pName, numSkin, this->skin))
+			if (this->decodeSafe(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		}
 
@@ -1840,7 +1840,7 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 
 		// set footprint for 64bit slice
 		assert(MAXSLOTS == 9);
-		for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
+		for (uint32_t i = 0; i < (1 << MAXSLOTS); i++) {
 			// v[(i/64)+0*4] should be 0
 			if (i & (1 << 0)) v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 			if (i & (1 << 1)) v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
@@ -1859,7 +1859,7 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 		uint64_t *v = (uint64_t *) footprint;
 
 		// craptastic random fill
-		for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
+		for (uint32_t i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
 			v[i] = (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -2099,25 +2099,28 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	 * self-test with different program settings
 	 */
 	// @formatter:off
-	for (opt_raw=0; opt_raw<2; opt_raw++) // decode notation in raw mode
-	for (opt_skin=0; opt_skin<2; opt_skin++) // split into placeholder/skin notation
-	for (opt_qntf=0; opt_qntf<2; opt_qntf++) { // force `QnTF` rewrites
+	for (unsigned iFast=0; iFast<2; iFast++) // decode notation in fast mode
+	for (unsigned iSkin=0; iSkin<2; iSkin++) // use placeholder/skin notation
+	for (unsigned iQnTF=0; iQnTF<2; iQnTF++) { // force `QnTF` rewrites
 	// @formatter:on
 
 		/*
 		 * Test all 512 operand combinations. Zero, 3 endpoints and their 4 inverts (8*8*8=512)
 		 */
 
-		assert(KSTART == 1);
-
 		// @formatter:off
-		for (uint32_t Fo = 0; Fo < KSTART + 3; Fo++) // operand of F: 0, a, b, c
+		for (uint32_t Fo = 0; Fo < pTree->kstart + 3; Fo++) // operand of F: 0, a, b, c
 		for (uint32_t Fi = 0; Fi < 2; Fi++)          // inverting of F
-		for (uint32_t To = 0; To < KSTART + 3; To++)
+		for (uint32_t To = 0; To < pTree->kstart + 3; To++)
 		for (uint32_t Ti = 0; Ti < 2; Ti++)
-		for (uint32_t Qo = 0; Qo < KSTART + 3; Qo++)
+		for (uint32_t Qo = 0; Qo < pTree->kstart + 3; Qo++)
 		for (uint32_t Qi = 0; Qi < 2; Qi++) {
 		// @formatter:on
+
+			// additional rangecheck
+			if (Qo && Qo < pTree->kstart) continue;
+			if (To && To < pTree->kstart) continue;
+			if (Fo && Fo < pTree->kstart) continue;
 
 			// bump test number
 			testNr++;
@@ -2125,6 +2128,10 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			/*
 			 * Load the tree
 			 */
+
+			opt_fast = iFast; // decode fast or safe
+			opt_qntf = iQnTF; // expand `QTF` to `QnTF` only
+
 			pTree->nstart = pTree->kstart + 3;
 			pTree->count = pTree->nstart;
 			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
@@ -2132,7 +2139,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			/*
 			 * save with placeholders and reload
 			 */
-			const char *treeName = pTree->encode(pTree->root, opt_skin ? true : false);
+			const char *treeName = pTree->encode(pTree->root, iSkin ? true : false);
 			assert(pTree->decode(treeName, false) == 0);
 
 			/*
@@ -2141,9 +2148,9 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 			// load test vector
 			pEval[0].bits[0] = 0b00000000; // v[0]
-			pEval[1].bits[0] = 0b10101010; // v[1]
-			pEval[2].bits[0] = 0b11001100; // v[2]
-			pEval[3].bits[0] = 0b11110000; // v[3]
+			pEval[pTree->kstart + 0].bits[0] = 0b10101010; // v[1]
+			pEval[pTree->kstart + 1].bits[0] = 0b11001100; // v[2]
+			pEval[pTree->kstart + 2].bits[0] = 0b11110000; // v[3]
 
 			// evaluate
 			pTree->eval(pEval);
@@ -2162,6 +2169,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				testNr++;
 
 				uint32_t q, t, f;
+
+				assert(pTree->kstart == KSTART); // for switch/case values
 
 				/*
 				 * Substitute endpoints `a-c` with their actual values.
@@ -2206,8 +2215,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 
 				if (expected != encountered) {
-					fprintf(stderr, "fail: testNr=%u raw=%d qntf=%d skin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
-					        testNr, opt_raw, opt_qntf, opt_skin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+					fprintf(stderr, "fail: testNr=%u iFast=%d iQnTF=%d iSkin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
+					        testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
 				numPassed++;
@@ -2215,8 +2224,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		}
 	}
 
-	printf("selftest passed %d tests\n", numPassed);
-	exit(0);
+	printf("selfTest() passed %d tests\n", numPassed);
 }
 
 /**
@@ -2243,7 +2251,7 @@ int main(int argc, char *const *argv) {
 		enum {
 			// long-only opts
 			LO_QNTF = 1,
-			LO_RAW,
+			LO_FAST,
 			LO_SEED,
 			LO_SELFTEST,
 			LO_SHRINKWRAP,
@@ -2265,7 +2273,7 @@ int main(int argc, char *const *argv) {
 			{"help",       0, 0, LO_HELP},
 			{"qntf",       0, 0, LO_QNTF},
 			{"quiet",      0, 0, LO_QUIET},
-			{"raw",        0, 0, LO_RAW},
+			{"fast",       0, 0, LO_FAST},
 			{"seed",       1, 0, LO_SEED},
 			{"selftest",   0, 0, LO_SELFTEST},
 			{"shrinkwrap", 0, 0, LO_SHRINKWRAP},
@@ -2307,6 +2315,9 @@ int main(int argc, char *const *argv) {
 			case LO_F:
 				opt_F++;
 				break;
+			case LO_FAST:
+				opt_fast++;
+				break;
 			case LO_HELP:
 				usage(argv, true);
 				exit(0);
@@ -2319,14 +2330,12 @@ int main(int argc, char *const *argv) {
 			case LO_QUIET:
 				opt_quiet++;
 				break;
-			case LO_RAW:
-				opt_raw++;
-				break;
 			case LO_SEED:
 				opt_seed = strtoul(optarg, NULL, 10);
 				break;
 			case LO_SELFTEST:
 				performSelfTest(pTree, pFootprints);
+				exit(0);
 				break;
 			case LO_SHRINKWRAP:
 				opt_shrinkwrap++;

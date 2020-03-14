@@ -57,7 +57,7 @@ struct tinyNode_t {
  * @typedef {object}
  * @date 2020-03-13 19:31:48
  */
-struct treeTree_t {
+struct tinyTree_t {
 
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
@@ -98,7 +98,7 @@ struct treeTree_t {
  	 * @date 2020-03-14 00:27:38
 	 */
 
-	inline treeTree_t(uint32_t flags) : flags(flags) {
+	inline tinyTree_t(uint32_t flags) : flags(flags) {
 		// only set flags because that determines tree functionality
 
 		// assert that all nodes fit in a 32 bit vector (`beenWhere`)
@@ -110,8 +110,8 @@ struct treeTree_t {
 	 *
 	 * Copy constructor not supported, so using them will trigger "unresolved externals"
 	 */
-	treeTree_t(const treeTree_t &rhs);
-	treeTree_t &operator=(const treeTree_t &rhs);
+	tinyTree_t(const tinyTree_t &rhs);
+	tinyTree_t &operator=(const tinyTree_t &rhs);
 
 	/**
 	 * Erase the contents
@@ -377,6 +377,20 @@ struct treeTree_t {
 	}
 
 	/**
+	 * decode error codes
+	 * @date 2020-03-14 12:15:22
+	 */
+	enum {
+		DERR_OK,                // success
+		DERR_SYNTAX,            // unknown character in name
+		DERR_PLACEHOLDER,       // placeholder not an lowercase endpoint
+		DERR_OVERFLOW,          // stack overflow, might imply too big
+		DERR_UNDERFLOW,         // stack underflow, notation not balanced
+		DERR_INCOMPLETE,        // stuff still on stack. missing opcodes
+		DERR_SIZE,              // notation too large for tree
+	};
+
+	/**
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
@@ -387,20 +401,7 @@ struct treeTree_t {
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-13 21:30:32
 	 */
-	int decodeNormalised(const char *pName, const char *pSkin = "abcdefghi") {
-
-		// test that skin is not short
-		if (this->flags & context_t::MAGICFLAG_PARANOID) {
-			assert(islower(pSkin[0]));
-			assert(islower(pSkin[1]));
-			assert(islower(pSkin[2]));
-			assert(islower(pSkin[3]));
-			assert(islower(pSkin[4]));
-			assert(islower(pSkin[5]));
-			assert(islower(pSkin[6]));
-			assert(islower(pSkin[7]));
-			assert(islower(pSkin[8]));
-		}
+	int decodeSafe(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
 		this->count = TINYTREE_NSTART;
@@ -415,87 +416,76 @@ struct treeTree_t {
 		// walk through the notation until end or until placeholder/skin separator
 		for (const char *pCh = pName; *pCh; pCh++) {
 
+			if (isalnum(*pCh) && stackPos >= TINYTREE_MAXSTACK)
+				return DERR_OVERFLOW;
+			if (!isalnum(*pCh) && count >= TINYTREE_NEND - 1)
+				return DERR_SIZE;
+			if (islower(*pCh) && !islower(pSkin[*pCh - 'a']))
+				return DERR_PLACEHOLDER;
+
 			switch (*pCh) {
 				case '0':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = 0;
 					break;
 				case 'a':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[0] - 'a');
 					break;
 				case 'b':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[1] - 'a');
 					break;
 				case 'c':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[2] - 'a');
 					break;
 				case 'd':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[3] - 'a');
 					break;
 				case 'e':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[4] - 'a');
 					break;
 				case 'f':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[5] - 'a');
 					break;
 				case 'g':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[6] - 'a');
 					break;
 				case 'h':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[7] - 'a');
 					break;
 				case 'i':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = (uint32_t) (TINYTREE_KSTART + pSkin[8] - 'a');
 					break;
 				case '1':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
 					break;
 				case '2':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
 					break;
 				case '3':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
 					break;
 				case '4':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
 					break;
 				case '5':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
 					break;
 				case '6':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
 					break;
 				case '7':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
 					break;
 				case '8':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
 					break;
 				case '9':
-					assert(stackPos < TINYTREE_MAXSTACK || !"[stack overflow]");
 					stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
 					break;
 
 				case '>': {
 					// GT (appreciated)
-					assert(stackPos >= 2 || !"[stack underflow]\n");
+					if (stackPos < 2)
+						return DERR_UNDERFLOW;
 
 					//pop operands
 					uint32_t R = stack[--stackPos]; // right hand side
@@ -510,7 +500,8 @@ struct treeTree_t {
 				}
 				case '+': {
 					// OR (appreciated)
-					assert(stackPos >= 2 || !"[stack underflow]\n");
+					if (stackPos < 2)
+						return DERR_UNDERFLOW;
 
 					// pop operands
 					uint32_t R = stack[--stackPos]; // right hand side
@@ -525,7 +516,8 @@ struct treeTree_t {
 				}
 				case '^': {
 					// XOR/NE (appreciated)
-					assert(stackPos >= 2 || !"[stack underflow]\n");
+					if (stackPos < 2)
+						return DERR_UNDERFLOW;
 
 					//pop operands
 					uint32_t R = stack[--stackPos]; // right hand side
@@ -540,7 +532,8 @@ struct treeTree_t {
 				}
 				case '!': {
 					// QnTF (appreciated)
-					assert(stackPos >= 3 || !"[stack underflow]\n");
+					if (stackPos < 3)
+						return DERR_UNDERFLOW;
 
 					// pop operands
 					uint32_t F = stack[--stackPos];
@@ -557,7 +550,8 @@ struct treeTree_t {
 				}
 				case '&': {
 					// AND (depreciated)
-					assert(stackPos >= 2 || !"[stack underflow]\n");
+					if (stackPos < 2)
+						return DERR_UNDERFLOW;
 
 					// pop operands
 					uint32_t R = stack[--stackPos]; // right hand side
@@ -572,7 +566,8 @@ struct treeTree_t {
 				}
 				case '<': {
 					// LT (obsolete)
-					assert(stackPos >= 2 || !"[stack underflow]\n");
+					if (stackPos < 2)
+						return DERR_UNDERFLOW;
 
 					//pop operands
 					uint32_t R = stack[--stackPos]; // right hand side
@@ -587,7 +582,8 @@ struct treeTree_t {
 				}
 				case '?': {
 					// QTF (depreciated)
-					assert(stackPos >= 3 || !"[stack underflow]\n");
+					if (stackPos < 3)
+						return DERR_UNDERFLOW;
 
 					// pop operands
 					uint32_t F = stack[--stackPos];
@@ -603,7 +599,8 @@ struct treeTree_t {
 				}
 				case '~': {
 					// NOT (support)
-					assert(stackPos >= 1 || !"[stack underflow]\n");
+					if (stackPos < 1)
+						return DERR_UNDERFLOW;
 
 					// invert top-of-stack
 					stack[stackPos - 1] ^= IBIT;
@@ -611,7 +608,7 @@ struct treeTree_t {
 				}
 
 				case '/':
-					// separator between pattern/transform
+					// separator between placeholder/skin
 					while (pCh[1])
 						pCh++;
 					break;
@@ -619,42 +616,29 @@ struct treeTree_t {
 					// skip spaces
 					break;
 				default:
-					assert(!"[bad token]\n");
+					return DERR_SYNTAX;
 			}
 		}
 
-		assert(stackPos == 1 || !"[unbalanced]\n");
+		if (stackPos != 1)
+			return DERR_INCOMPLETE;
 
 		// store result into root
 		this->root = stack[stackPos - 1];
-		return 0;
+		return DERR_OK;
 	}
 
 	/**
 	 * Parse notation and construct tree accordingly.
 	 * Notation is taken literally and not normalised
 	 *
-	 * Do not spend too much effort on detailing errors
+	 * WARNING: Does not check anything
 	 *
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
-	 * @return non-zero when parsing failed
 	 * @date 2020-03-13 21:11:04
 	 */
-	int decodeRaw(const char *pName, const char *pSkin = "abcdefghi") {
-
-		// test that skin is not short
-		if (this->flags & context_t::MAGICFLAG_PARANOID) {
-			assert(islower(pSkin[0]));
-			assert(islower(pSkin[1]));
-			assert(islower(pSkin[2]));
-			assert(islower(pSkin[3]));
-			assert(islower(pSkin[4]));
-			assert(islower(pSkin[5]));
-			assert(islower(pSkin[6]));
-			assert(islower(pSkin[7]));
-			assert(islower(pSkin[8]));
-		}
+	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
 		this->count = TINYTREE_NSTART;
@@ -853,23 +837,17 @@ struct treeTree_t {
 					stack[stackPos - 1] ^= IBIT;
 					break;
 				}
-
 				case '/':
-					// separator between placeholder/skin. Skip
-					while (pCh[1])
-						pCh++;
-					break;
-				case ' ':
-					// skip spaces
-					break;
-				default:
-					assert(!"[bad token]\n");
+					// skip delimiter
+
+					// store result into root
+					this->root = stack[stackPos - 1];
+					return;
 			}
 		}
 
 		// store result into root
 		this->root = stack[stackPos - 1];
-		return 0;
 	}
 
 	/**
@@ -878,7 +856,7 @@ struct treeTree_t {
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
-	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
+	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 * @date 2020-03-13 22:12:24
 	 */
 	const char * encode(uint32_t id, char *pSkin = NULL) {
@@ -1188,7 +1166,7 @@ struct treeTree_t {
 	 */
 	inline void eval(footprint_t *v) const {
 		// for all operators eligible for evaluation...
-		for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
+		for (uint32_t i = TINYTREE_NSTART; i < this->count; i++) {
 			// point to the first chunk of the `"question"`
 			const uint64_t *Q = v[this->N[i].Q].bits;
 			// point to the first chunk of the `"when-true"`
