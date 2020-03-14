@@ -33,6 +33,29 @@
 #include <stdarg.h>
 #include <time.h>
 
+/// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
+#define IBIT 0x80000000
+/// @constant {number} MAXSLOTS - Total number of slots
+#define MAXSLOTS 9
+
+/**
+ * struct representing a 512 bit vector, each bit representing the outcome of the unified operator for every possible state 9 variables can take
+ * The vector is split into a collection of 64bit wide words.
+ *
+ * Test vectors are also used to compare equality of two trees
+ *
+ * As this is a reference implementation, `SIMD` instructions should be avoided.
+ *
+ * @typedef {number[]}
+ * @date 2020-03-06 23:23:32
+ */
+struct footprint_t {
+	/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
+	enum { QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64) };
+
+	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
+};
+
 /**
  * Collection of utilities
  *
@@ -52,9 +75,15 @@ struct context_t {
 	/// @var {number} --timer, interval timer for verbose updates
 	unsigned opt_timer;
 
+	/// @var {number} - async indication that a timer interrupt occurred
+	uint32_t tick;
+	/// @var {uint64_t} - total memory allocated by `myAlloc()`
+	uint64_t totalAllocated;
+
 	/*
 	 * verbose levels
 	 */
+	// @formatter:off
 	enum {
 		VERBOSE_NONE       = 0,        // nothing
 		VERBOSE_SUMMARY    = 1,        // summary after performing an action
@@ -63,23 +92,32 @@ struct context_t {
 		VERBOSE_VERBOSE    = 4,        // above average verbosity
 		VERBOSE_INITIALIZE = 5,        // allocations, database connection and such
 	};
+	// @formatter:on
 
-	/// @var {number} - async indication that a timer interrupt occurred
-	uint32_t tick;
-	/// @var {uint64_t} - total memory allocated by `myAlloc()`
-	uint64_t totalAllocated;
+	/*
+	 * tree/database constraints
+	 */
+	// @formatter:off
+	enum {
+		MAGICFLAG_PARANOID = 0,                        // Force extra asserts when actually creating nodes
+		MAGICFLAG_QNTF     = 1,                        // Force generation of QnTF
+
+		MAGICMASK_PARANOID = 1 << MAGICFLAG_PARANOID,
+		MAGICMASK_QNTF     = 1 << MAGICFLAG_QNTF,
+	};
+	// @formatter:on
 
 	/**
 	 * Constructor
 	 */
 	context_t() {
 		// arguments and options
-		opt_debug   = 0;
+		opt_debug = 0;
 		opt_verbose = VERBOSE_TICK;
-		opt_timer   = 1; // default is 1-second intervals
+		opt_timer = 1; // default is 1-second intervals
 
 		// other values
-		tick           = 0;
+		tick = 0;
 		totalAllocated = 0;
 	}
 
@@ -91,7 +129,7 @@ struct context_t {
 	const char *timeAsString(void) {
 		static char tstr[256];
 
-		time_t    t   = time(0);
+		time_t t = time(0);
 		struct tm *tm = localtime(&t);
 		strftime(tstr, sizeof(tstr), "%F %T", tm);
 

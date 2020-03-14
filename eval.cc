@@ -13,7 +13,7 @@
  * and is therefore the authoritative outcome in cases of dispute during regression testing.
  *
  * It demonstrates:
- *   - Decoding en encoding of postfix notations
+ *   - Decoding and encoding of postfix notations
  *   - Constructing trees
  *   - Normalisations: inverting, function grouping, dyadic ordering
  *   - Caching
@@ -88,8 +88,6 @@ int main() {
 #define KSTART 1
 /// @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator
 #define SBUFMAX (10 * NUMNODES)
-/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
-#define QUADPERFOOTPRINT ((1 << MAXSLOTS) / 64)
 
 /*
  * User specified program options
@@ -156,6 +154,9 @@ void usage(char *const *argv, bool verbose) {
  * @date 2020-03-06 23:23:32
  */
 struct footprint_t {
+	/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
+	enum { QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64) };
+
 	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
 };
 
@@ -166,9 +167,12 @@ struct footprint_t {
  * @date 2020-03-06 21:14:47
  */
 struct node_t {
-	uint32_t Q; /** @var {number} Q - tree index to `"question"` */
-	uint32_t T; /** @var {number} T - tree index to `"when-true"` */
-	uint32_t F; /** @var {number} F - tree index to `"when-false"` */
+	/// @var {number} - reference to `"question"`
+	uint32_t Q;
+	/// @var {number} - reference to `"when-true"`. May have IBIT set
+	uint32_t T;
+	/// @var {number} - reference to `"when-false"`
+	uint32_t F;
 };
 
 /**
@@ -179,16 +183,19 @@ struct node_t {
  */
 struct tree_t {
 
-	/// @var {number} index of first endpoint
+	/// @var {number} index of first endpointvariable
 	uint32_t kstart;
-	/// @var {number} index of first node
+
+	/// @var {number} index of first operator node
 	uint32_t nstart;
-	/// @var {number} first free index
+
+	/// @var {number} index of first free node
 	uint32_t count;
 
 	/// @var {node_t[]} array of unified operators
 	node_t N[NUMNODES];
-	// @var {number} entrypoint/index where the result can be found
+
+	/// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
 
 	/**
@@ -250,109 +257,7 @@ struct tree_t {
 	}
 
 	/**
-	 * scan notation, find highest endpoint and decode optional skin
-	 *
-	 * @param {string} pPattern - notation and skin separated by '/'
-	 * @param {number[1]} pHighestEndpoint - return highest found endpoint in either notation or skin
-	 * @param {number[1]} pNumSkin - return number of skin elements. This might be higher than the number of placeholders
-	 * @param {number[]} pSkin - decoded list skins elements
-	 * @date 2020-03-09 10:31:50
-	 */
-	void decodeEndpoints(const char *pPattern, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
-
-		uint32_t prefix = 0; // current prefix
-		uint32_t highestEndpoint = 0; // highest endpoints
-		uint32_t numSkin = 0; // number of skin elements
-
-		/*
-		 * walk through the notation until end or until placeholder/skin separator
-		 */
-		for (; *pPattern != 0 && *pPattern != '/'; pPattern++) {
-
-			// skip spaces
-			if (isspace(*pPattern))
-				continue;
-
-			// test for prefix/endpoint
-			if (isupper(*pPattern)) {
-				// expand prefix
-				prefix = prefix * 26 + *pPattern - 'A';
-
-			} else if (islower(*pPattern)) {
-				// endpoint
-				uint32_t ep = prefix * 26 + *pPattern - 'a';
-
-				// remember highest
-				if (ep > highestEndpoint)
-					highestEndpoint = ep;
-
-				// reset prefix
-				prefix = 0;
-
-			} else {
-				// something else
-				prefix = 0;
-			}
-		}
-
-		/*
-		 * test for separator
-		 */
-		if (*pPattern != '/') {
-			// missing separator
-			*pHighestEndpoint = highestEndpoint; // highest endpoint in basic notation
-			*pNumSkin = 0; // no skin
-			return;
-		}
-
-		/*
-		 * decode the skin
-		 */
-
-		// skip separator
-		pPattern++;
-		// skin contains the final endpoints, reset highest
-		highestEndpoint = 0;
-
-		// walk through the notation until end
-		for (; *pPattern != 0; pPattern++) {
-
-			// skip spaces
-			if (isspace(*pPattern))
-				continue;
-
-			// test for prefix/endpoint
-			if (isupper(*pPattern)) {
-				// expand prefix
-				prefix = prefix * 26 + *pPattern - 'A';
-
-			} else if (islower(*pPattern)) {
-				// endpoint
-				uint32_t ep = prefix * 26 + *pPattern - 'a';
-
-				// store in binary skin
-				pSkin[numSkin++] = ep;
-
-				// remember highest
-				if (ep > highestEndpoint)
-					highestEndpoint = ep;
-
-				// reset prefix
-				prefix = 0;
-
-			} else {
-				// something else
-				prefix = 0;
-			}
-		}
-
-		// return result
-		*pHighestEndpoint = highestEndpoint; // highest endpoint in skin
-		*pNumSkin = numSkin; // number of skin elements
-	}
-
-	/**
-	 * Perform level 1 normalisation on q `"Q,T,F"` triplet and add to the tree only when unique.
+	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
 	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
 	 *
@@ -441,12 +346,6 @@ struct tree_t {
 				} else {
 					// OR
 					// "Q?~0:F" [2]
-					if (Q > F) {
-						// swap
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-					}
 				}
 			} else if ((T & ~IBIT) == Q) {
 				if (F == Q || F == 0) {
@@ -565,14 +464,17 @@ struct tree_t {
 
 		// sanity checking
 		if (true) {
-			assert(~Q & IBIT);            // Q not inverted
-			assert(~F & IBIT);            // F not inverted
-			assert(Q != 0);               // Q not zero
-			assert(T != 0);               // Q?0:F -> F?!Q:0
-			assert(T != IBIT || F != 0);  // Q?!0:0 -> Q
-			assert(Q != (T & ~IBIT));     // Q/T collapse
-			assert(Q != F);               // Q/F collapse
-			assert(T != F);               // T/F collapse
+			assert(~Q & IBIT);                     // Q not inverted
+			assert(~F & IBIT);                     // F not inverted
+			assert(Q != 0);                        // Q not zero
+			assert(T != 0);                        // Q?0:F -> F?!Q:0
+			assert(T != IBIT || F != 0);           // Q?!0:0 -> Q
+			assert(Q != (T & ~IBIT));              // Q/T collapse
+			assert(Q != F);                        // Q/F collapse
+			assert(T != F);                        // T/F collapse
+			assert((T & ~IBIT) != F || Q < F);     // NE ordering
+			assert(F != 0 || (T & IBIT) || Q < T); // AND ordering
+			assert(T != IBIT || Q < F);            // OR ordering
 		}
 
 		/*
@@ -609,18 +511,120 @@ struct tree_t {
 	}
 
 	/**
+	 * scan notation, find highest endpoint and decode optional skin
+	 *
+	 * @param {string} pName - notation and skin separated by '/'
+	 * @param {number[1]} pHighestEndpoint - return highest found endpoint in either notation or skin
+	 * @param {number[1]} pNumSkin - return number of skin elements. This might be higher than the number of placeholders
+	 * @param {number[]} pSkin - decoded list skins elements
+	 * @date 2020-03-09 10:31:50
+	 */
+	void decodeEndpoints(const char *pName, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
+
+		uint32_t prefix = 0; // current prefix
+		uint32_t highestEndpoint = 0; // highest endpoints
+		uint32_t numSkin = 0; // number of skin elements
+
+		/*
+		 * walk through the notation until end or until placeholder/skin separator
+		 */
+		for (; *pName != 0 && *pName != '/'; pName++) {
+
+			// skip spaces
+			if (isspace(*pName))
+				continue;
+
+			// test for prefix/endpoint
+			if (isupper(*pName)) {
+				// expand prefix
+				prefix = prefix * 26 + *pName - 'A';
+
+			} else if (islower(*pName)) {
+				// endpoint
+				uint32_t ep = prefix * 26 + *pName - 'a';
+
+				// remember highest
+				if (ep > highestEndpoint)
+					highestEndpoint = ep;
+
+				// reset prefix
+				prefix = 0;
+
+			} else {
+				// something else
+				prefix = 0;
+			}
+		}
+
+		/*
+		 * test for separator
+		 */
+		if (*pName != '/') {
+			// missing separator
+			*pHighestEndpoint = highestEndpoint; // highest endpoint in basic notation
+			*pNumSkin = 0; // no skin
+			return;
+		}
+
+		/*
+		 * decode the skin
+		 */
+
+		// skip separator
+		pName++;
+		// skin contains the final endpoints, reset highest
+		highestEndpoint = 0;
+
+		// walk through the notation until end
+		for (; *pName != 0; pName++) {
+
+			// skip spaces
+			if (isspace(*pName))
+				continue;
+
+			// test for prefix/endpoint
+			if (isupper(*pName)) {
+				// expand prefix
+				prefix = prefix * 26 + *pName - 'A';
+
+			} else if (islower(*pName)) {
+				// endpoint
+				uint32_t ep = prefix * 26 + *pName - 'a';
+
+				// store in binary skin
+				pSkin[numSkin++] = ep;
+
+				// remember highest
+				if (ep > highestEndpoint)
+					highestEndpoint = ep;
+
+				// reset prefix
+				prefix = 0;
+
+			} else {
+				// something else
+				prefix = 0;
+			}
+		}
+
+		// return result
+		*pHighestEndpoint = highestEndpoint; // highest endpoint in skin
+		*pNumSkin = numSkin; // number of skin elements
+	}
+
+	/**
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
 	 * Do not spend too much effort on detailing errors
 	 *
-	 * @param {string} pPattern - The notation describing the tree
+	 * @param {string} pName - The notation describing the tree
 	 * @param {number} numSkin - size of `pSkin[]`
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-09 17:05:36
 	 */
-	int decodeNormalised(const char *pPattern, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeNormalised(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -638,22 +642,22 @@ struct tree_t {
 
 
 		// walk through the notation until end or until placeholder/skin separator
-		for (const char *pattern = pPattern; *pattern != 0 && *pattern != '/'; pattern++) {
+		for (const char *pCh = pName; *pCh != 0 && *pCh != '/'; pCh++) {
 
 			// skip spaces
-			if (isspace(*pattern))
+			if (isspace(*pCh))
 				continue;
 
 			// test for prefix
-			if (isupper(*pattern)) {
-				prefix = prefix * 26 + *pattern - 'A';
+			if (isupper(*pCh)) {
+				prefix = prefix * 26 + *pCh - 'A';
 				continue;
 			}
 
 			// test for endpoint
-			if (islower(*pattern)) {
+			if (islower(*pCh)) {
 				// determine endpoint value
-				uint32_t ep = prefix * 26 + *pattern - 'a'; // endpoint
+				uint32_t ep = prefix * 26 + *pCh - 'a'; // endpoint
 
 				// test if placeholder
 				if (numSkin != 0) {
@@ -691,11 +695,11 @@ struct tree_t {
 
 			// test for back-reference
 			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
-			if (isdigit(*pattern)) {
+			if (isdigit(*pCh)) {
 				uint32_t nid; // node id
 
 				// determine final value
-				nid = prefix * 10 + *pattern - '0';
+				nid = prefix * 10 + *pCh - '0';
 
 				// reset prefix
 				prefix = 0;
@@ -750,10 +754,10 @@ struct tree_t {
 			 *
 			 * This is solved by placing the substition within parenthesis which restores back-reference offsets.
 			 */
-			if (*pattern == '(') {
+			if (*pCh == '(') {
 				nestStack[nestStackPos++] = nextNode;
 				continue;
-			} else if (*pattern == ')') {
+			} else if (*pCh == ')') {
 				nextNode = nestStack[--nestStackPos];
 				continue;
 			}
@@ -764,7 +768,7 @@ struct tree_t {
 				return 1;
 			}
 
-			switch (*pattern) {
+			switch (*pCh) {
 				case '>': {
 					// GT (appreciated)
 					if (stackPos < 2) {
@@ -970,7 +974,7 @@ struct tree_t {
 				}
 
 				default:
-					printf("[bad token: %c]\n", *pattern);
+					printf("[bad token: %c]\n", *pCh);
 					return 1;
 			}
 		}
@@ -991,13 +995,13 @@ struct tree_t {
 	 *
 	 * Do not spend too much effort on detailing errors
 	 *
-	 * @param {string} pPattern - The notation describing the tree
+	 * @param {string} pName - The notation describing the tree
 	 * @param {number} numSkin - size of `pSkin[]`
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-07 00:12:44
 	 */
-	int decodeRaw(const char *pPattern, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeRaw(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -1009,22 +1013,22 @@ struct tree_t {
 		uint32_t prefix = 0;
 
 		// walk through the notation until end or until placeholder/skin separator
-		for (const char *pattern = pPattern; *pattern != 0 && *pattern != '/'; pattern++) {
+		for (const char *pCh = pName; *pCh != 0 && *pCh != '/'; pCh++) {
 
 			// skip spaces
-			if (isspace(*pattern))
+			if (isspace(*pCh))
 				continue;
 
 			// test for prefix
-			if (isupper(*pattern)) {
-				prefix = prefix * 26 + *pattern - 'A';
+			if (isupper(*pCh)) {
+				prefix = prefix * 26 + *pCh - 'A';
 				continue;
 			}
 
 			// test for endpoint
-			if (islower(*pattern)) {
+			if (islower(*pCh)) {
 				// determine endpoint value
-				uint32_t ep = prefix * 26 + *pattern - 'a'; // endpoint
+				uint32_t ep = prefix * 26 + *pCh - 'a'; // endpoint
 
 				// test if placeholder
 				if (numSkin != 0) {
@@ -1062,11 +1066,11 @@ struct tree_t {
 
 			// test for back-reference
 			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
-			if (isdigit(*pattern)) {
+			if (isdigit(*pCh)) {
 				uint32_t nid; // node id
 
 				// determine final value
-				nid = prefix * 10 + *pattern - '0';
+				nid = prefix * 10 + *pCh - '0';
 
 				// reset prefix
 				prefix = 0;
@@ -1109,7 +1113,7 @@ struct tree_t {
 				return 1;
 			}
 
-			switch (*pattern) {
+			switch (*pCh) {
 				case '>': {
 					// GT (appreciated)
 					if (stackPos < 2) {
@@ -1335,7 +1339,7 @@ struct tree_t {
 				}
 
 				default:
-					printf("[bad token: %c]\n", *pattern);
+					printf("[bad token: %c]\n", *pCh);
 					return 1;
 			}
 		}
@@ -1354,16 +1358,16 @@ struct tree_t {
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
-	 * @param {string} pPattern - The notation describing the tree
+	 * @param {string} pName - The notation describing the tree
 	 * @param {boolean} shrinkwrap - Shrinkwrap nstart
 	 * @return non-zero when parsing failed
 	 * @date 2020-03-10 22:22:33
 	 */
-	int decode(const char *pPattern, bool shrinkwrap) {
+	int decode(const char *pName, bool shrinkwrap) {
 		uint32_t highestEndpoint, numSkin;
 
 		// get visual highest nstart
-		this->decodeEndpoints(pPattern, &highestEndpoint, &numSkin, this->skin);
+		this->decodeEndpoints(pName, &highestEndpoint, &numSkin, this->skin);
 
 		this->nstart = this->kstart + highestEndpoint + 1;
 		if (!shrinkwrap) {
@@ -1375,10 +1379,10 @@ struct tree_t {
 
 		// decode with explicit temporary storage for `pSkin`
 		if (opt_raw) {
-			if (this->decodeRaw(pPattern, numSkin, this->skin))
+			if (this->decodeRaw(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		} else {
-			if (this->decodeNormalised(pPattern, numSkin, this->skin))
+			if (this->decodeNormalised(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		}
 
@@ -1645,7 +1649,7 @@ struct tree_t {
 	 * Within the placeholders, endpoints are assigned in order of natural path which can be used as index for the skin to determine the actual endpoint.
 	 *
 	 * @param {number} id - entrypoint
-	 * @param {boolean} withPlaceholders - true for "ordered/skin" notation
+	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
 	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
 	 * @date 2020-03-08 20:52:41
 	 */
@@ -1685,7 +1689,7 @@ struct tree_t {
 				encodeQTF(id & ~IBIT);
 			}
 		} else {
-			// ordered/skin
+			// placeholder/skin
 			if ((id & ~IBIT) < this->nstart) {
 				// 'a/<id>'
 				beenThere[id & ~IBIT] = this->kstart;
@@ -1789,11 +1793,11 @@ struct tree_t {
 			// determine if the operator is `QTF` or `QnTF`
 			if (this->N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
-				for (unsigned j = 0; j < QUADPERFOOTPRINT; j++)
+				for (unsigned j = 0; j < footprint_t::QUADPERFOOTPRINT; j++)
 					R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j]);
 			} else {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
-				for (unsigned j = 0; j < QUADPERFOOTPRINT; j++)
+				for (unsigned j = 0; j < footprint_t::QUADPERFOOTPRINT; j++)
 					R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
 			}
 		}
@@ -1831,22 +1835,22 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 		uint64_t *v = (uint64_t *) footprint;
 
 		// set 64bit slice to zero
-		for (int i = 0; i < QUADPERFOOTPRINT * (1 + MAXSLOTS); i++)
+		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT * (1 + MAXSLOTS); i++)
 			v[i] = 0;
 
 		// set footprint for 64bit slice
 		assert(MAXSLOTS == 9);
 		for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
 			// v[(i/64)+0*4] should be 0
-			if (i & (1 << 0)) v[(i / 64) + 1 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 1)) v[(i / 64) + 2 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 2)) v[(i / 64) + 3 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 3)) v[(i / 64) + 4 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 4)) v[(i / 64) + 5 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 5)) v[(i / 64) + 6 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 6)) v[(i / 64) + 7 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 7)) v[(i / 64) + 8 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
-			if (i & (1 << 8)) v[(i / 64) + 9 * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 0)) v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 1)) v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 2)) v[(i / 64) + 3 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 3)) v[(i / 64) + 4 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 4)) v[(i / 64) + 5 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 5)) v[(i / 64) + 6 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 6)) v[(i / 64) + 7 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 7)) v[(i / 64) + 8 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			if (i & (1 << 8)) v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 		}
 
 	} else {
@@ -1855,7 +1859,7 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 		uint64_t *v = (uint64_t *) footprint;
 
 		// craptastic random fill
-		for (unsigned i = 0; i < QUADPERFOOTPRINT * nstart; i++) {
+		for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
 			v[i] = (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -1985,10 +1989,10 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	 */
 	uint64_t crc64 = 0;
 	if (pTree->root & IBIT) {
-		for (int i = 0; i < QUADPERFOOTPRINT; i++)
+		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
 			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root & ~IBIT].bits[i] ^ ~0LL));
 	} else {
-		for (int i = 0; i < QUADPERFOOTPRINT; i++)
+		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
 			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root].bits[i]));
 	}
 
@@ -2002,7 +2006,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	 * Output result of test vector prefixed with sign indicating if root is inverted
 	 */
 	printf("%c", (pTree->root & IBIT) ? '-' : '+');
-	for (int i = 0; i < QUADPERFOOTPRINT; i++)
+	for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
 		printf("%016lx ", pEval[pTree->root & ~IBIT].bits[i]);
 
 	printf("{%08lx} ", crc64);
@@ -2010,7 +2014,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Output tree
 	 */
-	printf(": %16s", pTree->encode(pTree->root, opt_skin ? true : false));
+	printf(": %26s", pTree->encode(pTree->root, opt_skin ? true : false));
 
 	/*
 	 * Output number of nodes and determine how many nodes if tree were flat
@@ -2096,7 +2100,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	 */
 	// @formatter:off
 	for (opt_raw=0; opt_raw<2; opt_raw++) // decode notation in raw mode
-	for (opt_skin=0; opt_skin<2; opt_skin++) // split into ordered/skin notation
+	for (opt_skin=0; opt_skin<2; opt_skin++) // split into placeholder/skin notation
 	for (opt_qntf=0; opt_qntf<2; opt_qntf++) { // force `QnTF` rewrites
 	// @formatter:on
 
@@ -2229,7 +2233,7 @@ int main(int argc, char *const *argv) {
 	// create an empty tree
 	tree_t *pTree = new tree_t(KSTART, KSTART);
 	// create an evaluation vector
-	footprint_t *pFootprints = new footprint_t[MAXSLOTS];
+	footprint_t *pFootprints = new footprint_t[NUMNODES];
 
 	/*
 	 *  Process program options

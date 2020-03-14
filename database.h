@@ -66,11 +66,6 @@
  *  All components contributing and using the database should share the same dimensions
  */
 
-/// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
-#define IBIT 0x80000000
-/// @constant {number} MAXSLOTS - Transform/skin size
-#define MAXSLOTS 9
-
 /**
  * The database file header
  *
