@@ -12,8 +12,8 @@ noinst_PROGRAMS =
 bin_PROGRAMS = \
 	eval gentransform tlookup gensignature genprimedata
 
-primedata.cc : genprimedata.cc
-	./genprimedata > primedata.cc
+primedata.h : genprimedata.cc
+	./genprimedata > primedata.h
 
 CPPFLAGS = $(LIBJANSSON_CFLAGS)
 LDADD = $(LIBJANSSON_LIBS)
@@ -32,7 +32,7 @@ tlookup_SOURCES = tlookup.cc context.h database.h
 
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
-gensignature_SOURCES = gensignature.cc context.h database.h tinytree.h primedata.cc
+gensignature_SOURCES = gensignature.cc context.h database.h tinytree.h primedata.h
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc

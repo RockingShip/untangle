@@ -36,6 +36,13 @@ jekyll/vendor
 # jansson might be build in-project
 jansson-*
 
+# generated files
+eval
+genprimedata
+gensignature
+gentransform
+tlookup
+
 *.bak
 *.dat
 *.db
