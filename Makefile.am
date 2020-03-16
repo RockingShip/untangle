@@ -24,15 +24,15 @@ eval_SOURCES = eval.cc
 
 # @date 2020-03-11 21:53:16
 gentransform_LDADD = $(LDADD)
-gentransform_SOURCES = gentransform.cc context.h database.h
+gentransform_SOURCES = gentransform.cc database.h datadef.h context.h  primedata.h
 
 # @date 2020-03-13 12:56:11
 tlookup_LDADD = $(LDADD)
-tlookup_SOURCES = tlookup.cc context.h database.h
+tlookup_SOURCES = tlookup.cc database.h datadef.h context.h primedata.h
 
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
-gensignature_SOURCES = gensignature.cc context.h database.h tinytree.h primedata.h
+gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc

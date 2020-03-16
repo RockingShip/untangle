@@ -26,35 +26,22 @@
  */
 
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <signal.h>
-#include <unistd.h>
+#include <assert.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <time.h>
+#include <signal.h>
+#include "primedata.h"
 
 /// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
 #define IBIT 0x80000000
+
 /// @constant {number} MAXSLOTS - Total number of slots
 #define MAXSLOTS 9
 
-/**
- * struct representing a 512 bit vector, each bit representing the outcome of the unified operator for every possible state 9 variables can take
- * The vector is split into a collection of 64bit wide words.
- *
- * Test vectors are also used to compare equality of two trees
- *
- * As this is a reference implementation, `SIMD` instructions should be avoided.
- *
- * @typedef {number[]}
- * @date 2020-03-06 23:23:32
- */
-struct footprint_t {
-	/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
-	enum { QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64) };
-
-	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
-};
+/// @constant {number} MAXTRANSFORM - Number of slot permutations
+#define MAXTRANSFORM (1*2*3*4*5*6*7*8*9)
 
 /**
  * Collection of utilities
@@ -79,6 +66,13 @@ struct context_t {
 	uint32_t tick;
 	/// @var {uint64_t} - total memory allocated by `myAlloc()`
 	uint64_t totalAllocated;
+
+	// statistics
+
+	/// @var {uint64_t} - number of calls to baseTree::hash()
+	uint64_t cntHash;
+	/// @var {uint64_t} - number of compares in baseTree::hash() (collisions)
+	uint64_t cntCompare;
 
 	/*
 	 * verbose levels
@@ -119,6 +113,10 @@ struct context_t {
 		// other values
 		tick = 0;
 		totalAllocated = 0;
+
+		// statistics
+		cntHash = 0;
+		cntCompare = 0;
 	}
 
 	/**
@@ -129,9 +127,9 @@ struct context_t {
 	const char *timeAsString(void) {
 		static char tstr[256];
 
-		time_t t = time(0);
-		struct tm *tm = localtime(&t);
-		strftime(tstr, sizeof(tstr), "%F %T", tm);
+		time_t t = ::time(0);
+		struct tm *tm = ::localtime(&t);
+		::strftime(tstr, sizeof(tstr), "%F %T", tm);
 
 		return tstr;
 	}
@@ -147,7 +145,7 @@ struct context_t {
 		va_list ap;
 		va_start(ap, format);
 		vfprintf(stderr, format, ap);
-		exit(1);
+		::exit(1);
 	}
 
 	/**
@@ -189,6 +187,66 @@ struct context_t {
 			fprintf(stderr, "memory -%p %s\n", ptr, name);
 
 		::free(ptr);
+	}
+
+	/**
+	 * Raise value to next prime.
+	 *
+	 * @param {number} n - number to raise
+	 * @date 2020-03-15 19:21:50
+	 */
+	static uint32_t raisePrime(uint32_t n)
+	{
+		if (n == 0)
+			return 0;
+
+		// do not exceed 32 bits unsigned
+		if (n > 4294000079 - n / 100)
+			return 4294000079;
+
+		// raise at least 1%
+		n += n / 100;
+
+		for (unsigned i = 0; ; i++) {
+			if (n <= primeData[i])
+				return primeData[i];
+		}
+		assert(0);
+	}
+
+	/**
+	 * Raise value 1%.
+	 *
+	 * @param {number} n - number to raise
+	 * @date 2020-03-15 19:42:19
+	 */
+	static uint32_t raiseProcent(uint32_t n) {
+		if (n == 0)
+			return 0; // zero is zero
+
+		if (n > 4294000079 - n / 100)
+			return 4294000079;
+
+		// raise 1%
+		if (n < 100)
+			n++; // increment small numbers
+		else
+			n += n / 100; // raise 1%
+
+		return n;
+	}
+
+	/**
+	 * Display creation flags to stderr
+	 *
+	 * @date 2020-03-15 23:15:44
+	 */
+	void logFlags(uint32_t flags) {
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
+		        flags,
+		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
+		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : ""
+		);
 	}
 
 };

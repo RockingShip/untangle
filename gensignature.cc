@@ -54,6 +54,13 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include "tinytree.h"
+#include "database.h"
+
+#include "config.h"
+
+#if defined(ENABLE_JANSSON)
+#include "jansson.h"
+#endif
 
 /**
  * Main program logic as application context
@@ -81,6 +88,8 @@ struct gensignatureContext_t : context_t {
 	unsigned opt_keep;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} --selftest, perform a selftest
+	unsigned opt_selftest;
 
 	/**
 	 * Constructor
@@ -175,8 +184,6 @@ void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
 						exit(1);
 					}
 				}
-
-				printf("%d %s/%s\n", testNr, treeName, skin);
 			} else {
 				treeName = pTree->encode(pTree->root, NULL);
 				if (iFast) {
@@ -189,10 +196,7 @@ void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
 						exit(1);
 					}
 				}
-
-				printf("%d %s\n", testNr, treeName);
 			}
-
 
 			/*
 			 * Evaluate tree
@@ -274,6 +278,170 @@ void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
 	}
 
 	printf("selfTestTree() passed %d tests\n", numPassed);
+}
+
+/**
+ * Perform a selftest.
+ *
+ * Searching for footprints requires an associative.
+ * A database lookup for a footprint will return an ordered structure and skin.
+ * Evaluating the "structure/skin" will result in the requested footprint.
+ *
+ * Two extreme implementations are:
+ *
+ * - Store and index all 9! possible permutations of the footprint.
+ *   Fastest runtime speed but at an extreme high storage cost.
+ *
+ * - Store the ordered structure.
+ *   During runtime, apply all 9! skin permutations to the footprint
+ *   and perform a database lookup to determine if a matching ordered structure exists.
+ *   Most efficient data storage with an extreme high performance hit.
+ *
+ * The chosen implentation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
+ * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
+ *
+ * @param {tree_t} pTree - worker tree
+ * @param {footprint_t} pEval - evaluation vector
+ * @date 2020-03-15 16:35:43
+ */
+void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *pEvalCol, footprint_t *pEvalRow) {
+
+	unsigned interleaveFactor = 720;
+
+	tinyTree_t tree(0);
+
+	tree.initialiseVector(ctx,pEvalCol, MAXTRANSFORM, pStore->fwdTransformData);
+	tree.initialiseVector(ctx,pEvalRow, MAXTRANSFORM, pStore->revTransformData);
+
+	/*
+	 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
+	 */
+
+	const char *pTestName = "abc!defg!!hi!";
+	tree.decodeFast(pTestName);
+
+	// test that tree is what was requested
+	assert(~tree.root & IBIT);
+	assert(::strcmp(pTestName, tree.encode(tree.root, NULL)) == 0);
+
+	{
+		/*
+		 * index all the key rows
+		 */
+
+		// index lookup return zero for not-found. First active id is 0.
+		pStore->numImprint = 1;
+
+		/*
+		 * Add footprint/imprint to each interleave stripe
+		 */
+		for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += interleaveFactor) {
+
+			// find where the transform is located in the evaluator store
+			footprint_t *v = pEvalRow + iRow * tinyTree_t::TINYTREE_NEND;
+
+			// apply the tree to the store
+			tree.eval(v);
+
+			// search the resulting footprint in the cache/index
+			uint32_t ix = pStore->lookupImprint(v[tree.root]);
+
+			// add to the database is not there
+			if (pStore->imprintIndex[ix] == 0) {
+				pStore->imprintIndex[ix] = pStore->addImprint(v[tree.root]);
+				imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+				// populate non-key fields
+				pImprint->sid = 0; // not used
+				pImprint->tid = iRow;
+			} else {
+				// should not already be present
+				assert(0);
+			}
+		}
+	}
+
+	/*
+	 * Generate all possible transformations of pattern
+	 */
+
+	// @formatter:off
+	for (unsigned a=tinyTree_t::TINYTREE_KSTART; a<tinyTree_t::TINYTREE_NSTART; a++)
+	for (unsigned b=tinyTree_t::TINYTREE_KSTART; b<tinyTree_t::TINYTREE_NSTART; b++)
+	for (unsigned c=tinyTree_t::TINYTREE_KSTART; c<tinyTree_t::TINYTREE_NSTART; c++)
+	for (unsigned d=tinyTree_t::TINYTREE_KSTART; d<tinyTree_t::TINYTREE_NSTART; d++)
+	for (unsigned e=tinyTree_t::TINYTREE_KSTART; e<tinyTree_t::TINYTREE_NSTART; e++)
+	for (unsigned f=tinyTree_t::TINYTREE_KSTART; f<tinyTree_t::TINYTREE_NSTART; f++)
+	for (unsigned g=tinyTree_t::TINYTREE_KSTART; g<tinyTree_t::TINYTREE_NSTART; g++)
+	for (unsigned h=tinyTree_t::TINYTREE_KSTART; h<tinyTree_t::TINYTREE_NSTART; h++)
+	for (unsigned i=tinyTree_t::TINYTREE_KSTART; i<tinyTree_t::TINYTREE_NSTART; i++) {
+	// @formatter:on
+
+		// test all endpoints unique
+		if ((1 << a | 1 << b | 1 << c | 1 << d | 1 << e | 1 << f | 1 << g | 1U<< h | 1 << i) != (0x1ffU << tinyTree_t::TINYTREE_KSTART))
+			continue;
+
+//		gProgress++;
+//
+//		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+//			fprintf(stderr, "\r[%s] %.5f%%", ctx.timeAsString(), gProgress * 100.0 / gProgressHi);
+//			ctx.tick = 0;
+//		}
+
+		//
+		char pattern[tinyTree_t::TINYTREE_NAMELEN];
+		pattern[0] = "0abcdefghi"[a];
+		pattern[1] = "0abcdefghi"[b];
+		pattern[2] = "0abcdefghi"[c];
+		pattern[3] = '!';
+		pattern[4] = "0abcdefghi"[d];
+		pattern[5] = "0abcdefghi"[e];
+		pattern[6] = "0abcdefghi"[f];
+		pattern[7] = "0abcdefghi"[g];
+		pattern[8] = '!';
+		pattern[9] = '!';
+		pattern[10] = "0abcdefghi"[h];
+		pattern[11] = "0abcdefghi"[i];
+		pattern[12] = '!';
+		pattern[13] = 0;
+
+		/*
+		 * load the pattern
+		 */
+		tree.decodeFast(pattern);
+
+		{
+			/*
+			 * Get starting point storage
+			 */
+			footprint_t *v = pEvalCol;
+
+			// find transform
+			for (unsigned iCol = 0; iCol < interleaveFactor; iCol++) {
+
+				// apply the tree to the store
+				tree.eval(v);
+
+				// search the resulting footprint in the cache/index
+				uint32_t ix = pStore->lookupImprint(v[tree.root]);
+
+				/*
+				 * Was something found
+				 */
+				if (pStore->imprintIndex[ix] != 0) {
+					/*
+					 * Is so, then found the stripe which is the starting point. iTransform is relative to that
+					 */
+					uint32_t tid = pStore->imprints[pStore->imprintIndex[ix]].tid + iCol;
+					printf("%06d\n", tid);
+					break;
+				}
+
+				v += tinyTree_t::TINYTREE_NEND;
+			}
+		}
+	}
+
+	printf("%d\n", pStore->numImprint);
 }
 
 /*
@@ -423,23 +591,9 @@ int main(int argc, char *const *argv) {
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
 				break;
-			case LO_SELFTEST: {
-				// register timer handler
-				if (app.opt_timer) {
-					signal(SIGALRM, sigalrmHandler);
-					::alarm(app.opt_timer);
-				}
-
-				// create an empty tree
-				tinyTree_t *pTree = new tinyTree_t(0);
-				// create an evaluation vector
-				footprint_t *pFootprints = new footprint_t[tinyTree_t::TINYTREE_NUMNODES];
-
-				// perform selfcheck
-				performSelfTestTree(pTree, pFootprints);
-				exit(0);
+			case LO_SELFTEST:
+				app.opt_selftest++;
 				break;
-			}
 			case LO_TEXT:
 				app.opt_text++;
 				break;
@@ -489,17 +643,34 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
-	 * Create database
+	 * Open input and create output database
 	 */
 
-//	database_t store(app);
+	// Open input
+	database_t db(app);
 
-	// set section sizes to be created
-	// additional creation flags
-//	store.flags = app.opt_flags;
+	db.open(app.arg_inputDatabase, true);
 
-	// create memory-based store
-//	store.create();
+        if (db.flags && app.opt_verbose >= app.VERBOSE_SUMMARY)
+                app.logFlags(db.flags);
+#if defined(ENABLE_JANSSON)
+        if (app.opt_verbose >= app.VERBOSE_INITIALIZE)
+                fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.headerInfo(NULL, db.dbHeader), JSON_PRESERVE_ORDER | JSON_COMPACT));
+#endif
+	if (db.maxTransform == 0)
+		app.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
+
+	// create output
+	database_t store(app);
+
+	// create new sections
+	store.maxImprint = MAXTRANSFORM + 10;
+	store.imprintIndexSize = store.maxImprint * 4;
+
+	store.create();
+
+	// inherit to existing
+	store.inheritSections(&db, database_t::ALLOCMASK_TRANSFORM|database_t::ALLOCMASK_TRANSFORMINDEX);
 
 	/*
 	 * Statistics
@@ -513,6 +684,13 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Invoke main entrypoint of application context
 	 */
+
+	footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+	footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+	assert(pEvalCol);
+	assert(pEvalRow);
+	performSelfTestInterleave(app, &store, pEvalCol, pEvalRow);
+
 //	app.main(&store);
 
 	/*
@@ -526,12 +704,12 @@ int main(int argc, char *const *argv) {
 //	store.save(app.arg_outputDatabase);
 
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_SUMMARY) {
-		json_t *jResult = json_object();
-		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-		store.headerInfo(jResult, store.dbHeader);
-		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-	}
+//	if (app.opt_verbose >= app.VERBOSE_SUMMARY) {
+//		json_t *jResult = json_object();
+//		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
+//		store.headerInfo(jResult, store.dbHeader);
+//		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+//	}
 #endif
 
 	return 0;

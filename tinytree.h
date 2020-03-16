@@ -32,9 +32,12 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 #include <assert.h>
 #include <ctype.h>
+#include <string.h>
 #include "context.h"
+#include "datadef.h"
 
 /**
  * Single unified operator node
@@ -61,7 +64,7 @@ struct tinyTree_t {
 
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_NUMNODES = (MAXSLOTS * 2),
+		TINYTREE_MAXNODES = (MAXSLOTS * 2),
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,
@@ -70,13 +73,13 @@ struct tinyTree_t {
 		TINYTREE_NSTART = (TINYTREE_KSTART + MAXSLOTS),
 
 		/// @constant {number} - Total number of entries in tree
-		TINYTREE_NEND = (TINYTREE_NSTART + TINYTREE_NUMNODES),
+		TINYTREE_NEND = (TINYTREE_NSTART + TINYTREE_MAXNODES),
 
 		/// @constant {number} - Maximum stack depth for tree walk. (3 operands + 1 opcode) per node
-		TINYTREE_MAXSTACK = ((3 + 1) * TINYTREE_NUMNODES),
+		TINYTREE_MAXSTACK = ((3 + 1) * TINYTREE_MAXNODES),
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		TINYTREE_NAMELEN = (1 + (3 + 1) * TINYTREE_NUMNODES + 1 + 1),
+		TINYTREE_NAMELEN = (1 + (3 + 1) * TINYTREE_MAXNODES + 1 + 1),
 	};
 
 	/// @var {number} functionality flags
@@ -86,7 +89,7 @@ struct tinyTree_t {
 	uint32_t count;
 
 	/// @var {node_t[]} array of unified operators
-	tinyNode_t N[TINYTREE_NUMNODES];
+	tinyNode_t N[TINYTREE_MAXNODES];
 
 	// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
@@ -1189,4 +1192,123 @@ struct tinyTree_t {
 			}
 		}
 	}
+
+	/**
+	 * Create an initial data vector for the evaluator
+	 *
+	 * During evaluation there are number of states values can possible take.
+	 * For expressions with 9 input variables there are `2^9=512` possible value states
+	 *
+	 * Using 512 bit vectors, it is possible to associate each bit position with a value state.
+	 * When evaluating the tree, all 512 bits of the vector can be performed in parallel.
+	 *
+	 * Example expression stored in data-vector (`v[]`) and tree (`N[]`)
+	 *
+	 *    index     | v[]        |  N[]
+	 * -------------+------------+--------
+	 * [0]          | 0b00000000 | null/zero/false
+	 * [1=KSTART+0] | 0b10101010 | `a`
+	 * [2=KSTART+1] | 0b11001100 | `b`
+	 * [3=KSTART+2] | 0b11110000 | `c`
+	 * [4=NSTART+0] | 0b10001000 | `ab&`
+	 * [5=NSTART+1] | 0b01111000 | `ab&c^`
+	 *
+	 * In most cases the trees to be evaluated have explicit skins.
+	 * This has effect on how input variables are preloaded into the vector.
+	 *
+	 *    index     | v[]        |  N[]
+	 * -------------+------------+--------
+	 * [0]          | 0b00000000 | null/zero/false
+	 * [1=KSTART+0] | 0b11001100 | `b`
+	 * [2=KSTART+1] | 0b11110000 | `c`
+	 * [3=KSTART+2] | 0b10101010 | `a`
+	 * [4=NSTART+0] | 0b11000000 | `ab&`/bca
+	 * [5=NSTART+1] | 0b01101010 | `ab&c^`/bca
+	 *
+	 * In the above table, placeholders in `ab&` directly index into `v[]`, and skin `/bca` is how endpoint `v[]` are preloaded.
+	 *
+	 * Encoding the initial state for `v[]` effected by skins is CPU-expensive.
+	 *
+	 * To optimise this, not one but 9! vectors are preloaded, each with appropiate endpoint values for each transform permutation.
+	 *
+	 * For `tinyTree_t` with `MAXNODE` set to 10, the size of the complete data vector is:
+	 * 	`(sizeof(footprint_t)*(1+MAXSLOTS+MAXNODE)*MAXSLOTS!)`=(64*(1+9+10)*9!)=464 Mbyte.
+	 * And there are 2 data vectors, one for forward transforms and a second for reverse.
+	 *
+	 * @param {footprint_t) pFootprint - footprint to initialise
+	 * @param {footprint_t) maxTransform - How many transforms
+	 * @param {uint64_t[]) pTransformData - forward or reverse transform data
+	 * @date 2020-03-15 15:39:59
+	 */
+	void initialiseVector(context_t &ctx, footprint_t *pFootprint, uint32_t numTransform, uint64_t *pTransformData) {
+
+		// hardcoded assumptions
+		assert(MAXSLOTS == 9);
+
+		/*
+		 * The patterns and generators have a hardcoded conceptual assumption about the following:
+		 */
+		uint64_t *v = (uint64_t *) pFootprint;
+
+		// zero everything
+		::memset(pFootprint, 0, sizeof(*pFootprint) * TINYTREE_NEND * numTransform);
+
+		/*
+		 * Initialize the data structures
+		 */
+		ctx.tick = 0;
+		for (unsigned iTrans = 0; iTrans < MAXTRANSFORM; iTrans++) {
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				fprintf(stderr, "\r\e[K%.5f%%", iTrans * 100.0 / MAXTRANSFORM);
+				ctx.tick = 0;
+			}
+
+			// set 64bit slice to zero
+			for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT * TINYTREE_NSTART; i++)
+				v[i] = 0;
+
+			// set footprint for 64bit slice
+			for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
+
+				// binary transform name. Each nibble is unique
+				uint64_t transformMask = *pTransformData;
+
+				// v[(i/64)+0*4] should be 0
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 3 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 4 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 5 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 6 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 7 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 8 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				transformMask >>= 4;
+				if (i & (1LL << (transformMask & 15)))
+					v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+			}
+
+			v += footprint_t::QUADPERFOOTPRINT * TINYTREE_NEND;
+			pTransformData++;
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+	}
+
 };

@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-11 21:53:16
@@ -61,8 +61,6 @@
  * Constants
  */
 
-/// @constant {number} MAXTRANSFORM - Number of transforms (`MAXSLOTS!`=9!)
-#define MAXTRANSFORM (1*2*3*4*5*6*7*8*9)
 /// @constant {number} MAXTRANSFORMINDEX - Number of blocks times block size
 #define MAXTRANSFORMINDEX ((MAXSLOTS + 1) + (1 + (1 + (1 + (1 + (1 + (1 + (1 + (1 + 2) * 3) * 4) * 5) * 6) * 7) * 8) * 9) * (MAXSLOTS + 1))
 
@@ -387,6 +385,8 @@ struct gentransformContext_t : context_t {
 		 */
 		this->createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward
 		this->createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse
+		pStore->numTransform = MAXTRANSFORM;
+		assert(pStore->numTransform == pStore->maxTransform);
 
 		/*
 		 * Reverse Id's are the lookups of reverse names
@@ -648,7 +648,7 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
  * @param {gentransformContext_t} pApp - program context
  * @date 2020-03-15 12:13:13
  */
-void performSelfTestMatchInterleave(gentransformContext_t *pApp) {
+void performSelfTestInterleave(gentransformContext_t *pApp) {
 	// allocate storage
 	uint64_t *pFwdData = new uint64_t[MAXTRANSFORM];
 	uint64_t *pRevData = new uint64_t[MAXTRANSFORM];
@@ -733,7 +733,7 @@ void performSelfTestMatchInterleave(gentransformContext_t *pApp) {
 		}
 	}
 
-	printf("performSelfTestMatchInterleave() passed %d tests\n", numPassed);
+	printf("performSelfTestInterleave() passed %d tests\n", numPassed);
 }
 
 /*
@@ -892,7 +892,7 @@ int main(int argc, char *const *argv) {
 
 				// perform selfcheck
 				performSelfTestMatch(&app);
-				performSelfTestMatchInterleave(&app);
+				performSelfTestInterleave(&app);
 				exit(0);
 				break;
 			}
@@ -950,7 +950,7 @@ int main(int argc, char *const *argv) {
 	database_t store(app);
 
 	// set section sizes to be created
-	store.numTransform = MAXTRANSFORM;
+	store.maxTransform = MAXTRANSFORM;
 	store.transformIndexSize = MAXTRANSFORMINDEX;
 	// additional creation flags
 	store.flags = app.opt_flags;

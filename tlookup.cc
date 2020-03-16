@@ -149,7 +149,7 @@ struct tlookupContext_t : context_t {
                  * Find the transform
                  */
                 int tread = -1, twrite = -1;
-                for (unsigned i = 0; i < db.numTransform; i++) {
+                for (unsigned i = 0; i < db.maxTransform; i++) {
                         if (!strcmp((*db.colTransformString)[i], trimmedName))
                                 tread = i;
                         if (!strcmp((*db.rowTransformString)[i], trimmedName))
@@ -303,7 +303,7 @@ int main(int argc, char *const *argv) {
 	// open database
 	db.open(app.arg_database, true);
 
-        if (db.numTransform == 0)
+        if (db.maxTransform == 0)
 	        app.fatal("Missing transform section: %s\n", app.arg_database);
 
         /*

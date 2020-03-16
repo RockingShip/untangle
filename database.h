@@ -45,13 +45,13 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <assert.h>
-#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include "context.h"
+#include "datadef.h"
 
 #include "config.h"
 
@@ -77,6 +77,7 @@ struct FileHeader_t {
 	uint32_t magic;                  // magic+version
 	uint32_t magic_flags;            // conditions it was created
 	uint32_t magic_maxSlots;
+	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofSignature;
 	uint32_t magic_sizeofPatternFirst;
 	uint32_t magic_sizeofPatternSecond;
@@ -86,17 +87,17 @@ struct FileHeader_t {
 	uint32_t interleaveFactor;
 
 	// section sizes
-	uint32_t numTransforms;         // for both fwd/rev
+	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
-	uint32_t numSignatures;
-	uint32_t signatureIndexSize;
 	uint32_t numImprints;
 	uint32_t imprintIndexSize;
+	uint32_t numSignature;
+	uint32_t signatureIndexSize;
 	uint32_t numPatternFirst;
 	uint32_t patternFirstIndexSize;
 	uint32_t numPatternSecond;
 	uint32_t patternSecondIndexSize;
-	uint32_t numGrows;
+	uint32_t numGrow;
 	uint32_t growIndexSize;
 
 	// section offsets
@@ -107,10 +108,10 @@ struct FileHeader_t {
 	uint64_t offRevTransformIds;
 	uint64_t offFwdTransformNameIndex;
 	uint64_t offRevTransformNameIndex;
-	uint64_t offSignatures;
-	uint64_t offSignatureIndex;
 	uint64_t offImprints;
 	uint64_t offImprintIndex;
+	uint64_t offSignatures;
+	uint64_t offSignatureIndex;
 	uint64_t offPatternFirst;
 	uint64_t offPatternFirstIndex;
 	uint64_t offPatternSecond;
@@ -121,8 +122,7 @@ struct FileHeader_t {
 	uint64_t offEnd;
 };
 
-/// @typedef {char[]} fixed size string containing transform
-typedef char transformName_t[MAXSLOTS + 1];
+
 
 /**
  * The *DATABASE*
@@ -141,15 +141,23 @@ struct database_t {
 	uint32_t           flags;                   // creation constraints
 	uint32_t           allocFlags;              // memory constraints
 	// transforms
-	uint32_t           numTransform;            // number of transforms (9!)
-	uint32_t           transformIndexSize;      // index size (must be prime)
+	uint32_t           numTransform;            // number of elements in collection
+	uint32_t           maxTransform;            // maximum size of collection
 	uint64_t           *fwdTransformData;       // forward transform (binary)
 	uint64_t           *revTransformData;       // reverse transform (binary)
 	transformName_t    *fwdTransformNames;      // forward transform (string)
 	transformName_t    *revTransformNames;      // reverse transform (string)
-	uint32_t           *revTransformIds;          // inverted skins
+	uint32_t           *revTransformIds;        // reverse transform (id)
+	uint32_t           transformIndexSize;      // index size (must be prime)
 	uint32_t           *fwdTransformNameIndex;  // fwdTransformNames index
 	uint32_t           *revTransformNameIndex;  // revTransformNames index
+	// imprint store
+	uint32_t           interleaveFactor;       // imprint interleave factor (col/row tab-stop distance)
+	uint32_t           numImprint;             // number of elements in collection
+	uint32_t           maxImprint;             // maximum size of collection
+	imprint_t          *imprints;              // imprint collection
+	uint32_t           imprintIndexSize;       // index size (must be prime)
+	uint32_t           *imprintIndex;          // index
 	// statistics
 	uint64_t           progressHi;
 	uint64_t           progress;
@@ -165,12 +173,22 @@ struct database_t {
 		flags = 0;
 		allocFlags = 0;
 
+		// transform store
 		numTransform = 0;
+		maxTransform = maxTransform + 0; // No rounding, exact number
 		transformIndexSize = 0;
 		fwdTransformData = revTransformData = NULL;
 		fwdTransformNames = revTransformNames = NULL;
 		fwdTransformNameIndex = revTransformNameIndex = NULL;
 		revTransformIds = NULL;
+
+		// imprint store
+//		interleaveFactor(calcInterleaveFactor(userArguments.opt_interleave)),
+		numImprint = 0;
+		maxImprint = 0;
+		imprints = NULL;
+		imprintIndexSize = 0;
+		imprintIndex = NULL;
 
 		progressHi = 0;
 		progress = 0;
@@ -184,10 +202,14 @@ struct database_t {
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
 		ALLOCFLAG_TRANSFORMINDEX,
+		ALLOCFLAG_IMPRINT,
+		ALLOCFLAG_IMPRINTINDEX,
 
 		// @formatter:off
-		ALLOCMASK_TRANSFORM      = 1 << ALLOCFLAG_TRANSFORM,
-		ALLOCMASK_TRANSFORMINDEX = 1 << ALLOCFLAG_TRANSFORMINDEX,
+		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
+		ALLOCMASK_TRANSFORMINDEX     = 1 << ALLOCFLAG_TRANSFORMINDEX,
+		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
+		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
 		// @formatter:on
 	};
 
@@ -199,12 +221,14 @@ struct database_t {
 	 * @date 2020-03-12 16:05:37
 	 */
 	void create(void) {
-		if (numTransform) {
-			fwdTransformData = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", numTransform, sizeof(*this->fwdTransformData));
-			revTransformData = (uint64_t *) ctx.myAlloc("database_t::revTransformData", numTransform, sizeof(*this->revTransformData));
-			fwdTransformNames = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", numTransform, sizeof(*this->fwdTransformNames));
-			revTransformNames = (transformName_t *) ctx.myAlloc("database_t::revTransformNames", numTransform, sizeof(*this->revTransformNames));
-			revTransformIds = (uint32_t *) ctx.myAlloc("database_t::revTransformIds", numTransform, sizeof(*this->revTransformIds));
+
+		// transform store
+		if (maxTransform) {
+			fwdTransformData = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
+			revTransformData = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
+			fwdTransformNames = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", maxTransform, sizeof(*this->fwdTransformNames));
+			revTransformNames = (transformName_t *) ctx.myAlloc("database_t::revTransformNames", maxTransform, sizeof(*this->revTransformNames));
+			revTransformIds = (uint32_t *) ctx.myAlloc("database_t::revTransformIds", maxTransform, sizeof(*this->revTransformIds));
 			allocFlags |= ALLOCMASK_TRANSFORM;
 			if (transformIndexSize) {
 				fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
@@ -212,8 +236,67 @@ struct database_t {
 				allocFlags |= ALLOCMASK_TRANSFORMINDEX;
 			}
 		}
+
+		// imprint store
+		if (maxImprint) {
+//			interleaveFactor = calcInterleaveFactor(userArguments.opt_interleave);
+			numImprint = 0; // do not start at 0
+			maxImprint = ctx.raiseProcent(maxImprint);
+			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*this->imprints));
+			allocFlags |= ALLOCMASK_IMPRINT;
+			if (imprintIndexSize) {
+				imprintIndexSize = ctx.raisePrime(imprintIndexSize);
+				imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
+				allocFlags |= ALLOCMASK_IMPRINTINDEX;
+			}
+		}
+
 	};
 
+
+	/**
+	 * Inherit read-only sections from an older database.
+	 *
+	 * NOTE: call after calling `create()`
+	 *
+	 * @date 2020-03-15 22:25:41
+	 */
+	void inheritSections(const database_t *pDatabase, uint32_t sections) {
+
+		// transform store
+		if (sections & database_t::ALLOCMASK_TRANSFORM) {
+			assert(maxTransform == 0);
+			maxTransform = pDatabase->maxTransform;
+			numTransform = pDatabase->numTransform;
+
+			fwdTransformData = pDatabase->fwdTransformData;
+			revTransformData = pDatabase->revTransformData;
+			fwdTransformNames = pDatabase->fwdTransformNames;
+			revTransformNames = pDatabase->revTransformNames;
+			revTransformIds = pDatabase->revTransformIds;
+
+			if (sections & database_t::ALLOCMASK_TRANSFORMINDEX) {
+				assert(transformIndexSize == 0);
+				transformIndexSize = pDatabase->transformIndexSize;
+
+				fwdTransformNameIndex = pDatabase->fwdTransformNameIndex;
+				revTransformNameIndex = pDatabase->revTransformNameIndex;
+			}
+		}
+
+		// imprint store
+		if (sections & database_t::ALLOCMASK_IMPRINT) {
+			assert(maxImprint == 0);
+			maxImprint = pDatabase->maxImprint;
+			numImprint = pDatabase->numImprint;
+//			interleaveFactor = calcInterleaveFactor(userArguments.opt_interleave);
+			imprints = pDatabase->imprints;
+			if (sections & database_t::ALLOCMASK_IMPRINTINDEX) {
+				imprintIndexSize = pDatabase->imprintIndexSize;
+				imprintIndex = pDatabase->imprintIndex;
+			}
+		}
+	}
 
 	/**
 	 * Create read-only database mmapped onto file
@@ -279,6 +362,8 @@ struct database_t {
 			ctx.fatal("db magic_maxslots. Encountered %d, Expected %d\n", dbHeader->magic_maxSlots, MAXSLOTS);
 		if (dbHeader->offEnd != (uint64_t) sbuf.st_size)
 			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", dbHeader->offEnd, (uint64_t) sbuf.st_size);
+		if (dbHeader->magic_sizeofImprint != sizeof(imprint_t))
+			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", dbHeader->magic_sizeofImprint, sizeof(imprint_t));
 
 		flags = dbHeader->magic_flags;
 
@@ -287,19 +372,27 @@ struct database_t {
 		 */
 
 		// transforms
-		numTransform = dbHeader->numTransforms;
-		transformIndexSize = dbHeader->transformIndexSize;
+		maxTransform = numTransform = dbHeader->numTransform;
 		fwdTransformData = (uint64_t *) (rawDatabase + dbHeader->offFwdTransforms);
 		revTransformData = (uint64_t *) (rawDatabase + dbHeader->offRevTransforms);
 		fwdTransformNames = (transformName_t *) (rawDatabase + dbHeader->offFwdTransformNames);
 		revTransformNames = (transformName_t *) (rawDatabase + dbHeader->offRevTransformNames);
 		revTransformIds = (uint32_t *) (rawDatabase + dbHeader->offRevTransformIds);
+		transformIndexSize = dbHeader->transformIndexSize;
 		fwdTransformNameIndex = (uint32_t *) (rawDatabase + dbHeader->offFwdTransformNameIndex);
 		revTransformNameIndex = (uint32_t *) (rawDatabase + dbHeader->offRevTransformNameIndex);
+
+		// imprints
+//		interleaveFactor = dbHeader->imprintInterleaveFactor;
+		maxImprint = numImprint = dbHeader->numImprints;
+		imprints = (imprint_t *) (rawDatabase + dbHeader->offImprints);
+		imprintIndexSize = dbHeader->imprintIndexSize;
+		imprintIndex = (uint32_t *) (rawDatabase + dbHeader->offImprintIndex);
 	};
 
-	/*
+	/**
 	 * Release system resources
+	 *
 	 * @date 2020-03-12 15:57:37
 	 */
 	~database_t() {
@@ -317,6 +410,10 @@ struct database_t {
 			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
 			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
 		}
+		if (allocFlags & ALLOCMASK_IMPRINT)
+			ctx.myFree("database_t::imprints", imprints);
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
+			ctx.myFree("database_t::imprintIndex", imprintIndex);
 
 		/*
 		 * Release resources
@@ -349,7 +446,7 @@ struct database_t {
 		static FileHeader_t fileHeader;
 		dbHeader = &fileHeader;
 
-		memset(&fileHeader, 0, sizeof(fileHeader));
+		::memset(&fileHeader, 0, sizeof(fileHeader));
 
 		/*
 		 * Quick cvalculate file size
@@ -362,6 +459,8 @@ struct database_t {
 		progressHi += sizeof(*this->revTransformIds) * this->numTransform;
 		progressHi += sizeof(*this->fwdTransformNameIndex * this->transformIndexSize);
 		progressHi += sizeof(*this->revTransformNameIndex * this->transformIndexSize);
+		progressHi += sizeof(*this->imprints) * this->numImprint;
+		progressHi += sizeof(*this->imprintIndex) * this->imprintIndexSize;
 		progress = 0;
 		ctx.tick = 0;
 
@@ -389,7 +488,7 @@ struct database_t {
 		 * write transforms
 		 */
 		if (this->numTransform) {
-			fileHeader.numTransforms = this->numTransform;
+			fileHeader.numTransform = this->numTransform;
 
 			// write forward/reverse transforms
 			fileHeader.offFwdTransforms = flen;
@@ -409,11 +508,35 @@ struct database_t {
 
 			// write index
 			if (transformIndexSize) {
+				fileHeader.transformIndexSize = this->transformIndexSize;
+
 				// write index
 				fileHeader.offFwdTransformNameIndex = flen;
 				flen += writeData(outf, this->fwdTransformNameIndex, sizeof(*this->fwdTransformNameIndex) * this->transformIndexSize);
 				fileHeader.offRevTransformNameIndex = flen;
 				flen += writeData(outf, this->revTransformNameIndex, sizeof(*this->revTransformNameIndex) * this->transformIndexSize);
+			}
+		}
+
+		/*
+		 * write imprints
+		 */
+//		fileHeader.imprintInterleaveFactor = interleaveFactor;
+		if (this->numImprint) {
+			// first entry must be zero
+			imprint_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->imprints, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.offImprints = flen;
+			fileHeader.numImprints = this->numImprint;
+			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprint);
+			if (this->imprintIndexSize) {
+				// Index
+				fileHeader.offImprintIndex = flen;
+				fileHeader.imprintIndexSize = this->imprintIndexSize;
+				flen += writeData(outf, this->imprintIndex, sizeof(*this->imprintIndex) * this->imprintIndexSize);
 			}
 		}
 
@@ -427,6 +550,7 @@ struct database_t {
 		fileHeader.magic = FILE_MAGIC;
 		fileHeader.magic_flags = this->flags;
 		fileHeader.magic_maxSlots = MAXSLOTS;
+		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.offEnd = flen;
 
 		// rewrite header
@@ -614,18 +738,86 @@ struct database_t {
 	}
 
 	/*
-	 * @date 2020-03-12 19:36:56
-	 *
-	 * Transform store
+	 * Imprint store
 	 */
+
+	/**
+	 * Lookup value in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the data in `pImprint`.
+	 *
+	 * @param v {footprint_t} v - value to index
+	 * @return {number} offset into index
+	 * @date 2020-03-15 20:07:14
+	 */
+	inline uint32_t lookupImprint(const footprint_t &v) const {
+
+		ctx.cntHash++;
+
+		// starting position
+		uint32_t crc = v.crc32();
+
+		uint32_t ix   = crc % imprintIndexSize;
+
+		// increment when overflowing
+		uint32_t bump = ix;
+		if (bump == 0)
+			bump = imprintIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		for (;;) {
+			ctx.cntCompare++;
+			if (this->imprintIndex[ix] == 0)
+				return ix; // "not-found"
+
+			const imprint_t *pImprint = this->imprints + this->imprintIndex[ix]; // point to data
+
+			if (pImprint->footprint.equals(v))
+				return ix; // "found"
+
+			// overflow, jump to next entry
+			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+			ix += bump;
+			if (ix >= imprintIndexSize)
+				ix -= imprintIndexSize; // effectively modulo
+		}
+	}
+
+	/**
+	 * Add a new imprint to the dataset
+	 *
+	 * @param v {footprint_t} v - value to index
+	 * @return {number} imprint id which should be stored in the index.
+	 */
+	inline uint32_t addImprint(const footprint_t &v) {
+		imprint_t *pImprint = this->imprints + this->numImprint++;
+
+		if (this->numImprint >= this->maxImprint)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
+
+		// only populate key fields
+		pImprint->footprint = v;
+
+		return (uint32_t) (pImprint - this->imprints);
+	}
+
 #if defined(ENABLE_JANSSON)
+	/**
+	 * Encode dimensions as json object
+	 *
+	 * @date 2020-03-12 19:36:56
+	 */
 	static json_t *headerInfo(json_t *jResult, const FileHeader_t *header) {
 		if (jResult == NULL)
 			jResult = json_object();
 		json_object_set_new_nocheck(jResult, "flags", json_integer(header->magic_flags));
 		json_object_set_new_nocheck(jResult, "maxSlots", json_integer(header->magic_maxSlots));
-		json_object_set_new_nocheck(jResult, "numTransforms", json_integer(header->numTransforms));
+//		json_object_set_new_nocheck(jResult, "imprintInterleaveFactor", json_integer(header->imprintInterleaveFactor));
+		json_object_set_new_nocheck(jResult, "numTransform", json_integer(header->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(header->transformIndexSize));
+		json_object_set_new_nocheck(jResult, "numImprints", json_integer(header->numImprints));
+		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(header->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(header->offEnd));
 
 		return jResult;

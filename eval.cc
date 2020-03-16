@@ -82,12 +82,12 @@ int main() {
 #define IBIT 0x80000000
 /// @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator
 #define MAXSLOTS 9
-/// @constant {number} NUMNODES - Maximum number of nodes the tree can contain. Keep large for selftest
-#define NUMNODES 20000
+/// @constant {number} MAXNODES - Maximum number of nodes the tree can contain. Keep large for selftest
+#define MAXNODES 20000
 /// @constant {number} KSTART - Starting index in tree where to find the input endpoints.
 #define KSTART 1
 /// @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator
-#define SBUFMAX (10 * NUMNODES)
+#define SBUFMAX (10 * MAXNODES)
 
 /*
  * User specified program options
@@ -193,7 +193,7 @@ struct tree_t {
 	uint32_t count;
 
 	/// @var {node_t[]} array of unified operators
-	node_t N[NUMNODES];
+	node_t N[MAXNODES];
 
 	/// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
@@ -634,7 +634,7 @@ struct tree_t {
 		nextNode = this->nstart;
 
 		// temporary stack storage for postfix notation
-		uint32_t stack[NUMNODES];
+		uint32_t stack[MAXNODES];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 		uint32_t nestStack[16];
@@ -680,7 +680,7 @@ struct tree_t {
 					return 1;
 				}
 
-				if (stackPos >= NUMNODES) {
+				if (stackPos >= MAXNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -705,7 +705,7 @@ struct tree_t {
 				prefix = 0;
 
 				// range check
-				if (stackPos >= NUMNODES) {
+				if (stackPos >= MAXNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -763,7 +763,7 @@ struct tree_t {
 			}
 
 			// test if new operator will fit
-			if (this->count >= NUMNODES) {
+			if (this->count >= MAXNODES) {
 				printf("[tree too large]\n");
 				return 1;
 			}
@@ -1008,7 +1008,7 @@ struct tree_t {
 		this->root = 0;
 
 		// temporary stack storage for postfix notation
-		uint32_t stack[NUMNODES];
+		uint32_t stack[MAXNODES];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 
@@ -1051,7 +1051,7 @@ struct tree_t {
 					return 1;
 				}
 
-				if (stackPos >= NUMNODES) {
+				if (stackPos >= MAXNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -1076,7 +1076,7 @@ struct tree_t {
 				prefix = 0;
 
 				// range check
-				if (stackPos >= NUMNODES) {
+				if (stackPos >= MAXNODES) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -1108,7 +1108,7 @@ struct tree_t {
 			}
 
 			// test if new operator will fit
-			if (this->count >= NUMNODES) {
+			if (this->count >= MAXNODES) {
 				printf("[tree too large]\n");
 				return 1;
 			}
@@ -1404,9 +1404,9 @@ struct tree_t {
 	/// @var {number} length of notation
 	unsigned spos;
 	/// @var {number[]} for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations
-	uint32_t beenThere[NUMNODES];
+	uint32_t beenThere[MAXNODES];
 	/// @var {number[]} the actual nodeId indexed by endpoint placeholder
-	uint32_t skin[NUMNODES];
+	uint32_t skin[MAXNODES];
 	/// @var {boolean} non-zero if placeholders are in sync with skin
 	bool placeholdersInSync;
 
@@ -1824,15 +1824,16 @@ struct tree_t {
  * For trees with more endpoints, populate the vector with random values.
  * If you suspect that that the evaluation result is a false-positive, rerun with a different seed
 
- * @param {footprint_t) footprint - footprint to initialise
- * @param {footprint_t) numRows - number of rows to initialise
+ * @param {footprint_t) pFootprint - footprint to initialise
+ * @param {footprint_t) kstart - kstart of tree
+ * @param {footprint_t) nstart - nstart of tree
  * @date 2020-03-10 21:25:24
  */
-void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) {
+void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart) {
 
 	if (kstart == 1 && nstart <= kstart + MAXSLOTS) {
 
-		uint64_t *v = (uint64_t *) footprint;
+		uint64_t *v = (uint64_t *) pFootprint;
 
 		// set 64bit slice to zero
 		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT * (1 + MAXSLOTS); i++)
@@ -1853,10 +1854,12 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 			if (i & (1 << 8)) v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 		}
 
+		// this might overwrite v[nstart] but that shouldn't be an issue.
+
 	} else {
 		srand(opt_seed);
 
-		uint64_t *v = (uint64_t *) footprint;
+		uint64_t *v = (uint64_t *) pFootprint;
 
 		// craptastic random fill
 		for (uint32_t i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
@@ -1865,6 +1868,11 @@ void initialiseVector(footprint_t *footprint, uint32_t kstart, uint32_t nstart) 
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 		}
+
+		// erase v[0]
+		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+			v[i] = 0;
+
 	}
 }
 
@@ -2078,7 +2086,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Self-test prefix handling
 	 */
-	for (uint32_t r = pTree->kstart; r < NUMNODES; r++) {
+	for (uint32_t r = pTree->kstart; r < MAXNODES; r++) {
 
 		// load tree
 		pTree->nstart = r + 1;
@@ -2213,7 +2221,6 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				if (pTree->root & IBIT)
 					encountered ^= 1; // invert result
 
-
 				if (expected != encountered) {
 					fprintf(stderr, "fail: testNr=%u iFast=%d iQnTF=%d iSkin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
 					        testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
@@ -2241,7 +2248,7 @@ int main(int argc, char *const *argv) {
 	// create an empty tree
 	tree_t *pTree = new tree_t(KSTART, KSTART);
 	// create an evaluation vector
-	footprint_t *pFootprints = new footprint_t[NUMNODES];
+	footprint_t *pFootprints = new footprint_t[MAXNODES];
 
 	/*
 	 *  Process program options
