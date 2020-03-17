@@ -95,11 +95,9 @@ struct context_t {
 	enum {
 		MAGICFLAG_PARANOID      = 0,                        // Force extra asserts when actually creating nodes
 		MAGICFLAG_QNTF          = 1,                        // Force generation of QnTF
-		MAGICFLAG_ROWINTERLEAVE = 2,                        // imprint index is row interleaved (otherwise column)
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_QNTF          = 1 << MAGICFLAG_QNTF,
-		MAGICMASK_ROWINTERLEAVE = 1 << MAGICFLAG_ROWINTERLEAVE,
 	};
 	// @formatter:on
 
@@ -197,7 +195,7 @@ struct context_t {
 	 * @param {number} n - number to raise
 	 * @date 2020-03-15 19:21:50
 	 */
-	static uint32_t raisePrime(uint32_t n)
+	uint32_t raisePrime(uint32_t n)
 	{
 		if (n == 0)
 			return 0;
@@ -222,7 +220,7 @@ struct context_t {
 	 * @param {number} n - number to raise
 	 * @date 2020-03-15 19:42:19
 	 */
-	static uint32_t raiseProcent(uint32_t n) {
+	uint32_t raiseProcent(uint32_t n) {
 		if (n == 0)
 			return 0; // zero is zero
 
@@ -244,12 +242,28 @@ struct context_t {
 	 * @date 2020-03-15 23:15:44
 	 */
 	void logFlags(uint32_t flags) {
-		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s\n", this->timeAsString(),
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
 		        flags,
 		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
-		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : "",
-		        (flags & context_t::MAGICMASK_ROWINTERLEAVE) ? " ROWINTERLEAVE" : ""
+		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : ""
 		);
+	}
+
+	/**
+	 * Convert a double to uint32_t, and lower to highest allowed prime if necessary
+	 *
+	 * @param {double} d - number to convert
+	 * @date 2020-03-17 17:28:20
+	 */
+	uint32_t double2u32(double d) {
+		if (d < 0)
+			return 0;
+
+		uint64_t u64 = d;
+
+		if (u64 > 4294000079)
+			return 4294000079;
+		return (uint32_t) u64;
 	}
 
 };

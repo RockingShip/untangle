@@ -84,7 +84,8 @@ struct FileHeader_t {
 	uint32_t magic_sizeofPatternSecond;
 	uint32_t magic_sizeofGrow;
 
-	// optional metrics.
+	// Associative index interleaving
+	uint32_t interleave;
 	uint32_t interleaveFactor;
 
 	// section sizes
@@ -153,7 +154,8 @@ struct database_t {
 	uint32_t           *fwdTransformNameIndex;  // fwdTransformNames index
 	uint32_t           *revTransformNameIndex;  // revTransformNames index
 	// imprint store
-	uint32_t           interleaveFactor;       // imprint interleave factor (col/row tab-stop distance)
+	uint32_t           interleave;             // imprint interleave factor (display value)
+	uint32_t           interleaveFactor;       // imprint interleave factor (interleave distance)
 	uint32_t           numImprint;             // number of elements in collection
 	uint32_t           maxImprint;             // maximum size of collection
 	imprint_t          *imprints;              // imprint collection
@@ -184,7 +186,8 @@ struct database_t {
 		revTransformIds = NULL;
 
 		// imprint store
-//		interleaveFactor(calcInterleaveFactor(userArguments.opt_interleave)),
+		interleave = 0;
+		interleaveFactor = 0;
 		numImprint = 0;
 		maxImprint = 0;
 		imprints = NULL;
@@ -202,15 +205,11 @@ struct database_t {
 	 */
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
-		ALLOCFLAG_TRANSFORMINDEX,
 		ALLOCFLAG_IMPRINT,
-		ALLOCFLAG_IMPRINTINDEX,
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
-		ALLOCMASK_TRANSFORMINDEX     = 1 << ALLOCFLAG_TRANSFORMINDEX,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
-		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
 		// @formatter:on
 	};
 
@@ -231,12 +230,9 @@ struct database_t {
 			fwdTransformNames = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", maxTransform, sizeof(*this->fwdTransformNames));
 			revTransformNames = (transformName_t *) ctx.myAlloc("database_t::revTransformNames", maxTransform, sizeof(*this->revTransformNames));
 			revTransformIds = (uint32_t *) ctx.myAlloc("database_t::revTransformIds", maxTransform, sizeof(*this->revTransformIds));
+			fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
+			revTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::revTransformNameIndex", transformIndexSize, sizeof(*revTransformNameIndex));
 			allocFlags |= ALLOCMASK_TRANSFORM;
-			if (transformIndexSize) {
-				fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
-				revTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::revTransformNameIndex", transformIndexSize, sizeof(*revTransformNameIndex));
-				allocFlags |= ALLOCMASK_TRANSFORMINDEX;
-			}
 		}
 
 		// imprint store
@@ -245,12 +241,9 @@ struct database_t {
 			numImprint = 0; // do not start at 0
 			maxImprint = ctx.raiseProcent(maxImprint);
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*this->imprints));
+			imprintIndexSize = ctx.raisePrime(imprintIndexSize);
+			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
-			if (imprintIndexSize) {
-				imprintIndexSize = ctx.raisePrime(imprintIndexSize);
-				imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
-				allocFlags |= ALLOCMASK_IMPRINTINDEX;
-			}
 		}
 
 	};
@@ -261,12 +254,24 @@ struct database_t {
 	 *
 	 * NOTE: call after calling `create()`
 	 *
+	 * @param {database_t} pDatabase - Database to inherit from
+	 * @param {string} pName - Name of database
+	 * @param {number} sections - set of sections to inherit
 	 * @date 2020-03-15 22:25:41
 	 */
-	void inheritSections(const database_t *pDatabase, uint32_t sections) {
+	void inheritSections(const database_t *pDatabase, const char *pName, uint32_t sections) {
+
+		interleave = pDatabase->interleave;
+		interleaveFactor = pDatabase->interleaveFactor;
 
 		// transform store
 		if (sections & database_t::ALLOCMASK_TRANSFORM) {
+			if (pDatabase->numTransform == 0) {
+				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
 			assert(maxTransform == 0);
 			maxTransform = pDatabase->maxTransform;
 			numTransform = pDatabase->numTransform;
@@ -277,26 +282,28 @@ struct database_t {
 			revTransformNames = pDatabase->revTransformNames;
 			revTransformIds = pDatabase->revTransformIds;
 
-			if (sections & database_t::ALLOCMASK_TRANSFORMINDEX) {
-				assert(transformIndexSize == 0);
-				transformIndexSize = pDatabase->transformIndexSize;
+			assert(transformIndexSize == 0);
+			transformIndexSize = pDatabase->transformIndexSize;
 
-				fwdTransformNameIndex = pDatabase->fwdTransformNameIndex;
-				revTransformNameIndex = pDatabase->revTransformNameIndex;
-			}
+			fwdTransformNameIndex = pDatabase->fwdTransformNameIndex;
+			revTransformNameIndex = pDatabase->revTransformNameIndex;
 		}
 
 		// imprint store
 		if (sections & database_t::ALLOCMASK_IMPRINT) {
+			if (pDatabase->numImprint == 0) {
+				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
 			assert(maxImprint == 0);
 			maxImprint = pDatabase->maxImprint;
 			numImprint = pDatabase->numImprint;
-//			interleaveFactor = calcInterleaveFactor(userArguments.opt_interleave);
 			imprints = pDatabase->imprints;
-			if (sections & database_t::ALLOCMASK_IMPRINTINDEX) {
-				imprintIndexSize = pDatabase->imprintIndexSize;
-				imprintIndex = pDatabase->imprintIndex;
-			}
+
+			imprintIndexSize = pDatabase->imprintIndexSize;
+			imprintIndex = pDatabase->imprintIndex;
 		}
 	}
 
@@ -369,6 +376,9 @@ struct database_t {
 
 		flags = dbHeader->magic_flags;
 
+		interleave = dbHeader->interleave;
+		interleaveFactor = dbHeader->interleaveFactor;
+
 		/*
 		 * map sections to starting positions in data
 		 */
@@ -385,7 +395,6 @@ struct database_t {
 		revTransformNameIndex = (uint32_t *) (rawDatabase + dbHeader->offRevTransformNameIndex);
 
 		// imprints
-//		interleaveFactor = dbHeader->imprintInterleaveFactor;
 		maxImprint = numImprint = dbHeader->numImprints;
 		imprints = (imprint_t *) (rawDatabase + dbHeader->offImprints);
 		imprintIndexSize = dbHeader->imprintIndexSize;
@@ -407,15 +416,13 @@ struct database_t {
 			ctx.myFree("database_t::fwdTransformNames", fwdTransformNames);
 			ctx.myFree("database_t::revTransformNames", revTransformNames);
 			ctx.myFree("database_t::revTransformIds", revTransformIds);
-		}
-		if (allocFlags & ALLOCMASK_TRANSFORMINDEX) {
 			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
 			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
 		}
-		if (allocFlags & ALLOCMASK_IMPRINT)
+		if (allocFlags & ALLOCMASK_IMPRINT) {
 			ctx.myFree("database_t::imprints", imprints);
-		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
 			ctx.myFree("database_t::imprintIndex", imprintIndex);
+		}
 
 		/*
 		 * Release resources
@@ -486,6 +493,9 @@ struct database_t {
 		fwrite(&fileHeader, sizeof(fileHeader), 1, outf);
 		uint64_t flen = sizeof(fileHeader);
 
+		fileHeader.interleaveFactor = interleaveFactor;
+		fileHeader.interleave = interleave;
+
 		/*
 		 * write transforms
 		 */
@@ -523,7 +533,6 @@ struct database_t {
 		/*
 		 * write imprints
 		 */
-//		fileHeader.imprintInterleaveFactor = interleaveFactor;
 		if (this->numImprint) {
 			// first entry must be zero
 			imprint_t zero;
@@ -804,6 +813,19 @@ struct database_t {
 		return (uint32_t) (pImprint - this->imprints);
 	}
 
+	/*
+	 * @date 2020-03-17 18:16:51
+	 *
+	 *  Imprinting indexing has two modes, one stores key rows, the other key columns.
+	 * `interleaveFactor` is the distance between two adjacent rows and mode independent
+	 * `interleave` is the number of imprints stored per footprint
+	 *
+	 * If interleave` == `interleaveFactor` then the mode is "store key columns", otherwise "store key rows"
+	 *
+	 * A lot of effort has been put into interleaving because it serves for selftesting and preparation for scalability.
+	 * (MAXSLOTS used to be 8, and preparation are for 10)
+	 */
+
 	 /**
 	  * Associative lookup of a footprint
 	  *
@@ -824,7 +846,38 @@ struct database_t {
 	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
 		 */
 
-		 if (this->flags & context_t::MAGICMASK_ROWINTERLEAVE) {
+		 if (this->interleave == this->interleaveFactor) {
+			 /*
+			  * index is populated with key cols, runtime scans rows
+			  * Because of the jumps, memory cache might be killed
+			  */
+
+			 // permutate all rows
+			 for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
+
+				 // find where the evaluator for the key is located in the evaluator store
+				 footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+
+				 // apply the reverse transform
+				 pTree->eval(v);
+
+				 // search the resulting footprint in the cache/index
+				 uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				 /*
+				  * Was something found
+				  */
+				 if (this->imprintIndex[ix] != 0) {
+					 /*
+					  * Is so, then found the stripe which is the starting point. iTransform is relative to that
+					  */
+					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					 *sid = pImprint->sid;
+					 *tid = pImprint->tid + iRow;
+					 return true;
+				 }
+			 }
+		 } else {
 			 /*
 			  * index is populated with key rows, runtime scans cols
 			  */
@@ -857,37 +910,6 @@ struct database_t {
 
 				 v += tinyTree_t::TINYTREE_NEND;
 			 }
-		 } else {
-			 /*
-			  * index is populated with key cols, runtime scans rows
-			  * Because of the jumps, memory cache might be killed
-			  */
-
-			 // permutate all rows
-			 for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
-
-				 // find where the evaluator for the key is located in the evaluator store
-				 footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
-
-				 // apply the reverse transform
-				 pTree->eval(v);
-
-				 // search the resulting footprint in the cache/index
-				 uint32_t ix = this->lookupImprint(v[pTree->root]);
-
-				 /*
-				  * Was something found
-				  */
-				 if (this->imprintIndex[ix] != 0) {
-					 /*
-					  * Is so, then found the stripe which is the starting point. iTransform is relative to that
-					  */
-					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					 *sid = pImprint->sid;
-					 *tid = pImprint->tid + iRow;
-					 return true;
-				 }
-			 }
 		 }
 		 return false;
 	 }
@@ -909,38 +931,7 @@ struct database_t {
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
 	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
 		 */
-		if (this->flags & context_t::MAGICMASK_ROWINTERLEAVE) {
-			/*
-			 * index is populated with key cols, runtime scans rows
-			 */
-			// permutate rows
-			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
-
-				// find where the transform is located in the evaluator store
-				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
-
-				// apply the forward transform
-				pTree->eval(v);
-
-				// search the resulting footprint in the cache/index
-				uint32_t ix = this->lookupImprint(v[pTree->root]);
-
-				// add to the database is not there
-				if (this->imprintIndex[ix] == 0) {
-					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
-					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					// populate non-key fields
-					pImprint->sid = sid;
-					pImprint->tid = iRow;
-				} else {
-					// should not already be present
-					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}\n",
-						__FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid);
-					exit(1);
-				}
-			}
-		} else {
+		if (this->interleave == this->interleaveFactor) {
 			/*
 			 * index is populated with key rows, runtime scans cols
 			 */
@@ -972,6 +963,37 @@ struct database_t {
 				}
 
 				v += tinyTree_t::TINYTREE_NEND;
+			}
+		} else {
+			/*
+			 * index is populated with key cols, runtime scans rows
+			 */
+			// permutate rows
+			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
+
+				// find where the transform is located in the evaluator store
+				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+
+				// apply the forward transform
+				pTree->eval(v);
+
+				// search the resulting footprint in the cache/index
+				uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				// add to the database is not there
+				if (this->imprintIndex[ix] == 0) {
+					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					// populate non-key fields
+					pImprint->sid = sid;
+					pImprint->tid = iRow;
+				} else {
+					// should not already be present
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}\n",
+					       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid);
+					exit(1);
+				}
 			}
 		}
 	}

@@ -88,6 +88,10 @@ struct gentransformContext_t : context_t {
 	unsigned opt_keep;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} --test, run without output
+	unsigned opt_test;
+	/// @var {number} --selftest, perform a selftest
+	unsigned opt_selftest;
 
 	/**
 	 * Constructor
@@ -98,6 +102,8 @@ struct gentransformContext_t : context_t {
 		opt_flags = 0;
 		opt_force = 0;
 		opt_keep = 0;
+		opt_selftest = 0;
+		opt_test = 0;
 		opt_text = 0;
 	}
 
@@ -416,42 +422,40 @@ struct gentransformContext_t : context_t {
  * - Verify that forward/reverse substitution counter each other
  *
  * @param {gentransformContext_t} pApp - program context
+ * @param {database_t} pStore - database just before `main()`
  * @date 2020-03-12 00:26:06
  */
-void performSelfTestMatch(gentransformContext_t *pApp) {
-	// allocate storage
-	uint64_t *pFwdData = new uint64_t[MAXTRANSFORM];
-	uint64_t *pRevData = new uint64_t[MAXTRANSFORM];
-	transformName_t *pFwdNames = new transformName_t[MAXTRANSFORM];
-	transformName_t *pRevNames = new transformName_t[MAXTRANSFORM];
-	uint32_t *pFwdIndex = new uint32_t[MAXTRANSFORMINDEX];
-	uint32_t *pRevIndex = new uint32_t[MAXTRANSFORMINDEX];
+void performSelfTestMatch(gentransformContext_t *pApp, database_t *pStore) {
+
 	unsigned numPassed = 0;
 
 	// generate datasets
-	pApp->createTransforms(pFwdData, pFwdNames, pFwdIndex, true); // forward transform
-	pApp->createTransforms(pRevData, pRevNames, pRevIndex, false); // reverse transform
+	pApp->createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward transform
+	pApp->createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse transform
 
 	/*
 	 * Test empty name
 	 */
 	{
-		uint32_t tid = pApp->lookupTransform("", pFwdIndex);
+		uint32_t tid = pApp->lookupTransform("", pStore->fwdTransformNameIndex);
 
 		// test empty name is transparent skin
 		if (tid != 0) {
-			fprintf(stderr, "fail: empty name lookup %08x\n", tid);
+			printf("{\"error\":\"failed empty name lookup\",\"where\":\"%s\",\"tid\":%d}\n",
+			       __FUNCTION__, tid);
 			exit(1);
 		}
 
-		// test transparent transform is transparent
+		// test transparent transform ([0]) is transparent
 		for (unsigned k = 0; k < MAXSLOTS; k++) {
-			if (pFwdNames[0][k] != (char) ('a' + k)) {
-				fprintf(stderr, "fail: transparent forward %s\n", pFwdNames[0]);
+			if (pStore->fwdTransformNames[0][k] != (char) ('a' + k)) {
+				printf("{\"error\":\"failed transparent forward\",\"where\":\"%s\",\"name\":\"%s\"}\n",
+				       __FUNCTION__, pStore->fwdTransformNames[0]);
 				exit(1);
 			}
-			if (pRevNames[0][k] != (char) ('a' + k)) {
-				fprintf(stderr, "fail: transparent forward %s\n", pRevNames[0]);
+			if (pStore->revTransformNames[0][k] != (char) ('a' + k)) {
+				printf("{\"error\":\"failed transparent reverse\",\"where\":\"%s\",\"name\":\"%s\"}\n",
+				       __FUNCTION__, pStore->revTransformNames[0]);
 				exit(1);
 			}
 		}
@@ -466,11 +470,11 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
 		uint32_t *pIndex;
 
 		if (round == 0) {
-			pNames = pFwdNames;
-			pIndex = pFwdIndex;
+			pNames = pStore->fwdTransformNames;
+			pIndex = pStore->fwdTransformNameIndex;
 		} else {
-			pNames = pFwdNames;
-			pIndex = pFwdIndex;
+			pNames = pStore->revTransformNames;
+			pIndex = pStore->revTransformNameIndex;
 		}
 
 		/*
@@ -503,7 +507,8 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
 				pNames[iTransform][iLen] = 'a' + iLen;
 
 				if (iTransform != encountered) {
-					fprintf(stderr, "fail lookup: encountered=%08x round=%d iTransform=%08x iLen=%d name=%s\n", encountered, round, iTransform, iLen, pNames[iTransform]);
+					printf("{\"error\":\"failed lookup\",\"where\":\"%s\",\"encountered\":%d,\"round\":%d,\"iTransform\":%d,\"iLen\":%d,\"name\":\"%s\"}\n",
+					       __FUNCTION__, encountered, round, iTransform, iLen, pNames[iTransform]);
 					exit(1);
 				}
 
@@ -529,7 +534,7 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
 		char forward[MAXSLOTS + 1];
 
 		for (unsigned k = 0; k < MAXSLOTS; k++)
-			forward[k] = pFwdNames[iTransform][skin[k] - 'a'];
+			forward[k] = pStore->fwdTransformNames[iTransform][skin[k] - 'a'];
 		forward[MAXSLOTS] = 0;
 
 		// apply reserse skin
@@ -537,13 +542,14 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
 		char reverse[MAXSLOTS + 1];
 
 		for (unsigned k = 0; k < MAXSLOTS; k++)
-			reverse[k] = pRevNames[iTransform][forward[k] - 'a'];
+			reverse[k] = pStore->revTransformNames[iTransform][forward[k] - 'a'];
 		reverse[MAXSLOTS] = 0;
 
 		// test both are identical
 		for (unsigned k = 0; k < MAXSLOTS; k++) {
 			if (skin[k] != reverse[k]) {
-				fprintf(stderr, "fail: expected=%s encountered=%s iTransform=%d forward=%s reverse=%s\n", skin, reverse, iTransform, pFwdNames[iTransform], pRevNames[iTransform]);
+				printf("{\"error\":\"failed forward/reverse\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"iTransform\":%d,\"forward\":\"%s\",\"reverse\":\"%s\"}\n",
+				       __FUNCTION__, reverse, skin, iTransform, pStore->fwdTransformNames[iTransform], pStore->revTransformNames[iTransform]);
 				exit(1);
 			}
 		}
@@ -551,7 +557,7 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
 		numPassed++;
 	}
 
-	printf("performSelfTestMatch() passed %d tests\n", numPassed);
+	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /**
@@ -646,21 +652,20 @@ void performSelfTestMatch(gentransformContext_t *pApp) {
  * The mechanism is called `"interleaving"`.
  *
  * @param {gentransformContext_t} pApp - program context
+ * @param {database_t} pStore - database just before `main()`
  * @date 2020-03-15 12:13:13
  */
-void performSelfTestInterleave(gentransformContext_t *pApp) {
-	// allocate storage
-	uint64_t *pFwdData = new uint64_t[MAXTRANSFORM];
-	uint64_t *pRevData = new uint64_t[MAXTRANSFORM];
-	transformName_t *pFwdNames = new transformName_t[MAXTRANSFORM];
-	transformName_t *pRevNames = new transformName_t[MAXTRANSFORM];
-	uint32_t *pFwdIndex = new uint32_t[MAXTRANSFORMINDEX];
-	uint32_t *pRevIndex = new uint32_t[MAXTRANSFORMINDEX];
+void performSelfTestInterleave(gentransformContext_t *pApp, database_t *pStore) {
+
+	// shortcuts
+	transformName_t *pFwdNames = pStore->fwdTransformNames;
+	transformName_t *pRevNames = pStore->revTransformNames;
+
 	unsigned numPassed = 0;
 
 	// generate datasets
-	pApp->createTransforms(pFwdData, pFwdNames, pFwdIndex, true); // forward transform
-	pApp->createTransforms(pRevData, pRevNames, pRevIndex, false); // reverse transform
+	pApp->createTransforms(pStore->fwdTransformData, pFwdNames, pStore->fwdTransformNameIndex, true); // forward transform
+	pApp->createTransforms(pStore->revTransformData, pRevNames, pStore->revTransformNameIndex, false); // reverse transform
 
 	unsigned numRows, numCols = 1;
 
@@ -699,8 +704,8 @@ void performSelfTestInterleave(gentransformContext_t *pApp) {
 
 				// check
 				if (strcmp(cell, pFwdNames[row * numCols + col]) != 0) {
-					fprintf(stderr, "fail: expected=%s encountered=%s numCols=%d numRows=%d col=%d:%s row=%d:%s\n",
-					        pFwdNames[row * numCols + col], cell, numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
+					printf("{\"error\":\"failed merge\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%d,\"numRows\":%d,\"col\":%d,\"colName\":\"%s\",\"row\":%d,\"rowName\":\"%s\"}\n",
+					       __FUNCTION__, cell, pFwdNames[row * numCols + col], numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
 					exit(1);
 				}
 
@@ -733,7 +738,7 @@ void performSelfTestInterleave(gentransformContext_t *pApp) {
 		}
 	}
 
-	printf("performSelfTestInterleave() passed %d tests\n", numPassed);
+	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /*
@@ -789,7 +794,8 @@ void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
 		fprintf(stderr, "\t-h --help            This list\n");
 		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t-q --quiet           Say more\n");
-		fprintf(stderr, "\t   --selftest        Validate proper operation\n");
+		fprintf(stderr, "\t   --selftest        Validate prerequisites\n");
+		fprintf(stderr, "\t   --test            Run without output\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", args->opt_timer);
 		fprintf(stderr, "\t-v --verbose         Say less\n");
@@ -821,6 +827,7 @@ int main(int argc, char *const *argv) {
 			LO_FORCE,
 			LO_KEEP,
 			LO_SELFTEST,
+			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -837,6 +844,7 @@ int main(int argc, char *const *argv) {
 			{"help",     0, 0, LO_HELP},
 			{"keep",     0, 0, LO_KEEP},
 			{"quiet",    2, 0, LO_QUIET},
+			{"test",     0, 0, LO_TEST},
 			{"selftest", 0, 0, LO_SELFTEST},
 			{"text",     0, 0, LO_TEXT},
 			{"timer",    1, 0, LO_TIMER},
@@ -883,19 +891,13 @@ int main(int argc, char *const *argv) {
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
 				break;
-			case LO_SELFTEST: {
-				// register timer handler
-				if (app.opt_timer) {
-					signal(SIGALRM, sigalrmHandler);
-					::alarm(app.opt_timer);
-				}
-
-				// perform selfcheck
-				performSelfTestMatch(&app);
-				performSelfTestInterleave(&app);
-				exit(0);
+			case LO_SELFTEST:
+				app.opt_selftest++;
+				app.opt_test++;
 				break;
-			}
+			case LO_TEST:
+				app.opt_test++;
+				break;
 			case LO_TEXT:
 				app.opt_text++;
 				break;
@@ -928,7 +930,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!app.opt_force) {
+	if (!app.opt_test && !app.opt_force) {
 		struct stat sbuf;
 
 		if (!stat(app.arg_outputDatabase, &sbuf)) {
@@ -968,6 +970,16 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
 
 	/*
+	 * Test prerequisite
+	 */
+	if (app.opt_selftest) {
+		// perform selfcheck
+		performSelfTestMatch(&app, &store);
+		performSelfTestInterleave(&app, &store);
+		exit(0);
+	}
+
+	/*
 	 * Invoke main entrypoint of application context
 	 */
 	app.main(&store);
@@ -976,14 +988,16 @@ int main(int argc, char *const *argv) {
 	 * Save the database
 	 */
 
-	// unexpected termination should unlink the outputs
-	signal(SIGINT, sigintHandler);
-	signal(SIGHUP, sigintHandler);
+	if (!app.opt_test) {
+		// unexpected termination should unlink the outputs
+		signal(SIGINT, sigintHandler);
+		signal(SIGHUP, sigintHandler);
 
-	store.save(app.arg_outputDatabase);
+		store.save(app.arg_outputDatabase);
+	}
 
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_SUMMARY) {
+	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.headerInfo(jResult, store.dbHeader);

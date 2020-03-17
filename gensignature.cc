@@ -63,6 +63,7 @@
 #include <sys/stat.h>
 #include "tinytree.h"
 #include "database.h"
+#include "metrics.h"
 
 #include "config.h"
 
@@ -89,15 +90,28 @@ struct gensignatureContext_t : context_t {
 	const char *arg_outputDatabase;
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
-
+	/// @var {number} size of signatures to be generated in this invocation
+	unsigned arg_numNodes;
 	/// @var {number} database compatibility and settings
 	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
+	/// @var {number} size of imprint index WARNING: must be prime
+	uint32_t opt_imprintIndexSize;
+	/// @var {number} interleave for associative imprint index
+	unsigned opt_interleave;
 	/// @var {number} --keep, do not delete output database in case of errors
 	unsigned opt_keep;
+	/// @var {number} Maximum number of imprints to be stored database
+	uint32_t opt_maxImprint;
+	/// @var {number} non-zero to indicate `QnTF`-only mode
+	unsigned opt_qntf;
+	/// @var {number} index/data ratio
+	double opt_ratio;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} --test, run without output
+	unsigned opt_test;
 	/// @var {number} --selftest, perform a selftest
 	unsigned opt_selftest;
 
@@ -107,9 +121,17 @@ struct gensignatureContext_t : context_t {
 	gensignatureContext_t() {
 		// arguments and options
 		arg_outputDatabase = NULL;
+		arg_numNodes = 0;
 		opt_flags = 0;
 		opt_force = 0;
+		opt_imprintIndexSize = 0;
+		opt_interleave = 720;
 		opt_keep = 0;
+		opt_maxImprint = 0;
+		opt_qntf = 0;
+		opt_ratio = 3.0;
+		opt_selftest = 0;
+		opt_test = 0;
 		opt_text = 0;
 	}
 
@@ -129,13 +151,13 @@ struct gensignatureContext_t : context_t {
  *  - Compare with independent generated result
  *
  * @param {tree_t} pTree - worker tree
- * @param {footprint_t} pEval - evaluation vector
  * @date 2020-03-10 21:46:10
  */
-void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
+void performSelfTestTree(tinyTree_t *pTree) {
 
 	unsigned testNr = 0;
 	unsigned numPassed = 0;
+	footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
 
 	/*
 	 * self-test with different program settings
@@ -287,7 +309,7 @@ void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
 		}
 	}
 
-	printf("selfTestTree() passed %d tests\n", numPassed);
+	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /**
@@ -310,23 +332,20 @@ void performSelfTestTree(tinyTree_t *pTree, footprint_t *pEval) {
  * The chosen implentation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
  * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
  *
+ * Demonstrate that for any given footprint it will re-orientate
  * @param {tree_t} pTree - worker tree
- * @param {footprint_t} pEval - evaluation vector
+ * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
+ * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
  * @date 2020-03-15 16:35:43
  */
 void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
+
+	unsigned numPassed = 0;
 
 	tinyTree_t tree(0);
 
 	// test name. NOTE: this is deliberately "not ordered"
 	const char *pBasename = "abc!defg!!hi!";
-
-	/*
-	 * Create evaluators
-	 */
-
-	tree.initialiseVector(ctx, pEvalFwd, MAXTRANSFORM, pStore->fwdTransformData);
-	tree.initialiseVector(ctx, pEvalRev, MAXTRANSFORM, pStore->revTransformData);
 
 	/*
 	 * Basic test tree
@@ -373,31 +392,17 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 	 * Storage is based on worst-case scenario.
 	 * Actual storage needs to be tested/runtime decided.
 	 */
-	for (uint32_t iInterleave = 0; iInterleave < 4; iInterleave++) {
-
-		// interleave. Order it for fastest first
-		static uint32_t interleaveFactor[] = {120, 720, 720, 120};
-		static uint32_t interleaveMode[] = {0, 1, 0, 1};
-		static uint32_t interleaveImprint[] = {72, 120, 504, 720};
-
-		//  mode=1 interleave=5040 numImprint=72 seconds=80 speed=4536         memory=4.160G
-		//  mode=0 interleave=120 numImprint=120 seconds=41 speed=8850         memory=6.896G
-		//  mode=1 interleave=720 numImprint=504 seconds=7 speed=51840        memory=28.784G
-		//  mode=0 interleave=720 numImprint=720 seconds=4 speed=90720        memory=41.095G
-		//  mode=1 interleave=120 numImprint=3024 seconds=1 speed=362880     memory=172.420G
-		//  mode=0 interleave=5040 numImprint=5040 seconds=1 speed=362880    memory=287.329G
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->maxSlots; pInterleave++) {
+		if (pInterleave->maxSlots != MAXSLOTS)
+			continue; // only process settings that match `MAXSLOTS`
 
 		/*
 		 * Setup database and erase indices
 		 */
 
 		// mode
-		if (interleaveMode[iInterleave])
-			pStore->flags |= context_t::MAGICMASK_ROWINTERLEAVE;
-		else
-			pStore->flags &= ~context_t::MAGICMASK_ROWINTERLEAVE;
-
-		pStore->interleaveFactor = interleaveFactor[iInterleave];
+		pStore->interleave = pInterleave->numStored;
+		pStore->interleaveFactor = pInterleave->interleaveFactor;
 
 		// clear
 		memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
@@ -439,10 +444,12 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 
 			// test that transform id's match
 			if (iTransform != tid) {
-				printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"expected\":\"%d\",\"encountered\":\"%d\"}\n",
-				       __FUNCTION__, iTransform, tid);
-				exit(0);
+				printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+				       __FUNCTION__, tid, iTransform);
+				exit(1);
 			}
+
+			numPassed++;
 
 		}
 
@@ -454,17 +461,20 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 		if (seconds == 0)
 			seconds = 1;
 
-		fprintf(stderr, "\r[%s] mode=%d interleave=%d numImprint=%d seconds=%ld speed=%ld memory=%ld\n",
-		        ctx.timeAsString(), interleaveMode[iInterleave], pStore->interleaveFactor, pStore->numImprint - 1, seconds, MAXTRANSFORM / seconds, sizeof(imprint_t) * 791647 * pStore->numImprint);
-
+		// base estimated size on 791647 signatures
+		fprintf(stderr, "\r[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%ld, /*speed=*/%d, /*storage=*/%.3f}\n",
+		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, seconds,
+		        (int)(MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 		// test that number of imprints match
-		if (interleaveImprint[iInterleave] != pStore->numImprint - 1) {
-			printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"expected\":\"%d\",\"encountered\":\"%d\"}\n",
-			       __FUNCTION__, interleaveImprint[iInterleave], pStore->numImprint - 1);
-			exit(0);
+		if (pInterleave->numStored != pStore->numImprint - 1) {
+			printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+			       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
+			exit(1);
 		}
 	}
+
+	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /*
@@ -514,17 +524,22 @@ void sigalrmHandler(int sig) {
  * @date  2020-03-14 11:17:04
  */
 void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
-	fprintf(stderr, "usage: %s <input.db> <output.db>\n", argv[0]);
+	fprintf(stderr, "usage: %s <input.db> <output.db> <numnode>\n", argv[0]);
 	if (verbose) {
-		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t-h --help            This list\n");
-		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t-q --quiet           Say more\n");
-		fprintf(stderr, "\t   --selftest        Validate proper operation\n");
-		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", args->opt_timer);
-		fprintf(stderr, "\t-v --verbose         Say less\n");
-
+		fprintf(stderr, "\t   --force                 Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t-h --help                  This list\n");
+		fprintf(stderr, "\t   --imprintindex=<number> Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>   Imprint index interleave [default=%d]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --keep                  Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t   --maximprint=<number>   Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", app.opt_qntf ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t   --ratio=<number>        Index/data ratio [default=%f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
+		fprintf(stderr, "\t   --test                  Run without output\n");
+		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
 }
 
@@ -550,8 +565,15 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_FORCE,
+			LO_IMPRINTINDEX,
+			LO_INTERLEAVE,
 			LO_KEEP,
+			LO_MAXIMPRINT,
+			LO_NOQNTF,
+			LO_QNTF,
+			LO_RATIO,
 			LO_SELFTEST,
+			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -563,17 +585,24 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",    1, 0, LO_DEBUG},
-			{"force",    0, 0, LO_FORCE},
-			{"help",     0, 0, LO_HELP},
-			{"keep",     0, 0, LO_KEEP},
-			{"quiet",    2, 0, LO_QUIET},
-			{"selftest", 0, 0, LO_SELFTEST},
-			{"text",     0, 0, LO_TEXT},
-			{"timer",    1, 0, LO_TIMER},
-			{"verbose",  2, 0, LO_VERBOSE},
+			{"debug",        1, 0, LO_DEBUG},
+			{"force",        0, 0, LO_FORCE},
+			{"help",         0, 0, LO_HELP},
+			{"imprintindex", 1, 0, LO_IMPRINTINDEX},
+			{"interleave",   1, 0, LO_INTERLEAVE},
+			{"keep",         0, 0, LO_KEEP},
+			{"maximprint",   1, 0, LO_MAXIMPRINT},
+			{"no-qntf",      0, 0, LO_NOQNTF},
+			{"qntf",         0, 0, LO_QNTF},
+			{"quiet",        2, 0, LO_QUIET},
+			{"ratio",        1, 0, LO_RATIO},
+			{"selftest",     0, 0, LO_SELFTEST},
+			{"test",         0, 0, LO_TEST},
+			{"text",         0, 0, LO_TEXT},
+			{"timer",        1, 0, LO_TIMER},
+			{"verbose",      2, 0, LO_VERBOSE},
 			//
-			{NULL,       0, 0, 0}
+			{NULL,           0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -608,14 +637,38 @@ int main(int argc, char *const *argv) {
 			case LO_HELP:
 				usage(argv, true, &app);
 				exit(0);
+			case LO_IMPRINTINDEX:
+				app.opt_imprintIndexSize = (uint32_t) strtoul(optarg, NULL, 10);
+				break;
+			case LO_INTERLEAVE:
+				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 10);
+				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
+					app.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+				break;
 			case LO_KEEP:
 				app.opt_keep++;
+				break;
+			case LO_MAXIMPRINT:
+				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 10);
+				break;
+			case LO_NOQNTF:
+				app.opt_qntf = 0;
+				break;
+			case LO_QNTF:
+				app.opt_qntf = 1;
 				break;
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
 				break;
+			case LO_RATIO:
+				app.opt_ratio = strtof(optarg, NULL);
+				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
+				app.opt_test++;
+				break;
+			case LO_TEST:
+				app.opt_test++;
 				break;
 			case LO_TEXT:
 				app.opt_text++;
@@ -639,9 +692,10 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Program has two argument, the output database
 	 */
-	if (argc - optind >= 2) {
+	if (argc - optind >= 3) {
 		app.arg_outputDatabase = argv[optind++];
 		app.arg_inputDatabase = argv[optind++];
+		app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
 	} else {
 		usage(argv, false, &app);
 		exit(1);
@@ -650,7 +704,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!app.opt_force) {
+	if (!app.opt_test && !app.opt_force) {
 		struct stat sbuf;
 
 		if (!stat(app.arg_outputDatabase, &sbuf)) {
@@ -680,22 +734,68 @@ int main(int argc, char *const *argv) {
 	if (app.opt_verbose >= app.VERBOSE_INITIALIZE)
 		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.headerInfo(NULL, db.dbHeader), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
-	if (db.maxTransform == 0)
-		app.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
 
-	// create output
+	/*
+	 * create output
+	 */
+
 	database_t store(app);
 
+	/*
+	 * @date 2020-03-17 13:57:25
+	 *
+	 * Database indices are hashlookup tables with overflow.
+	 * The art is to have a hash function that distributes evenly over the hashtable.
+	 * If index entries are in use, then jump to overflow entries.
+	 * The larger the index in comparison to the number of data entries the lower the chance an overflow will occur.
+	 * The ratio between index and data size is called `ratio`.
+	 */
+
+	if (app.opt_selftest) {
+		// force dimensions when self testing. Need to store a single footprint
+		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
+		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
+
+		/*
+		 * @date 2020-03-17 16:11:36
+		 * constraint: index needs to be larger than number of data entries
+		 */
+		assert(store.imprintIndexSize > store.maxImprint);
+	} else {
+		// settings for interleave
+		const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
+		assert(pInterleave);
+
+		store.interleave = pInterleave->numStored;
+		store.interleaveFactor = pInterleave->interleaveFactor;
+
+		if (app.opt_maxImprint == 0)
+			store.maxImprint = getMaxImprints(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
+		else
+			store.maxImprint = app.opt_maxImprint;
+
+		if (app.opt_imprintIndexSize == 0)
+			store.imprintIndexSize = app.double2u32(store.maxImprint * app.opt_ratio);
+		else
+			store.imprintIndexSize = app.opt_imprintIndexSize;
+
+		if (app.opt_interleave == 0)
+			app.fatal("no preset for --interleave\n");
+		if (app.opt_maxImprint == 0)
+			app.fatal("no preset for --maximprint\n");
+	}
+
 	// create new sections
-	store.maxImprint = MAXTRANSFORM + 10;
-	store.imprintIndexSize = store.maxImprint * 4;
-
-	store.imprintIndexSize = 14000029;
 	store.create();
-	store.imprintIndexSize = 14000029;
 
-	// inherit to existing
-	store.inheritSections(&db, database_t::ALLOCMASK_TRANSFORM | database_t::ALLOCMASK_TRANSFORMINDEX);
+	// dont let `create()` round dimensions
+	if (app.opt_selftest) {
+		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
+		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
+	}
+
+	// inherit from existing
+	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
 
 	/*
 	 * Statistics
@@ -707,14 +807,41 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
 
 	/*
+	 * Test prerequisite
+	 */
+	if (app.opt_selftest) {
+		// perform selfchecks
+
+		tinyTree_t tree(0);
+
+		// allocate evaluators
+		footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+		footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+		assert(pEvalCol);
+		assert(pEvalRow);
+
+		// initialise evaluators
+		tree.initialiseVector(app, pEvalCol, MAXTRANSFORM, store.fwdTransformData);
+		tree.initialiseVector(app, pEvalRow, MAXTRANSFORM, store.revTransformData);
+
+		/*
+		 * @date 2020-03-17 16:31:08
+		 * I usually avoid `&` in function declarations because it does not allow visual hints that it is pass by value.
+		 * Here are some observations:
+		 * - it is guaranteed to be non-NULL
+		 * - in function declarations it can be used as replacement/placeholder for global names
+		 *   that is, if `app` were global before `performSelfTestInterleave`,
+		 *   then removing `app` as argument would not require additional changing of code.
+		 */
+		performSelfTestTree(&tree);
+		performSelfTestInterleave(app, &store, pEvalCol, pEvalRow);
+
+		exit(0);
+	}
+
+	/*
 	 * Invoke main entrypoint of application context
 	 */
-
-	footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-	footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-	assert(pEvalCol);
-	assert(pEvalRow);
-	performSelfTestInterleave(app, &store, pEvalCol, pEvalRow);
 
 //	app.main(&store);
 
@@ -722,19 +849,21 @@ int main(int argc, char *const *argv) {
 	 * Save the database
 	 */
 
-	// unexpected termination should unlink the outputs
-	signal(SIGINT, sigintHandler);
-	signal(SIGHUP, sigintHandler);
+	if (!app.opt_test) {
+		// unexpected termination should unlink the outputs
+		signal(SIGINT, sigintHandler);
+		signal(SIGHUP, sigintHandler);
 
-//	store.save(app.arg_outputDatabase);
+		store.save(app.arg_outputDatabase);
+	}
 
 #if defined(ENABLE_JANSSON)
-//	if (app.opt_verbose >= app.VERBOSE_SUMMARY) {
-//		json_t *jResult = json_object();
-//		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-//		store.headerInfo(jResult, store.dbHeader);
-//		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-//	}
+	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
+		json_t *jResult = json_object();
+		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
+		store.headerInfo(jResult, store.dbHeader);
+		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+	}
 #endif
 
 	return 0;

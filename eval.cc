@@ -2231,7 +2231,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		}
 	}
 
-	printf("selfTest() passed %d tests\n", numPassed);
+	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /**
