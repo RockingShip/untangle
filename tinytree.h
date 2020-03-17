@@ -1,3 +1,6 @@
+#ifndef _TINYTREE_H
+#define _TINYTREE_H
+
 /*
  * @date 2020-03-13 19:18:57
  *
@@ -1312,3 +1315,5 @@ struct tinyTree_t {
 	}
 
 };
+
+#endif

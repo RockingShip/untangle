@@ -52,6 +52,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include "datadef.h"
+#include "tinytree.h"
 
 #include "config.h"
 
@@ -175,7 +176,7 @@ struct database_t {
 
 		// transform store
 		numTransform = 0;
-		maxTransform = maxTransform + 0; // No rounding, exact number
+		maxTransform = 0;
 		transformIndexSize = 0;
 		fwdTransformData = revTransformData = NULL;
 		fwdTransformNames = revTransformNames = NULL;
@@ -224,6 +225,7 @@ struct database_t {
 
 		// transform store
 		if (maxTransform) {
+			assert(maxTransform == MAXTRANSFORM);
 			fwdTransformData = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
 			revTransformData = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
 			fwdTransformNames = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", maxTransform, sizeof(*this->fwdTransformNames));
@@ -800,6 +802,178 @@ struct database_t {
 		pImprint->footprint = v;
 
 		return (uint32_t) (pImprint - this->imprints);
+	}
+
+	 /**
+	  * Associative lookup of a footprint
+	  *
+	  * Find any orientation of the footprint and return the matching structure and skin with identical effect
+	  *
+	  * @param {tinyTree_t} pTree - Tree containg expression
+	  * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
+	  * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
+	  * @param {uint32_t} sid - found structure id
+	  * @param {uint32_t} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
+	  * @return {boolean} - `true` if found, `false` if not.
+	  * @date 2020-03-16 21:20:18
+	  */
+	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t *sid, uint32_t *tid) {
+		/*
+		 * According to `performSelfTestInterleave` the following is true:
+	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
+	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
+		 */
+
+		 if (this->flags & context_t::MAGICMASK_ROWINTERLEAVE) {
+			 /*
+			  * index is populated with key rows, runtime scans cols
+			  */
+			 footprint_t *v = pFwdEvaluator;
+
+			 // permutate all colums
+			 for (unsigned iCol = 0; iCol < interleaveFactor; iCol++) {
+
+				 // apply the tree to the store
+				 pTree->eval(v);
+
+				 // search the resulting footprint in the cache/index
+				 uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				 /*
+				  * Was something found
+				  */
+				 if (this->imprintIndex[ix] != 0) {
+					 /*
+					 * Is so, then found the stripe which is the starting point. iTransform is relative to that
+					 */
+					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					 *sid = pImprint->sid;
+					 /*
+					 * NOTE: Need to reverse the transform
+					 */
+					 *tid = this->revTransformIds[pImprint->tid + iCol];
+					 return true;
+				 }
+
+				 v += tinyTree_t::TINYTREE_NEND;
+			 }
+		 } else {
+			 /*
+			  * index is populated with key cols, runtime scans rows
+			  * Because of the jumps, memory cache might be killed
+			  */
+
+			 // permutate all rows
+			 for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
+
+				 // find where the evaluator for the key is located in the evaluator store
+				 footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+
+				 // apply the reverse transform
+				 pTree->eval(v);
+
+				 // search the resulting footprint in the cache/index
+				 uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				 /*
+				  * Was something found
+				  */
+				 if (this->imprintIndex[ix] != 0) {
+					 /*
+					  * Is so, then found the stripe which is the starting point. iTransform is relative to that
+					  */
+					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					 *sid = pImprint->sid;
+					 *tid = pImprint->tid + iRow;
+					 return true;
+				 }
+			 }
+		 }
+		 return false;
+	 }
+
+	/**
+	* Associative lookup of a footprint
+	*
+	* Find any orientation of the footprint and return the matching structure and skin with identical effect
+	*
+	* @param {tinyTree_t} pTree - Tree containg expression
+	* @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
+	* @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
+	* @param {uint32_t} sid - structure id to attach to imprints.
+	* @date 2020-03-16 21:46:02
+	*/
+	inline void addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t sid) {
+		/*
+		 * According to `performSelfTestInterleave` the following is true:
+	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
+	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
+		 */
+		if (this->flags & context_t::MAGICMASK_ROWINTERLEAVE) {
+			/*
+			 * index is populated with key cols, runtime scans rows
+			 */
+			// permutate rows
+			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
+
+				// find where the transform is located in the evaluator store
+				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+
+				// apply the forward transform
+				pTree->eval(v);
+
+				// search the resulting footprint in the cache/index
+				uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				// add to the database is not there
+				if (this->imprintIndex[ix] == 0) {
+					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					// populate non-key fields
+					pImprint->sid = sid;
+					pImprint->tid = iRow;
+				} else {
+					// should not already be present
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}\n",
+						__FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid);
+					exit(1);
+				}
+			}
+		} else {
+			/*
+			 * index is populated with key rows, runtime scans cols
+			 */
+
+			footprint_t *v = pFwdEvaluator;
+
+			// permutate cols
+			for (unsigned iCol = 0; iCol < this->interleaveFactor; iCol++) {
+
+				// apply the tree to the store
+				pTree->eval(v);
+
+				// search the resulting footprint in the cache/index
+				uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				// add to the database is not there
+				if (this->imprintIndex[ix] == 0) {
+					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					// populate non-key fields
+					pImprint->sid = sid;
+					pImprint->tid = iCol;
+				} else {
+					// should not already be present
+					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}",
+					       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid);
+					exit(1);
+				}
+
+				v += tinyTree_t::TINYTREE_NEND;
+			}
+		}
 	}
 
 #if defined(ENABLE_JANSSON)

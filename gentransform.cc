@@ -710,25 +710,25 @@ void performSelfTestInterleave(gentransformContext_t *pApp) {
 				 * If the above applies, then the following should be valid
 				 */
 
-				assert(pFwdNames[row * numCols + col][0] == pFwdNames[row * numCols][pFwdNames[col][0] - 'a']);
-				assert(pFwdNames[row * numCols + col][1] == pFwdNames[row * numCols][pFwdNames[col][1] - 'a']);
-				assert(pFwdNames[row * numCols + col][2] == pFwdNames[row * numCols][pFwdNames[col][2] - 'a']);
-				assert(pFwdNames[row * numCols + col][3] == pFwdNames[row * numCols][pFwdNames[col][3] - 'a']);
-				assert(pFwdNames[row * numCols + col][4] == pFwdNames[row * numCols][pFwdNames[col][4] - 'a']);
-				assert(pFwdNames[row * numCols + col][5] == pFwdNames[row * numCols][pFwdNames[col][5] - 'a']);
-				assert(pFwdNames[row * numCols + col][6] == pFwdNames[row * numCols][pFwdNames[col][6] - 'a']);
-				assert(pFwdNames[row * numCols + col][7] == pFwdNames[row * numCols][pFwdNames[col][7] - 'a']);
-				assert(pFwdNames[row * numCols + col][8] == pFwdNames[row * numCols][pFwdNames[col][8] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][0] == pFwdNames[(row * numCols)][pFwdNames[col][0] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][1] == pFwdNames[(row * numCols)][pFwdNames[col][1] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][2] == pFwdNames[(row * numCols)][pFwdNames[col][2] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][3] == pFwdNames[(row * numCols)][pFwdNames[col][3] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][4] == pFwdNames[(row * numCols)][pFwdNames[col][4] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][5] == pFwdNames[(row * numCols)][pFwdNames[col][5] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][6] == pFwdNames[(row * numCols)][pFwdNames[col][6] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][7] == pFwdNames[(row * numCols)][pFwdNames[col][7] - 'a']);
+				assert(pFwdNames[(row * numCols) + col][8] == pFwdNames[(row * numCols)][pFwdNames[col][8] - 'a']);
 
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][0] - 'a'] == pFwdNames[col][0]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][1] - 'a'] == pFwdNames[col][1]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][2] - 'a'] == pFwdNames[col][2]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][3] - 'a'] == pFwdNames[col][3]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][4] - 'a'] == pFwdNames[col][4]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][5] - 'a'] == pFwdNames[col][5]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][6] - 'a'] == pFwdNames[col][6]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][7] - 'a'] == pFwdNames[col][7]);
-				assert(pRevNames[row * numCols][pFwdNames[row * numCols + col][8] - 'a'] == pFwdNames[col][8]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][0] - 'a'] == pFwdNames[col][0]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][1] - 'a'] == pFwdNames[col][1]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][2] - 'a'] == pFwdNames[col][2]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][3] - 'a'] == pFwdNames[col][3]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][4] - 'a'] == pFwdNames[col][4]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][5] - 'a'] == pFwdNames[col][5]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][6] - 'a'] == pFwdNames[col][6]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][7] - 'a'] == pFwdNames[col][7]);
+				assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][8] - 'a'] == pFwdNames[col][8]);
 			}
 		}
 	}

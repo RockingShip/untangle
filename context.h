@@ -93,11 +93,13 @@ struct context_t {
 	 */
 	// @formatter:off
 	enum {
-		MAGICFLAG_PARANOID = 0,                        // Force extra asserts when actually creating nodes
-		MAGICFLAG_QNTF     = 1,                        // Force generation of QnTF
+		MAGICFLAG_PARANOID      = 0,                        // Force extra asserts when actually creating nodes
+		MAGICFLAG_QNTF          = 1,                        // Force generation of QnTF
+		MAGICFLAG_ROWINTERLEAVE = 2,                        // imprint index is row interleaved (otherwise column)
 
-		MAGICMASK_PARANOID = 1 << MAGICFLAG_PARANOID,
-		MAGICMASK_QNTF     = 1 << MAGICFLAG_QNTF,
+		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
+		MAGICMASK_QNTF          = 1 << MAGICFLAG_QNTF,
+		MAGICMASK_ROWINTERLEAVE = 1 << MAGICFLAG_ROWINTERLEAVE,
 	};
 	// @formatter:on
 
@@ -242,10 +244,11 @@ struct context_t {
 	 * @date 2020-03-15 23:15:44
 	 */
 	void logFlags(uint32_t flags) {
-		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s\n", this->timeAsString(),
 		        flags,
 		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
-		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : ""
+		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : "",
+		        (flags & context_t::MAGICMASK_ROWINTERLEAVE) ? " ROWINTERLEAVE" : ""
 		);
 	}
 

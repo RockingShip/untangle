@@ -61,6 +61,7 @@ struct footprint_t {
 	 * @date 2020-03-15 20:26:04
 	 */
 	inline bool equals(const struct footprint_t &rhs) const {
+		// NOTE: QUADPERFOOTPRINT tests
 		if (this->bits[0] != rhs.bits[0]) return false;
 		if (this->bits[1] != rhs.bits[1]) return false;
 		if (this->bits[2] != rhs.bits[2]) return false;
@@ -69,7 +70,6 @@ struct footprint_t {
 		if (this->bits[5] != rhs.bits[5]) return false;
 		if (this->bits[6] != rhs.bits[6]) return false;
 		if (this->bits[7] != rhs.bits[7]) return false;
-		if (this->bits[8] != rhs.bits[8]) return false;
 
 		return true;
 	}
@@ -83,6 +83,7 @@ struct footprint_t {
 	inline uint32_t crc32(void) const {
 
 		uint64_t crc64 = 0;
+		// NOTE: QUADPERFOOTPRINT tests
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[0]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[1]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[2]));
@@ -91,7 +92,6 @@ struct footprint_t {
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[5]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[6]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[7]));
-		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[8]));
 
 		return (uint32_t) crc64;
 	}
