@@ -5,12 +5,12 @@ EXTRA_DIST = \
 
 MAINTAINERCLEANFILES = 
 DISTCLEANFILES =
-CLEANFILES = 
-BUILT_SOURCES = genprimedata genpushdata
+CLEANFILES =
+BUILT_SOURCES = genprimedata genpushdata pushdata.h
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genprimedata genpushdata
+	eval gentransform tlookup gensignature genprimedata genpushdata genprogress
 
 # genprimedata is fast and output is small, include in distribution
 primedata.h : genprimedata.cc
@@ -38,10 +38,13 @@ tlookup_SOURCES = tlookup.cc database.h datadef.h context.h primedata.h tinytree
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
 gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h primedata.h metrics.h
-nodist_gensignature_SOURCES = pushdata.h
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc
 
 # @date 2020-03-18 10:50:29
 genpushdata_SOURCES = genpushdata.cc
+
+# @date 2020-03-18 18:04:50
+genprogress_SOURCES = genprogress.cc generator.h tinytree.h context.h primedata.h datadef.h
+nodist_genprogress_SOURCES = pushdata.h

@@ -69,7 +69,7 @@ struct tinyTree_t {
 
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = (MAXSLOTS * 2),
+		TINYTREE_MAXNODES = 5*2, // for 5n9
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,
@@ -115,7 +115,7 @@ struct tinyTree_t {
 	 * @param {number} flags - Tree/node functionality
  	 * @date 2020-03-14 00:27:38
 	 */
-	inline tinyTree_t(context_t &ctx, uint32_t flags) : ctx(ctx), flags(flags),count(0) {
+	inline tinyTree_t(context_t &ctx, uint32_t flags) : ctx(ctx), flags(flags), count(0) {
 		// only set flags because that determines tree functionality
 
 		/*
@@ -126,8 +126,8 @@ struct tinyTree_t {
 		assert(TINYTREE_NEND < 32);
 
 		// allocate structures
-		pCacheQTF = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheQTF", 1<<16, sizeof(*this->pCacheQTF));
-		pCacheVersion = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheVersion", 1<<16, sizeof(*this->pCacheVersion));
+		pCacheQTF = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheQTF", 1 << 16, sizeof(*this->pCacheQTF));
+		pCacheVersion = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheVersion", 1 << 16, sizeof(*this->pCacheVersion));
 
 		// clear versioned memory
 		iVersion = 0;
@@ -161,7 +161,7 @@ struct tinyTree_t {
 		// bump incarnation. 
 		if (iVersion == 0) {
 			// clear versioned memory
-			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1<<16)));
+			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1 << 16)));
 		}
 		iVersion++; // when overflows, next call will clear
 
@@ -331,8 +331,8 @@ struct tinyTree_t {
 					if (Q > F) {
 						// swap
 						uint32_t savQ = Q;
-						Q             = F;
-						F             = savQ;
+						Q = F;
+						F = savQ;
 					}
 				}
 			} else {
@@ -345,8 +345,8 @@ struct tinyTree_t {
 					if (Q > T) {
 						// swap
 						uint32_t savQ = Q;
-						Q             = T;
-						T             = savQ;
+						Q = T;
+						T = savQ;
 					}
 				} else if (T == F) {
 					// SELF
@@ -373,7 +373,7 @@ struct tinyTree_t {
 			T = normaliseQTF(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
- 		return this->basicNode(Q, T, F) ^ ibit;
+		return this->basicNode(Q, T, F) ^ ibit;
 	}
 
 	/*
@@ -436,15 +436,15 @@ struct tinyTree_t {
 #endif
 
 		// construct packed notation
-		uint32_t ix = ((T&IBIT) ? 1<<15 : 0<<15) | Q << 10 | T << 5 | F << 0;
-		
+		uint32_t ix = ((T & IBIT) ? 1 << 15 : 0 << 15) | Q << 10 | T << 5 | F << 0;
+
 		// does entry exist
 		if (pCacheVersion[ix] == iVersion)
 			return pCacheQTF[ix];
-			
-		assert(this->count < TINYTREE_NEND);
 
-		uint32_t   nid    = this->count++;
+		uint32_t nid = this->count++;
+		assert(nid < TINYTREE_NEND);
+
 		tinyNode_t *pNode = this->N + nid;
 
 		pNode->Q = Q;
@@ -454,7 +454,7 @@ struct tinyTree_t {
 		// add to cache
 		pCacheQTF[ix] = nid;
 		pCacheVersion[ix] = iVersion;
-		
+
 		return nid;
 	}
 
@@ -939,7 +939,7 @@ struct tinyTree_t {
 	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 * @date 2020-03-13 22:12:24
 	 */
-	const char * encode(uint32_t id, char *pSkin = NULL) {
+	const char *encode(uint32_t id, char *pSkin = NULL) {
 
 		static char nameStorage[TINYTREE_NAMELEN + 1];
 

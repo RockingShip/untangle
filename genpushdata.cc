@@ -1,3 +1,5 @@
+//#pragma GCC optimize ("O0") // optimize on demand
+
 /*
  * @date 2020-03-18 10:50:29
  *
@@ -53,6 +55,9 @@ enum {
 
 	/// @constant {number} NSTART - Start of nodes. should match tinyTree_t::TINYTREE_NSTART
 	NSTART = (KSTART + MAXSLOTS),
+
+	/// @constant {number} NEND - Highest node id
+	NEND = (NSTART + MAXNODES),
 
 	/// @constant {number} PUSH_TIBIT - template Bitmask to indicate inverted `T`
 	PUSH_TIBIT = 0x8000,
@@ -112,9 +117,9 @@ bool testQTF(uint32_t Q, uint32_t T, uint32_t F) {
 	if (Q == 0)
 		return false; // 0?X:Y
 	if (T == 0)
-		return 0; // Q?0:F -> F?~Q:0
+		return false; // Q?0:F -> F?~Q:0
 	if (T == PUSH_TIBIT && F == 0)
-		return 0; // Q?~0:0
+		return false; // Q?~0:0
 
 	return 1;
 }
@@ -182,7 +187,7 @@ uint32_t generateData(void) {
 			// save starting position in data
 			pushIndex[ix] = numData;
 
-			printf("// %x: wildcard=%d numPlaceholder=%d numNode=%d\n", numData, iWildcard, numPlaceholder, numNode);
+			printf("// %x: wildcard=%d numNode=%d numPlaceholder=%d\n", numData, iWildcard, numPlaceholder, numNode);
 
 			/*
 			 * Iterate through all possible `Q,T,F` possibilities
@@ -206,7 +211,7 @@ uint32_t generateData(void) {
 				 * The replacement values must be higher than the end-loop condition
 				 */
 
-				if (iWildcard & 0b001) {
+				if (iWildcard & 0b100) {
 					Q = 0x7f; // assign unique value and break loop after finishing code block
 				} else if (newNumPlaceholder < MAXSLOTS) {
 					// Q must be a previously existing placeholder
@@ -234,7 +239,7 @@ uint32_t generateData(void) {
 					assert(!(To & ~PUSH_QTF_MASK));
 				}
 
-				if (iWildcard & 0b100) {
+				if (iWildcard & 0b001) {
 					F = 0x7d; // assign unique value and break loop after finishing code block
 				} else if (newNumPlaceholder < MAXSLOTS) {
 					// F must be a previously existing placeholder
@@ -252,12 +257,11 @@ uint32_t generateData(void) {
 				 * Write output to data
 				 */
 				if (Ti == 1 && testQTF(Q, To ^ PUSH_TIBIT, F)) {
-					numData++;
 
 					// `">NSTART"` flags a wildcard
-					uint32_t outQ = (Q > NSTART) ? 0 : Q;
-					uint32_t outT = (To > NSTART) ? 0 : To;
-					uint32_t outF = (F > NSTART) ? 0 : F;
+					uint32_t outQ = (Q > NEND) ? 0 : Q;
+					uint32_t outT = (To > NEND) ? 0 : To;
+					uint32_t outF = (F > NEND) ? 0 : F;
 
 					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | PUSH_TIBIT | outQ << PUSH_POS_Q | outT << PUSH_POS_T | outF << PUSH_POS_F); // inverted T
 					numData++;
@@ -269,12 +273,11 @@ uint32_t generateData(void) {
 					col++;
 				}
 				if (Ti == 0 && testQTF(Q, To, F)) {
-					numData++;
 
 					// `">NSTART"` flags a wildcard
-					uint32_t outQ = (Q > NSTART) ? 0 : Q;
-					uint32_t outT = (To > NSTART) ? 0 : To;
-					uint32_t outF = (F > NSTART) ? 0 : F;
+					uint32_t outQ = (Q > NEND) ? 0 : Q;
+					uint32_t outT = (To > NEND) ? 0 : To;
+					uint32_t outF = (F > NEND) ? 0 : F;
 
 					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | 0 | outQ << PUSH_POS_Q | outT << PUSH_POS_T | outF << PUSH_POS_F); // non-inverted T
 					numData++;
