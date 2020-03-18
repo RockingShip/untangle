@@ -1,0 +1,428 @@
+/*
+ * @date 2020-03-18 10:50:29
+ *
+ * `genpushdata` generates template data for `generator.h`
+ *
+ * The list will start with all `QnTF` templates followed by all `QTF` templates and terminated by zero
+ *
+ * The starting position of the list is found through the index:
+ *   starting point = `"pushIndex[<sectionStart> + numNode * MAXSLOTS + numPlaceholder]`
+ *
+ * Where `<sectionStart>` is one of:
+ *   `PUSH_QTF`, `PUSH_QTP`, `PUSH_QPF`, `PUSH_QPP`, `PUSH_PTF`, `PUSH_PTP`, `PUSH_PPF`
+ *
+ * Templates are encoded as `"nextNumPlaceholders << 16 | TIBIT << 15 | Q << 8 | T << 4 | F << 0"`
+ * QTF are positioned to match the same positions as on the runtime stack.
+ */
+
+/*
+ *	This file is part of Untangle, Information in fractal structures.
+ *	Copyright (C) 2017-2020, xyzzy@rockingship.org
+ *
+ *	This program is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 3 of the License, or
+ *	(at your option) any later version.
+ *
+ *	This program is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <unistd.h>
+#include <time.h>
+#include <signal.h>
+
+enum {
+	/// @constant {number} MAXSLOTS - Total number of slots
+	MAXSLOTS = 9,
+
+	/// @constant {number} MAXNODES - Number of nodes. should match tinyTree_t::TINYTREE_MAXNODES
+	MAXNODES = 10,
+
+	/// @constant {number} KSTART - Start of endpoints. should match tinyTree_t::TINYTREE_KSTART
+	KSTART = 1,
+
+	/// @constant {number} NSTART - Start of nodes. should match tinyTree_t::TINYTREE_NSTART
+	NSTART = (KSTART + MAXSLOTS),
+
+	/// @constant {number} PUSH_TIBIT - template Bitmask to indicate inverted `T`
+	PUSH_TIBIT = 0x8000,
+
+	/// @constant {number} PUSH_QPOS - template starting bit position for `Q`
+	PUSH_QPOS = 8,
+
+	/// @constant {number} PUSH_TPOS - template starting bit position for `T`
+	PUSH_TPOS = 4,
+
+	/// @constant {number} PUSH_FPOS - template starting bit position for `F`
+	PUSH_FPOS = 0,
+
+	/// @constant {number} PUSH_FPOS - template starting bit position for `newNumPlaceholders`
+	PUSH_POS_NUMPLACEHOLDER = 16,
+};
+
+/// @global {number} - async indication that a timer interrupt occurred
+unsigned tick;
+
+// section starting offsets
+enum {
+	PUSH_QTF = (0 * MAXNODES * MAXSLOTS),
+	PUSH_QTP = (1 * MAXNODES * MAXSLOTS),
+	PUSH_QPF = (2 * MAXNODES * MAXSLOTS),
+	PUSH_QPP = (3 * MAXNODES * MAXSLOTS),
+	PUSH_PTF = (4 * MAXNODES * MAXSLOTS),
+	PUSH_PTP = (5 * MAXNODES * MAXSLOTS),
+	PUSH_PPF = (6 * MAXNODES * MAXSLOTS),
+};
+
+// index tables pointing to start of data
+uint32_t pushIndex[MAXNODES * MAXSLOTS * 7];
+
+/**
+ * Test if a `Q,T,F` combo would flow through normalisation unchanged
+ *
+ * Test level-1 normalisation excluding dyadic ordering
+ *
+ * @param {number} Q
+ * @param {number} T
+ * @param {number} F
+ * @return {boolean} `true` it is would pass, `false` otherwise
+ */
+bool testQTF(uint32_t Q, uint32_t T, uint32_t F) {
+
+	// test normalised
+	if (Q == (T & ~PUSH_TIBIT))
+		return false;  // Q?Q:F or Q?~Q:F
+	if (Q == F)
+		return false; // Q?T:Q
+	if (T == F)
+		return false; // Q?F:F
+	if (Q == 0)
+		return false; // 0?X:Y
+	if (T == 0)
+		return 0; // Q?0:F -> F?~Q:0
+	if (T == PUSH_TIBIT && F == 0)
+		return 0; // Q?~0:0
+
+	return 1;
+}
+
+/**
+ * Wildcard values represent node-references that are popped from the stack during runtime.
+ * Zero means no wildcard, otherwise it must be a value greater than NSTART
+ *
+ * @return {number} Number of data entries created
+ * @date 2020-03-18 10:52:57
+ */
+uint32_t generateData(void) {
+
+	/*
+	 * start data with an empty list
+	 * index entries containing zero indicate invalid `numPlaceholder/numNode`
+	 */
+
+	printf("const uint32_t pushData[] = { 0,\n\n");
+	uint32_t numData = 1;
+
+	/*
+	 * Run in multiple rounds, each round is a 3-bit mask, each bit indicating which operands are wildcards
+	 * Do not include all bits set because that implies at runtime all operands were popped from stack with optimized handling
+	 */
+	for (unsigned iWildcard = 0; iWildcard < 0b111; iWildcard++) {
+
+		// @formatter:off
+		for (unsigned numNode=0; numNode < MAXNODES; numNode++)
+		for (unsigned numPlaceholder=0; numPlaceholder < MAXSLOTS; numPlaceholder++) {
+		// @formatter:on
+
+			unsigned col = 0;
+
+			// Index position
+			unsigned ix = (iWildcard * MAXNODES + numNode) * MAXSLOTS + numPlaceholder;
+
+			// test for proper section starts
+			if (numPlaceholder == 0 && numNode == 0) {
+				switch (iWildcard) {
+					case 0b000:
+						assert(PUSH_QTF == ix);
+						break;
+					case 0b001:
+						assert(PUSH_QTP == ix);
+						break;
+					case 0b010:
+						assert(PUSH_QPF == ix);
+						break;
+					case 0b011:
+						assert(PUSH_QPP == ix);
+						break;
+					case 0b100:
+						assert(PUSH_PTF == ix);
+						break;
+					case 0b101:
+						assert(PUSH_PTP == ix);
+						break;
+					case 0b110:
+						assert(PUSH_PPF == ix);
+						break;
+				}
+			}
+
+			// save starting position in data
+			pushIndex[ix] = numData;
+
+			printf("// %08x: wildcard=%d numPlaceholder=%d numNode=%d\n", numData, iWildcard, numPlaceholder, numNode);
+
+			/*
+			 * Iterate through all possible `Q,T,F` possibilities
+			 * First all the `QnTF` (Ti=1), then all the `QTF` (Ti=0)
+			 *
+			 * This to allow early bailout of list handling in `QnTF` mode.
+			 */
+
+			// @formatter:off
+			for (int Ti = 1; Ti >= 0; Ti--)
+			for (unsigned Q = 0; Q < NSTART + numNode; Q++)
+			for (unsigned To = 0; To < NSTART + numNode; To++)
+			for (unsigned F = 0; F < NSTART + numNode; F++) {
+			// @formatter:on
+
+				unsigned newNumPlaceholder = numPlaceholder;
+
+				/*
+				 * Test if some placeholders are wildcards.
+				 * Wildcards get runtime replaced by popped values from the stack
+				 * The replacement values must be higher than the end-loop condition
+				 */
+
+				if (iWildcard & 0b001) {
+					Q = 0x7f; // assign unique value and break loop after finishing code block
+				} else if (newNumPlaceholder < MAXSLOTS) {
+					// Q must be a previously existing placeholder
+					if (Q > KSTART + newNumPlaceholder && Q < NSTART)
+						continue; // placeholder not created yet
+					// bump placeholder if using for the first time
+					if (Q == KSTART + newNumPlaceholder)
+						newNumPlaceholder++;
+				}
+
+				if (iWildcard & 0b010) {
+					To = 0x7e; // assign unique value and break loop after finishing code block
+				} else if (newNumPlaceholder < MAXSLOTS) {
+					// T must be a previously existing placeholder
+					if (To > KSTART + newNumPlaceholder && To < NSTART)
+						continue; // placeholder not created yet
+					// bump placeholder if using for the first time
+					if (To == KSTART + newNumPlaceholder)
+						newNumPlaceholder++;
+				}
+
+				if (iWildcard & 0b100) {
+					F = 0x7d; // assign unique value and break loop after finishing code block
+				} else if (newNumPlaceholder < MAXSLOTS) {
+					// F must be a previously existing placeholder
+					if (F > KSTART + newNumPlaceholder && F < NSTART)
+						continue; // placeholder not created yet
+					// bump placeholder if using for the first time
+					if (F == KSTART + newNumPlaceholder)
+						newNumPlaceholder++;
+				}
+
+				/*
+				 * Write output to data
+				 */
+				if (Ti == 1 && testQTF(Q, To ^ PUSH_TIBIT, F)) {
+					numData++;
+
+					// `">NSTART"` flags a wildcard
+					uint32_t outQ = (Q > NSTART) ? 0 : Q;
+					uint32_t outT = (To > NSTART) ? 0 : To;
+					uint32_t outF = (F > NSTART) ? 0 : F;
+
+					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | PUSH_TIBIT | outQ << PUSH_QPOS | outT << PUSH_TPOS | outF << PUSH_FPOS); // inverted T
+					numData++;
+
+					if (col % 9 == 8)
+						printf("\n");
+					else
+						printf(" ");
+					col++;
+				}
+				if (Ti == 0 && testQTF(Q, To, F)) {
+					numData++;
+
+					// `">NSTART"` flags a wildcard
+					uint32_t outQ = (Q > NSTART) ? 0 : Q;
+					uint32_t outT = (To > NSTART) ? 0 : To;
+					uint32_t outF = (F > NSTART) ? 0 : F;
+
+					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | 0 | outQ << PUSH_QPOS | outT << PUSH_TPOS | outF << PUSH_FPOS); // non-inverted T
+					numData++;
+
+					if (col % 9 == 8)
+						printf("\n");
+					else
+						printf(" ");
+					col++;
+				}
+			}
+
+			// assert that a list was created
+			assert (pushIndex[ix] != numData);
+
+			// end of list
+			printf("0,\n");
+			numData++;
+		}
+
+		// bump data index
+	}
+
+	printf("};\n\n");
+	return numData;
+}
+
+/**
+ * Generate/display the index
+ *
+ * @date 2020-03-18 13:49:33
+ */
+void generateIndex(void) {
+
+	printf("const uint32_t pushIndex[] = { \n");
+
+	/*
+	 * Generate index
+	 */
+	for (unsigned iWildcard = 0; iWildcard < 0b111; iWildcard++) {
+
+		printf("// wildcard=%u\n", iWildcard);
+
+		for (unsigned numNode = 0; numNode < MAXNODES; numNode++) {
+			for (unsigned numPlaceholder = 0; numPlaceholder < MAXSLOTS; numPlaceholder++) {
+
+				// Index position
+				unsigned ix = (iWildcard * MAXNODES + numNode) * MAXSLOTS + numPlaceholder;
+
+				printf("0x%08x,", pushIndex[ix]);
+			}
+
+			printf("\n");
+		}
+	}
+
+	// end of list
+	printf("};\n\n");
+}
+
+/**
+ * Construct a time themed prefix string for console logging
+ *
+ * @date 2020-03-18 10:51:04
+ */
+const char *timeAsString(void) {
+	static char tstr[256];
+
+	time_t t = time(0);
+	struct tm *tm = localtime(&t);
+	strftime(tstr, sizeof(tstr), "%F %T", tm);
+
+	return tstr;
+}
+
+/**
+ * Signal handlers
+ *
+ * Bump interval timer
+ *
+ * @param {number} sig - signal (ignored)
+ * @date 2020-03-18 10:51:11
+ */
+void sigalrmHandler(int sig) {
+	(void) sig; // trick compiler t see parameter is used
+
+	tick++;
+	alarm(1);
+}
+
+/**
+ * Program main entry point
+ *
+ * @param  {number} argc - number of arguments
+ * @param  {string[]} argv - program arguments
+ * @return {number} 0 on normal return, non-zero when attention is required
+ * @date   2020-03-14 18:12:59
+ */
+int main(int argc, char *const *argv) {
+	setlinebuf(stdout);
+
+	/*
+	 * Test if output is redirected
+	 */
+	if (isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
+
+	/*
+	 * register timer handler
+	 */
+	signal(SIGALRM, sigalrmHandler);
+	::alarm(1);
+
+	/*
+	 * Allocate and prepare vector marking primes
+	 */
+
+	fprintf(stderr, "\r\e[K[%s] Allocating\n", timeAsString());
+
+	/*
+	 * Create data and output
+	 */
+
+	printf("// generated by %s on \"%s\"\n", argv[0], timeAsString());
+	printf("\n");
+	printf("#ifndef _PRIMEDATA_H\n");
+	printf("#define _PRIMEDATA_H\n");
+	printf("\n");
+	printf("#include <stdint.h>\n");
+	printf("\n");
+	printf("// Index is encoded as [SECTION_START + numNode * MAXSLOTS + numPlaceholder]\n");
+	printf("\n");
+
+	uint32_t numData = generateData();
+	generateIndex();
+
+	printf("\n\n");
+	printf("enum {\n");
+	printf("\t// Maximum number of placeholders\n\tPUSH_MAXPLACEHOLDERS=%d,\n", MAXSLOTS);
+	printf("\t// Maximum number of nodes\n\tPUSH_MAXNODES=%d,\n", MAXNODES);
+	printf("\t// Should match `tinyTree_t::TINYTREE_KSTART\n\tPUSH_KSTART=%d,\n", KSTART);
+	printf("\t// Should match `tinyTree_t::TINYTREE_NSTART\n\tPUSH_NSTART=%d,\n", NSTART);
+	printf("\t// Section starts\n\t");
+	printf("PUSH_QTF=%d, ", PUSH_QTF);
+	printf("PUSH_QTP=%d, ", PUSH_QTP);
+	printf("PUSH_QPF=%d, ", PUSH_QPF);
+	printf("PUSH_QPP=%d, ", PUSH_QPP);
+	printf("PUSH_PTF=%d, ", PUSH_PTF);
+	printf("PUSH_PTP=%d, ", PUSH_PTP);
+	printf("PUSH_PPF=%d,\n", PUSH_PPF);
+	printf("};\n");
+
+	printf("\n");
+	printf("#endif\n");
+
+	// status
+	fprintf(stderr, "\r\e[K[%s] Generated %d data entries\n", timeAsString(), numData);
+
+	return 0;
+}
+

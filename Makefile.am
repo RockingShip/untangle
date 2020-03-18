@@ -6,14 +6,17 @@ EXTRA_DIST = \
 MAINTAINERCLEANFILES = 
 DISTCLEANFILES =
 CLEANFILES = 
-BUILT_SOURCES = genprimedata
+BUILT_SOURCES = genprimedata genpushdata
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genprimedata
+	eval gentransform tlookup gensignature genprimedata genpushdata
 
 primedata.h : genprimedata.cc
 	./genprimedata > primedata.h
+
+pushdata.h : genpushdata.cc
+	./genpushdata > pushdata.h
 
 CPPFLAGS = $(LIBJANSSON_CFLAGS)
 LDADD = $(LIBJANSSON_LIBS)
@@ -36,3 +39,6 @@ gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc
+
+# @date 2020-03-18 10:50:29
+genpushdata_SOURCES = genpushdata.cc

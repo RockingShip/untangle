@@ -4,11 +4,13 @@
 /*
  * @date 2020-03-17 20:04:16
  *
- * Generate all possible normalised structures for a given structure size
+ * Generate all possible normalised structures for a given structure size.
  *
  * Structures will pass level-1 normalisation with exception the of ordering of dyadics.
  * This is because during runtime the placeholder endpoints will be replaced by actual
  * values which might have different values.
+ *
+ * Generation is based on templates instead of nested `for` loops for generating `Q,T,F` combos.
  *
  * @date 2020-03-17 23:54:39
  *

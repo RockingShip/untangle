@@ -43,9 +43,6 @@
 /// @constant {number} - Snap interval
 #define BUMP 1000000
 
-/// @constant {number} - Upper limit of progress for monitoring
-#define PROGRESSHI 9108448263
-
 /// @global {boolean[]} - true if index is a prime
 uint8_t *isPrime;
 
@@ -76,6 +73,8 @@ const char *timeAsString(void) {
  * @date 2020-03-14 18:11:59
  */
 void sigalrmHandler(int sig) {
+	(void) sig; // trick compiler t see parameter is used
+
 	tick++;
 	alarm(1);
 }
@@ -124,10 +123,12 @@ int main(int argc, char *const *argv) {
 	 */
 	unsigned numPrimes = 1; // 2 is predefined
 	uint64_t numProgress = 0;
+	uint64_t progressHi = 9108448263;
+
 	for (uint64_t iPrime = 3; iPrime * iPrime < MAXPRIME; iPrime++) {
 		if (tick) {
 			// timer interval detected
-			fprintf(stderr, "\r\e[K[%s] %.1f%%", timeAsString(), numProgress * 100.0 / PROGRESSHI);
+			fprintf(stderr, "\r\e[K[%s] %.1f%%", timeAsString(), numProgress * 100.0 / progressHi);
 
 			tick = 0;
 		}
@@ -142,8 +143,8 @@ int main(int argc, char *const *argv) {
 	}
 	fprintf(stderr, "\r\e[K"); // erase line
 
-	if (numProgress != PROGRESSHI)
-		fprintf(stderr, "WARNING: PROGRESSHI not %ld\n", numProgress);
+	if (numProgress != progressHi)
+		fprintf(stderr, "WARNING: progressHi not %ld\n", numProgress);
 
 	/*
 	 * Write to stdout
@@ -153,6 +154,8 @@ int main(int argc, char *const *argv) {
 	printf("\n");
 	printf("#ifndef _PRIMEDATA_H\n");
 	printf("#define _PRIMEDATA_H\n");
+	printf("\n");
+	printf("#include <stdint.h>\n");
 	printf("\n");
 
 	printf("uint32_t primeData[] = {\n");

@@ -46,6 +46,7 @@ tlookup
 *.bak
 *.dat
 *.db
+*.gch
 *.gz
 *.json
 *.log
