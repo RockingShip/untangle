@@ -421,23 +421,23 @@ struct gentransformContext_t : context_t {
  * - Lookup of `""` should return the transparent transform
  * - Verify that forward/reverse substitution counter each other
  *
- * @param {gentransformContext_t} pApp - program context
+ * @param {gentransformContext_t} app - program context
  * @param {database_t} pStore - database just before `main()`
  * @date 2020-03-12 00:26:06
  */
-void performSelfTestMatch(gentransformContext_t *pApp, database_t *pStore) {
+void performSelfTestMatch(gentransformContext_t &app, database_t *pStore) {
 
 	unsigned numPassed = 0;
 
 	// generate datasets
-	pApp->createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward transform
-	pApp->createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse transform
+	app.createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward transform
+	app.createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse transform
 
 	/*
 	 * Test empty name
 	 */
 	{
-		uint32_t tid = pApp->lookupTransform("", pStore->fwdTransformNameIndex);
+		uint32_t tid = app.lookupTransform("", pStore->fwdTransformNameIndex);
 
 		// test empty name is transparent skin
 		if (tid != 0) {
@@ -501,7 +501,7 @@ void performSelfTestMatch(gentransformContext_t *pApp, database_t *pStore) {
 				pNames[iTransform][iLen] = 0;
 
 				// lookup name
-				uint32_t encountered = pApp->lookupTransform(pNames[iTransform], pIndex);
+				uint32_t encountered = app.lookupTransform(pNames[iTransform], pIndex);
 
 				// undo truncation
 				pNames[iTransform][iLen] = 'a' + iLen;
@@ -557,7 +557,7 @@ void performSelfTestMatch(gentransformContext_t *pApp, database_t *pStore) {
 		numPassed++;
 	}
 
-	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr,"[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /**
@@ -655,7 +655,7 @@ void performSelfTestMatch(gentransformContext_t *pApp, database_t *pStore) {
  * @param {database_t} pStore - database just before `main()`
  * @date 2020-03-15 12:13:13
  */
-void performSelfTestInterleave(gentransformContext_t *pApp, database_t *pStore) {
+void performSelfTestInterleave(gentransformContext_t &app, database_t *pStore) {
 
 	// shortcuts
 	transformName_t *pFwdNames = pStore->fwdTransformNames;
@@ -664,8 +664,8 @@ void performSelfTestInterleave(gentransformContext_t *pApp, database_t *pStore) 
 	unsigned numPassed = 0;
 
 	// generate datasets
-	pApp->createTransforms(pStore->fwdTransformData, pFwdNames, pStore->fwdTransformNameIndex, true); // forward transform
-	pApp->createTransforms(pStore->revTransformData, pRevNames, pStore->revTransformNameIndex, false); // reverse transform
+	app.createTransforms(pStore->fwdTransformData, pFwdNames, pStore->fwdTransformNameIndex, true); // forward transform
+	app.createTransforms(pStore->revTransformData, pRevNames, pStore->revTransformNameIndex, false); // reverse transform
 
 	unsigned numRows, numCols = 1;
 
@@ -738,7 +738,7 @@ void performSelfTestInterleave(gentransformContext_t *pApp, database_t *pStore) 
 		}
 	}
 
-	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr,"[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /*
@@ -974,8 +974,8 @@ int main(int argc, char *const *argv) {
 	 */
 	if (app.opt_selftest) {
 		// perform selfcheck
-		performSelfTestMatch(&app, &store);
-		performSelfTestInterleave(&app, &store);
+		performSelfTestMatch(app, &store);
+		performSelfTestInterleave(app, &store);
 		exit(0);
 	}
 

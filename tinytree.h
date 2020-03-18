@@ -961,7 +961,7 @@ struct tinyTree_t {
 						}
 					} else {
 						if (F == 0) {
-							// Q?T:0
+							// AND Q?T:0
 							if (To >= TINYTREE_NSTART) stack[stackPos++] = To;
 							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
 						} else if (To == 0) {
@@ -969,7 +969,7 @@ struct tinyTree_t {
 							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
 							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
 						} else if (F == To) {
-							// XOR Q?F:F
+							// SELF Q?F:F
 							assert(!"Q?F:F");
 						} else {
 							// QTF Q?T:F
@@ -1073,7 +1073,7 @@ struct tinyTree_t {
 					}
 				} else {
 					if (F == 0) {
-						// Q?T:0
+						// AND Q?T:0
 						stack[stackPos++] = To;
 						stack[stackPos++] = Q;
 					} else if (To == 0) {
@@ -1081,7 +1081,7 @@ struct tinyTree_t {
 						stack[stackPos++] = F;
 						stack[stackPos++] = Q;
 					} else if (F == To) {
-						// XOR Q?F:F
+						// SELF Q?F:F
 						assert(!"Q?F:F");
 					} else {
 						// QTF Q?T:F
@@ -1120,7 +1120,7 @@ struct tinyTree_t {
 						// LT Q?0:F
 						pName[nameLen++] = '<';
 					} else if (F == To) {
-						// Q?F:F
+						// SELF Q?F:F
 						assert(!"Q?F:F");
 					} else {
 						// QTF Q?T:F

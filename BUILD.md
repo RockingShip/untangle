@@ -39,7 +39,7 @@ With each step generator tools adds sections and content to the database.
     Self test to determine if assumptions are correct
     
     ```sh
-    ./gentransform --selftest
+    ./gentransform - --selftest
     ```
     
     Create database

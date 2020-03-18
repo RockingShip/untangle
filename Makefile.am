@@ -32,7 +32,7 @@ tlookup_SOURCES = tlookup.cc database.h datadef.h context.h primedata.h tinytree
 
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
-gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h primedata.h
+gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h primedata.h metrics.h
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc

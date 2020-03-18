@@ -150,10 +150,11 @@ struct gensignatureContext_t : context_t {
  *  - Evaluate
  *  - Compare with independent generated result
  *
+ * @param {gentransformContext_t} ctx - I/O context
  * @param {tree_t} pTree - worker tree
  * @date 2020-03-10 21:46:10
  */
-void performSelfTestTree(tinyTree_t *pTree) {
+void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 
 	unsigned testNr = 0;
 	unsigned numPassed = 0;
@@ -309,7 +310,7 @@ void performSelfTestTree(tinyTree_t *pTree) {
 		}
 	}
 
-	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr,"[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /**
@@ -333,7 +334,8 @@ void performSelfTestTree(tinyTree_t *pTree) {
  * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
  *
  * Demonstrate that for any given footprint it will re-orientate
- * @param {tree_t} pTree - worker tree
+ * @param {gentransformContext_t} ctx - I/O context
+ * @param {database_t} pStore - memory based database
  * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
  * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
  * @date 2020-03-15 16:35:43
@@ -462,8 +464,8 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 			seconds = 1;
 
 		// base estimated size on 791647 signatures
-		fprintf(stderr, "\r[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%ld, /*speed=*/%d, /*storage=*/%.3f}\n",
-		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, seconds,
+		fprintf(stderr, "\r[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
+		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 		        (int)(MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 		// test that number of imprints match
@@ -474,7 +476,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 		}
 	}
 
-	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr,"[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /*
@@ -833,7 +835,7 @@ int main(int argc, char *const *argv) {
 		 *   that is, if `app` were global before `performSelfTestInterleave`,
 		 *   then removing `app` as argument would not require additional changing of code.
 		 */
-		performSelfTestTree(&tree);
+		performSelfTestTree(app, &tree);
 		performSelfTestInterleave(app, &store, pEvalCol, pEvalRow);
 
 		exit(0);
