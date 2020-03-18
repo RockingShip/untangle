@@ -144,7 +144,7 @@ struct gensignatureContext_t : context_t {
  * This totals to a collection of (8*8*8) 512 trees.
  *
  * For every tree:
- *  - normalised q,t,f triplet
+ *  - normalise q,t,f triplet
  *  - Save tree as string
  *  - Load tree as string
  *  - Evaluate
@@ -195,7 +195,7 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 			 */
 
 			pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
-			pTree->count = tinyTree_t::TINYTREE_NSTART;
+			pTree->clear();
 			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 			/*
@@ -212,8 +212,8 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 				} else {
 					int ret = pTree->decodeSafe(treeName, skin);
 					if (ret != 0) {
-						fprintf(stderr, "selfTestTree() failed: testNr=%u iFast=%d iQnTF=%d iSkin=%d name:%s/%s ret:%d\n",
-						        testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
+						printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
+						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
 						exit(1);
 					}
 				}
@@ -224,9 +224,8 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 				} else {
 					int ret = pTree->decodeSafe(treeName);
 					if (ret != 0) {
-						fprintf(stderr, "selfTestTree() failed: testNr=%u iFast=%d iQnTF=%d iSkin=%d name:%s ret:%d\n",
-						        testNr, iFast, iQnTF, iSkin, treeName, ret);
-						exit(1);
+						printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
+						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, ret);
 					}
 				}
 			}
@@ -301,8 +300,8 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 					encountered ^= 1; // invert result
 
 				if (expected != encountered) {
-					fprintf(stderr, "selfTestTree() failed: testNr=%u raw=%d qntf=%d skin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
-					        testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+					printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
+					       __FUNCTION__, testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
 				numPassed++;
@@ -344,7 +343,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 
 	unsigned numPassed = 0;
 
-	tinyTree_t tree(0);
+	tinyTree_t tree(ctx, 0);
 
 	// test name. NOTE: this is deliberately "not ordered"
 	const char *pBasename = "abc!defg!!hi!";
@@ -369,18 +368,33 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 		assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
 
 		// calculate `"abc!defg!!hi!"/cabdefghi"`
-		tree.decodeFast("abc!defg!!hi!");
+		tree.decodeSafe("abc!defg!!hi!");
 		footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
 		tree.eval(pEncountered);
 
 		// calculate `"cab!defg!!hi!"` (manually applying forward transform)
-		tree.decodeFast("cab!defg!!hi!");
+		tree.decodeSafe("cab!defg!!hi!");
 		footprint_t *pExpect = pEvalFwd;
 		tree.eval(pExpect);
 
 		// compare
 		if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
-			fprintf(stderr, "performSelfTestInterleave() failed: \"abc!defg!!hi!/cabdefghi\" != \"cab!defg!!hi!\"\n");
+			printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
+			       __FUNCTION__);
+			exit(1);
+		}
+
+		// test that cache lookups work
+		// calculate `"abc!de!fabc!!"`
+		tree.decodeSafe("abc!de!fabc!!");
+		tree.eval(pEvalFwd);
+
+		const char *pExpectedName = tree.encode(tree.root);
+
+		// compare
+		if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
+			printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+			       __FUNCTION__, pExpectedName, "abc!de!f2!");
 			exit(1);
 		}
 	}
@@ -814,7 +828,7 @@ int main(int argc, char *const *argv) {
 	if (app.opt_selftest) {
 		// perform selfchecks
 
-		tinyTree_t tree(0);
+		tinyTree_t tree(app, 0);
 
 		// allocate evaluators
 		footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];

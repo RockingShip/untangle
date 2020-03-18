@@ -65,6 +65,8 @@ struct tinyNode_t {
  */
 struct tinyTree_t {
 
+	context_t &ctx;
+
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
 		TINYTREE_MAXNODES = (MAXSLOTS * 2),
@@ -97,18 +99,49 @@ struct tinyTree_t {
 	// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
 
+	/// @var {number[]} lookup table for `basicNode()` to register used `Q,T,F` combinations
+	uint32_t *pCacheQTF;
+
+	/// @var {number[]} versioned memory for `pCacheQTF`
+	uint32_t *pCacheVersion;
+
+	/// @var {number} current version incarnation
+	uint32_t iVersion;
+
 	/**
 	 * Constructor
 	 *
+	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
  	 * @date 2020-03-14 00:27:38
 	 */
-
-	inline tinyTree_t(uint32_t flags) : flags(flags) {
+	inline tinyTree_t(context_t &ctx, uint32_t flags) : ctx(ctx), flags(flags),count(0) {
 		// only set flags because that determines tree functionality
 
-		// assert that all nodes fit in a 32 bit vector (`beenWhere`)
-		assert(TINYTREE_NEND < 32); // for beenThere
+		/*
+		 * Assert that the highest available node fits into a 5 bit value. `2^5` = 32.
+		 *  - for `beenThere[]` using it as index in uint32_t
+		 *  - for `pCacheQTF[]` using packed `QTnF` storage of 5 bits per field
+		 */
+		assert(TINYTREE_NEND < 32);
+
+		// allocate structures
+		pCacheQTF = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheQTF", 1<<16, sizeof(*this->pCacheQTF));
+		pCacheVersion = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheVersion", 1<<16, sizeof(*this->pCacheVersion));
+
+		// clear versioned memory
+		iVersion = 0;
+		this->clear();
+	}
+
+	/**
+	 * Release system resources
+	 *
+	 * @date 2020-03-18 19:30:09
+	 */
+	~tinyTree_t() {
+		ctx.myFree("tinyTree_t::pCacheQTF", this->pCacheQTF);
+		ctx.myFree("tinyTree_t::pCacheVersion", this->pCacheVersion);
 	}
 
 	/*
@@ -125,6 +158,13 @@ struct tinyTree_t {
 	 * @date 2020-03-06 22:27:36
 	 */
 	inline void clear(void) {
+		// bump incarnation. 
+		if (iVersion == 0) {
+			// clear versioned memory
+			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1<<16)));
+		}
+		iVersion++; // when overflows, next call will clear
+
 		this->count = TINYTREE_NSTART; // rewind first free node
 		this->root = 0; // set result to zero-reference
 	}
@@ -336,6 +376,28 @@ struct tinyTree_t {
  		return this->basicNode(Q, T, F) ^ ibit;
 	}
 
+	/*
+	 * @date  2020-03-18 18:20:45
+	 *
+	 * Versioned memory.
+	 *
+	 * `tinyTree_t` is tuned for speed.
+	 * A performance hit is `basicNode()` which has to search the tree for existing `QTF` combinations.
+	 *
+	 * `NEND` if <32 and will fit in 5 bits.
+	 * A packed `QnTF` (as used by `genpushdata`) is in total (1+5*3=) 16 bits large
+	 *
+	 * An ultrafast lookup would be a table indexed by the packed `QTF` and containing the matching node id.
+	 *
+	 * There is an additional problem, it requires this lookup table to be cleared every time the tree is cleared.
+	 * A solution is to use versioned memory.
+	 *
+	 * Versioned memory has an accompanying shadow array containing the version of the current tree incarnation.
+	 * Writing memory also updates the matching memory version.
+	 * If the memory version matched the incarnation version then the contents is considered.
+	 * Otherwise, the contents should be considered the default value, in this case being zero.
+	 */
+
 	/**
 	 * Simple(fast) hash table lookup for nodes
 	 *
@@ -358,18 +420,28 @@ struct tinyTree_t {
 			assert(Q != (T & ~IBIT));              // Q/T collapse
 			assert(Q != F);                        // Q/F collapse
 			assert(T != F);                        // T/F collapse
-			assert((T & ~IBIT) != F || Q < F);     // NE ordering
+			assert((T & ~IBIT) != F || Q < F);     // XOR/NE ordering
 			assert(F != 0 || (T & IBIT) || Q < T); // AND ordering
 			assert(T != IBIT || Q < F);            // OR ordering
 		}
 
+#if 0
+		// SLOW and reference implementation
 		// test if component already exists
 		for (uint32_t nid = TINYTREE_NSTART; nid < this->count; nid++) {
 			const tinyNode_t *pNode = this->N + nid;
 			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
 				return nid;
 		}
+#endif
 
+		// construct packed notation
+		uint32_t ix = ((T&IBIT) ? 1<<15 : 0<<15) | Q << 10 | T << 5 | F << 0;
+		
+		// does entry exist
+		if (pCacheVersion[ix] == iVersion)
+			return pCacheQTF[ix];
+			
 		assert(this->count < TINYTREE_NEND);
 
 		uint32_t   nid    = this->count++;
@@ -379,6 +451,10 @@ struct tinyTree_t {
 		pNode->T = T;
 		pNode->F = F;
 
+		// add to cache
+		pCacheQTF[ix] = nid;
+		pCacheVersion[ix] = iVersion;
+		
 		return nid;
 	}
 
@@ -410,8 +486,7 @@ struct tinyTree_t {
 	int decodeSafe(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
-		this->count = TINYTREE_NSTART;
-		this->root = 0;
+		this->clear();
 
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -647,8 +722,7 @@ struct tinyTree_t {
 	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
-		this->count = TINYTREE_NSTART;
-		this->root = 0;
+		this->clear();
 
 		// temporary stack storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode

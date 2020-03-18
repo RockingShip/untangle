@@ -39,8 +39,10 @@ jansson-*
 # generated files
 eval
 genprimedata
+genpushdata
 gensignature
 gentransform
+pushdata.h
 tlookup
 
 *.bak

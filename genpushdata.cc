@@ -6,12 +6,12 @@
  * The list will start with all `QnTF` templates followed by all `QTF` templates and terminated by zero
  *
  * The starting position of the list is found through the index:
- *   starting point = `"pushIndex[<sectionStart> + numNode * MAXSLOTS + numPlaceholder]`
+ *   starting point = `"pushIndex[<section>][numNode][numPlaceholder]`
  *
- * Where `<sectionStart>` is one of:
+ * Where `<section>` is one of:
  *   `PUSH_QTF`, `PUSH_QTP`, `PUSH_QPF`, `PUSH_QPP`, `PUSH_PTF`, `PUSH_PTP`, `PUSH_PPF`
  *
- * Templates are encoded as `"nextNumPlaceholders << 16 | TIBIT << 15 | Q << 8 | T << 4 | F << 0"`
+ * Templates are encoded as `"nextNumPlaceholders << 16 | TIBIT << 15 | Q << 10 | T << 5 | F << 0"`
  * QTF are positioned to match the same positions as on the runtime stack.
  */
 
@@ -57,32 +57,35 @@ enum {
 	/// @constant {number} PUSH_TIBIT - template Bitmask to indicate inverted `T`
 	PUSH_TIBIT = 0x8000,
 
-	/// @constant {number} PUSH_QPOS - template starting bit position for `Q`
-	PUSH_QPOS = 8,
+	/// @constant {number} PUSH_QTF_MASK - mask to isolate QTF fields
+	PUSH_QTF_MASK = 0b11111,
 
-	/// @constant {number} PUSH_TPOS - template starting bit position for `T`
-	PUSH_TPOS = 4,
+	/// @constant {number} PUSH_POS_Q - template starting bit position for `Q`
+	PUSH_POS_Q = 5 * 2,
 
-	/// @constant {number} PUSH_FPOS - template starting bit position for `F`
-	PUSH_FPOS = 0,
+	/// @constant {number} PUSH_POS_T - template starting bit position for `T`
+	PUSH_POS_T = 5 * 1,
 
-	/// @constant {number} PUSH_FPOS - template starting bit position for `newNumPlaceholders`
+	/// @constant {number} PUSH_POS_F - template starting bit position for `F`
+	PUSH_POS_F = 5 * 0,
+
+	/// @constant {number} PUSH_POS_F - template starting bit position for `newNumPlaceholders`
 	PUSH_POS_NUMPLACEHOLDER = 16,
+};
+
+// section starting offsets
+enum {
+	PUSH_QTF = 0,
+	PUSH_QTP = 1,
+	PUSH_QPF = 2,
+	PUSH_QPP = 3,
+	PUSH_PTF = 4,
+	PUSH_PTP = 5,
+	PUSH_PPF = 6,
 };
 
 /// @global {number} - async indication that a timer interrupt occurred
 unsigned tick;
-
-// section starting offsets
-enum {
-	PUSH_QTF = (0 * MAXNODES * MAXSLOTS),
-	PUSH_QTP = (1 * MAXNODES * MAXSLOTS),
-	PUSH_QPF = (2 * MAXNODES * MAXSLOTS),
-	PUSH_QPP = (3 * MAXNODES * MAXSLOTS),
-	PUSH_PTF = (4 * MAXNODES * MAXSLOTS),
-	PUSH_PTP = (5 * MAXNODES * MAXSLOTS),
-	PUSH_PPF = (6 * MAXNODES * MAXSLOTS),
-};
 
 // index tables pointing to start of data
 uint32_t pushIndex[MAXNODES * MAXSLOTS * 7];
@@ -153,25 +156,25 @@ uint32_t generateData(void) {
 			if (numPlaceholder == 0 && numNode == 0) {
 				switch (iWildcard) {
 					case 0b000:
-						assert(PUSH_QTF == ix);
+						assert(PUSH_QTF * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b001:
-						assert(PUSH_QTP == ix);
+						assert(PUSH_QTP * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b010:
-						assert(PUSH_QPF == ix);
+						assert(PUSH_QPF * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b011:
-						assert(PUSH_QPP == ix);
+						assert(PUSH_QPP * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b100:
-						assert(PUSH_PTF == ix);
+						assert(PUSH_PTF * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b101:
-						assert(PUSH_PTP == ix);
+						assert(PUSH_PTP * (MAXNODES * MAXSLOTS) == ix);
 						break;
 					case 0b110:
-						assert(PUSH_PPF == ix);
+						assert(PUSH_PPF * (MAXNODES * MAXSLOTS) == ix);
 						break;
 				}
 			}
@@ -179,7 +182,7 @@ uint32_t generateData(void) {
 			// save starting position in data
 			pushIndex[ix] = numData;
 
-			printf("// %08x: wildcard=%d numPlaceholder=%d numNode=%d\n", numData, iWildcard, numPlaceholder, numNode);
+			printf("// %x: wildcard=%d numPlaceholder=%d numNode=%d\n", numData, iWildcard, numPlaceholder, numNode);
 
 			/*
 			 * Iterate through all possible `Q,T,F` possibilities
@@ -212,6 +215,9 @@ uint32_t generateData(void) {
 					// bump placeholder if using for the first time
 					if (Q == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
+
+					// verify that fields do not overflow
+					assert(!(Q & ~PUSH_QTF_MASK));
 				}
 
 				if (iWildcard & 0b010) {
@@ -223,6 +229,9 @@ uint32_t generateData(void) {
 					// bump placeholder if using for the first time
 					if (To == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
+
+					// verify that fields do not overflow
+					assert(!(To & ~PUSH_QTF_MASK));
 				}
 
 				if (iWildcard & 0b100) {
@@ -234,6 +243,9 @@ uint32_t generateData(void) {
 					// bump placeholder if using for the first time
 					if (F == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
+
+					// verify that fields do not overflow
+					assert(!(F & ~PUSH_QTF_MASK));
 				}
 
 				/*
@@ -247,7 +259,7 @@ uint32_t generateData(void) {
 					uint32_t outT = (To > NSTART) ? 0 : To;
 					uint32_t outF = (F > NSTART) ? 0 : F;
 
-					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | PUSH_TIBIT | outQ << PUSH_QPOS | outT << PUSH_TPOS | outF << PUSH_FPOS); // inverted T
+					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | PUSH_TIBIT | outQ << PUSH_POS_Q | outT << PUSH_POS_T | outF << PUSH_POS_F); // inverted T
 					numData++;
 
 					if (col % 9 == 8)
@@ -264,7 +276,7 @@ uint32_t generateData(void) {
 					uint32_t outT = (To > NSTART) ? 0 : To;
 					uint32_t outF = (F > NSTART) ? 0 : F;
 
-					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | 0 | outQ << PUSH_QPOS | outT << PUSH_TPOS | outF << PUSH_FPOS); // non-inverted T
+					printf("0x%05x,", newNumPlaceholder << PUSH_POS_NUMPLACEHOLDER | 0 | outQ << PUSH_POS_Q | outT << PUSH_POS_T | outF << PUSH_POS_F); // non-inverted T
 					numData++;
 
 					if (col % 9 == 8)
@@ -297,26 +309,28 @@ uint32_t generateData(void) {
  */
 void generateIndex(void) {
 
-	printf("const uint32_t pushIndex[] = { \n");
+	printf("const uint32_t pushIndex[7][%d][%d] = { \n", MAXNODES, MAXSLOTS);
 
 	/*
 	 * Generate index
 	 */
 	for (unsigned iWildcard = 0; iWildcard < 0b111; iWildcard++) {
 
-		printf("// wildcard=%u\n", iWildcard);
+		printf("{ // wildcard=%u\n", iWildcard);
 
 		for (unsigned numNode = 0; numNode < MAXNODES; numNode++) {
+			printf("\t{ ");
 			for (unsigned numPlaceholder = 0; numPlaceholder < MAXSLOTS; numPlaceholder++) {
 
 				// Index position
 				unsigned ix = (iWildcard * MAXNODES + numNode) * MAXSLOTS + numPlaceholder;
 
-				printf("0x%08x,", pushIndex[ix]);
+				printf("0x%05x,", pushIndex[ix]);
 			}
 
-			printf("\n");
+			printf(" },\n");
 		}
+		printf("},\n");
 	}
 
 	// end of list
@@ -379,35 +393,27 @@ int main(int argc, char *const *argv) {
 	::alarm(1);
 
 	/*
-	 * Allocate and prepare vector marking primes
-	 */
-
-	fprintf(stderr, "\r\e[K[%s] Allocating\n", timeAsString());
-
-	/*
 	 * Create data and output
 	 */
 
 	printf("// generated by %s on \"%s\"\n", argv[0], timeAsString());
 	printf("\n");
-	printf("#ifndef _PRIMEDATA_H\n");
-	printf("#define _PRIMEDATA_H\n");
+	printf("#ifndef _PUSHDATA_H\n");
+	printf("#define _PUSHDATA_H\n");
 	printf("\n");
 	printf("#include <stdint.h>\n");
 	printf("\n");
-	printf("// Index is encoded as [SECTION_START + numNode * MAXSLOTS + numPlaceholder]\n");
-	printf("\n");
-
-	uint32_t numData = generateData();
-	generateIndex();
+	printf("// Index is encoded as: \"pushIndex[SECTION][numNode][numPlaceholder]\"\n");
 
 	printf("\n\n");
+
 	printf("enum {\n");
 	printf("\t// Maximum number of placeholders\n\tPUSH_MAXPLACEHOLDERS=%d,\n", MAXSLOTS);
 	printf("\t// Maximum number of nodes\n\tPUSH_MAXNODES=%d,\n", MAXNODES);
 	printf("\t// Should match `tinyTree_t::TINYTREE_KSTART\n\tPUSH_KSTART=%d,\n", KSTART);
 	printf("\t// Should match `tinyTree_t::TINYTREE_NSTART\n\tPUSH_NSTART=%d,\n", NSTART);
-	printf("\t// Section starts\n\t");
+
+	printf("\t// Sections\n\t");
 	printf("PUSH_QTF=%d, ", PUSH_QTF);
 	printf("PUSH_QTP=%d, ", PUSH_QTP);
 	printf("PUSH_QPF=%d, ", PUSH_QPF);
@@ -415,9 +421,24 @@ int main(int argc, char *const *argv) {
 	printf("PUSH_PTF=%d, ", PUSH_PTF);
 	printf("PUSH_PTP=%d, ", PUSH_PTP);
 	printf("PUSH_PPF=%d,\n", PUSH_PPF);
+
+	printf("\t// Bit offsets in template\n\t");
+	printf("PUSH_POS_NUMPLACEHOLDER=%d, ", PUSH_POS_NUMPLACEHOLDER);
+	printf("PUSH_POS_Q=%d, ", PUSH_POS_Q);
+	printf("PUSH_POS_T=%d, ", PUSH_POS_T);
+	printf("PUSH_POS_F=%d,\n", PUSH_POS_F);
+
+	printf("\t// Mask to indicate T inverted\n\tPUSH_TIBIT=0x%x,\n", PUSH_TIBIT);
+
 	printf("};\n");
 
-	printf("\n");
+	printf("\n\n");
+
+	uint32_t numData = generateData();
+	generateIndex();
+
+	printf("\n\n");
+
 	printf("#endif\n");
 
 	// status

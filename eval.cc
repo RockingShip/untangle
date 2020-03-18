@@ -2098,7 +2098,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		assert(pTree->decode(treeName, false) == 0);
 
 		if (pTree->root != r) {
-			fprintf(stderr, "prefix fail: expected=%d encountered:%d %s\n", r, pTree->root, treeName);
+			fprintf(stderr, "prefix fail: expected=%d encountered=%d %s\n", r, pTree->root, treeName);
 			exit(1);
 		}
 	}
