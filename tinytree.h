@@ -69,7 +69,7 @@ struct tinyTree_t {
 
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = 5*2, // for 5n9
+		TINYTREE_MAXNODES = 5 * 2, // for 5n9
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,
@@ -85,6 +85,33 @@ struct tinyTree_t {
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
 		TINYTREE_NAMELEN = (1 + (3 + 1) * TINYTREE_MAXNODES + 1 + 1),
+
+		/*
+		 * @date 2020-03-19 16:12:52
+		 *
+		 * Packed Notation to make operator fit into 16 bits
+		 *   packedQTF =  <invertedT> << (WIDTH*3) | Q << (WIDTH*2) | T << (WIDTH*1) | F << (WIDTH*0)
+		 *
+		 * This order is chosen as it is the order found on stacks during `decode()`
+		 */
+
+		/// @constant {number} - Field width
+		PACKED_WIDTH = 5,
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_MASK = (1 << PACKED_WIDTH) - 1,
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_TIBIT = 1 << (PACKED_WIDTH * 3),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_FPOS = (PACKED_WIDTH * 0),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_TPOS = (PACKED_WIDTH * 1),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_QPOS = (PACKED_WIDTH * 2),
 	};
 
 	/// @var {number} functionality flags
@@ -94,12 +121,12 @@ struct tinyTree_t {
 	uint32_t count;
 
 	/// @var {node_t[]} array of unified operators
-	tinyNode_t N[TINYTREE_MAXNODES];
+	tinyNode_t N[TINYTREE_NEND];
 
 	// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
 
-	/// @var {number[]} lookup table for `basicNode()` to register used `Q,T,F` combinations
+	/// @var {number[]} lookup table for `basicNode()` index by packed `QTF`
 	uint32_t *pCacheQTF;
 
 	/// @var {number[]} versioned memory for `pCacheQTF`
@@ -433,14 +460,19 @@ struct tinyTree_t {
 			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
 				return nid;
 		}
-#endif
-
+#else
 		// construct packed notation
-		uint32_t ix = ((T & IBIT) ? 1 << 15 : 0 << 15) | Q << 10 | T << 5 | F << 0;
+		uint32_t qtf = ((T & IBIT) ? PACKED_TIBIT : 0) | Q << PACKED_QPOS | (T & ~IBIT) << PACKED_TPOS | F << PACKED_FPOS;
 
 		// does entry exist
-		if (pCacheVersion[ix] == iVersion)
-			return pCacheQTF[ix];
+		if (pCacheVersion[qtf] == iVersion && pCacheQTF[qtf] != 0)
+			return pCacheQTF[qtf];
+
+		// add to cache
+		pCacheQTF[qtf] = this->count;
+		pCacheVersion[qtf] = iVersion;
+#endif
+
 
 		uint32_t nid = this->count++;
 		assert(nid < TINYTREE_NEND);
@@ -450,10 +482,6 @@ struct tinyTree_t {
 		pNode->Q = Q;
 		pNode->T = T;
 		pNode->F = F;
-
-		// add to cache
-		pCacheQTF[ix] = nid;
-		pCacheVersion[ix] = iVersion;
 
 		return nid;
 	}

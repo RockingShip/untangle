@@ -181,7 +181,7 @@ int main(int argc, char *const *argv) {
 	printf("#endif\n");
 
 	// status
-	fprintf(stderr, "\r\e[K[%s] Selected %u primes\n", timeAsString(), numSelected);
+	fprintf(stderr, "[%s] Selected %u primes\n", timeAsString(), numSelected);
 
 	return 0;
 }

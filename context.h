@@ -74,6 +74,13 @@ struct context_t {
 	/// @var {uint64_t} - number of compares in baseTree::hash() (collisions)
 	uint64_t cntCompare;
 
+	// statistics
+
+	/// @var {uint64_t} - Upper limit of progress tracker
+	uint64_t progressHi;
+	/// @var {uint64_t} - Current position of progress tracker
+	uint64_t progress;
+
 	/*
 	 * verbose levels
 	 */
@@ -195,8 +202,7 @@ struct context_t {
 	 * @param {number} n - number to raise
 	 * @date 2020-03-15 19:21:50
 	 */
-	uint32_t raisePrime(uint32_t n)
-	{
+	uint32_t raisePrime(uint32_t n) {
 		if (n == 0)
 			return 0;
 
@@ -207,7 +213,7 @@ struct context_t {
 		// raise at least 1%
 		n += n / 100;
 
-		for (unsigned i = 0; ; i++) {
+		for (unsigned i = 0;; i++) {
 			if (n <= primeData[i])
 				return primeData[i];
 		}

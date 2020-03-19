@@ -221,8 +221,10 @@ uint32_t generateData(void) {
 					if (Q == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
-					// verify that fields do not overflow
+					// verify that fielded does not overflow
 					assert(!(Q & ~PUSH_QTF_MASK));
+				} else {
+					continue; // skip if exceeds maximum
 				}
 
 				if (iWildcard & 0b010) {
@@ -235,8 +237,10 @@ uint32_t generateData(void) {
 					if (To == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
-					// verify that fields do not overflow
+					// verify that fielded does not overflow
 					assert(!(To & ~PUSH_QTF_MASK));
+				} else {
+					continue; // skip if exceeds maximum
 				}
 
 				if (iWildcard & 0b001) {
@@ -249,8 +253,10 @@ uint32_t generateData(void) {
 					if (F == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
-					// verify that fields do not overflow
+					// verify that fielded does not overflow
 					assert(!(F & ~PUSH_QTF_MASK));
+				} else {
+					continue; // skip if exceeds maximum
 				}
 
 				/*
@@ -445,7 +451,7 @@ int main(int argc, char *const *argv) {
 	printf("#endif\n");
 
 	// status
-	fprintf(stderr, "\r\e[K[%s] Generated %d data entries\n", timeAsString(), numData);
+	fprintf(stderr, "[%s] Generated %d data entries\n", timeAsString(), numData);
 
 	return 0;
 }

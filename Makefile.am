@@ -5,7 +5,7 @@ EXTRA_DIST = \
 
 MAINTAINERCLEANFILES = 
 DISTCLEANFILES =
-CLEANFILES =
+CLEANFILES = pushdata.h
 BUILT_SOURCES = genprimedata genpushdata pushdata.h
 
 noinst_PROGRAMS =

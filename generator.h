@@ -55,6 +55,9 @@
  */
 struct generatorTree_t : tinyTree_t {
 
+	/// @var {number} --text, textual output instead of binary database
+	unsigned opt_text;
+
 	/// @var {uint32_t[]} array of packed unified operators
 	uint32_t packedN[TINYTREE_NEND];
 
@@ -70,7 +73,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
-	 * @date 2020-03-14 2020-03-18 18:45:33
+	 * @date 2020-03-18 18:45:33
 	 */
 	inline generatorTree_t(context_t &ctx, uint32_t flags) : tinyTree_t(ctx, flags) {
 		// assert `pushdata.h` is usable
@@ -138,6 +141,30 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
+	 * found initial candidate.
+	 *
+	 * @param {number} r - Root of tree
+	 * @date 2020-03-18 22:17:26
+	 */
+	inline void foundTree(uint32_t r) {
+		ctx.progress++;
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), ctx.progress * 100.0 / ctx.progressHi);
+			ctx.tick = 0;
+		}
+
+		if (opt_text) {
+			// simply dump tree
+			for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
+				uint32_t qtf = packedN[i];
+				printf("%d%x%x%x ", (qtf & PACKED_TIBIT) ? 1 : 0, (qtf >> PACKED_QPOS) & PACKED_MASK, (qtf >> PACKED_TPOS) & PACKED_MASK, (qtf >> PACKED_FPOS) & PACKED_MASK);
+			}
+			printf("\n");
+		}
+	}
+
+	/**
 	 * Push/add packed node to tree
 	 *
 	 * @param {uint32_t} qtf - packed notation of `QTF`
@@ -152,9 +179,9 @@ struct generatorTree_t : tinyTree_t {
 		if (!pIsNormalised[qtf])
 			return 0;
 
-		// test if already in cache
+		// test if already in cache then fail. This should have been a back-reference
 		if (pCacheVersion[qtf] == iVersion && pCacheQTF[qtf] != 0) {
-			return pCacheQTF[qtf];
+			return 0;
 		}
 
 		// add/push packed node
@@ -168,39 +195,22 @@ struct generatorTree_t : tinyTree_t {
 		pCacheQTF[qtf] = nid;
 		pCacheVersion[qtf] = iVersion;
 
+		assert((nid & ~PACKED_MASK) == 0); // may not overflow packed field
+
 		return nid;
 	}
 
 	/**
 	 * Unwind pushed nodes from tree, releasing nodes that were created
 	 *
-	 * @param {number} count0 - position to restore to
 	 * @date 2020-03-18 18:00:10
 	 */
-	inline void pop(uint32_t count0) {
-		// pop and remove nodes until restore achieved
-		while (this->count > count0) {
-			// pop last node
-			uint32_t qtf = this->packedN[--this->count];
+	inline void pop(void) {
+		// pop node
+		uint32_t qtf = this->packedN[--this->count];
 
-			// erase index
-			pCacheQTF[qtf] = 0;
-		}
-	}
-
-	/**
-	 * Unwind pushed nodes from tree, releasing nodes that were created
-	 *
-	 * @param {number} count0 - position to restore to
-	 * @date 2020-03-18 22:17:26
-	 */
-	inline void foundTree() {
-		// simply dump tree
-		for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
-			unsigned qtf = packedN[i];
-			printf("%d.%x.%x.%x ", qtf & 0x8000 ? 1 : 0, (qtf >> 10) & 0x1f, (qtf >> 5) & 0x1f, (qtf >> 0) & 0x1f);
-		}
-		printf("\n");
+		// erase index
+		pCacheQTF[qtf] = 0;
 	}
 
 	/**
@@ -214,8 +224,8 @@ struct generatorTree_t : tinyTree_t {
 	 * Because the tree is built in the same order as `decode()`, it will always be natural path walking order
 	 *
 	 * The stack is implemented as a 64 bit word.
-	 * Each pushed/popped value is max 4 bits in size, allowing for a stack-depth of 16
-	 * This allows for easy shifting. "<<=4" for "push", ">>=4" for pops.
+	 * Each pushed/popped value is max 5 bits in size, allowing for a stack-depth of 12
+	 * This allows for easy shifting. "<<=5" for "push", ">>=5" for pops.
 	 *
 	 * The generator makes use of 6 state driven tables `push_QTF[]`, `push_PTF[]`, `push_QPF[]`, `push_QTP[]`, `push_PPF[]`, `push_PTP[]`, `push_QPP[]`
 	 * You index them with the current number of placeholders and nodes already assigned.
@@ -233,7 +243,8 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned endpointLeft, unsigned numPlaceholder, uint64_t stack) {
 
-		const uint32_t count0 = this->count;
+		assert (numPlaceholder <= MAXSLOTS);
+		assert(tinyTree_t::TINYTREE_MAXNODES <= 12);
 
 		if (endpointLeft >= 3) {
 			/*
@@ -250,30 +261,36 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t R = this->push(*pData & 0xffff); // unpack and push operands
 				if (R) {
 					if (endpointLeft == 3 && stack == STACKGUARD)
-						this->foundTree(); // All placeholders used and stack unwound
+						this->foundTree(R); // All placeholders used and stack unwound
 					else
-						this->generateTrees(endpointLeft - 3, (*pData >> 16), stack << 4 | R);
+						this->generateTrees(endpointLeft - 3, (*pData >> 16), stack << PACKED_WIDTH | R);
+					this->pop();
 				}
-				this->pop(count0);
 
 				pData++;
 			}
 		}
 
+		/*
+		 * POP value from stack
+		 */
+
+		// don't pop stack-guard
+		if (stack == STACKGUARD)
+			return;
+
+		uint32_t pop0 = (uint32_t) (stack & PACKED_MASK);
+		stack >>= PACKED_WIDTH;
+
 		// test for at least 1 push and the stack-guard
-		if (endpointLeft >= 2 && (stack & ~0xfLL)) {
+		if (endpointLeft >= 2) {
 
 			/*
 			 * pop Q, new T and F
 			 */
 			{
-				// pop Q
-				uint64_t newStack = stack;
-				const uint32_t Q = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
 				// runtime values to merge into template
-				uint32_t qtf = Q << PUSH_POS_Q;
+				uint32_t qtf = pop0 << PACKED_QPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_PTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -284,12 +301,12 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q, unpack and push operands
 					if (R) {
-						if (endpointLeft == 2 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 2 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 2, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
@@ -299,13 +316,8 @@ struct generatorTree_t : tinyTree_t {
 			 * pop T, new Q, F
 			 */
 			{
-				// pop T
-				uint64_t newStack = stack;
-				const uint32_t T = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
 				// runtime values to merge into template
-				uint32_t qtf = T << PUSH_POS_T;
+				uint32_t qtf = pop0 << PACKED_TPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_QPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -315,17 +327,19 @@ struct generatorTree_t : tinyTree_t {
 						continue; // bailout when QnTF is exhausted
 
 					// Reject XOR/NE, gets handled in next loop
-					if (T == ((*pData >> PUSH_POS_F) & ~0xf))
+					if (pop0 == ((*pData >> PACKED_FPOS) & PACKED_MASK)) {
+						pData++;
 						continue;
+					}
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge T, unpack and push operands
 					if (R) {
-						if (endpointLeft == 2 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 2 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 2, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
@@ -335,13 +349,8 @@ struct generatorTree_t : tinyTree_t {
 			 * pop F, new Q, T
 			 */
 			{
-				// pop F
-				uint64_t newStack = stack;
-				const uint32_t F = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
 				// runtime values to merge into template
-				uint32_t qtf = F << PUSH_POS_F;
+				uint32_t qtf = pop0 << PACKED_FPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_QTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -352,33 +361,37 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge F, unpack and push operands
 					if (R) {
-						if (endpointLeft == 2 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 2 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 2, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
 			}
 		}
 
+		/*
+		 * POP value from stack
+		 */
+
+		// don't pop stack-guard
+		if (stack == STACKGUARD)
+			return;
+
+		uint32_t pop1 = (uint32_t) (stack & PACKED_MASK);
+		stack >>= PACKED_WIDTH;
+
 		// test for at least 2 pushes and the stack-guard
-		if (endpointLeft >= 1 && (stack & ~0xffLL)) {
+		if (endpointLeft >= 1) {
 			/*
 			 * pop Q and T, new F
 			 */
 			{
 				// pop Q, T
-				uint64_t newStack = stack;
-				const uint32_t T = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-				const uint32_t Q = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
-				// runtime values to merge into template
-				uint32_t qtf = (Q << PUSH_POS_Q) | (T << PUSH_POS_T);
+				uint32_t qtf = (pop1 << PACKED_QPOS) | (pop0 << PACKED_TPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_PPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -388,17 +401,19 @@ struct generatorTree_t : tinyTree_t {
 						continue; // bailout when QnTF is exhausted
 
 					// Reject XOR/NE, gets handled in next loop
-					if (T == ((*pData >> PUSH_POS_F) & ~0xf))
+					if (pop0 == ((*pData >> PACKED_FPOS) & PACKED_MASK)) {
+						pData++;
 						continue;
+					}
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+T, unpack and push operands
 					if (R) {
-						if (endpointLeft == 1 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 1 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 1, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 1, (*pData >> 16), (stack << PACKED_WIDTH) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
@@ -409,14 +424,7 @@ struct generatorTree_t : tinyTree_t {
 			 */
 			{
 				// pop Q, F
-				uint64_t newStack = stack;
-				const uint32_t F = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-				const uint32_t Q = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
-				// runtime values to merge into template
-				uint32_t qtf = (Q << PUSH_POS_Q) | (F << PUSH_POS_F);
+				uint32_t qtf = (pop1 << PACKED_QPOS) | (pop0 << PACKED_FPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_PTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -427,12 +435,12 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
 					if (R) {
-						if (endpointLeft == 1 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 1 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 1, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 1, (*pData >> 16), (stack << 4) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
@@ -443,14 +451,7 @@ struct generatorTree_t : tinyTree_t {
 			 */
 			{
 				// pop T, F
-				uint64_t newStack = stack;
-				const uint32_t F = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-				const uint32_t T = (uint32_t) newStack & 0xf;
-				newStack >>= 4;
-
-				// runtime values to merge into template
-				uint32_t qtf = (T << PUSH_POS_T) | (F << PUSH_POS_F);
+				uint32_t qtf = (pop1 << PACKED_TPOS) | (pop0 << PACKED_FPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
 				const uint32_t *pData = pushData + pushIndex[PUSH_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
@@ -461,51 +462,57 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
 					if (R) {
-						if (endpointLeft == 1 && newStack == STACKGUARD)
-							this->foundTree(); // All placeholders used and stack unwound
+						if (endpointLeft == 1 && stack == STACKGUARD)
+							this->foundTree(R); // All placeholders used and stack unwound
 						else
-							this->generateTrees(endpointLeft - 1, (*pData >> 16), (newStack << 4) | R);
+							this->generateTrees(endpointLeft - 1, (*pData >> 16), (stack << PACKED_WIDTH) | R);
+						this->pop();
 					}
-					this->pop(count0);
 
 					pData++;
 				}
 			}
 		}
 
-		// test for at least 3 pushes and the stack-guard
-		if (stack & ~0xfffLL) {
+		/*
+		 * POP value from stack
+		 */
+
+		// don't pop stack-guard
+		if (stack == STACKGUARD)
+			return;
+
+		uint32_t pop2 = (uint32_t) (stack & PACKED_MASK);
+		stack >>= PACKED_WIDTH;
+
+		{
 			/*
 			 * pop Q, T and F
 			 */
-
-			uint64_t newStack = stack;
-			// The stack looks like `"xxxxQTF"`, which is the contact encoding of `push()`
-			const uint32_t QTF = (uint32_t) newStack & 0xfff;
-			newStack >>= 12;
+			uint32_t qtf = (pop2 << PACKED_QPOS) | (pop1 << PACKED_TPOS) | (pop0 << PACKED_FPOS);
 
 			{
 				// QnTF
-				uint32_t R = this->push(PUSH_TIBIT | QTF); // push with inverted T
+				uint32_t R = this->push(PUSH_TIBIT | qtf); // push with inverted T
 				if (R) {
-					if (endpointLeft == 0 && newStack == STACKGUARD)
-						this->foundTree(); // All placeholders used and stack unwound
+					if (endpointLeft == 0 && stack == STACKGUARD)
+						this->foundTree(R); // All placeholders used and stack unwound
 					else
-						this->generateTrees(endpointLeft, numPlaceholder, (newStack << 4) | R);
+						this->generateTrees(endpointLeft, numPlaceholder, (stack << PACKED_WIDTH) | R);
+					this->pop();
 				}
-				this->pop(count0);
 			}
 
 			if (~this->flags & context_t::MAGICMASK_QNTF) {
 				// QTF
-				uint32_t R = this->push(QTF); // push without inverted T
+				uint32_t R = this->push(qtf); // push without inverted T
 				if (R) {
-					if (endpointLeft == 0 && newStack == STACKGUARD)
-						this->foundTree();
+					if (endpointLeft == 0 && stack == STACKGUARD)
+						this->foundTree(R);
 					else
-						this->generateTrees(endpointLeft, numPlaceholder, (newStack << 4) | R);
+						this->generateTrees(endpointLeft, numPlaceholder, (stack << PACKED_WIDTH) | R);
+					this->pop();
 				}
-				this->pop(count0);
 			}
 		}
 	}

@@ -478,7 +478,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 			seconds = 1;
 
 		// base estimated size on 791647 signatures
-		fprintf(stderr, "\r[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
+		fprintf(stderr, "[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
 		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 		        (int)(MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
