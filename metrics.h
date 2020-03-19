@@ -23,10 +23,10 @@
  */
 
 /**
+ * @date 2020-03-17 14:06:58
+ *
  * Metrics for supported imprint index interleaving
  * `numStored` and `numRuntime` are worse case for footprints with 9 unique slots.
- *
- * @date 2020-03-17 14:06:58
  */
 struct metricsInterleave_t {
 	/// @var {number} - Valid when match MAXSLOTS
@@ -57,13 +57,14 @@ static const metricsInterleave_t metricsInterleave[] = {
 };
 
 /**
+ * @date 2020-03-17 15:33:02
+ *
  * Return entry matching selection
  * Interleave can discriminate by number of entries stored in database.
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @param {number} interleave - The interleave value communicated with user
  * @return {metricsInterleave_t} Reference to match or NULL if not found
- * @date 2020-03-17 15:33:02
  */
 const metricsInterleave_t * getMetricsInterleave(unsigned maxSlots, unsigned interleave) {
 
@@ -78,11 +79,12 @@ const metricsInterleave_t * getMetricsInterleave(unsigned maxSlots, unsigned int
 }
 
 /**
+ * @date 2020-03-17 15:12:02
+ *
  * Construct a list of valid interleaves
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @return {string} Comma separated list of allowed interleaves
- * @date 2020-03-17 15:12:02
  */
 const char * getAllowedInterleaves(unsigned maxSlots) {
 	static char sbuf[256];
@@ -107,9 +109,9 @@ const char * getAllowedInterleaves(unsigned maxSlots) {
 }
 
 /**
- * Metrics describing imprints
- *
  * @date 2020-03-17 14:06:58
+ *
+ * Metrics describing imprints
  */
 struct metricsImprint_t {
 	/// @var {number} - Valid when match `MAXSLOTS`
@@ -135,13 +137,14 @@ static const metricsImprint_t metricsImprint[] = {
 };
 
 /**
+ * @date 2020-03-17 17:37:50
+ *
  * Get expected number of imprints for requested settings
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @param {number} interleave - The interleave value communicated with user
  * @param {number} numNodes - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
- * @date 2020-03-17 17:37:50
  */
 unsigned getMaxImprints(unsigned maxSlots, unsigned interleave, unsigned numNodes) {
 	// walk through list

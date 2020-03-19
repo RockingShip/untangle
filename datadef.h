@@ -2,9 +2,10 @@
 #define _DATADEF_H
 
 /*
- * Collection of data definitions used to store footprints, signatures, patterns and more
+ * @date 2020-03-15 20:20:35
  *
- @date 2020-03-15 20:20:35 */
+ * Collection of data definitions used to store footprints, signatures, patterns and more
+ */
 
 /*
  *	This file is part of Untangle, Information in fractal structures.
@@ -35,6 +36,8 @@
 typedef char transformName_t[MAXSLOTS + 1];
 
 /**
+ * @date 2020-03-06 23:23:32
+ *
  * struct representing a 512 bit vector, each bit representing the outcome of the unified operator for every possible state 9 variables can take
  * The vector is split into a collection of 64bit wide words.
  *
@@ -43,7 +46,6 @@ typedef char transformName_t[MAXSLOTS + 1];
  * As this is a reference implementation, `SIMD` instructions should be avoided.
  *
  * @typedef {number[]}
- * @date 2020-03-06 23:23:32
  */
 struct footprint_t {
 	enum {
@@ -54,11 +56,12 @@ struct footprint_t {
 	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
 
 	/**
+	 * @date 2020-03-15 20:26:04
+	 *
 	 * Compare twwo prints and determine if both are same
 	 *
 	 * @param {footprint_t} rhs - right hand side of comparison
 	 * @return {boolean} `true` if same, `false` if different
-	 * @date 2020-03-15 20:26:04
 	 */
 	inline bool equals(const struct footprint_t &rhs) const {
 		// NOTE: QUADPERFOOTPRINT tests
@@ -75,10 +78,11 @@ struct footprint_t {
 	}
 
 	/**
+	 * @date 2020-03-15 20:29:35
+	 *
 	 * Calculate the crc of a footprint
 	 *
 	 * @return {number} - calculate crc
-	 * @date 2020-03-15 20:29:35
 	 */
 	inline uint32_t crc32(void) const {
 
@@ -99,9 +103,9 @@ struct footprint_t {
 };
 
 /*
- * Footprint belonging to signature/transform
- *
  * @date 2020-03-15 19:16:31
+ *
+ * Footprint belonging to signature/transform
  */
 struct imprint_t {
 	footprint_t footprint; // footprint

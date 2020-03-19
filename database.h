@@ -68,10 +68,11 @@
  */
 
 /**
+ * @date 2020-03-12 15:09:50
+ *
  * The database file header
  *
  * @typedef {object} FileHeader_t
- * @date 2020-03-12 15:09:50
  */
 struct FileHeader_t {
 	// environment metrics
@@ -127,9 +128,9 @@ struct FileHeader_t {
 
 
 /**
- * The *DATABASE*
- *
  * @date 2020-03-12 15:17:55
+ *
+ * The *DATABASE*
  */
 struct database_t {
 
@@ -199,9 +200,9 @@ struct database_t {
 	};
 
 	/**
-	 * Runtime flags to indicate which sections were allocated. If not then they are read-only mmapped.
-	 *
 	 * @date 2020-03-12 15:19:50
+	 *
+	 * Runtime flags to indicate which sections were allocated. If not then they are read-only mmapped.
 	 */
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
@@ -214,11 +215,12 @@ struct database_t {
 	};
 
 	/**
+	 * @date 2020-03-12 16:05:37
+	 *
 	 * Create read-write database as memory store
 	 *
          * @param {context_t} ctx - I/O context 
          * @param {databaseArguments_t} userArguments - creation arguments
-	 * @date 2020-03-12 16:05:37
 	 */
 	void create(void) {
 
@@ -250,6 +252,8 @@ struct database_t {
 
 
 	/**
+	 * @date 2020-03-15 22:25:41
+	 *
 	 * Inherit read-only sections from an older database.
 	 *
 	 * NOTE: call after calling `create()`
@@ -257,7 +261,6 @@ struct database_t {
 	 * @param {database_t} pDatabase - Database to inherit from
 	 * @param {string} pName - Name of database
 	 * @param {number} sections - set of sections to inherit
-	 * @date 2020-03-15 22:25:41
 	 */
 	void inheritSections(const database_t *pDatabase, const char *pName, uint32_t sections) {
 
@@ -308,11 +311,12 @@ struct database_t {
 	}
 
 	/**
+	 * @date 2020-03-12 16:07:44
+	 *
 	 * Create read-only database mmapped onto file
 	 *
          * @param {string} fileName - database filename
          * @param {boolean} shared - `false` to `read()`, `true` to `mmap()`
-	 * @date 2020-03-12 16:07:44
 	 */
 	void open(const char *fileName, bool shared) {
 
@@ -402,9 +406,9 @@ struct database_t {
 	};
 
 	/**
-	 * Release system resources
-	 *
 	 * @date 2020-03-12 15:57:37
+	 *
+	 * Release system resources
 	 */
 	~database_t() {
 		/*
@@ -444,10 +448,11 @@ struct database_t {
 	}
 
 	/**
+	 * @date 2020-03-12 16:04:30
+	 *
 	 * Write database to file
 	 *
 	 * @param {string} fileName - File to write to
-	 * @date 2020-03-12 16:04:30
 	 */
 	void save(const char *fileName) {
 
@@ -588,12 +593,13 @@ struct database_t {
 	}
 
 	/**
+	 * @date 2020-03-12 15:54:57
+	 *
 	 * Read data from database file
 	 * 
 	 * @param {number} hndl - OS file handle 
 	 * @param {void[]} data - Buffer to read to
 	 * @param {number} dataLength = how much to read
-	 * @date 2020-03-12 15:54:57
 	 * @return {number} total number of bytes read
 	 */
 	uint64_t readData(int hndl, void *data, size_t dataLength) {
@@ -632,12 +638,13 @@ struct database_t {
 	}
 
 	/**
+	 * @date 2020-03-12 15:56:46
+	 *
 	 * Write data to database file
 	 * 
 	 * @param {number} hndl - OS file handle 
 	 * @param {void[]} data - Buffer to read to
 	 * @param {number} dataLength = how much to write
-	 * @date 2020-03-12 15:56:46
 	 * @return {number} total number of bytes written
 	 */
 	uint64_t writeData(FILE *outf, const void *data, size_t dataLength) {

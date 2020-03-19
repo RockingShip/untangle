@@ -117,11 +117,12 @@ unsigned opt_T = 0;
 unsigned opt_F = 0;
 
 /**
+ * @date  2020-03-06 21:06:01
+ *
  * Program usage. Keep high in source code for easy reference
  *
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
- * @date  2020-03-06 21:06:01
  */
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);

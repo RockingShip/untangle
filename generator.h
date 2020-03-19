@@ -49,9 +49,9 @@
 #include "pushdata.h"
 
 /**
- * `generatorTree_t` extends `tinyTree_t` by giving it tree creation capabilities
- *
  * @date 2020-03-17 20:22:08
+ *
+ * `generatorTree_t` extends `tinyTree_t` by giving it tree creation capabilities
  */
 struct generatorTree_t : tinyTree_t {
 
@@ -69,11 +69,12 @@ struct generatorTree_t : tinyTree_t {
 	};
 
 	/**
+	 * @date 2020-03-18 18:45:33
+	 *
 	 * Constructor
 	 *
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
-	 * @date 2020-03-18 18:45:33
 	 */
 	inline generatorTree_t(context_t &ctx, uint32_t flags) : tinyTree_t(ctx, flags) {
 		// assert `pushdata.h` is usable
@@ -89,18 +90,18 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
-	 * Release system resources
-	 *
 	 * @date 2020-03-18 19:30:09
+	 *
+	 * Release system resources
 	 */
 	~generatorTree_t() {
 		ctx.myFree("generatorTree_t::pIsNormalised", this->pIsNormalised);
 	}
 
 	/**
-	 * Initialise lookup tables for generator
-	 *
 	 * @date 2020-03-18 21:05:34
+	 *
+	 * Initialise lookup tables for generator
 	 */
 	void initialiseGenerator(void) {
 		/*
@@ -141,10 +142,11 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-18 22:17:26
+	 *
 	 * found initial candidate.
 	 *
 	 * @param {number} r - Root of tree
-	 * @date 2020-03-18 22:17:26
 	 */
 	inline void foundTree(uint32_t r) {
 		ctx.progress++;
@@ -165,11 +167,12 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-18 18:15:57
+	 *
 	 * Push/add packed node to tree
 	 *
 	 * @param {uint32_t} qtf - packed notation of `QTF`
 	 * @return {uint32_t} 0 if not normalised, or node id of already existing or newly created one
-	 * @date 2020-03-18 18:15:57
 	 */
 	inline uint32_t push(uint32_t qtf) {
 		// is it a valid packed notation
@@ -201,9 +204,9 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
-	 * Unwind pushed nodes from tree, releasing nodes that were created
-	 *
 	 * @date 2020-03-18 18:00:10
+	 *
+	 * Unwind pushed nodes from tree, releasing nodes that were created
 	 */
 	inline void pop(void) {
 		// pop node
@@ -214,6 +217,8 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-17 20:24:13
+	 *
 	 * Generate all possible structures a tree of `n` nodes can have.
 	 *
 	 * It recursively pushes and pops nodes to the current tree until all available nodes and placeholders are exhausted.
@@ -236,10 +241,9 @@ struct generatorTree_t : tinyTree_t {
 	 *  - Q,T,F are operands that are newly assigned placeholders.
 	 *  - P should be replaced by popped stack values (pointing to other nodes)
 	 *
-	 * @param {number} endpointLeft -  number of endpoints still to fill
+\	 * @param {number} endpointsLeft -  number of endpoints still to fill
 	 * @param {number} numPlaceholder - number of placeholders already assigned
 	 * @param {uint64_t} stack - `decode` stack
-	 * @date 2020-03-17 20:24:13
 	 */
 	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned endpointLeft, unsigned numPlaceholder, uint64_t stack) {
 

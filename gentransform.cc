@@ -65,11 +65,12 @@
 #define MAXTRANSFORMINDEX ((MAXSLOTS + 1) + (1 + (1 + (1 + (1 + (1 + (1 + (1 + (1 + 2) * 3) * 4) * 5) * 6) * 7) * 8) * 9) * (MAXSLOTS + 1))
 
 /**
+ * @date 2020-03-11 22:53:39
+ *
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  *
  * @typedef {object}
- * @date 2020-03-11 22:53:39
  */
 struct gentransformContext_t : context_t {
 
@@ -108,6 +109,8 @@ struct gentransformContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 00:39:44
+	 *
 	 * Create all forward transforms.
 	 *
 	 * if `"bca"` is the forward transform then `"bca?/bca"` would have the
@@ -117,7 +120,6 @@ struct gentransformContext_t : context_t {
 	 * @param {string[MAXSLOTS+1][MAXTRANSFORM]} pString - output array if fixed sized transform names
 	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
 	 * @param {boolean} isForward - `true` for forward mapping and `false` for reverse mapping
-	 * @date 2020-03-12 00:39:44
 	 */
 	void createTransforms(uint64_t *pData, transformName_t *pNames, uint32_t *pIndex, bool isForward) {
 
@@ -345,6 +347,8 @@ struct gentransformContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 10:28:05
+	 *
 	 * Lookup a transform name and return its matching enumeration id.
 	 * Transform names can be short meaning that trailing endpoints which are in sync can be omitted.
 	 * Example: For `"bdacefghi"`, `"bdac"` is the minimum transform name and `"efghi"` is the "long" part.
@@ -356,7 +360,6 @@ struct gentransformContext_t : context_t {
 	 * @param {string} pName - Transform name
   	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
 	 * @return {uint32_t} - Transform enumeration id or IBIT if "not-found"
-	 * @date 2020-03-12 10:28:05
 	 */
 	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
 		assert(pIndex);
@@ -380,10 +383,11 @@ struct gentransformContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 19:58:14
+	 *
 	 * Main entrypoint
 	 *
 	 * @param {database_t} pStore - data store
-	 * @date 2020-03-12 19:58:14
 	 */
 	void main(database_t *pStore) {
 		/*
@@ -415,6 +419,8 @@ struct gentransformContext_t : context_t {
 };
 
 /**
+ * @date 2020-03-12 00:26:06
+ *
  * Perform a selftest. Keep separate of `gentransformContext_t`
  *
  * - Test the index by performing lookups on all `MAXSLOT==9` transforms
@@ -423,7 +429,6 @@ struct gentransformContext_t : context_t {
  *
  * @param {gentransformContext_t} app - program context
  * @param {database_t} pStore - database just before `main()`
- * @date 2020-03-12 00:26:06
  */
 void performSelfTestMatch(gentransformContext_t &app, database_t *pStore) {
 
@@ -561,6 +566,8 @@ void performSelfTestMatch(gentransformContext_t &app, database_t *pStore) {
 }
 
 /**
+ * @date 2020-03-15 12:13:13
+ *
  * The list of transform names has repetitive properties which give the enumerated id's modulo properties.
  *
  * A modulo property is that the enumeration can be written as `"(row * numCols) + col"`.
@@ -653,7 +660,6 @@ void performSelfTestMatch(gentransformContext_t &app, database_t *pStore) {
  *
  * @param {gentransformContext_t} pApp - program context
  * @param {database_t} pStore - database just before `main()`
- * @date 2020-03-15 12:13:13
  */
 void performSelfTestInterleave(gentransformContext_t &app, database_t *pStore) {
 

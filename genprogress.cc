@@ -1,8 +1,7 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-18 18:04:50
- *
  */
 
 /*
@@ -34,26 +33,24 @@
 #include "generator.h"
 
 /**
+ * @date 2020-03-19 00:15:03
+ *
  * Previous major version of generator. taken from `"untangle-1.48.0"`
  * NOTE: that version was in the mindset of `QTnF` which has been updated
  *
  * For version 1.48, it has been recorded that `foundTree()` was called these many times:
  *
  * `1n9`=6, `2n9`=484, `3n9`=111392, `4n9`=48295088, `5n9`=33212086528
- *
- * @date 2020-03-19 00:15:03
  */
 struct ancientTree_t : tinyTree_t {
 
-	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
-
 	/**
+	 * @date 2020-03-19 00:27:45
+	 *
 	 * Constructor
 	 *
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
-	 * @date 2020-03-19 00:27:45
 	 */
 	ancientTree_t(context_t &ctx, uint32_t flags) : tinyTree_t(ctx, flags) {
 		opt_text = 0;
@@ -78,9 +75,9 @@ struct ancientTree_t : tinyTree_t {
 	}
 
 	/**
-	 * undo last push, releasing nodes that were created
-	 *
 	 * @date 2020-03-19 15:45:25
+	 *
+	 * undo last push, releasing nodes that were created
 	 */
 	inline void pop(void) {
 		// pop node
@@ -94,17 +91,15 @@ struct ancientTree_t : tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-19 00:15:03
+	 *
 	 * NOTE: all arguments must *ALWAYS* stay arguments, pass-by-value.
 	 * NOTE: `numNodes` may be an extra argument to limit `slotValues[]`. Maybe eliminate the whole thing by replacing it with a single value.
 	 * NOTE: zero (for dyadics) count as a point
 	 *
-	 * @param {number} endpointLeft -  number of endpoints still to fill
+	 * @param {number} endpointsLeft -  number of endpoints still to fill
 	 * @param {number} numPlaceholder - number of placeholders already assigned
-
-	 * @param {number} endpointsLeft - number of open connections still to fill
-	 * @param {number} numSlot - Number of placeholders used
-	 * @param {number[]} stack - stack for temporary results
-	 * @date 2020-03-19 00:15:03
+	 * @param {uint64_t} stack - stack for temporary results
 	 */
 	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned endpointsLeft, unsigned numPlaceholder, uint64_t stack) {
 
@@ -763,11 +758,13 @@ struct ancientTree_t : tinyTree_t {
 
 };
 
-/*
- * I/O and Application context.
- * Needs to be global to be accessible by signal handlers.
+/**
+ * @date 2020-03-19 20:20:53
  *
- * @global {gensignatureContext_t} Application
+ * Main program logic as application context
+ * It is contained as an independent `struct` so it can be easily included into projects/code
+ *
+ * @typedef {object}
  */
 context_t app;
 

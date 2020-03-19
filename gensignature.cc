@@ -74,11 +74,12 @@
 #endif
 
 /**
+ * @date 2020-03-14 11:10:15
+ *
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  *
  * @typedef {object}
- * @date 2020-03-14 11:10:15
  */
 struct gensignatureContext_t : context_t {
 
@@ -138,6 +139,8 @@ struct gensignatureContext_t : context_t {
 };
 
 /**
+ * @date 2020-03-10 21:46:10
+ *
  * Perform a selftest.
  *
  * For every single-node tree there a 8 possible operands: Zero, three variables and their inverts.
@@ -152,7 +155,6 @@ struct gensignatureContext_t : context_t {
  *
  * @param {gentransformContext_t} ctx - I/O context
  * @param {tree_t} pTree - worker tree
- * @date 2020-03-10 21:46:10
  */
 void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 
@@ -313,6 +315,8 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 }
 
 /**
+ * @date 2020-03-15 16:35:43
+ *
  * Perform a selftest.
  *
  * Searching for footprints requires an associative.
@@ -337,7 +341,6 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
  * @param {database_t} pStore - memory based database
  * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
  * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
- * @date 2020-03-15 16:35:43
  */
 void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
 
@@ -502,12 +505,13 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 gensignatureContext_t app;
 
 /**
+ * @date 2020-03-11 23:06:35
+ *
  * Signal handler
  *
  * Delete partially created database unless explicitly requested
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-11 23:06:35
  */
 void sigintHandler(int sig) {
 	if (!app.opt_keep) {
@@ -517,12 +521,13 @@ void sigintHandler(int sig) {
 }
 
 /**
+ * @date 2020-03-11 23:06:35
+ *
  * Signal handlers
  *
  * Bump interval timer
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-11 23:06:35
  */
 void sigalrmHandler(int sig) {
 	if (app.opt_timer) {
@@ -532,12 +537,13 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * @date  2020-03-14 11:17:04
+ *
  * Program usage. Keep this directly above `main()`
  *
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
- * @date  2020-03-14 11:17:04
  */
 void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 	fprintf(stderr, "usage: %s <input.db> <output.db> <numnode>\n", argv[0]);
@@ -560,6 +566,8 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 }
 
 /**
+ * @date   2020-03-14 11:19:40
+ *
  * Program main entry point
  * Process all user supplied arguments to construct a application context.
  * Activate application context.
@@ -567,7 +575,6 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-14 11:19:40
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);

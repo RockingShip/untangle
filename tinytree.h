@@ -43,10 +43,11 @@
 #include "datadef.h"
 
 /**
+ * @date 2020-03-13 19:30:38
+ *
  * Single unified operator node
  *
  * @typedef {object}
- * @date 2020-03-13 19:30:38
  */
 struct tinyNode_t {
 	/// @var {number} - reference to `"question"`
@@ -58,10 +59,11 @@ struct tinyNode_t {
 };
 
 /**
+ * @date 2020-03-13 19:31:48
+ *
  * High speed node tree
  *
  * @typedef {object}
- * @date 2020-03-13 19:31:48
  */
 struct tinyTree_t {
 
@@ -136,11 +138,12 @@ struct tinyTree_t {
 	uint32_t iVersion;
 
 	/**
+ 	 * @date 2020-03-14 00:27:38
+ 	 *
 	 * Constructor
 	 *
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
- 	 * @date 2020-03-14 00:27:38
 	 */
 	inline tinyTree_t(context_t &ctx, uint32_t flags) : ctx(ctx), flags(flags), count(0) {
 		// only set flags because that determines tree functionality
@@ -162,9 +165,9 @@ struct tinyTree_t {
 	}
 
 	/**
-	 * Release system resources
-	 *
 	 * @date 2020-03-18 19:30:09
+	 *
+	 * Release system resources
 	 */
 	~tinyTree_t() {
 		ctx.myFree("tinyTree_t::pCacheQTF", this->pCacheQTF);
@@ -180,9 +183,9 @@ struct tinyTree_t {
 	tinyTree_t &operator=(const tinyTree_t &rhs);
 
 	/**
-	 * Erase the contents
-	 *
 	 * @date 2020-03-06 22:27:36
+	 *
+	 * Erase the contents
 	 */
 	inline void clear(void) {
 		// bump incarnation. 
@@ -197,6 +200,8 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-13 19:34:52
+	 *
 	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
 	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
@@ -205,7 +210,6 @@ struct tinyTree_t {
 	 * @param {number} T
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
-	 * @date 2020-03-13 19:34:52
 	 */
 	uint32_t normaliseQTF(uint32_t Q, uint32_t T, uint32_t F) {
 
@@ -426,13 +430,14 @@ struct tinyTree_t {
 	 */
 
 	/**
+	 * @date 2020-03-13 19:57:04
+	 *
 	 * Simple(fast) hash table lookup for nodes
 	 *
 	 * @param {number} Q
 	 * @param {number} T
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
-	 * @date 2020-03-13 19:57:04
 	 */
 	inline uint32_t basicNode(uint32_t Q, uint32_t T, uint32_t F) {
 
@@ -487,8 +492,9 @@ struct tinyTree_t {
 	}
 
 	/**
-	 * decode error codes
 	 * @date 2020-03-14 12:15:22
+	 *
+	 * decode error codes
 	 */
 	enum {
 		DERR_OK,                // success
@@ -501,6 +507,8 @@ struct tinyTree_t {
 	};
 
 	/**
+	 * @date 2020-03-13 21:30:32
+	 *
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
@@ -509,7 +517,6 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 * @return non-zero when parsing failed
-	 * @date 2020-03-13 21:30:32
 	 */
 	int decodeSafe(const char *pName, const char *pSkin = "abcdefghi") {
 

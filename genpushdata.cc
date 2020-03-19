@@ -125,11 +125,12 @@ bool testQTF(uint32_t Q, uint32_t T, uint32_t F) {
 }
 
 /**
+ * @date 2020-03-18 10:52:57
+ *
  * Wildcard values represent node-references that are popped from the stack during runtime.
  * Zero means no wildcard, otherwise it must be a value greater than NSTART
  *
  * @return {number} Number of data entries created
- * @date 2020-03-18 10:52:57
  */
 uint32_t generateData(void) {
 
@@ -312,9 +313,9 @@ uint32_t generateData(void) {
 }
 
 /**
- * Generate/display the index
- *
  * @date 2020-03-18 13:49:33
+ *
+ * Generate/display the index
  */
 void generateIndex(void) {
 
@@ -347,9 +348,9 @@ void generateIndex(void) {
 }
 
 /**
- * Construct a time themed prefix string for console logging
- *
  * @date 2020-03-18 10:51:04
+ *
+ * Construct a time themed prefix string for console logging
  */
 const char *timeAsString(void) {
 	static char tstr[256];
@@ -362,12 +363,13 @@ const char *timeAsString(void) {
 }
 
 /**
+ * @date 2020-03-18 10:51:11
+ *
  * Signal handlers
  *
  * Bump interval timer
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-18 10:51:11
  */
 void sigalrmHandler(int sig) {
 	(void) sig; // trick compiler t see parameter is used
@@ -377,12 +379,13 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * @date   2020-03-14 18:12:59
+ *
  * Program main entry point
  *
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-14 18:12:59
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);

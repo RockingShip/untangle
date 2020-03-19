@@ -40,10 +40,11 @@
 #include "database.h"
 
 /**
+ * @date 2020-03-13 13:00:48
+ *
  * Main program logic as application context
  *
  * @typedef {object}
- * @date 2020-03-13 13:00:48
  */
 struct tlookupContext_t : context_t {
 
@@ -67,7 +68,6 @@ struct tlookupContext_t : context_t {
 	 *
 	 * @param {database_t} pDb - database
 	 * @param {string} pArg - Argument to lookup
-	 * @date
 	 */
 	void main(database_t *pDb, const char *pArg) {
 		/*
@@ -171,12 +171,13 @@ struct tlookupContext_t : context_t {
 tlookupContext_t app;
 
 /**
+ * @date 2020-03-13 13:38:55
+ *
  * Signal handlers
  *
  * Bump interval timer
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-13 13:38:55
  */
 void sigalrmHandler(int sig) {
 	if (app.opt_timer) {
@@ -186,12 +187,13 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * @date  2020-03-13 13:37:44
+ *
  * Program usage. Keep this directly above `main()`
  *
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
- * @date  2020-03-13 13:37:44
  */
 void usage(char *const *argv, bool verbose, const tlookupContext_t *args) {
 	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
@@ -204,6 +206,8 @@ void usage(char *const *argv, bool verbose, const tlookupContext_t *args) {
 }
 
 /**
+ * @date   2020-03-13 13:30:32
+ *
  * Program main entry point
  * Program main entry point
  * Process all user supplied arguments to construct a application context.
@@ -212,7 +216,6 @@ void usage(char *const *argv, bool verbose, const tlookupContext_t *args) {
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-13 13:30:32
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);

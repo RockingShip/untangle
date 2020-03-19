@@ -44,10 +44,11 @@
 #define MAXTRANSFORM (1*2*3*4*5*6*7*8*9)
 
 /**
+ * @date 2020-03-12 13:19:24
+ *
  * Collection of utilities
  *
  * @typedef {object} FileHeader_t
- * @date 2020-03-12 13:19:24
  */
 struct context_t {
 
@@ -127,9 +128,9 @@ struct context_t {
 	}
 
 	/**
-	 * Construct a time themed prefix string for console logging
-	 *
 	 * @date 2020-03-12 13:37:12
+	 *
+	 * Construct a time themed prefix string for console logging
 	 */
 	const char *timeAsString(void) {
 		static char tstr[256];
@@ -142,11 +143,12 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 13:37:12
+	 *
 	 * Fatal error and exit
 	 *
 	 * @param format
 	 * @param ...
-	 * @date 2020-03-12 13:37:12
 	 */
 	void __attribute__((noreturn)) __attribute__ ((format (printf, 2, 3))) fatal(const char *format, ...) {
 		va_list ap;
@@ -156,13 +158,14 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 13:37:12
+	 *
 	 * Allocate memory
 	 *
 	 * @param {string} name - Name associated to memory area
 	 * @param {number} __nmemb - Number of elements
 	 * @param {number} __size  - Size of element in bytes
 	 * @return {void[]} Pointer to memory area or NULL if zero length was requested
-	 * @date 2020-03-12 13:37:12
 	 */
 	void *myAlloc(const char *name, size_t __nmemb, size_t __size) {
 		if (opt_verbose >= VERBOSE_INITIALIZE)
@@ -183,11 +186,12 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-12 13:37:12
+	 *
 	 * Release memory
 	 *
 	 * @param {string} name - Name associated to memory area. Should match that of `myALloc()`
 	 * @param {void[]} ptr - Pointer to memory area to be released
-	 * @date 2020-03-12 13:37:12
 	 */
 	void myFree(const char *name, void *ptr) {
 		if (opt_verbose >= VERBOSE_INITIALIZE)
@@ -197,10 +201,11 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-15 19:21:50
+	 *
 	 * Raise value to next prime.
 	 *
 	 * @param {number} n - number to raise
-	 * @date 2020-03-15 19:21:50
 	 */
 	uint32_t raisePrime(uint32_t n) {
 		if (n == 0)
@@ -221,10 +226,11 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-15 19:42:19
+	 *
 	 * Raise value 1%.
 	 *
 	 * @param {number} n - number to raise
-	 * @date 2020-03-15 19:42:19
 	 */
 	uint32_t raiseProcent(uint32_t n) {
 		if (n == 0)
@@ -243,9 +249,9 @@ struct context_t {
 	}
 
 	/**
-	 * Display creation flags to stderr
-	 *
 	 * @date 2020-03-15 23:15:44
+	 *
+	 * Display creation flags to stderr
 	 */
 	void logFlags(uint32_t flags) {
 		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
@@ -256,10 +262,11 @@ struct context_t {
 	}
 
 	/**
+	 * @date 2020-03-17 17:28:20
+	 *
 	 * Convert a double to uint32_t, and lower to highest allowed prime if necessary
 	 *
 	 * @param {double} d - number to convert
-	 * @date 2020-03-17 17:28:20
 	 */
 	uint32_t double2u32(double d) {
 		if (d < 0)
