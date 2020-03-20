@@ -58,6 +58,8 @@ struct context_t {
 
 	/// @var {number} intentionally undocumented
 	uint32_t opt_debug;
+	/// @var {number} program flags
+	uint32_t opt_flags;
 	/// @var {number} --verbose, What do you want to know
 	unsigned opt_verbose;
 	/// @var {number} --timer, interval timer for verbose updates
@@ -101,11 +103,22 @@ struct context_t {
 	 */
 	// @formatter:off
 	enum {
-		MAGICFLAG_PARANOID      = 0,                        // Force extra asserts when actually creating nodes
+		MAGICFLAG_PARANOID      = 0,                        // Force extra asserts
 		MAGICFLAG_QNTF          = 1,                        // Force generation of QnTF
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_QNTF          = 1 << MAGICFLAG_QNTF,
+	};
+	// @formatter:on
+
+	/*
+	 * @date 2020-03-19 19:51:15
+	 *
+	 * Debug settings
+	 */
+	enum {
+		DEBUG_FOUNDTREE           = (1 << 0),        // `generator_t::foundTree()` only counts number of calls (used by `genprogress`)
+		DEBUG_FOUNDTREE_TEXT      = (1 << 1),        // `generator_t::foundTree()` outputs text notation of found trees
 	};
 	// @formatter:on
 
@@ -115,6 +128,7 @@ struct context_t {
 	context_t() {
 		// arguments and options
 		opt_debug = 0;
+		opt_flags = 0;
 		opt_verbose = VERBOSE_TICK;
 		opt_timer = 1; // default is 1-second intervals
 

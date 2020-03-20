@@ -171,10 +171,12 @@ struct database_t {
 	 * Constructor
 	 */
 	database_t(context_t &ctx) : ctx(ctx) {
+		// copy user flags+debug settings
+		flags = ctx.opt_flags;
+
 		hndl = 0;
 		rawDatabase = NULL;
 		dbHeader = NULL;
-		flags = 0;
 		allocFlags = 0;
 
 		// transform store

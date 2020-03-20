@@ -93,8 +93,6 @@ struct gensignatureContext_t : context_t {
 	const char *arg_inputDatabase;
 	/// @var {number} size of signatures to be generated in this invocation
 	unsigned arg_numNodes;
-	/// @var {number} database compatibility and settings
-	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} size of imprint index WARNING: must be prime
@@ -105,8 +103,6 @@ struct gensignatureContext_t : context_t {
 	unsigned opt_keep;
 	/// @var {number} Maximum number of imprints to be stored database
 	uint32_t opt_maxImprint;
-	/// @var {number} non-zero to indicate `QnTF`-only mode
-	unsigned opt_qntf;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} --text, textual output instead of binary database
@@ -123,13 +119,11 @@ struct gensignatureContext_t : context_t {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
-		opt_flags = 0;
 		opt_force = 0;
 		opt_imprintIndexSize = 0;
 		opt_interleave = 720;
 		opt_keep = 0;
 		opt_maxImprint = 0;
-		opt_qntf = 0;
 		opt_ratio = 3.0;
 		opt_selftest = 0;
 		opt_test = 0;
@@ -346,7 +340,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 
 	unsigned numPassed = 0;
 
-	tinyTree_t tree(ctx, 0);
+	tinyTree_t tree(ctx);
 
 	// test name. NOTE: this is deliberately "not ordered"
 	const char *pBasename = "abc!defg!!hi!";
@@ -411,8 +405,8 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 	 * Storage is based on worst-case scenario.
 	 * Actual storage needs to be tested/runtime decided.
 	 */
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->maxSlots; pInterleave++) {
-		if (pInterleave->maxSlots != MAXSLOTS)
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
+		if (pInterleave->numSlots != MAXSLOTS)
 			continue; // only process settings that match `MAXSLOTS`
 
 		/*
@@ -554,7 +548,8 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --interleave=<number>   Imprint index interleave [default=%d]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --keep                  Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t   --maximprint=<number>   Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", app.opt_qntf ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>        Index/data ratio [default=%f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
@@ -592,7 +587,9 @@ int main(int argc, char *const *argv) {
 			LO_INTERLEAVE,
 			LO_KEEP,
 			LO_MAXIMPRINT,
+			LO_NOPARANOID,
 			LO_NOQNTF,
+			LO_PARANOID,
 			LO_QNTF,
 			LO_RATIO,
 			LO_SELFTEST,
@@ -615,7 +612,9 @@ int main(int argc, char *const *argv) {
 			{"interleave",   1, 0, LO_INTERLEAVE},
 			{"keep",         0, 0, LO_KEEP},
 			{"maximprint",   1, 0, LO_MAXIMPRINT},
+			{"no-paranoid",  0, 0, LO_NOPARANOID},
 			{"no-qntf",      0, 0, LO_NOQNTF},
+			{"paranoid",     0, 0, LO_PARANOID},
 			{"qntf",         0, 0, LO_QNTF},
 			{"quiet",        2, 0, LO_QUIET},
 			{"ratio",        1, 0, LO_RATIO},
@@ -674,11 +673,17 @@ int main(int argc, char *const *argv) {
 			case LO_MAXIMPRINT:
 				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 10);
 				break;
+			case LO_NOPARANOID:
+				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				break;
 			case LO_NOQNTF:
-				app.opt_qntf = 0;
+				app.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				break;
+			case LO_PARANOID:
+				app.opt_flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				app.opt_qntf = 1;
+				app.opt_flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
@@ -713,7 +718,7 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
-	 * Program has two argument, the output database
+	 * Program arguments
 	 */
 	if (argc - optind >= 3) {
 		app.arg_outputDatabase = argv[optind++];
@@ -835,7 +840,7 @@ int main(int argc, char *const *argv) {
 	if (app.opt_selftest) {
 		// perform selfchecks
 
-		tinyTree_t tree(app, 0);
+		tinyTree_t tree(app);
 
 		// allocate evaluators
 		footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];

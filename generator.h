@@ -72,7 +72,7 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
 	 */
-	inline generatorTree_t(context_t &ctx, uint32_t flags) : tinyTree_t(ctx, flags) {
+	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx) {
 		// assert `pushdata.h` is usable
 		assert ((int) tinyTree_t::TINYTREE_KSTART == (int) PUSH_KSTART);
 		assert ((int) tinyTree_t::TINYTREE_NSTART == (int) PUSH_NSTART);

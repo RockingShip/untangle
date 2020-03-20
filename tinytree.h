@@ -67,8 +67,6 @@ struct tinyNode_t {
  */
 struct tinyTree_t {
 
-	context_t &ctx;
-
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
 		TINYTREE_MAXNODES = 5 * 2, // for 5n9
@@ -87,34 +85,13 @@ struct tinyTree_t {
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
 		TINYTREE_NAMELEN = (1 + (3 + 1) * TINYTREE_MAXNODES + 1 + 1),
-
-		/*
-		 * @date 2020-03-19 16:12:52
-		 *
-		 * Packed Notation to make operator fit into 16 bits
-		 *   packedQTF =  <invertedT> << (WIDTH*3) | Q << (WIDTH*2) | T << (WIDTH*1) | F << (WIDTH*0)
-		 *
-		 * This order is chosen as it is the order found on stacks during `decode()`
-		 */
-
-		/// @constant {number} - Field width
-		PACKED_WIDTH = 5,
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_MASK = (1 << PACKED_WIDTH) - 1,
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_TIBIT = 1 << (PACKED_WIDTH * 3),
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_FPOS = (PACKED_WIDTH * 0),
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_TPOS = (PACKED_WIDTH * 1),
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_QPOS = (PACKED_WIDTH * 2),
 	};
+
+	/// @var {context_t} I/O context
+	context_t &ctx;
+
+	/// @var {number} local copy of context_t::opt_debug for faster access
+	uint32_t debug;
 
 	/// @var {number} functionality flags
 	uint32_t flags;
@@ -145,8 +122,10 @@ struct tinyTree_t {
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
 	 */
-	inline tinyTree_t(context_t &ctx, uint32_t flags) : ctx(ctx), flags(flags), count(0) {
-		// only set flags because that determines tree functionality
+	inline tinyTree_t(context_t &ctx) : ctx(ctx) {
+		// copy user flags+debug settings
+		debug = ctx.opt_debug;
+		flags = ctx.opt_flags;
 
 		/*
 		 * Assert that the highest available node fits into a 5 bit value. `2^5` = 32.
