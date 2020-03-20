@@ -105,9 +105,9 @@ uint32_t pushIndex[MAXNODES * MAXSLOTS * 7];
  * @param {number} F
  * @return {boolean} `true` it is would pass, `false` otherwise
  */
-bool testQTF(uint32_t Q, uint32_t T, uint32_t F) {
+bool testNormalised(uint32_t Q, uint32_t T, uint32_t F) {
 
-	// test normalised
+	// level-1
 	if (Q == (T & ~PUSH_TIBIT))
 		return false;  // Q?Q:F or Q?~Q:F
 	if (Q == F)
@@ -120,6 +120,14 @@ bool testQTF(uint32_t Q, uint32_t T, uint32_t F) {
 		return false; // Q?0:F -> F?~Q:0
 	if (T == PUSH_TIBIT && F == 0)
 		return false; // Q?~0:0
+
+	// level-2 (simple)
+	if (F == (T & ~PUSH_TIBIT) && Q > F)
+		return false; // XOR "Q?~F:F"
+	if (F == 0 && !(T & PUSH_TIBIT) && Q > (T & ~PUSH_TIBIT))
+		return false; // AND "Q?T:0"
+	if ((T & ~PUSH_TIBIT) == 0 && Q > F)
+		return false; // OR "Q?~0:F"
 
 	return 1;
 }
@@ -213,7 +221,7 @@ uint32_t generateData(void) {
 				 */
 
 				if (iWildcard & 0b100) {
-					Q = 0x7f; // assign unique value and break loop after finishing code block
+					Q = 0x7d; // assign unique value and break loop after finishing code block
 				} else if (newNumPlaceholder < MAXSLOTS) {
 					// Q must be a previously existing placeholder
 					if (Q > KSTART + newNumPlaceholder && Q < NSTART)
@@ -245,7 +253,7 @@ uint32_t generateData(void) {
 				}
 
 				if (iWildcard & 0b001) {
-					F = 0x7d; // assign unique value and break loop after finishing code block
+					F = 0x7f; // assign unique value and break loop after finishing code block
 				} else if (newNumPlaceholder < MAXSLOTS) {
 					// F must be a previously existing placeholder
 					if (F > KSTART + newNumPlaceholder && F < NSTART)
@@ -263,7 +271,7 @@ uint32_t generateData(void) {
 				/*
 				 * Write output to data
 				 */
-				if (Ti == 1 && testQTF(Q, To ^ PUSH_TIBIT, F)) {
+				if (Ti == 1 && testNormalised(Q, To ^ PUSH_TIBIT, F)) {
 
 					// `">NSTART"` flags a wildcard
 					uint32_t outQ = (Q > NEND) ? 0 : Q;
@@ -279,7 +287,7 @@ uint32_t generateData(void) {
 						printf(" ");
 					col++;
 				}
-				if (Ti == 0 && testQTF(Q, To, F)) {
+				if (Ti == 0 && testNormalised(Q, To, F)) {
 
 					// `">NSTART"` flags a wildcard
 					uint32_t outQ = (Q > NEND) ? 0 : Q;

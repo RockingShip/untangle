@@ -198,7 +198,7 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 
 			pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
 			pTree->clear();
-			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+			pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 			/*
 			 * save with placeholders and reload

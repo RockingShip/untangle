@@ -200,18 +200,144 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-20 16:01:22
+	 *
+	 * NOTE: forgot to mention this earlier
+	 *
+	 * Level-2 normalisation: dyadic ordering.
+	 *
+	 * Comparing the operand reference id's is not sufficient to determining ordering.
+	 *
+	 * For example `"ab+cd>&~"` and `"cd>ab+&~"` would be considered 2 different trees.
+	 *
+	 * To find them identical a deep inspection must occur
+	 *
+	 * @param {number} lhs - entrypoint to right side
+	 * @param {number} rhs - entrypoint to right side
+	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
+	 */
+	int compare(uint32_t lhs, uint32_t rhs) {
+
+		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		int stackPos = 0;
+
+		assert(~lhs&IBIT);
+		assert(~rhs&IBIT);
+
+		stackL[stackPos] = lhs;
+		stackR[stackPos] = rhs;
+		stackPos++;
+
+		uint32_t beenThere = 0;
+		uint8_t beenWhere[TINYTREE_NEND];
+
+		do {
+			// pop stack
+			--stackPos;
+			uint32_t L = stackL[stackPos];
+			uint32_t R = stackR[stackPos];
+
+			/*
+			 * compare endpoints/references
+			 */
+			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART)
+				return -1; // `end` < `ref`
+			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART)
+				return +1; // `ref` > `end`
+
+			/*
+			 * compare contents
+			 */
+			if (L < TINYTREE_NSTART) {
+				if (L < R)
+					return -1; // `lhs` < `rhs`
+				if (L > R)
+					return +1; // `lhs` < `rhs`
+
+				// continue with next stack entry
+				continue;
+			}
+
+			/*
+			 * Been here before
+			 */
+			if (beenThere & (1<<L)) {
+				if (beenWhere[L] == R)
+					continue; // yes
+			}
+			beenThere |= 1<<L;
+			beenWhere[L] = R;
+
+			// decode L and R
+			const tinyNode_t *pNodeL = this->N + L;
+			const tinyNode_t *pNodeR = this->N + R;
+
+			/*
+			 * Reminder:
+			 *  [ 2] a ? ~0 : b                  "+" OR
+			 *  [ 6] a ? ~b : 0                  ">" GT
+			 *  [ 8] a ? ~b : b                  "^" XOR
+			 *  [ 9] a ? ~b : c                  "!" QnTF
+			 *  [16] a ?  b : 0                  "&" AND
+			 *  [19] a ?  b : c                  "?" QTF
+			 */
+
+			/*
+			 * compare structure
+			 */
+			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT))
+				return -1; // `QnTF` < `QTF`
+			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+				return +1; // `QTF` > `QnTF`
+			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
+				return -1; // `OR` < !`OR`
+			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
+				return +1; // !`OR` > `OR`
+			if (pNodeL->F == 0 && pNodeR->F != 0)
+				return -1; // `GT` < !`GT` or `AND` < !`AND`
+			if (pNodeL->F != 0 && pNodeR->F == 0)
+				return +1; // !`GT` > `GT` or !`AND` > `AND`
+			if (pNodeL->F == (pNodeL->T ^ IBIT) && pNodeR->F != (pNodeR->T ^ IBIT))
+				return -1; // `XOR` < !`XOR`
+			if (pNodeL->F != (pNodeL->T ^ IBIT) && pNodeR->F == (pNodeR->T ^ IBIT))
+				return +1; // !`XOR` > `XOR`
+
+
+			/*
+			 * Push references
+			 */
+			stackL[stackPos] = pNodeL->F;
+			stackR[stackPos] = pNodeR->F;
+			stackPos++;
+			stackL[stackPos] = pNodeL->T & ~IBIT;
+			stackR[stackPos] = pNodeR->T & ~IBIT;
+			stackPos++;
+			stackL[stackPos] = pNodeL->Q;
+			stackR[stackPos] = pNodeR->Q;
+			stackPos++;
+
+		} while (stackPos > 0);
+
+		// identical
+		return 0;
+	}
+
+	/**
 	 * @date 2020-03-13 19:34:52
 	 *
 	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
-	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
+	 * Level 1: Normalisations include: inverting, function grouping
+	 * Level 2: dyadic ordering
+	 * Level 3: QnTF expanding.
 	 *
 	 * @param {number} Q
 	 * @param {number} T
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	uint32_t normaliseQTF(uint32_t Q, uint32_t T, uint32_t F) {
+	uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
 		if (this->flags & context_t::MAGICMASK_PARANOID) {
 			assert((Q & ~IBIT) < this->count);
@@ -290,14 +416,6 @@ struct tinyTree_t {
 				} else {
 					// OR
 					// "Q?~0:F" [2]
-
-					// level 1c: dyadic ordering
-					if (Q > F) {
-						// swap
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-					}
 				}
 			} else if ((T & ~IBIT) == Q) {
 				if (F == Q || F == 0) {
@@ -318,15 +436,6 @@ struct tinyTree_t {
 				} else if ((T & ~IBIT) == F) {
 					// XOR/NOT-EQUAL
 					// "Q?~F:F" [8]
-
-					// level 1c: dyadic ordering
-					if (Q > F) {
-						// swap
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-						T = savQ ^ IBIT;
-					}
 				} else {
 					// QnTF
 					// "Q?~T:F" [9]
@@ -357,28 +466,12 @@ struct tinyTree_t {
 					// OR
 					// "Q?Q:F" [15] -> "Q?~0:F" [2]
 					T = 0 ^ IBIT;
-
-					// level 1c: dyadic ordering
-					if (Q > F) {
-						// swap
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-					}
 				}
 			} else {
 				if (F == Q || F == 0) {
 					// AND
 					// "Q?T:Q" [17] -> "Q?T:0" [16]
 					F = 0;
-
-					// level 1c: dyadic ordering
-					if (Q > T) {
-						// swap
-						uint32_t savQ = Q;
-						Q = T;
-						T = savQ;
-					}
 				} else if (T == F) {
 					// SELF
 					// "Q?F:F" [18] -> "F"
@@ -387,6 +480,46 @@ struct tinyTree_t {
 					// QTF
 					// "Q?T:F" [19]
 				}
+			}
+		}
+
+		/*
+		 * Level-2 Normalisation, dyadic ordering
+		 */
+
+		/*
+		 * Reminder:
+		 *  [ 2] a ? ~0 : b                  "+" OR
+		 *  [ 8] a ? ~b : b                  "^" XOR
+		 *  [16] a ?  b : 0                  "&" AND
+		 */
+
+		if (T == IBIT) {
+			// `OR` ordering
+			if (this->compare(Q, F) > 0) {
+				// swap
+				uint32_t savQ = Q;
+				Q = F;
+				F = savQ;
+			}
+		}
+		if (F == (T ^ IBIT)) {
+			// `XOR` ordering
+			if (this->compare(Q, F) > 0) {
+				// swap
+				uint32_t savQ = Q;
+				Q = F;
+				F = savQ;
+				T = savQ ^ IBIT;
+			}
+		}
+		if (F == 0 && (~T & IBIT)) {
+			// `AND` ordering
+			if (this->compare(Q, T) > 0) {
+				// swap
+				uint32_t savQ = Q;
+				Q = T;
+				T = savQ;
 			}
 		}
 
@@ -401,10 +534,10 @@ struct tinyTree_t {
 		if ((this->flags & context_t::MAGICMASK_QNTF) && (~T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
-			T = normaliseQTF(Q, T ^ IBIT, F) ^ IBIT;
+			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
-		return this->basicNode(Q, T, F) ^ ibit;
+		return this->addNormalised(Q, T, F) ^ ibit;
 	}
 
 	/*
@@ -413,7 +546,7 @@ struct tinyTree_t {
 	 * Versioned memory.
 	 *
 	 * `tinyTree_t` is tuned for speed.
-	 * A performance hit is `basicNode()` which has to search the tree for existing `QTF` combinations.
+	 * A performance hit is `addNormalised()` which has to search the tree for existing `QTF` combinations.
 	 *
 	 * `NEND` if <32 and will fit in 5 bits.
 	 * A packed `QnTF` (as used by `genpushdata`) is in total (1+5*3=) 16 bits large
@@ -439,7 +572,7 @@ struct tinyTree_t {
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	inline uint32_t basicNode(uint32_t Q, uint32_t T, uint32_t F) {
+	inline uint32_t addNormalised(uint32_t Q, uint32_t T, uint32_t F) {
 
 		// sanity checking
 		if (this->flags & context_t::MAGICMASK_PARANOID) {
@@ -608,7 +741,7 @@ struct tinyTree_t {
 					uint32_t L = stack[--stackPos]; // left hand side
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R ^ IBIT, 0);
+					uint32_t nid = addNode(L, R ^ IBIT, 0);
 
 					stack[stackPos++] = nid; // push
 					beenThere[nextNode++] = nid; // save actual index for back references
@@ -624,7 +757,7 @@ struct tinyTree_t {
 					uint32_t L = stack[--stackPos]; // left hand side
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, 0 ^ IBIT, R);
+					uint32_t nid = addNode(L, 0 ^ IBIT, R);
 
 					stack[stackPos++] = nid; // push
 					beenThere[nextNode++] = nid; // save actual index for back references
@@ -640,7 +773,7 @@ struct tinyTree_t {
 					uint32_t L = stack[--stackPos]; // left hand side
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R ^ IBIT, R);
+					uint32_t nid = addNode(L, R ^ IBIT, R);
 
 					stack[stackPos++] = nid; // push
 					beenThere[nextNode++] = nid; // save actual index for back references
@@ -657,7 +790,7 @@ struct tinyTree_t {
 					uint32_t Q = stack[--stackPos];
 
 					// create operator
-					uint32_t nid = normaliseQTF(Q, T ^ IBIT, F);
+					uint32_t nid = addNode(Q, T ^ IBIT, F);
 
 					// push
 					stack[stackPos++] = nid; // push
@@ -674,7 +807,7 @@ struct tinyTree_t {
 					uint32_t L = stack[--stackPos]; // left hand side
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R, 0);
+					uint32_t nid = addNode(L, R, 0);
 
 					stack[stackPos++] = nid; // push
 					beenThere[nextNode++] = nid; // save actual index for back references
@@ -690,7 +823,7 @@ struct tinyTree_t {
 					uint32_t L = stack[--stackPos]; // left hand side
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, 0, R);
+					uint32_t nid = addNode(L, 0, R);
 
 					stack[stackPos++] = nid; // push
 					beenThere[stackPos++] = nid; // save actual index for back references
@@ -707,7 +840,7 @@ struct tinyTree_t {
 					uint32_t Q = stack[--stackPos];
 
 					// create operator
-					uint32_t nid = normaliseQTF(Q, T, F);
+					uint32_t nid = addNode(Q, T, F);
 
 					stack[stackPos++] = nid; // push
 					beenThere[nextNode++] = nid; // save actual index for back references

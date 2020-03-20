@@ -15,7 +15,7 @@
  *  `eval` self-test demonstrates:
  *   - Decoding and encoding of postfix notations
  *   - Constructing trees
- *   - Normalisations: inverting, function grouping, dyadic ordering
+ *   - Normalisations: 1:inverting, 1:function grouping, 2:dyadic ordering
  *   - Caching
  *   - Evaluating
  */
@@ -258,6 +258,127 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-20 23:00:23
+	 *
+	 * for level-2 normalisation: dyadic ordering.
+	 *
+	 * Comparing the operand reference id's is not sufficient to determining ordering.
+	 *
+	 * For example `"ab+cd>&~"` and `"cd>ab+&~"` would be considered 2 different trees.
+	 *
+	 * To find them identical a deep inspection must occur
+	 *
+	 * @param {number} lhs - entrypoint to right side
+	 * @param {number} rhs - entrypoint to right side
+	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
+	 */
+	int compare(uint32_t lhs, uint32_t rhs) {
+
+		static uint8_t beenThere[MAXNODES];
+
+		static uint32_t stackL[MAXNODES*3]; // there are 3 operands per per opcode
+		static uint32_t stackR[MAXNODES*3]; // there are 3 operands per per opcode
+		int stackPos = 0;
+
+		assert(~lhs&IBIT);
+		assert(~rhs&IBIT);
+
+		stackL[stackPos] = lhs;
+		stackR[stackPos] = rhs;
+		stackPos++;
+
+		// erase where been
+		memset(beenThere, 0, sizeof(*beenThere) * this->count);
+
+		do {
+			// pop stack
+			--stackPos;
+			uint32_t L = stackL[stackPos];
+			uint32_t R = stackR[stackPos];
+
+			/*
+			 * compare endpoints/references
+			 */
+			if (L < nstart && R >= nstart)
+				return -1; // `end` < `ref`
+			if (L >= nstart && R < nstart)
+				return +1; // `ref` > `end`
+
+			/*
+			 * compare contents
+			 */
+			if (L < nstart) {
+				if (L < R)
+					return -1; // `lhs` < `rhs`
+				if (L > R)
+					return +1; // `lhs` < `rhs`
+
+				// continue with next stack entry
+				continue;
+			}
+
+			/*
+			 * Been here before
+			 */
+			if (beenThere[L] == R)
+				continue; // yes
+			beenThere[L] = R;
+
+			// decode L and R
+			const node_t *pNodeL = this->N + L;
+			const node_t *pNodeR = this->N + R;
+
+			/*
+			 * Reminder:
+			 *  [ 2] a ? ~0 : b                  "+" OR
+			 *  [ 6] a ? ~b : 0                  ">" GT
+			 *  [ 8] a ? ~b : b                  "^" XOR
+			 *  [ 9] a ? ~b : c                  "!" QnTF
+			 *  [16] a ?  b : 0                  "&" AND
+			 *  [19] a ?  b : c                  "?" QTF
+			 */
+
+			/*
+			 * compare structure
+			 */
+			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT))
+				return -1; // `QnTF` < `QTF`
+			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+				return +1; // `QTF` > `QnTF`
+			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
+				return -1; // `OR` < !`OR`
+			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
+				return +1; // !`OR` > `OR`
+			if (pNodeL->F == 0 && pNodeR->F != 0)
+				return -1; // `GT` < !`GT` or `AND` < !`AND`
+			if (pNodeL->F != 0 && pNodeR->F == 0)
+				return +1; // !`GT` > `GT` or !`AND` > `AND`
+			if (pNodeL->F == (pNodeL->T ^ IBIT) && pNodeR->F != (pNodeR->T ^ IBIT))
+				return -1; // `XOR` < !`XOR`
+			if (pNodeL->F != (pNodeL->T ^ IBIT) && pNodeR->F == (pNodeR->T ^ IBIT))
+				return +1; // !`XOR` > `XOR`
+
+
+			/*
+			 * Push references
+			 */
+			stackL[stackPos] = pNodeL->F;
+			stackR[stackPos] = pNodeR->F;
+			stackPos++;
+			stackL[stackPos] = pNodeL->T & ~IBIT;
+			stackR[stackPos] = pNodeR->T & ~IBIT;
+			stackPos++;
+			stackL[stackPos] = pNodeL->Q;
+			stackR[stackPos] = pNodeR->Q;
+			stackPos++;
+
+		} while (stackPos > 0);
+
+		// identical
+		return 0;
+	}
+
+	/**
 	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
 	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
@@ -268,7 +389,7 @@ struct tree_t {
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 * @date 2020-03-09 16:27:10
 	 */
-	uint32_t normaliseQTF(uint32_t Q, uint32_t T, uint32_t F) {
+	uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
 		if (true) {
 			assert((Q & ~IBIT) < this->count);
@@ -419,16 +540,8 @@ struct tree_t {
 		 *
 		 */
 
-		// `AND` `Q?T:0` where Q>T
-		if ((~T & IBIT) && F == 0 && Q > T) {
-			// swap
-			uint32_t savQ = Q;
-			Q = T;
-			T = savQ;
-		}
-
 		// `OR` `Q?~0:F` where Q>F
-		if (T == IBIT && Q > F) {
+		if (T == IBIT && this->compare(Q, F) > 0) {
 			// swap
 			uint32_t savQ = Q;
 			Q = F;
@@ -436,7 +549,7 @@ struct tree_t {
 		}
 
 		// `XOR` `Q?~F:F` where Q>F
-		if ((T ^ IBIT) == F && Q > F) {
+		if ((T ^ IBIT) == F && this->compare(Q, F) > 0) {
 			// swap
 			uint32_t savQ = Q;
 			Q = F;
@@ -444,10 +557,17 @@ struct tree_t {
 			T = savQ ^ IBIT;
 		}
 
-		/*
-		 * level 1d+ - This is where you would put additional normalisations
-		 */
+		// `AND` `Q?T:0` where Q>T
+		if ((~T & IBIT) && F == 0 && this->compare(Q, T) > 0) {
+			// swap
+			uint32_t savQ = Q;
+			Q = T;
+			T = savQ;
+		}
 
+		/**
+		 ** This is where you would put additional normalisations
+		 **/
 
 		/*
 		 * Directly before caching, rewrite `QTF` to `QnTF`
@@ -460,11 +580,12 @@ struct tree_t {
 		if (opt_qntf && (~T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
-			T = normaliseQTF(Q, T ^ IBIT, F) ^ IBIT;
+			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
 		// sanity checking
 		if (true) {
+			// level-1
 			assert(~Q & IBIT);                     // Q not inverted
 			assert(~F & IBIT);                     // F not inverted
 			assert(Q != 0);                        // Q not zero
@@ -473,9 +594,10 @@ struct tree_t {
 			assert(Q != (T & ~IBIT));              // Q/T collapse
 			assert(Q != F);                        // Q/F collapse
 			assert(T != F);                        // T/F collapse
-			assert((T & ~IBIT) != F || Q < F);     // NE ordering
-			assert(F != 0 || (T & IBIT) || Q < T); // AND ordering
-			assert(T != IBIT || Q < F);            // OR ordering
+			// level-2
+			assert(T != IBIT || this->compare(Q, F) < 0);            // OR ordering
+			assert((T & ~IBIT) != F || this->compare(Q, F) < 0);     // NE ordering
+			assert(F != 0 || (T & IBIT) || this->compare(Q, T) < 0); // AND ordering
 		}
 
 		/*
@@ -635,7 +757,7 @@ struct tree_t {
 		nextNode = this->nstart;
 
 		// temporary stack storage for postfix notation
-		uint32_t stack[MAXNODES];
+		static uint32_t stack[MAXNODES];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 		uint32_t nestStack[16];
@@ -787,7 +909,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R ^ IBIT, 0);
+					uint32_t nid = addNode(L, R ^ IBIT, 0);
 
 					// push
 					stack[stackPos++] = nid;
@@ -814,7 +936,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R ^ IBIT, R);
+					uint32_t nid = addNode(L, R ^ IBIT, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -841,7 +963,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, 0 ^ IBIT, R);
+					uint32_t nid = addNode(L, 0 ^ IBIT, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -869,7 +991,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(Q, T ^ IBIT, F);
+					uint32_t nid = addNode(Q, T ^ IBIT, F);
 
 					// push
 					stack[stackPos++] = nid;
@@ -896,7 +1018,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, R, 0);
+					uint32_t nid = addNode(L, R, 0);
 
 					// push
 					stack[stackPos++] = nid;
@@ -924,7 +1046,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(Q, T, F);
+					uint32_t nid = addNode(Q, T, F);
 
 					// push
 					stack[stackPos++] = nid;
@@ -964,7 +1086,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = normaliseQTF(L, 0, R);
+					uint32_t nid = addNode(L, 0, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1009,7 +1131,7 @@ struct tree_t {
 		this->root = 0;
 
 		// temporary stack storage for postfix notation
-		uint32_t stack[MAXNODES];
+		static uint32_t stack[MAXNODES];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 
@@ -2143,7 +2265,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 			pTree->nstart = pTree->kstart + 3;
 			pTree->count = pTree->nstart;
-			pTree->root = pTree->normaliseQTF(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+			pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 			/*
 			 * save with placeholders and reload

@@ -924,7 +924,7 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
-	 * Program has one argument, the output database
+	 * Program arguments
 	 */
 	if (argc - optind >= 1) {
 		app.arg_outputDatabase = argv[optind++];

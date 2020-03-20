@@ -170,7 +170,7 @@ struct ancientTree_t : tinyTree_t {
 					const unsigned newNumSlot = (iT == numSlotT) ? numSlotT + 1 : numSlotT; // bump number of slots
 
 					// NE
-					if (this->basicNode(Q, T ^ IBIT, T) == R) {
+					if (this->addNormalised(Q, T ^ IBIT, T) == R) {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
@@ -179,7 +179,7 @@ struct ancientTree_t : tinyTree_t {
 					}
 
 					// OR
-					if (this->basicNode(Q, 0 ^ IBIT, T) == R) {
+					if (this->addNormalised(Q, 0 ^ IBIT, T) == R) {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
@@ -188,7 +188,7 @@ struct ancientTree_t : tinyTree_t {
 					}
 
 					// GT
-					if (this->basicNode(Q, T ^ IBIT, 0) == R) {
+					if (this->addNormalised(Q, T ^ IBIT, 0) == R) {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
@@ -197,7 +197,7 @@ struct ancientTree_t : tinyTree_t {
 					}
 
 					// AND
-					if (this->basicNode(Q, T, 0) == R) {
+					if (this->addNormalised(Q, T, 0) == R) {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
@@ -230,7 +230,7 @@ struct ancientTree_t : tinyTree_t {
 						const unsigned newNumSlot = numSlotT; // bump number of slots
 
 						// NE
-						if (this->basicNode(Q, T ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, T) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -240,7 +240,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// OR
-						if (this->basicNode(Q, 0 ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, 0 ^ IBIT, T) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -249,7 +249,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// GT
-						if (this->basicNode(Q, T ^ IBIT, 0) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, 0) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -258,7 +258,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// AND
-						if (this->basicNode(Q, T, 0) == R) {
+						if (this->addNormalised(Q, T, 0) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -287,7 +287,7 @@ struct ancientTree_t : tinyTree_t {
 						const unsigned newNumSlot = (iT == numSlotT) ? numSlotT + 1 : numSlotT; // bump number of slots
 
 						// NE
-						if (this->basicNode(Q, T ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, T) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -296,7 +296,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// OR
-						if (this->basicNode(Q, 0 ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, 0 ^ IBIT, T) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -305,7 +305,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// GT
-						if (this->basicNode(Q, T ^ IBIT, 0) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, 0) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -314,7 +314,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// AND
-						if (this->basicNode(Q, T, 0) == R) {
+						if (this->addNormalised(Q, T, 0) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -349,7 +349,7 @@ struct ancientTree_t : tinyTree_t {
 						const unsigned newNumSlot = numSlotT; // bump number of slots
 
 						// NE
-						if (this->basicNode(Q, T ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, T) == R) {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
@@ -358,7 +358,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// OR
-						if (this->basicNode(Q, 0 ^ IBIT, T) == R) {
+						if (this->addNormalised(Q, 0 ^ IBIT, T) == R) {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
@@ -367,7 +367,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// GT
-						if (this->basicNode(Q, T ^ IBIT, 0) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, 0) == R) {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
@@ -376,7 +376,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// AND
-						if (this->basicNode(Q, T, 0) == R) {
+						if (this->addNormalised(Q, T, 0) == R) {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
@@ -416,7 +416,7 @@ struct ancientTree_t : tinyTree_t {
 						const unsigned newNumSlot = (iF == numSlotF) ? numSlotF + 1 : numSlotF; // bump number of slots
 
 						// QnTF
-						if (this->basicNode(Q, T ^ IBIT, F) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 							if (endpointsLeft == 3 && stack == 0)
 								foundTree();
 							else
@@ -425,7 +425,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// QTF
-						if (this->basicNode(Q, T, F) == R) {
+						if (this->addNormalised(Q, T, F) == R) {
 							if (endpointsLeft == 3 && stack == 0)
 								foundTree();
 							else
@@ -466,7 +466,7 @@ struct ancientTree_t : tinyTree_t {
 							const unsigned newNumSlot = numSlotF; // bump number of slots
 
 							// QnTF
-							if (this->basicNode(Q, T ^ IBIT, F) == R) {
+							if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
@@ -475,7 +475,7 @@ struct ancientTree_t : tinyTree_t {
 							}
 
 							// QTF
-							if (this->basicNode(Q, T, F) == R) {
+							if (this->addNormalised(Q, T, F) == R) {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
@@ -512,7 +512,7 @@ struct ancientTree_t : tinyTree_t {
 							const unsigned newNumSlot = (iF == numSlotF) ? numSlotF + 1 : numSlotF; // bump number of slots
 
 							// QnTF
-							if (this->basicNode(Q, T ^ IBIT, F) == R) {
+							if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
@@ -521,7 +521,7 @@ struct ancientTree_t : tinyTree_t {
 							}
 
 							// QTF
-							if (this->basicNode(Q, T, F) == R) {
+							if (this->addNormalised(Q, T, F) == R) {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
@@ -557,7 +557,7 @@ struct ancientTree_t : tinyTree_t {
 						const unsigned newNumSlot = (iF == numSlotF) ? numSlotF + 1 : numSlotF; // bump number of slots
 
 						// QnTF
-						if (this->basicNode(Q, T ^ IBIT, F) == R) {
+						if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -566,7 +566,7 @@ struct ancientTree_t : tinyTree_t {
 						}
 
 						// QTF
-						if (this->basicNode(Q, T, F) == R) {
+						if (this->addNormalised(Q, T, F) == R) {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
@@ -609,7 +609,7 @@ struct ancientTree_t : tinyTree_t {
 							const unsigned newNumSlot = numSlotF; // bump number of slots
 
 							// QnTF
-							if (this->basicNode(Q, T ^ IBIT, F) == R) {
+							if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
@@ -618,7 +618,7 @@ struct ancientTree_t : tinyTree_t {
 							}
 
 							// QTF
-							if (this->basicNode(Q, T, F) == R) {
+							if (this->addNormalised(Q, T, F) == R) {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
@@ -657,16 +657,16 @@ struct ancientTree_t : tinyTree_t {
 							const unsigned newNumSlot = numSlotF; // bump number of slots
 
 							// QnTF
-							if (this->basicNode(Q, T ^ IBIT, F) == R) {
+							if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 
 							// QTF
-							if (this->basicNode(Q, T, F) == R) {
+							if (this->addNormalised(Q, T, F) == R) {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
@@ -700,7 +700,7 @@ struct ancientTree_t : tinyTree_t {
 					const unsigned newNumSlot = (iF == numSlotF) ? numSlotF + 1 : numSlotF; // bump number of slots
 
 					// QnTF
-					if (this->basicNode(Q, T ^ IBIT, F) == R) {
+					if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 						if (endpointsLeft == 1 && stack == 0)
 							foundTree();
 						else
@@ -709,7 +709,7 @@ struct ancientTree_t : tinyTree_t {
 					}
 
 					// QTF
-					if (this->basicNode(Q, T, F) == R) {
+					if (this->addNormalised(Q, T, F) == R) {
 						if (endpointsLeft == 1 && stack == 0)
 							foundTree();
 						else
@@ -737,7 +737,7 @@ struct ancientTree_t : tinyTree_t {
 			assert (T != F);
 
 			// QnTF
-			if (this->basicNode(Q, T ^ IBIT, F) == R) {
+			if (this->addNormalised(Q, T ^ IBIT, F) == R) {
 				if (endpointsLeft == 0 && stack == 0)
 					foundTree();
 				else
@@ -746,7 +746,7 @@ struct ancientTree_t : tinyTree_t {
 			}
 
 			// QTF
-			if (this->basicNode(Q, T, F) == R) {
+			if (this->addNormalised(Q, T, F) == R) {
 				if (endpointsLeft == 0 && stack == 0)
 					foundTree();
 				else
