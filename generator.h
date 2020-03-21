@@ -47,8 +47,13 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdint.h>
+#include <stdio.h>
+#include <assert.h>
+#include <string.h>
 #include "tinytree.h"
 #include "pushdata.h"
+#include "progressdata.h"
 
 /**
  * @date 2020-03-17 20:22:08
@@ -109,10 +114,22 @@ struct generatorTree_t : tinyTree_t {
 	uint8_t *pIsType;
 
 	/// @var {object} callback object for `foundTree()`
-	context_t* cbObject;
+	context_t *cbObject;
 
 	/// @var {object} callback member for `foundTree()`
-	void(context_t::* cbMember)(generatorTree_t&);
+	void (context_t::* cbMember)(generatorTree_t &);
+
+	/// @var {uint64_t} lower bound `progress` (if non-zero)
+	uint64_t windowLo;
+
+	/// @var {uint64_t} upper bound (not including) `progress` (if non-zero)
+	uint64_t windowHi;
+
+	/// @var {uint64_t[]} restart data
+	const uint64_t *pRestartData;
+
+	/// @var {number} Indication that a restart point has passed
+	uint64_t *restartTick;
 
 	/**
 	 * @date 2020-03-18 18:45:33
@@ -130,6 +147,13 @@ struct generatorTree_t : tinyTree_t {
 
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32.
 		assert(TINYTREE_NEND < 32);
+
+		cbObject = NULL;
+		cbMember = NULL;
+		windowLo = 0;
+		windowHi = 0;
+		pRestartData = NULL;
+		restartTick = 0;
 
 		// allocate structures
 		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << 16, sizeof(*this->pIsType));
@@ -356,7 +380,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * Register a callback for found trees
 	 */
-	void addCallback(context_t* object, void(context_t::* member)(generatorTree_t&)) {
+	void addCallback(context_t *object, void(context_t::* member)(generatorTree_t &)) {
 		cbObject = object;
 		cbMember = member;
 	}
@@ -367,8 +391,27 @@ struct generatorTree_t : tinyTree_t {
 	 * found level-1,2 normalised candidate.
 	 */
 	inline void callFoundTree(void) {
+		// test that tree is within limits
+		assert(this->count >= TINYTREE_NSTART && this->count <= TINYTREE_NEND);
+
+		// test if tree is within progress range
+		// NOTE: first tree has `progress==0`
+		if (windowLo && ctx.progress < windowLo) {
+			ctx.progress++;
+			return;
+		}
+		if (windowHi && ctx.progress >= windowHi) {
+			ctx.progress++;
+			return;
+		}
+
 		// invoke the callback
-		(*cbObject.*cbMember)(*this);
+		if (cbObject != NULL) {
+			(*cbObject.*cbMember)(*this);
+		}
+
+		// bump counter after processing
+		ctx.progress++;
 	}
 
 	/**
@@ -463,7 +506,7 @@ struct generatorTree_t : tinyTree_t {
 	 *  - `endpointsLeft` are the number of open-ends a tree has.
 	 *  - `XOR`'s have a hidden endpoints
 	 *
-\	 * @param {number} endpointsLeft -  number of endpoints still to fill
+	 * @param {number} endpointsLeft -  number of endpoints still to fill
 	 * @param {number} numPlaceholder - number of placeholders already assigned
 	 * @param {uint64_t} stack - `decode` stack
 	 */
@@ -471,6 +514,99 @@ struct generatorTree_t : tinyTree_t {
 
 		assert (numPlaceholder <= MAXSLOTS);
 		assert(tinyTree_t::TINYTREE_MAXNODES <= 64 / PACKED_WIDTH);
+
+		/*
+		 * Test progress end-condition
+		 */
+		if (windowHi && ctx.progress >= windowHi)
+			return; // hit end condition
+
+		/*
+		 * @date 2020-03-21 12:30:41
+		 *
+		 * Windowing and progress.
+		 *
+		 * With large datasets it is crucial to have generator restart capabilities.
+		 * Restarting introduces the concept of windowing making it possible to break larger invocations
+		 * into a collection of smaller jobs which can be run in parallel.
+		 *
+		 * Speeding progression of this call can be done by suppressing ignoring code execution and
+		 * increasing `progress` in such a was that it seems like normal operation.
+		 *
+		 * Recursion on its 3nd level (when trees are 2 nodes in size) is a good moment to check conditions
+		 * This makes that restarting sensible for trees >= 4 nodes
+		 */
+		if (this->count == TINYTREE_NSTART + 2) {
+			if (this->pRestartData) {
+				/*
+				 * assert that restart data is in sync with reality
+				 */
+				if (ctx.progress != *this->pRestartData) {
+					ctx.fatal("restartData out of sync. Encountered:%ld, Expected:%ld", ctx.progress, *this->pRestartData);
+					assert(ctx.progress == *this->pRestartData);
+				}
+
+				// jump to next restart point
+				this->pRestartData++;
+
+				/*
+				 * Test if any of this level overlaps the window
+				 */
+				if (windowLo >= *this->pRestartData) {
+					// jump to next restart point
+					ctx.progress = *this->pRestartData;
+					return;
+				} else {
+					// passed restart point. Status on new line
+					this->restartTick++;
+				}
+
+			} else if (cbObject == NULL) {
+				/*
+				 * Generate restart data
+				 */
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					if (ctx.progressHi)
+						fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), ctx.progress * 100.0 / ctx.progressHi);
+					else
+						fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), ctx.progress);
+					ctx.tick = 0;
+				}
+
+				// tree is incomplete and requires a slightly different notation
+				printf("%12ldLL/*", ctx.progress);
+				for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < this->count; iNode++) {
+					const tinyNode_t *pNode = &this->N[iNode];
+					uint32_t Q = pNode->Q;
+					uint32_t To = pNode->T & ~IBIT;
+					uint32_t Ti = pNode->T & IBIT;
+					uint32_t F = pNode->F;
+
+					if (Q >= tinyTree_t::TINYTREE_NSTART)
+						putchar("123456789"[Q - tinyTree_t::TINYTREE_NSTART]);
+					else
+						putchar("0abcdefghi"[Q]);
+					if (To >= tinyTree_t::TINYTREE_NSTART)
+						putchar("123456789"[To - tinyTree_t::TINYTREE_NSTART]);
+					else
+						putchar("0abcdefghi"[To]);
+					if (F >= tinyTree_t::TINYTREE_NSTART)
+						putchar("123456789"[F - tinyTree_t::TINYTREE_NSTART]);
+					else
+						putchar("0abcdefghi"[F]);
+					putchar(Ti ? '!' : '?');
+				}
+				printf("*/,");
+
+				// communicate with `genprogressdataContext_t::main()`
+				// `genprogress` needs to know how many restart points are generated.
+				(*(uint64_t *) ctx.aux)++;
+
+				if ((*(uint64_t *) ctx.aux) % 8 == 1)
+					printf("\n");
+
+			}
+		}
 
 		/*
 		 * Nodes with three endpoints

@@ -53,40 +53,6 @@
 struct context_t {
 
 	/*
-	 * User specified program arguments and options
-	 */
-
-	/// @var {number} intentionally undocumented
-	uint32_t opt_debug;
-	/// @var {number} program flags
-	uint32_t opt_flags;
-	/// @var {number} --text, often used switch
-	unsigned opt_text;
-	/// @var {number} --timer, interval timer for verbose updates
-	unsigned opt_timer;
-	/// @var {number} --verbose, What do you want to know
-	unsigned opt_verbose;
-
-	/// @var {number} - async indication that a timer interrupt occurred
-	uint32_t tick;
-	/// @var {uint64_t} - total memory allocated by `myAlloc()`
-	uint64_t totalAllocated;
-
-	// statistics
-
-	/// @var {uint64_t} - number of calls to baseTree::hash()
-	uint64_t cntHash;
-	/// @var {uint64_t} - number of compares in baseTree::hash() (collisions)
-	uint64_t cntCompare;
-
-	// statistics
-
-	/// @var {uint64_t} - Upper limit of progress tracker
-	uint64_t progressHi;
-	/// @var {uint64_t} - Current position of progress tracker
-	uint64_t progress;
-
-	/*
 	 * verbose levels
 	 */
 	// @formatter:off
@@ -118,28 +84,59 @@ struct context_t {
 	 *
 	 * Debug settings
 	 */
+	// @formatter:off
 	enum {
 	};
 	// @formatter:on
+
+	/*
+	 * User specified program arguments and options
+	 */
+
+	/// @var {number} intentionally undocumented
+	uint32_t opt_debug;
+	/// @var {number} program flags
+	uint32_t opt_flags;
+	/// @var {number} --timer, interval timer for verbose updates
+	unsigned opt_timer;
+	/// @var {number} --verbose, What do you want to know
+	unsigned opt_verbose;
+
+	/// @var {number} - async indication that a timer interrupt occurred
+	uint32_t tick;
+	/// @var {uint64_t} - total memory allocated by `myAlloc()`
+	uint64_t totalAllocated;
+
+	// statistics
+
+	/// @var {uint64_t} - number of calls to baseTree::hash()
+	uint64_t cntHash;
+	/// @var {uint64_t} - number of compares in baseTree::hash() (collisions)
+	uint64_t cntCompare;
+
+	/// @var {uint64_t} - Upper limit of progress tracker
+	uint64_t progressHi;
+	/// @var {uint64_t} - Current position of progress tracker
+	uint64_t progress;
+
+	/// @var {uint64_t} - Auxiliary usage that may come in handy
+	void *aux;
 
 	/**
 	 * Constructor
 	 */
 	context_t() {
-		// arguments and options
 		opt_debug = 0;
 		opt_flags = 0;
-		opt_text = 0;
 		opt_timer = 1; // default is 1-second intervals
 		opt_verbose = VERBOSE_TICK;
-
-		// other values
 		tick = 0;
 		totalAllocated = 0;
-
-		// statistics
 		cntHash = 0;
 		cntCompare = 0;
+		progress = 0;
+		progressHi = 0;
+		aux = NULL;
 	}
 
 	/**
