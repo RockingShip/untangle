@@ -105,14 +105,6 @@ struct tinyTree_t {
 	// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
 
-	/// @var {number[]} lookup table for `basicNode()` index by packed `QTF`
-	uint32_t *pCacheQTF;
-
-	/// @var {number[]} versioned memory for `pCacheQTF`
-	uint32_t *pCacheVersion;
-
-	/// @var {number} current version incarnation
-	uint32_t iVersion;
 
 	/**
  	 * @date 2020-03-14 00:27:38
@@ -134,12 +126,6 @@ struct tinyTree_t {
 		 */
 		assert(TINYTREE_NEND < 32);
 
-		// allocate structures
-		pCacheQTF = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheQTF", 1 << 16, sizeof(*this->pCacheQTF));
-		pCacheVersion = (uint32_t *) ctx.myAlloc("tinyTree_t::pCacheVersion", 1 << 16, sizeof(*this->pCacheVersion));
-
-		// clear versioned memory
-		iVersion = 0;
 		this->clear();
 	}
 
@@ -149,8 +135,6 @@ struct tinyTree_t {
 	 * Release system resources
 	 */
 	~tinyTree_t() {
-		ctx.myFree("tinyTree_t::pCacheQTF", this->pCacheQTF);
-		ctx.myFree("tinyTree_t::pCacheVersion", this->pCacheVersion);
 	}
 
 	/*
@@ -167,13 +151,6 @@ struct tinyTree_t {
 	 * Erase the contents
 	 */
 	inline void clear(void) {
-		// bump incarnation. 
-		if (iVersion == 0) {
-			// clear versioned memory
-			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1 << 16)));
-		}
-		iVersion++; // when overflows, next call will clear
-
 		this->count = TINYTREE_NSTART; // rewind first free node
 		this->root = 0; // set result to zero-reference
 	}

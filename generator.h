@@ -55,8 +55,50 @@
  */
 struct generatorTree_t : tinyTree_t {
 
-	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
+	/*
+	 * @date 2020-03-19 16:12:52
+	 *
+	 * Packed Notation to make operator fit into 16 bits
+	 *   packedQTF =  <invertedT> << (WIDTH*3) | Q << (WIDTH*2) | T << (WIDTH*1) | F << (WIDTH*0)
+	 *
+	 * This order is chosen as it is the order found on stacks during `decode()`
+	 */
+	enum {
+		/// @constant {number} - Field width
+		PACKED_WIDTH = 5,
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_MASK = (1 << PACKED_WIDTH) - 1,
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_TIBIT = 1 << (PACKED_WIDTH * 3),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_FPOS = (PACKED_WIDTH * 0),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_TPOS = (PACKED_WIDTH * 1),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_QPOS = (PACKED_WIDTH * 2),
+
+		/// @constant {number} - used for `pIsType[]` to indicate type of node
+		PACKED_OR   = 0x01,
+		PACKED_GT   = 0x02,
+		PACKED_XOR  = 0x04,
+		PACKED_QnTF = 0x08,
+		PACKED_AND  = 0x10,
+		PACKED_QTF  = 0x20,
+	};
+
+	/// @var {number[]} lookup table for `push()` index by packed `QTF`
+	uint32_t *pCacheQTF;
+
+	/// @var {number[]} versioned memory for `pCacheQTF`
+	uint32_t *pCacheVersion;
+
+	/// @var {number} current version incarnation
+	uint32_t iVersion;
 
 	/// @var {uint32_t[]} array of packed unified operators
 	uint32_t packedN[TINYTREE_NEND];
@@ -95,6 +137,8 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	~generatorTree_t() {
 		ctx.myFree("generatorTree_t::pIsType", this->pIsType);
+		ctx.myFree("generatorTree_t::pCacheQTF", this->pCacheQTF);
+		ctx.myFree("generatorTree_t::pCacheVersion", this->pCacheVersion);
 	}
 
 	/**

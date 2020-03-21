@@ -52,8 +52,7 @@ struct ancientTree_t : tinyTree_t {
 	 * @param {context_t} ctx - I/O context
 	 * @param {number} flags - Tree/node functionality
 	 */
-	ancientTree_t(context_t &ctx, uint32_t flags) : tinyTree_t(ctx, flags) {
-		opt_text = 0;
+	ancientTree_t(context_t &ctx) : tinyTree_t(ctx) {
 	}
 
 	// @date 2020-03-19 00:46:36
