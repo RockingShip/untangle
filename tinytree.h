@@ -126,7 +126,7 @@ struct tinyTree_t {
 		 */
 		assert(TINYTREE_NEND < 32);
 
-		this->clear();
+		this->clearTree();
 	}
 
 	/**
@@ -150,7 +150,7 @@ struct tinyTree_t {
 	 *
 	 * Erase the contents
 	 */
-	inline void clear(void) {
+	inline void clearTree(void) {
 		this->count = TINYTREE_NSTART; // rewind first free node
 		this->root = 0; // set result to zero-reference
 	}
@@ -178,8 +178,8 @@ struct tinyTree_t {
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int stackPos = 0;
 
-		assert(~lhs&IBIT);
-		assert(~rhs&IBIT);
+		assert(~lhs & IBIT);
+		assert(~rhs & IBIT);
 
 		stackL[stackPos] = lhs;
 		stackR[stackPos] = rhs;
@@ -218,11 +218,11 @@ struct tinyTree_t {
 			/*
 			 * Been here before
 			 */
-			if (beenThere & (1<<L)) {
+			if (beenThere & (1 << L)) {
 				if (beenWhere[L] == R)
 					continue; // yes
 			}
-			beenThere |= 1<<L;
+			beenThere |= 1 << L;
 			beenWhere[L] = R;
 
 			// decode L and R
@@ -598,7 +598,7 @@ struct tinyTree_t {
 	int decodeSafe(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
-		this->clear();
+		this->clearTree();
 
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -834,7 +834,7 @@ struct tinyTree_t {
 	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
-		this->clear();
+		this->clearTree();
 
 		// temporary stack storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode

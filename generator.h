@@ -12,6 +12,10 @@
  *
  * Generation is based on templates instead of nested `for` loops for generating `Q,T,F` combos.
  *
+ * Demonstrated:
+ *  - Tree deep-comparison
+ *  - Packed `QTF` notation
+ *
  * @date 2020-03-17 23:54:39
  *
  * Building `QnTF` datasets is two-pass:
@@ -21,10 +25,8 @@
  *
  *  @date 2020-03-18 21:12:26
  *
- *  All normalisation excludes ordered dyadics.
- *
- *  This is to allow pattern detector generators to use all generated combos to create all
- *  transformation masks without having to resort to run-time ordering.
+ *  It generates fully normalised and naturally ordered trees for further processing.
+ *  With this version, all calls to `foundTree()` are notation unique.
  */
 
 /*
@@ -83,12 +85,12 @@ struct generatorTree_t : tinyTree_t {
 		PACKED_QPOS = (PACKED_WIDTH * 2),
 
 		/// @constant {number} - used for `pIsType[]` to indicate type of node
-		PACKED_OR   = 0x01,
-		PACKED_GT   = 0x02,
-		PACKED_XOR  = 0x04,
+		PACKED_OR = 0x01,
+		PACKED_GT = 0x02,
+		PACKED_XOR = 0x04,
 		PACKED_QnTF = 0x08,
-		PACKED_AND  = 0x10,
-		PACKED_QTF  = 0x20,
+		PACKED_AND = 0x10,
+		PACKED_QTF = 0x20,
 	};
 
 	/// @var {number[]} lookup table for `push()` index by packed `QTF`
@@ -106,13 +108,18 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {uint8_t[]} array indexed by packed `QTnF` to indicate what type of operator
 	uint8_t *pIsType;
 
+	/// @var {object} callback object for `foundTree()`
+	context_t* cbObject;
+
+	/// @var {object} callback member for `foundTree()`
+	void(context_t::* cbMember)(generatorTree_t&);
+
 	/**
 	 * @date 2020-03-18 18:45:33
 	 *
 	 * Constructor
 	 *
 	 * @param {context_t} ctx - I/O context
-	 * @param {number} flags - Tree/node functionality
 	 */
 	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx) {
 		// assert `pushdata.h` is usable
@@ -131,7 +138,7 @@ struct generatorTree_t : tinyTree_t {
 
 		// clear versioned memory
 		iVersion = 0;
-		clearPacked();
+		clearGenerator();
 
 		initialiseGenerator();
 	}
@@ -152,7 +159,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * Erase the contents
 	 */
-	inline void clearPacked(void) {
+	inline void clearGenerator(void) {
 		// bump incarnation.
 		if (iVersion == 0) {
 			// clear versioned memory
@@ -253,8 +260,8 @@ struct generatorTree_t : tinyTree_t {
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int stackPos = 0;
 
-		assert(~lhs&IBIT);
-		assert(~rhs&IBIT);
+		assert(~lhs & IBIT);
+		assert(~rhs & IBIT);
 
 		stackL[stackPos] = lhs;
 		stackR[stackPos] = rhs;
@@ -293,11 +300,11 @@ struct generatorTree_t : tinyTree_t {
 			/*
 			 * Been here before
 			 */
-			if (beenThere & (1<<L)) {
+			if (beenThere & (1 << L)) {
 				if (beenWhere[L] == R)
 					continue; // yes
 			}
-			beenThere |= 1<<L;
+			beenThere |= 1 << L;
 			beenWhere[L] = R;
 
 			// decode L and R
@@ -345,28 +352,23 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-21 02:01:18
+	 *
+	 * Register a callback for found trees
+	 */
+	void addCallback(context_t* object, void(context_t::* member)(generatorTree_t&)) {
+		cbObject = object;
+		cbMember = member;
+	}
+
+	/**
 	 * @date 2020-03-18 22:17:26
 	 *
-	 * found initial candidate.
-	 *
-	 * @param {number} r - Root of tree
+	 * found level-1,2 normalised candidate.
 	 */
-	inline void foundTree(uint32_t r) {
-		ctx.progress++;
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), ctx.progress * 100.0 / ctx.progressHi);
-			ctx.tick = 0;
-		}
-
-		if (opt_text) {
-			// simply dump tree
-			for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
-				uint32_t qtf = packedN[i];
-				printf("%d%x%x%x ", (qtf & PACKED_TIBIT) ? 1 : 0, (qtf >> PACKED_QPOS) & PACKED_MASK, (qtf >> PACKED_TPOS) & PACKED_MASK, (qtf >> PACKED_FPOS) & PACKED_MASK);
-			}
-			printf("\n");
-		}
+	inline void callFoundTree(void) {
+		// invoke the callback
+		(*cbObject.*cbMember)(*this);
 	}
 
 	/**
@@ -385,22 +387,35 @@ struct generatorTree_t : tinyTree_t {
 		if (pIsType[qtf] == 0)
 			return 0; // no
 
-		// test if already in cache then fail. This should have been a back-reference
+		// test if already in cache then fail. 
+		// Must use a back-reference and not create a new node 
 		if (pCacheVersion[qtf] == iVersion && pCacheQTF[qtf] != 0)
 			return 0;
 
 		// add/push packed node
 		uint32_t nid = this->count++;
-		assert(nid < TINYTREE_NEND);
+		assert(nid < TINYTREE_NEND); // overflow
+		assert((nid & ~PACKED_MASK) == 0); // may not overflow packed field
 
 		// add to packed nodes
 		this->packedN[nid] = qtf;
 
-		// add to cache
+		// add to cache of fast duplicate lookups
 		pCacheQTF[qtf] = nid;
 		pCacheVersion[qtf] = iVersion;
 
-		assert((nid & ~PACKED_MASK) == 0); // may not overflow packed field
+		// populate node
+		tinyNode_t *pNode = this->N + nid;
+		pNode->F = qtf & PACKED_MASK;
+		qtf >>= PACKED_WIDTH;
+		pNode->T = qtf & PACKED_MASK;
+		qtf >>= PACKED_WIDTH;
+		pNode->Q = qtf & PACKED_MASK;
+		qtf >>= PACKED_WIDTH;
+		if (qtf)
+			pNode->T ^= IBIT;
+		// save root
+		this->root = nid;
 
 		return nid;
 	}
@@ -442,6 +457,11 @@ struct generatorTree_t : tinyTree_t {
 	 * Table naming:
 	 *  - Q,T,F are operands that are newly assigned placeholders.
 	 *  - P should be replaced by popped stack values (pointing to other nodes)
+	 *  - Templates only contain endpoints
+	 *  - Stack only contains node'id, and entries are unique
+	 *  - Use deep comparison during runtime to compare structures and not id's
+	 *  - `endpointsLeft` are the number of open-ends a tree has.
+	 *  - `XOR`'s have a hidden endpoints
 	 *
 \	 * @param {number} endpointsLeft -  number of endpoints still to fill
 	 * @param {number} numPlaceholder - number of placeholders already assigned
@@ -475,7 +495,7 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t R = this->push(*pData & 0xffff); // unpack and push operands
 				if (R) {
 					if (endpointsLeft == 3 && stack == 0)
-						this->foundTree(R); // All placeholders used and stack unwound
+						this->callFoundTree(); // All placeholders used and stack unwound
 					else
 						this->generateTrees(endpointsLeft - 3, (*pData >> 16), stack << PACKED_WIDTH | R);
 					this->pop();
@@ -518,7 +538,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -550,7 +570,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge T, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -582,7 +602,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -616,7 +636,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0) {
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						} else {
 							this->generateTrees(endpointsLeft - 2, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						}
@@ -668,7 +688,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+T, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 1, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -707,7 +727,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 1, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -737,7 +757,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 1, (*pData >> 16), (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -763,7 +783,7 @@ struct generatorTree_t : tinyTree_t {
 					uint32_t R = this->push(qtf); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
-							this->foundTree(R); // All placeholders used and stack unwound
+							this->callFoundTree(); // All placeholders used and stack unwound
 						else
 							this->generateTrees(endpointsLeft - 1, numPlaceholder, (stack << PACKED_WIDTH) | R);
 						this->pop();
@@ -791,7 +811,7 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t R = this->push(PUSH_TIBIT | qtf); // push with inverted T
 				if (R) {
 					if (endpointsLeft == 0 && stack == 0)
-						this->foundTree(R); // All placeholders used and stack unwound
+						this->callFoundTree(); // All placeholders used and stack unwound
 					else
 						this->generateTrees(endpointsLeft, numPlaceholder, (stack << PACKED_WIDTH) | R);
 					this->pop();
@@ -803,7 +823,7 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t R = this->push(qtf); // push without inverted T
 				if (R) {
 					if (endpointsLeft == 0 && stack == 0)
-						this->foundTree(R);
+						this->callFoundTree();
 					else
 						this->generateTrees(endpointsLeft, numPlaceholder, (stack << PACKED_WIDTH) | R);
 					this->pop();

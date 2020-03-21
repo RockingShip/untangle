@@ -1,7 +1,15 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-18 18:04:50
+ *
+ * `genprogress` fires up the generator and extracts some metrics.
+ * It generates fully normalised and naturally ordered trees for further processing.
+ * With this version, all calls to `foundTree()` are notation unique.
+ *
+ * Selfcheck consists of checking runtime metrics with previous heuristics.
+ * An ancient implementation of the generator is included for regression testing.
+ * It now seems that the current implementation has out-performed and over achieved the ancient version.
  */
 
 /*
@@ -29,6 +37,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include "generator.h"
 #include "metrics.h"
@@ -42,6 +51,8 @@
  * For version 1.48, it has been recorded that `foundTree()` was called these many times:
  *
  * `1n9`=6, `2n9`=484, `3n9`=111392, `4n9`=48295088, `5n9`=33212086528
+ *
+ * @typedef {object}
  */
 struct ancientTree_t : tinyTree_t {
 
@@ -65,12 +76,16 @@ struct ancientTree_t : tinyTree_t {
 			ctx.tick = 0;
 		}
 
-		if (opt_text) {
+		if (ctx.opt_text) {
+			printf("%s\n", this->encode(this->root));
+
+#if 0
 			// simply dump tree
 			for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
 				printf("%d%x%x%x ", N[i].T & IBIT ? 1 : 0, N[i].Q, N[i].T & ~IBIT, N[i].F);
 			}
 			printf("\n");
+#endif
 		}
 	}
 
@@ -81,13 +96,7 @@ struct ancientTree_t : tinyTree_t {
 	 */
 	inline void pop(void) {
 		// pop node
-		tinyNode_t *pNode = this->N + --this->count;
-
-		// construct packed notation
-		uint32_t qtf = ((pNode->T & IBIT) ? PUSH_TIBIT : 0) | pNode->Q << PUSH_POS_Q | (pNode->T & ~IBIT) << PUSH_POS_T | pNode->F << PUSH_POS_F;
-
-		// erase index
-		pCacheQTF[qtf] = 0;
+		--this->count;
 	}
 
 	/**
@@ -768,7 +777,239 @@ struct ancientTree_t : tinyTree_t {
  *
  * @typedef {object}
  */
-context_t app;
+struct genprogressContext_t : context_t {
+
+	/*
+	 * User specified program arguments and options
+	 */
+
+	/// @var {number} size of structures used in this invocation
+	unsigned arg_numNodes;
+	/// @var {number} --ancient, use the ancient implementation
+	unsigned opt_ancient;
+	/// @var {number} --selftest, perform a selftest
+	unsigned opt_selftest;
+
+	/**
+	 * Constructor
+	 */
+	genprogressContext_t() {
+		// arguments and options
+		arg_numNodes = 0;
+		opt_ancient = 0;
+		opt_selftest = 0;
+	}
+
+	/**
+	 * @date 2020-03-18 22:17:26
+	 *
+	 * found candidate.
+	 *
+	 * @param {number} r - Root of tree
+	 */
+	void foundTree(generatorTree_t &tree) {
+		this->progress++;
+
+		if (opt_verbose >= VERBOSE_TICK && tick) {
+			fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), progress * 100.0 / progressHi);
+			tick = 0;
+		}
+
+		/*
+		 * Debug mode used to create progress metrics and dump generated trees
+		 */
+		if (opt_text) {
+
+			// display candidate
+			printf("%s\n", tree.encode(tree.root));
+
+#if 0
+			// simple tree dump for the very paranoia
+			for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
+				uint32_t qtf = packedN[i];
+				printf("%d%x%x%x ", (qtf & PACKED_TIBIT) ? 1 : 0, (qtf >> PACKED_QPOS) & PACKED_MASK, (qtf >> PACKED_TPOS) & PACKED_MASK, (qtf >> PACKED_FPOS) & PACKED_MASK);
+			}
+			printf("\n");
+#endif
+		}
+
+	}
+
+	/**
+	 * @date 2020-03-19 20:58:57
+	 *
+	 * Main entrypoint
+	 *
+	 * @param {database_t} pStore - data store
+	 */
+	void main(generatorTree_t &generator) {
+		// set generator into debug mode to disable default handling of `foundTree()`
+
+		if (this->opt_ancient) {
+			/*
+			 * Ancient code
+			 */
+
+			// create generator
+			ancientTree_t ancient(*this);
+
+			// number of expected calls to `foundTree()`
+			static uint64_t numProgress[] = {1, 6, 484, 111392, 45434680, 33212086528LL};
+			// number of unique notations passed to `foundTree()`
+			static uint64_t numUnique[] = {0, 6, 484, 97696, 35780488, 0};
+
+			(void) numUnique; // suppress unused warning
+
+			// clear tree
+			ancient.clearTree();
+
+			// reset progress
+			this->progressHi = (this->arg_numNodes < 6) ? numProgress[this->arg_numNodes] : 1;
+			this->progress = 0;
+			this->tick = 0;
+
+			unsigned endpointsLeft = this->arg_numNodes * 2 + 1;
+			ancient.generateTrees(endpointsLeft, 0, 0);
+
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
+
+			if (this->progress != this->progressHi) {
+				printf("{\"error\":\"ancientTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, this->arg_numNodes);
+				exit(1);
+			}
+		} else {
+			/*
+			 * Current code
+			 */
+
+			// clear tree
+			generator.clearGenerator();
+
+			// find metrics for setting
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, this->arg_numNodes);
+
+			// reset progress
+			this->progressHi = pMetrics ? pMetrics->numProgress : 1;
+			this->progress = 0;
+			this->tick = 0;
+
+			unsigned endpointsLeft = this->arg_numNodes * 2 + 1;
+
+			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genprogressContext_t::foundTree);
+			generator.generateTrees(endpointsLeft, 0, 0);
+
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
+
+			if (this->progress != this->progressHi) {
+				printf("{\"error\":\"generatorTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, this->arg_numNodes);
+
+				fprintf(stderr, "[%s] metricsGenerator_t { /*numSlots=*/%d, /*qntf=*/%d, /*numNodes=*/%d, /*numProgress=*/%ldLL}\n",
+				        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, this->arg_numNodes, this->progress);
+
+				exit(1);
+			}
+		}
+
+		fprintf(stderr, "[%s] generatorTree_t::foundTree() for numNode=%d called %ld times\n", this->timeAsString(), this->arg_numNodes, this->progress);
+	}
+
+};
+
+/**
+ * @date 2020-03-19 20:06:36
+ *
+ * Perform a selftest.
+ *
+ * @param {gentransformContext_t} app - I/O context
+ */
+void performSelfTest(genprogressContext_t &app) {
+
+	generatorTree_t generator(app);
+
+	{
+		// quickly test that `tinyTree_t` does level-2 normalisation
+		generator.decodeSafe("ab>ba+&");
+		const char *pName = generator.encode(generator.root);
+		assert(strcmp(pName, "ab+ab>&") == 0);
+	}
+
+	for (unsigned numNodes = 1; numNodes <= 5; numNodes++) {
+		// clear tree
+		generator.clearGenerator();
+
+		// find metrics for setting
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, 0, numNodes);
+
+		// reset progress
+		app.progressHi = pMetrics ? pMetrics->numProgress : 1;
+		app.progress = 0;
+		app.tick = 0;
+
+		unsigned endpointsLeft = numNodes * 2 + 1;
+
+		generator.addCallback(&app, (void (context_t::*)(generatorTree_t &)) &genprogressContext_t::foundTree);
+		generator.generateTrees(endpointsLeft, 0, 0);
+
+		if (app.opt_verbose >= app.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (app.progress != app.progressHi) {
+			printf("{\"error\":\"ancientTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+			       __FUNCTION__, app.progress, app.progressHi, numNodes);
+			exit(1);
+		}
+
+		fprintf(stderr, "[%s] generatorTree_t::foundTree() for numNode=%d called %ld times\n", app.timeAsString(), numNodes, app.progress);
+	}
+
+	/*
+	 * Invoke ancient code
+	 */
+	ancientTree_t ancient(app);
+
+	for (unsigned numNodes = 1; numNodes <= 5; numNodes++) {
+		// number of expected calls to `foundTree()`
+		static uint64_t numProgress[] = {0, 6, 484, 111392, 48295088, 33212086528LL};
+		// number of unique notations passed to `foundTree()`
+		static uint64_t numUnique[] = {0, 6, 484, 97696, 37144912, 0};
+
+		(void) numUnique; // suppress unused warning
+
+		// clear tree
+		ancient.clearTree();
+
+		// reset progress
+		app.progressHi = numProgress[numNodes];
+		app.progress = 0;
+		app.tick = 0;
+
+		unsigned endpointsLeft = numNodes * 2 + 1;
+		ancient.generateTrees(endpointsLeft, 0, 0);
+
+		if (app.opt_verbose >= app.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (app.progress != app.progressHi) {
+			printf("{\"error\":\"ancientTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+			       __FUNCTION__, app.progress, app.progressHi, numNodes);
+			exit(1);
+		}
+
+		fprintf(stderr, "[%s] ancientTree_t::foundTree() for numNode=%d called %ld times\n", app.timeAsString(), numNodes, app.progress);
+	}
+}
+
+/*
+ * I/O and Application context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {genprogressContext_t} Application
+ */
+genprogressContext_t app;
 
 /**
  * Construct a time themed prefix string for console logging
@@ -803,6 +1044,30 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * Program usage. Keep this directly above `main()`
+ *
+ * @param {string[]} argv - program arguments
+ * @param {boolean} verbose - set to true for option descriptions
+ * @param {userArguments_t} args - argument context
+ * @date  2020-03-19 20:02:40
+ */
+void usage(char *const *argv, bool verbose, const genprogressContext_t *args) {
+	fprintf(stderr, "usage:\t%s <numnode>\n\t%s --selftest\n", argv[0], argv[0]);
+	if (verbose) {
+		fprintf(stderr, "\n");
+		fprintf(stderr, "\t   --ancient               Use ancient implementation for regression testing\n");
+		fprintf(stderr, "\t-h --help                  This list\n");
+		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
+		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t-v --verbose               Say less\n");
+	}
+}
+
+/**
  * Program main entry point
  *
  * @param  {number} argc - number of arguments
@@ -814,13 +1079,142 @@ int main(int argc, char *const *argv) {
 	setlinebuf(stdout);
 
 	/*
-	 * Test if output is redirected
+	 *  Process program options
 	 */
-	if (0)
-		if (isatty(1)) {
-			fprintf(stderr, "stdout not redirected\n");
+	for (;;) {
+		// Long option shortcuts
+		enum {
+			// long-only opts
+			LO_ANCIENT = 1,
+			LO_DEBUG,
+			LO_NOPARANOID,
+			LO_NOQNTF,
+			LO_PARANOID,
+			LO_QNTF,
+			LO_SELFTEST,
+			LO_TEXT,
+			LO_TIMER,
+			// short opts
+			LO_HELP = 'h',
+			LO_QUIET = 'q',
+			LO_VERBOSE = 'v',
+		};
+
+		// long option descriptions
+		static struct option long_options[] = {
+			/* name, has_arg, flag, val */
+			{"ancient",     0, 0, LO_ANCIENT},
+			{"debug",       1, 0, LO_DEBUG},
+			{"help",        0, 0, LO_HELP},
+			{"no-paranoid", 0, 0, LO_NOPARANOID},
+			{"no-qntf",     0, 0, LO_NOQNTF},
+			{"paranoid",    0, 0, LO_PARANOID},
+			{"qntf",        0, 0, LO_QNTF},
+			{"quiet",       2, 0, LO_QUIET},
+			{"selftest",    0, 0, LO_SELFTEST},
+			{"text",        0, 0, LO_TEXT},
+			{"timer",       1, 0, LO_TIMER},
+			{"verbose",     2, 0, LO_VERBOSE},
+			//
+			{NULL,          0, 0, 0}
+		};
+
+		char optstring[128], *cp;
+		cp = optstring;
+
+		/* construct optarg */
+		for (int i = 0; long_options[i].name; i++) {
+			if (isalpha(long_options[i].val)) {
+				*cp++ = (char) long_options[i].val;
+
+				if (long_options[i].has_arg != 0)
+					*cp++ = ':';
+				if (long_options[i].has_arg == 2)
+					*cp++ = ':';
+			}
+		}
+		*cp = '\0';
+
+		// parse long options
+		int option_index = 0;
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		if (c == -1)
+			break;
+
+		switch (c) {
+			case LO_ANCIENT:
+				app.opt_ancient++;
+				break;
+			case LO_DEBUG:
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				break;
+			case LO_HELP:
+				usage(argv, true, &app);
+				exit(0);
+			case LO_NOPARANOID:
+				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				break;
+			case LO_NOQNTF:
+				app.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				break;
+			case LO_PARANOID:
+				app.opt_flags |= context_t::MAGICMASK_PARANOID;
+				break;
+			case LO_QNTF:
+				app.opt_flags |= context_t::MAGICMASK_QNTF;
+				break;
+			case LO_QUIET:
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
+				break;
+			case LO_SELFTEST:
+				app.opt_selftest++;
+				break;
+			case LO_TEXT:
+				app.opt_text++;
+				break;
+			case LO_TIMER:
+				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+				break;
+			case LO_VERBOSE:
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
+				break;
+
+			case '?':
+				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+				exit(1);
+			default:
+				fprintf(stderr, "getopt returned character code %d\n", c);
+				exit(1);
+		}
+	}
+
+	/*
+	 * Program arguments
+	 */
+	if (app.opt_selftest) {
+		// selftest mode
+		if (argc - optind >= 0) {
+		} else {
+			usage(argv, false, &app);
 			exit(1);
 		}
+	} else {
+		// regular mode
+		if (argc - optind >= 1) {
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+		} else {
+			usage(argv, false, &app);
+			exit(1);
+		}
+	}
+
+	/*
+	 * Expecting a lot of output, redirect to a file or kill the screen
+	 */
+	if (app.opt_text && isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
 
 	/*
 	 * register timer handler
@@ -831,81 +1225,23 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
-	 * Invoke current code
+	 * Test
 	 */
+	if (app.opt_selftest) {
+		performSelfTest(app);
 
-	generatorTree_t generator(app, 0);
-
-	generator.opt_text = 0; // for debugging
-
-	for (unsigned numNodes = 1; numNodes <= 5; numNodes++) {
-		// number of expected calls to `foundTree()`
-		static uint64_t numProgress[] = {0, 6, 484, 111392, 45434680, 33212086528LL};
-		// number of unique notations passed to `foundTree()`
-		static uint64_t numUnique[] = {0, 6, 484, 97696, 35780488, 0};
-
-		(void) numUnique; // suppress unused warning
-		// clear tree
-		generator.clear();
-
-		// reset progress
-		app.progressHi = numProgress[numNodes];
-		app.progress = 0;
-		app.tick = 0;
-
-		unsigned endpointsLeft = numNodes * 2 + 1;
-		generator.generateTrees(endpointsLeft, 0, generatorTree_t::STACKGUARD);
-
-		if (app.opt_verbose >= app.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		if (app.progress != app.progressHi) {
-			printf("{\"error\":\"ancientTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-			       __FUNCTION__, app.progress, app.progressHi, numNodes);
-			exit(1);
-		}
-
-		fprintf(stderr, "[%s] generatorTree_t::foundTree() for numNode=%d called %ld times\n", app.timeAsString(), numNodes, app.progress);
+		exit(0);
 	}
 
 	/*
-	 * Invoke ancient code
+	 * Invoke current code
 	 */
-	ancientTree_t ancient(app, 0);
 
-	ancient.opt_text = 0; // for debugging
-
-	if (0)
-		for (unsigned numNodes = 1; numNodes <= 5; numNodes++) {
-			// number of expected calls to `foundTree()`
-			static uint64_t numProgress[] = {0, 6, 484, 111392, 48295088, 33212086528LL};
-			// number of unique notations passed to `foundTree()`
-			static uint64_t numUnique[] = {0, 6, 484, 97696, 37144912, 0};
-
-			(void) numUnique; // suppress unused warning
-
-			// clear tree
-			ancient.clear();
-
-			// reset progress
-			app.progressHi = numProgress[numNodes];
-			app.progress = 0;
-			app.tick = 0;
-
-			unsigned endpointsLeft = numNodes * 2 + 1;
-			ancient.generateTrees(endpointsLeft, 0, 0);
-
-			if (app.opt_verbose >= app.VERBOSE_TICK)
-				fprintf(stderr, "\r\e[K");
-
-			if (app.progress != app.progressHi) {
-				printf("{\"error\":\"ancientTree_t::progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-				       __FUNCTION__, app.progress, app.progressHi, numNodes);
-				exit(1);
-			}
-
-			fprintf(stderr, "[%s] ancientTree_t::foundTree() for numNode=%d called %ld times\n", app.timeAsString(), numNodes, app.progress);
-		}
+	/*
+	 * Invoke main entrypoint of application context
+	 */
+	generatorTree_t generator(app);
+	app.main(generator);
 
 	return 0;
 }

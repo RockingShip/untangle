@@ -60,10 +60,12 @@ struct context_t {
 	uint32_t opt_debug;
 	/// @var {number} program flags
 	uint32_t opt_flags;
-	/// @var {number} --verbose, What do you want to know
-	unsigned opt_verbose;
+	/// @var {number} --text, often used switch
+	unsigned opt_text;
 	/// @var {number} --timer, interval timer for verbose updates
 	unsigned opt_timer;
+	/// @var {number} --verbose, What do you want to know
+	unsigned opt_verbose;
 
 	/// @var {number} - async indication that a timer interrupt occurred
 	uint32_t tick;
@@ -117,8 +119,6 @@ struct context_t {
 	 * Debug settings
 	 */
 	enum {
-		DEBUG_FOUNDTREE           = (1 << 0),        // `generator_t::foundTree()` only counts number of calls (used by `genprogress`)
-		DEBUG_FOUNDTREE_TEXT      = (1 << 1),        // `generator_t::foundTree()` outputs text notation of found trees
 	};
 	// @formatter:on
 
@@ -129,8 +129,9 @@ struct context_t {
 		// arguments and options
 		opt_debug = 0;
 		opt_flags = 0;
-		opt_verbose = VERBOSE_TICK;
+		opt_text = 0;
 		opt_timer = 1; // default is 1-second intervals
+		opt_verbose = VERBOSE_TICK;
 
 		// other values
 		tick = 0;

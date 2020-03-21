@@ -156,7 +156,9 @@ void usage(char *const *argv, bool verbose) {
  */
 struct footprint_t {
 	/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
-	enum { QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64) };
+	enum {
+		QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64)
+	};
 
 	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
 };
@@ -276,12 +278,12 @@ struct tree_t {
 
 		static uint8_t beenThere[MAXNODES];
 
-		static uint32_t stackL[MAXNODES*3]; // there are 3 operands per per opcode
-		static uint32_t stackR[MAXNODES*3]; // there are 3 operands per per opcode
+		static uint32_t stackL[MAXNODES * 3]; // there are 3 operands per per opcode
+		static uint32_t stackR[MAXNODES * 3]; // there are 3 operands per per opcode
 		int stackPos = 0;
 
-		assert(~lhs&IBIT);
-		assert(~rhs&IBIT);
+		assert(~lhs & IBIT);
+		assert(~rhs & IBIT);
 
 		stackL[stackPos] = lhs;
 		stackR[stackPos] = rhs;
@@ -2354,7 +2356,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		}
 	}
 
-	fprintf(stderr,"%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr, "%s() passed %d tests\n", __FUNCTION__, numPassed);
 }
 
 /**

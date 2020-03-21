@@ -191,7 +191,7 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 			 */
 
 			pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
-			pTree->clear();
+			pTree->clearTree();
 			pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 			/*
@@ -305,7 +305,7 @@ void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
 		}
 	}
 
-	fprintf(stderr,"[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+	fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /**
@@ -475,9 +475,9 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 			seconds = 1;
 
 		// base estimated size on 791647 signatures
-		fprintf(stderr, "[%s] metricsInterleave_t { /*maxSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
+		fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
 		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
-		        (int)(MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
+		        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 		// test that number of imprints match
 		if (pInterleave->numStored != pStore->numImprint - 1) {
@@ -487,7 +487,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
 		}
 	}
 
-	fprintf(stderr,"[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+	fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /*
@@ -540,7 +540,7 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
-	fprintf(stderr, "usage: %s <input.db> <output.db> <numnode>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.db> <input.db> <numnode>\n\t%s --selftest <input.db>\n", argv[0], argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force                 Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
@@ -720,13 +720,25 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Program arguments
 	 */
-	if (argc - optind >= 3) {
-		app.arg_outputDatabase = argv[optind++];
-		app.arg_inputDatabase = argv[optind++];
-		app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+	if (app.opt_selftest) {
+		// selftest mode
+		// regular mode
+		if (argc - optind >= 1) {
+			app.arg_inputDatabase = argv[optind++];
+		} else {
+			usage(argv, false, &app);
+			exit(1);
+		}
 	} else {
-		usage(argv, false, &app);
-		exit(1);
+		// regular mode
+		if (argc - optind >= 3) {
+			app.arg_outputDatabase = argv[optind++];
+			app.arg_inputDatabase = argv[optind++];
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+		} else {
+			usage(argv, false, &app);
+			exit(1);
+		}
 	}
 
 	/*
