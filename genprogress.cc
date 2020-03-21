@@ -31,6 +31,7 @@
 #include <signal.h>
 
 #include "generator.h"
+#include "metrics.h"
 
 /**
  * @date 2020-03-19 00:15:03
@@ -122,6 +123,8 @@ struct ancientTree_t : tinyTree_t {
 		enum {
 			KSTART = TINYTREE_KSTART,
 			NSTART = TINYTREE_NSTART,
+			WIDTH = generatorTree_t::PACKED_WIDTH,
+			MASK = generatorTree_t::PACKED_MASK,
 		};
 
 		static const uint32_t slotValues[1 + MAXSLOTS + 3][MAXSLOTS + /*MAXNODEPATTERN*/6 + 1] = {
@@ -173,7 +176,7 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 
@@ -182,7 +185,7 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 
@@ -191,7 +194,7 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 
@@ -200,15 +203,15 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 3 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 				}
 			}
 		}
 
-		uint32_t pop0 = stack & PACKED_MASK;
-		stack >>= PACKED_WIDTH;
+		uint32_t pop0 = stack & MASK;
+		stack >>= WIDTH;
 
 		if (endpointsLeft >= 2 && pop0 != 0) {
 			/*
@@ -233,7 +236,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 
 						}
@@ -243,7 +246,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -252,7 +255,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -261,7 +264,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 					}
@@ -290,7 +293,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -299,7 +302,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -308,7 +311,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -317,7 +320,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 					}
@@ -325,8 +328,8 @@ struct ancientTree_t : tinyTree_t {
 			}
 		}
 
-		uint32_t pop1 = stack & PACKED_MASK;
-		stack >>= PACKED_WIDTH;
+		uint32_t pop1 = stack & MASK;
+		stack >>= WIDTH;
 
 		if (endpointsLeft >= 1 && pop1 != 0) {
 			/*
@@ -352,7 +355,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -361,7 +364,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -370,7 +373,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -379,7 +382,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 1 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 					}
@@ -419,7 +422,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 3 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -428,7 +431,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 3 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 3, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 3, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 					}
@@ -436,8 +439,8 @@ struct ancientTree_t : tinyTree_t {
 			}
 		}
 
-		pop0 = stack & PACKED_MASK;
-		stack >>= PACKED_WIDTH;
+		pop0 = stack & MASK;
+		stack >>= WIDTH;
 
 		if (endpointsLeft >= 2 && pop0 != 0) {
 			/*
@@ -469,7 +472,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 
@@ -478,7 +481,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 						}
@@ -515,7 +518,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 
@@ -524,7 +527,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 2 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 						}
@@ -560,7 +563,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 
@@ -569,7 +572,7 @@ struct ancientTree_t : tinyTree_t {
 							if (endpointsLeft == 2 && stack == 0)
 								foundTree();
 							else
-								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << PACKED_WIDTH | R);
+								this->generateTrees(endpointsLeft - 2, newNumSlot, stack << WIDTH | R);
 							pop();
 						}
 					}
@@ -577,8 +580,8 @@ struct ancientTree_t : tinyTree_t {
 			}
 		}
 
-		pop1 = stack & PACKED_MASK;
-		stack >>= PACKED_WIDTH;
+		pop1 = stack & MASK;
+		stack >>= WIDTH;
 
 		if (endpointsLeft >= 1 && pop1 != 0) {
 			/*
@@ -612,7 +615,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 
@@ -621,7 +624,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 						}
@@ -669,7 +672,7 @@ struct ancientTree_t : tinyTree_t {
 								if (endpointsLeft == 1 && stack == 0)
 									foundTree();
 								else
-									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+									this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 								pop();
 							}
 						}
@@ -703,7 +706,7 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 1 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 
@@ -712,15 +715,15 @@ struct ancientTree_t : tinyTree_t {
 						if (endpointsLeft == 1 && stack == 0)
 							foundTree();
 						else
-							this->generateTrees(endpointsLeft - 1, newNumSlot, stack << PACKED_WIDTH | R);
+							this->generateTrees(endpointsLeft - 1, newNumSlot, stack << WIDTH | R);
 						pop();
 					}
 				}
 			}
 		}
 
-		uint32_t pop2 = stack & PACKED_MASK;
-		stack >>= PACKED_WIDTH;
+		uint32_t pop2 = stack & MASK;
+		stack >>= WIDTH;
 
 		if (pop2 != 0) {
 			/*
@@ -740,7 +743,7 @@ struct ancientTree_t : tinyTree_t {
 				if (endpointsLeft == 0 && stack == 0)
 					foundTree();
 				else
-					this->generateTrees(endpointsLeft, numPlaceholder, stack << PACKED_WIDTH | R);
+					this->generateTrees(endpointsLeft, numPlaceholder, stack << WIDTH | R);
 				pop();
 			}
 
@@ -749,7 +752,7 @@ struct ancientTree_t : tinyTree_t {
 				if (endpointsLeft == 0 && stack == 0)
 					foundTree();
 				else
-					this->generateTrees(endpointsLeft, numPlaceholder, stack << PACKED_WIDTH | R);
+					this->generateTrees(endpointsLeft, numPlaceholder, stack << WIDTH | R);
 				pop();
 			}
 		}

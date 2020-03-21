@@ -546,27 +546,15 @@ struct tinyTree_t {
 			assert(T != IBIT || Q < F);            // OR ordering
 		}
 
-#if 0
-		// SLOW and reference implementation
+		/*
+		 * Perform a lookup to determine if node was already created
+		 */
 		// test if component already exists
 		for (uint32_t nid = TINYTREE_NSTART; nid < this->count; nid++) {
 			const tinyNode_t *pNode = this->N + nid;
 			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
 				return nid;
 		}
-#else
-		// construct packed notation
-		uint32_t qtf = ((T & IBIT) ? PACKED_TIBIT : 0) | Q << PACKED_QPOS | (T & ~IBIT) << PACKED_TPOS | F << PACKED_FPOS;
-
-		// does entry exist
-		if (pCacheVersion[qtf] == iVersion && pCacheQTF[qtf] != 0)
-			return pCacheQTF[qtf];
-
-		// add to cache
-		pCacheQTF[qtf] = this->count;
-		pCacheVersion[qtf] = iVersion;
-#endif
-
 
 		uint32_t nid = this->count++;
 		assert(nid < TINYTREE_NEND);

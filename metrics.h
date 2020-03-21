@@ -30,8 +30,7 @@
  */
 struct metricsInterleave_t {
 	/// @var {number} - Valid when match MAXSLOTS
-	unsigned maxSlots;
-
+	unsigned numSlots;
 	/// @var {number} - Row interleave (distance between two adjacent row keys)
 	unsigned interleaveFactor;
 	/// @var {number} - How many row/columns need to be stored in database. This value is communicated with user.
@@ -45,13 +44,15 @@ struct metricsInterleave_t {
 	unsigned speed;
 	/// @var {number} - Some indication of runtime index storage in G bytes. (worse case)
 	float storage;
+
+	int zero; // to screen align data
 } ;
 
 static const metricsInterleave_t metricsInterleave[] = {
-	{9, 120, 120,  3024, 8850,   6.896},
-	{9, 720, 504,  720,  51840,  28.78},
-	{9, 720, 720,  504,  90720,  41.095},
-	{9, 120, 3024, 120,  362880, 172.420},
+	{9, 120, 120,  3024, 8850,   6.896,   0},
+	{9, 720, 504,  720,  51840,  28.78,   0},
+	{9, 720, 720,  504,  90720,  41.095,  0},
+	{9, 120, 3024, 120,  362880, 172.420, 0},
 	//
 	{0}
 };
@@ -66,11 +67,11 @@ static const metricsInterleave_t metricsInterleave[] = {
  * @param {number} interleave - The interleave value communicated with user
  * @return {metricsInterleave_t} Reference to match or NULL if not found
  */
-const metricsInterleave_t * getMetricsInterleave(unsigned maxSlots, unsigned interleave) {
+const metricsInterleave_t * getMetricsInterleave(unsigned numSlots, unsigned interleave) {
 
 	// walk through list
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->maxSlots; pInterleave++) {
-		if (pInterleave->maxSlots == maxSlots && pInterleave->numStored == interleave)
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
+		if (pInterleave->numSlots == numSlots && pInterleave->numStored == interleave)
 			return pInterleave;
 	}
 
@@ -86,13 +87,13 @@ const metricsInterleave_t * getMetricsInterleave(unsigned maxSlots, unsigned int
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @return {string} Comma separated list of allowed interleaves
  */
-const char * getAllowedInterleaves(unsigned maxSlots) {
+const char * getAllowedInterleaves(unsigned numSlots) {
 	static char sbuf[256];
 	unsigned spos = 0;
 
 	// walk through list
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->maxSlots; pInterleave++) {
-		if (pInterleave->maxSlots == maxSlots) {
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
+		if (pInterleave->numSlots == numSlots) {
 			// delimiter
 			if (spos) {
 				sbuf[spos++] = ',';
@@ -123,15 +124,17 @@ struct metricsImprint_t {
 
 	/// @var {number} - Total number of imprints for settings
 	uint32_t numImprints;
+
+	int zero; // to screen align data
 } ;
 
 static const metricsImprint_t metricsImprint[] = {
 	// placeholder values
-	{9, 720,  1, 60},
-	{9, 720,  2, 1859},
-	{9, 720,  3, 114626},
-	{9, 720,  4, 11167160},
-	{9, 720,  5, 1035381442},
+	{9, 720, 1, 60,         0},
+	{9, 720, 2, 1859,       0},
+	{9, 720, 3, 114626,     0},
+	{9, 720, 4, 11167160,   0},
+	{9, 720, 5, 1035381442, 0},
 	//
 	{0}
 };
@@ -155,4 +158,67 @@ unsigned getMaxImprints(unsigned maxSlots, unsigned interleave, unsigned numNode
 	}
 	// not found
 	return 0;
+}
+
+/**
+ * @date 2020-03-20 00:42:42
+ *
+ * Metrics describing generator
+ */
+struct metricsGenerator_t {
+	/// @var {number} - Valid when match MAXSLOTS
+	unsigned numSlots;
+	/// @var {number} - `QnTF` mode
+	unsigned qntf;
+	/// @var {number} - Valid when match `numNodes` (higher values implies more signatures)
+	unsigned numNodes;
+
+	/// @var {number} - Total number of `foundTrees()` called
+	uint64_t numProgress;
+
+	int zero; // to screen align data
+};
+
+static const metricsGenerator_t metricsGenerator[] = {
+	{9, 0, 1, 6,               0},
+	{9, 0, 2, 424,             0},
+	{9, 0, 3, 56744,           0}, // 2020-03-20 21:00:56
+	{9, 0, 4, 12273554,        0}, // 2020-03-20 21:01:22
+	{9, 0, 5, 3822190098LL,    0}, // 2020-03-20 21:02:54
+	{9, 0, 6, 1556055783374LL, 0}, // 2020-03-20 18:45:50
+	//
+	{9, 1, 1, 4,               0},
+	{9, 1, 2, 154,             0},
+	{9, 1, 3, 10874,           0}, // 2020-03-20 21:04:38
+	{9, 1, 4, 1222578,         0}, // 2020-03-20 21:05:06
+	{9, 1, 5, 196525924,       0}, // 2020-03-20 21:07:59
+	{9, 1, 6, 41814086105LL,   0}, // 2020-03-20 21:28:31
+	{9, 1, 7, 8144956381400LL, 0}, // ??
+	//
+	{0}
+};
+
+/**
+ * @date 2020-03-20 00:52:57
+ *
+ * Get metrics for invocation
+ *
+ * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
+ * @param {number} interleave - The interleave value communicated with user
+ * @param {number} numNodes - signature size in number of nodes
+ * @return {metricsImprint_t} Reference to match or NULL if not found
+ */
+const metricsGenerator_t * getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNodes) {
+	// qntf should be boolean
+	if (qntf)
+		qntf = 1;
+
+	// walk through list
+	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
+		// test if found
+		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->numNodes == numNodes)
+			return pMetrics; // found
+	}
+	// not found
+	return NULL;
 }
