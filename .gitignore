@@ -39,7 +39,7 @@ jansson-*
 # generated files
 eval
 genprimedata
-genprogress
+genrestartdata
 genpushdata
 gensignature
 gentransform

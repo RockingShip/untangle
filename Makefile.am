@@ -6,19 +6,19 @@ EXTRA_DIST = \
 MAINTAINERCLEANFILES = 
 DISTCLEANFILES =
 CLEANFILES = pushdata.h
-BUILT_SOURCES = genprimedata genpushdata pushdata.h genprogressdata
+BUILT_SOURCES = genprimedata genpushdata pushdata.h genrestartdata
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genprimedata genpushdata genprogressdata
+	eval gentransform tlookup gensignature genprimedata genpushdata genrestartdata
 
 # genprimedata is fast and output is small, include in distribution
 primedata.h : genprimedata.cc
 	./genprimedata > primedata.h
 
-# genprogressdata is slow and output is small, include in distribution
-progressdata.h : genprogressdata.cc
-	./genprogressdata > progressdata.h
+# genrestartdata is slow and output is small, include in distribution
+restartdata.h : genrestartdata.cc
+	./genrestartdata > restartdata.h
 
 # pushdata is fast and output is big, exclude from distribution
 pushdata.h : genpushdata.cc
@@ -50,6 +50,6 @@ genprimedata_SOURCES = genprimedata.cc
 genpushdata_SOURCES = genpushdata.cc
 
 # @date 2020-03-18 18:04:50
-# NOTE: do not include progressdata.h with dependencies
-genprogressdata_SOURCES = genprogressdata.cc generator.h tinytree.h context.h primedata.h datadef.h progressdata.h metrics.h
-nodist_genprogressdata_SOURCES = pushdata.h
+# NOTE: do not include restartdata.h with dependencies
+genrestartdata_SOURCES = genrestartdata.cc generator.h tinytree.h context.h primedata.h datadef.h restartdata.h metrics.h
+nodist_genrestartdata_SOURCES = pushdata.h

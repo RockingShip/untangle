@@ -53,7 +53,7 @@
 #include <string.h>
 #include "tinytree.h"
 #include "pushdata.h"
-#include "progressdata.h"
+#include "restartdata.h"
 
 /**
  * @date 2020-03-17 20:22:08
@@ -131,6 +131,9 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {number} Indication that a restart point has passed
 	uint64_t *restartTick;
 
+	/// @var {number} Number of restart entries found
+	uint64_t numFoundRestart;
+
 	/**
 	 * @date 2020-03-18 18:45:33
 	 *
@@ -154,6 +157,7 @@ struct generatorTree_t : tinyTree_t {
 		windowHi = 0;
 		pRestartData = NULL;
 		restartTick = 0;
+		numFoundRestart = 0;
 
 		// allocate structures
 		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << 16, sizeof(*this->pIsType));
@@ -598,11 +602,10 @@ struct generatorTree_t : tinyTree_t {
 				}
 				printf("*/,");
 
-				// communicate with `genprogressdataContext_t::main()`
 				// `genprogress` needs to know how many restart points are generated.
-				(*(uint64_t *) ctx.aux)++;
+				numFoundRestart++;
 
-				if ((*(uint64_t *) ctx.aux) % 8 == 1)
+				if (numFoundRestart % 8 == 1)
 					printf("\n");
 
 			}

@@ -82,12 +82,12 @@ int main() {
 #define IBIT 0x80000000
 /// @constant {number} MAXSLOTS - Maximum number of slots/variables for the evaluator
 #define MAXSLOTS 9
-/// @constant {number} MAXNODES - Maximum number of nodes the tree can contain. Keep large for selftest
-#define MAXNODES 20000
 /// @constant {number} KSTART - Starting index in tree where to find the input endpoints.
 #define KSTART 1
+/// @constant {number} NEND - Maximum number of nodes the tree can contain. Keep large for selftest
+#define NEND 20000
 /// @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator
-#define SBUFMAX (10 * MAXNODES)
+#define SBUFMAX (10 * NEND)
 
 /*
  * User specified program options
@@ -196,7 +196,7 @@ struct tree_t {
 	uint32_t count;
 
 	/// @var {node_t[]} array of unified operators
-	node_t N[MAXNODES];
+	node_t N[NEND];
 
 	/// @var {number} single entrypoint/index where the result can be found
 	uint32_t root;
@@ -276,10 +276,10 @@ struct tree_t {
 	 */
 	int compare(uint32_t lhs, uint32_t rhs) {
 
-		static uint8_t beenThere[MAXNODES];
+		static uint8_t beenThere[NEND];
 
-		static uint32_t stackL[MAXNODES * 3]; // there are 3 operands per per opcode
-		static uint32_t stackR[MAXNODES * 3]; // there are 3 operands per per opcode
+		static uint32_t stackL[NEND * 3]; // there are 3 operands per per opcode
+		static uint32_t stackR[NEND * 3]; // there are 3 operands per per opcode
 		int stackPos = 0;
 
 		assert(~lhs & IBIT);
@@ -759,7 +759,7 @@ struct tree_t {
 		nextNode = this->nstart;
 
 		// temporary stack storage for postfix notation
-		static uint32_t stack[MAXNODES];
+		static uint32_t stack[NEND];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 		uint32_t nestStack[16];
@@ -805,7 +805,7 @@ struct tree_t {
 					return 1;
 				}
 
-				if (stackPos >= MAXNODES) {
+				if (stackPos >= NEND) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -830,7 +830,7 @@ struct tree_t {
 				prefix = 0;
 
 				// range check
-				if (stackPos >= MAXNODES) {
+				if (stackPos >= NEND) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -888,7 +888,7 @@ struct tree_t {
 			}
 
 			// test if new operator will fit
-			if (this->count >= MAXNODES) {
+			if (this->count >= NEND) {
 				printf("[tree too large]\n");
 				return 1;
 			}
@@ -1133,7 +1133,7 @@ struct tree_t {
 		this->root = 0;
 
 		// temporary stack storage for postfix notation
-		static uint32_t stack[MAXNODES];
+		static uint32_t stack[NEND];
 		int stackPos = 0;
 		uint32_t prefix = 0;
 
@@ -1176,7 +1176,7 @@ struct tree_t {
 					return 1;
 				}
 
-				if (stackPos >= MAXNODES) {
+				if (stackPos >= NEND) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -1201,7 +1201,7 @@ struct tree_t {
 				prefix = 0;
 
 				// range check
-				if (stackPos >= MAXNODES) {
+				if (stackPos >= NEND) {
 					printf("[stack overflow]\n");
 					return 1;
 				}
@@ -1233,7 +1233,7 @@ struct tree_t {
 			}
 
 			// test if new operator will fit
-			if (this->count >= MAXNODES) {
+			if (this->count >= NEND) {
 				printf("[tree too large]\n");
 				return 1;
 			}
@@ -1529,9 +1529,9 @@ struct tree_t {
 	/// @var {number} length of notation
 	unsigned spos;
 	/// @var {number[]} for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations
-	uint32_t beenThere[MAXNODES];
+	uint32_t beenThere[NEND];
 	/// @var {number[]} the actual nodeId indexed by endpoint placeholder
-	uint32_t skin[MAXNODES];
+	uint32_t skin[NEND];
 	/// @var {boolean} non-zero if placeholders are in sync with skin
 	bool placeholdersInSync;
 
@@ -2211,7 +2211,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Self-test prefix handling
 	 */
-	for (uint32_t r = pTree->kstart; r < MAXNODES; r++) {
+	for (uint32_t r = pTree->kstart; r < NEND; r++) {
 
 		// load tree
 		pTree->nstart = r + 1;
@@ -2373,7 +2373,7 @@ int main(int argc, char *const *argv) {
 	// create an empty tree
 	tree_t *pTree = new tree_t(KSTART, KSTART);
 	// create an evaluation vector
-	footprint_t *pFootprints = new footprint_t[MAXNODES];
+	footprint_t *pFootprints = new footprint_t[NEND];
 
 	/*
 	 *  Process program options

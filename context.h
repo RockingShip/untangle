@@ -119,9 +119,6 @@ struct context_t {
 	/// @var {uint64_t} - Current position of progress tracker
 	uint64_t progress;
 
-	/// @var {uint64_t} - Auxiliary usage that may come in handy
-	void *aux;
-
 	/**
 	 * Constructor
 	 */
@@ -136,7 +133,6 @@ struct context_t {
 		cntCompare = 0;
 		progress = 0;
 		progressHi = 0;
-		aux = NULL;
 	}
 
 	/**

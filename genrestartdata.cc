@@ -3,7 +3,7 @@
 /*
  * @date 2020-03-18 18:04:50
  *
- * `genprogressdata` fires up the generator and extracts some metrics.
+ * `genrestartdata` fires up the generator and extracts some metrics.
  * It generates fully normalised and naturally ordered trees for further processing.
  * With this version, all calls to `foundTree()` are notation unique.
  *
@@ -45,21 +45,21 @@
 /*
  * NOTE: in trying to avoid a separate program to just test windowing...
  *
- *  `"progressdata.h"` is only needed for testing the windowing functionality
+ *  `"restartdata.h"` is only needed for testing the windowing functionality
  *
  * If you are not developing:
- *   File timestamps got messed up, probably after a git clone and make has deleted `"progressdata.h"`
- *   Recover `"progressdata.h"` and do a `"touch progressdata.h"`
+ *   File timestamps got messed up, probably after a git clone and make has deleted `"restartdata.h"`
+ *   Recover `"restartdata.h"` and do a `"touch restartdata.h"`
  *   Continue with building
  *
  * Otherwise:
- *  - Create an empty `"progressdata.h"`
- *  - compile, run and redirect output to `"progressdata.h"`
+ *  - Create an empty `"restartdata.h"`
+ *  - compile, run and redirect output to `"restartdata.h"`
  *  - compile again
  *
  *  OR: Remove the include and compile. This will disable the windowing selftest
  */
-#include "progressdata.h"
+#include "restartdata.h"
 
 /**
  * @date 2020-03-19 20:20:53
@@ -69,7 +69,7 @@
  *
  * @typedef {object}
  */
-struct genprogressdataContext_t : context_t {
+struct genrestartdataContext_t : context_t {
 
 	/*
 	 * User specified program arguments and options
@@ -83,7 +83,7 @@ struct genprogressdataContext_t : context_t {
 	/**
 	 * Constructor
 	 */
-	genprogressdataContext_t() {
+	genrestartdataContext_t() {
 		// arguments and options
 		arg_numNodes = 0;
 		arg_qntf = 0;
@@ -98,19 +98,16 @@ struct genprogressdataContext_t : context_t {
 		// create generator
 		generatorTree_t generator(*this);
 
-		printf("#ifndef _PROGRESSDATA_H\n");
-		printf("#define _PROGRESSDATA_H\n");
+		printf("#ifndef _RESTARTDATA_H\n");
+		printf("#define _RESTARTDATA_H\n");
 		printf("\n");
 		printf("#include <stdint.h>\n");
 		printf("\n");
 
 		uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES][2];
 
-		uint64_t numData = 0;
-
-		// NOTE: use auxiliary field in `context_t` for communicating with `generatorTree_t::foundTree()`
-		printf("const uint64_t progressData[] = { 0,\n\n");
-		this->aux = (void *) &numData;
+		printf("const uint64_t restartData[] = { 0,\n\n");
+		generator.numFoundRestart = 1; // skip first zero
 
 		// @formatter:off
 		for (arg_numNodes = 0; arg_numNodes < tinyTree_t::TINYTREE_MAXNODES; arg_numNodes++)
@@ -124,10 +121,10 @@ struct genprogressdataContext_t : context_t {
 
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
 			if (pMetrics) {
-				buildProgressIndex[arg_numNodes][arg_qntf] = numData;
+				buildProgressIndex[arg_numNodes][arg_qntf] = generator.numFoundRestart;
 
 				// output section header
-				printf("// %ld: numNode=%d qntf=%d \n", numData, arg_numNodes, arg_qntf);
+				printf("// %ld: numNode=%d qntf=%d \n", generator.numFoundRestart, arg_numNodes, arg_qntf);
 
 				// clear tree
 				generator.clearGenerator();
@@ -138,21 +135,21 @@ struct genprogressdataContext_t : context_t {
 				this->progress = 0;
 				this->tick = 0;
 
-				// do not supply a callback so `generateTrees` is aware progress data is being created
-				// NOTE: `foundTree()` is called when `numNode` matches, progress data triggers when trees are exactly 2 nodes in size.
+				// do not supply a callback so `generateTrees` is aware restart data is being created
+				// NOTE: `foundTree()` is called when `numNode` matches, restart data triggers when trees are exactly 2 nodes in size.
 				generator.addCallback(NULL, NULL);
 				generator.generateTrees(endpointsLeft, 0, 0);
 
 				// was there any output
-				if (buildProgressIndex[arg_numNodes][arg_qntf] != numData) {
+				if (buildProgressIndex[arg_numNodes][arg_qntf] != generator.numFoundRestart) {
 					// yes, output section delimiter
 					printf(" 0xffffffffffffffffLL,");
-					numData++;
+					generator.numFoundRestart++;
 
 					// align
-					while (numData % 8 != 1) {
+					while (generator.numFoundRestart % 8 != 1) {
 						printf("0,");
-						numData++;
+						generator.numFoundRestart++;
 					}
 
 					printf("\n");
@@ -177,7 +174,7 @@ struct genprogressdataContext_t : context_t {
 		 * Output index
 		 */
 
-		printf("const uint32_t progressIndex[%d][2] = {\n", tinyTree_t::TINYTREE_MAXNODES);
+		printf("const uint32_t restartIndex[%d][2] = {\n", tinyTree_t::TINYTREE_MAXNODES);
 
 		for (unsigned numNode = 0; numNode < tinyTree_t::TINYTREE_MAXNODES; numNode++) {
 			printf("\t{ %8d, %8d },\n", buildProgressIndex[numNode][0], buildProgressIndex[numNode][1]);
@@ -196,7 +193,7 @@ struct genprogressdataContext_t : context_t {
  *
  * @typedef {object}
  */
-struct genprogressdataSelftest_t : genprogressdataContext_t {
+struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 	/*
 	 * User specified program arguments and options
@@ -212,19 +209,19 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 	/**
 	 * Constructor
 	 */
-	genprogressdataSelftest_t() : genprogressdataContext_t() {
+	genrestartdataSelftest_t() : genrestartdataContext_t() {
 		// arguments and options
 		opt_selftest = 0;
 		opt_text = 0;
 
-		selftestResults = (char **) myAlloc("genprogressdataContext_t::selftestResults", 2000000, sizeof(*selftestResults));
+		selftestResults = (char **) myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestResults));
 	}
 
 	/**
 	 * Destructor
 	 */
-	~genprogressdataSelftest_t() {
-		myFree("genprogressdataContext_t::selftestResults", selftestResults);
+	~genrestartdataSelftest_t() {
+		myFree("genrestartdataContext_t::selftestResults", selftestResults);
 
 	}
 
@@ -312,13 +309,9 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 
 		// find metrics for setting
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
-		assert(pMetrics && pMetrics->numProgress);
+		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNodes * 2 + 1;
-
-#if !defined(_PROGRESSDATA_H)
-		fprintf(stderr, "[%s] WARNING: \"progressdata.h\" not found or empty. Windowing selftest with restart disabled\n", this->timeAsString());
-#endif
 
 		/*
 		 * Pass 1, slice dataset into single entries
@@ -334,14 +327,14 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
-#if defined(_PROGRESSDATA_H)
-			generator.pRestartData = progressData + progressIndex[pMetrics->numNodes][pMetrics->qntf];
+#if defined(_RESTARTDATA_H)
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
 #endif
 			this->progressHi = pMetrics->numProgress;
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genprogressdataSelftest_t::selftestFoundTreeCreate);
+			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeCreate);
 			generator.generateTrees(endpointsLeft, 0, 0);
 		}
 
@@ -362,14 +355,14 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = 0;
 			generator.windowHi = 0;
-#if defined(_PROGRESSDATA_H)
-			generator.pRestartData = progressData + progressIndex[pMetrics->numNodes][pMetrics->qntf];
+#if defined(_RESTARTDATA_H)
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
 #endif
 			this->progressHi = pMetrics->numProgress;
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genprogressdataSelftest_t::selftestFoundTreeVerify);
+			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeVerify);
 			generator.generateTrees(endpointsLeft, 0, 0);
 		}
 
@@ -397,7 +390,7 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 		}
 
 		/*
-		 * Debug mode used to create progress metrics and dump generated trees
+		 * Debug mode used to create restart metrics and dump generated trees
 		 */
 		if (opt_text) {
 #if 1
@@ -451,11 +444,15 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
+#if defined(_RESTARTDATA_H)
+		if (pMetrics)
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
+#endif
 		this->progressHi = pMetrics ? pMetrics->numProgress : 0;
 		this->progress = 0;
 		this->tick = 0;
 
-		generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genprogressdataSelftest_t::selftestFoundTreePrint);
+		generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreePrint);
 		generator.generateTrees(endpointsLeft, 0, 0);
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -476,9 +473,9 @@ struct genprogressdataSelftest_t : genprogressdataContext_t {
  * I/O and Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {genprogressdataContext_t} Application
+ * @global {genrestartdataContext_t} Application
  */
-genprogressdataSelftest_t app;
+genrestartdataSelftest_t app;
 
 /**
  * Construct a time themed prefix string for console logging
@@ -520,7 +517,7 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  * @date  2020-03-19 20:02:40
  */
-void usage(char *const *argv, bool verbose, const genprogressdataContext_t *args) {
+void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args) {
 	fprintf(stderr, "usage:\t%s\n\t%s --selftest [<numnode>]\n", argv[0], argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -688,6 +685,10 @@ int main(int argc, char *const *argv) {
 	 * Test
 	 */
 	if (app.opt_selftest) {
+#if !defined(_RESTARTDATA_H)
+		fprintf(stderr, "[%s] WARNING: \"restartdata.h\" not found or empty. Windowing selftest with restart disabled\n", this->timeAsString());
+#endif
+
 		if (app.arg_numNodes == 0) {
 			// call default selftest
 			app.selftestWindow();
