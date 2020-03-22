@@ -53,7 +53,6 @@
 #include <sys/mman.h>
 #include "datadef.h"
 #include "tinytree.h"
-
 #include "config.h"
 
 #if defined(ENABLE_JANSSON)
@@ -964,11 +963,13 @@ struct database_t {
 					pImprint->sid = sid;
 					pImprint->tid = iCol;
 				} else {
-					// should not already be present
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}",
-					       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid);
-					exit(1);
+					// test for similar. First imprint must be unique, others must have matching sid
+					if (iCol == 0 || pImprint->sid != sid) {
+						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}",
+						       __PRETTY_FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid);
+						exit(1);
+					}
 				}
 
 				v += tinyTree_t::TINYTREE_NEND;

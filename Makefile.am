@@ -16,13 +16,19 @@ bin_PROGRAMS = \
 primedata.h : genprimedata.cc
 	./genprimedata > primedata.h
 
-# genrestartdata is slow and output is small, include in distribution
-restartdata.h : genrestartdata.cc
-	./genrestartdata > restartdata.h
-
 # pushdata is fast and output is big, exclude from distribution
 pushdata.h : genpushdata.cc
 	./genpushdata > pushdata.h
+
+# genrestartdata is slow and output is small, include in distribution
+restartdata.h : genrestartdata.cc
+	@echo "#"
+	@echo "# If you are not developing when this happens, most likely timestamps are incorrect"
+	@echo "# Instead of waiting 6 minutes:
+	@echo "# - Restore pre-calculated version of \"restartdata.h\"'"
+	@echo "# - Perform \"touch restartdata.h\""
+	@echo "#"
+	./genrestartdata > restartdata.h
 
 CPPFLAGS = $(LIBJANSSON_CFLAGS)
 LDADD = $(LIBJANSSON_LIBS)

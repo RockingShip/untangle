@@ -38,7 +38,6 @@
 #include <time.h>
 #include <signal.h>
 #include <getopt.h>
-
 #include "generator.h"
 #include "metrics.h"
 
@@ -136,9 +135,7 @@ struct genrestartdataContext_t : context_t {
 				this->tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
-				// NOTE: `foundTree()` is called when `numNode` matches, restart data triggers when trees are exactly 2 nodes in size.
-				generator.addCallback(NULL, NULL);
-				generator.generateTrees(endpointsLeft, 0, 0);
+				generator.generateTrees(endpointsLeft, 0, 0, NULL, NULL);
 
 				// was there any output
 				if (buildProgressIndex[arg_numNodes][arg_qntf] != generator.numFoundRestart) {
@@ -334,8 +331,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeCreate);
-			generator.generateTrees(endpointsLeft, 0, 0);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeCreate);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -362,8 +358,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeVerify);
-			generator.generateTrees(endpointsLeft, 0, 0);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeVerify);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -452,8 +447,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		this->progress = 0;
 		this->tick = 0;
 
-		generator.addCallback(this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreePrint);
-		generator.generateTrees(endpointsLeft, 0, 0);
+		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreePrint);
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
@@ -686,7 +680,7 @@ int main(int argc, char *const *argv) {
 	 */
 	if (app.opt_selftest) {
 #if !defined(_RESTARTDATA_H)
-		fprintf(stderr, "[%s] WARNING: \"restartdata.h\" not found or empty. Windowing selftest with restart disabled\n", this->timeAsString());
+		fprintf(stderr, "[%s] WARNING: \"restartdata.h\" not found or empty. Windowing selftest with restart disabled\n", app.timeAsString());
 #endif
 
 		if (app.arg_numNodes == 0) {

@@ -136,7 +136,7 @@ struct gensignatureContext_t : context_t {
  *
  * @typedef {object}
  */
-struct genrestartdataSelftest_t : gensignatureContext_t {
+struct gensignatureSelftest_t : gensignatureContext_t {
 
 	/// @var {number} --selftest, perform a selftest
 	unsigned opt_selftest;
@@ -144,7 +144,7 @@ struct genrestartdataSelftest_t : gensignatureContext_t {
 	/**
 	 * Constructor
 	 */
-	genrestartdataSelftest_t() {
+	gensignatureSelftest_t() {
 		// arguments and options
 		opt_selftest = 0;
 	}
@@ -515,7 +515,7 @@ struct genrestartdataSelftest_t : gensignatureContext_t {
  *
  * @global {gensignatureContext_t} Application
  */
-genrestartdataSelftest_t app;
+gensignatureSelftest_t app;
 
 /**
  * @date 2020-03-11 23:06:35
@@ -866,22 +866,26 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
 
 	/*
+	 * Create datastructures
+	 */
+
+	tinyTree_t tree(app);
+
+	// allocate evaluators
+	footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+	footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
+	assert(pEvalCol);
+	assert(pEvalRow);
+
+	// initialise evaluators
+	tree.initialiseVector(app, pEvalCol, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(app, pEvalRow, MAXTRANSFORM, store.revTransformData);
+
+	/*
 	 * Test prerequisite
 	 */
 	if (app.opt_selftest) {
 		// perform selfchecks
-
-		tinyTree_t tree(app);
-
-		// allocate evaluators
-		footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-		footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-		assert(pEvalCol);
-		assert(pEvalRow);
-
-		// initialise evaluators
-		tree.initialiseVector(app, pEvalCol, MAXTRANSFORM, store.fwdTransformData);
-		tree.initialiseVector(app, pEvalRow, MAXTRANSFORM, store.revTransformData);
 
 		/*
 		 * @date 2020-03-17 16:31:08
@@ -902,7 +906,7 @@ int main(int argc, char *const *argv) {
 	 * Invoke main entrypoint of application context
 	 */
 
-//	app.main(&store);
+//	app.main(store, pEvalCol, pEvalRow);
 
 	/*
 	 * Save the database
