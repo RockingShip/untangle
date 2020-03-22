@@ -55,39 +55,39 @@ struct context_t {
 	/*
 	 * verbose levels
 	 */
-	// @formatter:off
 	enum {
+		// @formatter:off
 		VERBOSE_NONE       = 0,        // nothing
 		VERBOSE_SUMMARY    = 1,        // summary after performing an action
 		VERBOSE_ACTIONS    = 2,        // tell before performing an action
 		VERBOSE_TICK       = 3,        // timed progress of actions (default)
 		VERBOSE_VERBOSE    = 4,        // above average verbosity
 		VERBOSE_INITIALIZE = 5,        // allocations, database connection and such
+		// @formatter:on
 	};
-	// @formatter:on
 
 	/*
 	 * tree/database constraints
 	 */
-	// @formatter:off
 	enum {
-		MAGICFLAG_PARANOID      = 0,                        // Force extra asserts
-		MAGICFLAG_QNTF          = 1,                        // Force generation of QnTF
+		// @formatter:off
+		MAGICFLAG_PARANOID      = 0,    // Force extra asserts
+		MAGICFLAG_QNTF          = 1,    // Force generation of QnTF
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_QNTF          = 1 << MAGICFLAG_QNTF,
+		// @formatter:on
 	};
-	// @formatter:on
 
 	/*
 	 * @date 2020-03-19 19:51:15
 	 *
 	 * Debug settings
 	 */
-	// @formatter:off
 	enum {
+		// @formatter:off
+		// @formatter:on
 	};
-	// @formatter:on
 
 	/*
 	 * User specified program arguments and options

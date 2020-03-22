@@ -113,4 +113,45 @@ struct imprint_t {
 	uint32_t    tid;       // skin/transform
 };
 
+/*
+ * @date 2020-03-22 17:43:03
+ *
+ * Footprint belonging to signature/transform
+ */
+struct signature_t {
+	enum {
+		/// @constant {number} (numnode*3+1+1/*root invert*/+1/*terminator*/) For 5n9 signatures (4n9 is default) that would be 18
+		SIGNAMELENGTH = (5 * 3 + 1 + 1 + 1),
+	};
+
+	enum {
+		SIGFLAG_PROVIDES = 0, // this signature provides as an operand
+		SIGFLAG_REQUIRED = 1, // this signature is used as an operand
+
+		// @formatter: off
+		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
+		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
+		// @formatter: on
+	};
+
+	/// @var {number} score
+	uint32_t score;
+
+	/*
+	 * the following are 8-bit values and align better if placed last
+	 */
+
+	/// @var {number} flags
+	uint8_t  flags;
+
+	/// @var {number} size of tree in nodes
+	uint8_t  size;
+
+	/// @var {number} number of unique endpoints
+	uint8_t  numUnique;
+
+	/// @var {staing} Notation/name of signature. With space for inverted root and terminator
+	char name[SIGNAMELENGTH];
+};
+
 #endif

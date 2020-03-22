@@ -125,7 +125,6 @@ struct FileHeader_t {
 };
 
 
-
 /**
  * @date 2020-03-12 15:17:55
  *
@@ -161,6 +160,12 @@ struct database_t {
 	imprint_t          *imprints;              // imprint collection
 	uint32_t           imprintIndexSize;       // index size (must be prime)
 	uint32_t           *imprintIndex;          // index
+	// signature store
+	uint32_t           numSignature;          // number of signatures
+	uint32_t           maxSignature;          // maximum size of collection
+	signature_t        *signatures;            // signature collection
+	uint32_t           signatureIndexSize;     // index size (must be prime)
+	uint32_t           *signatureIndex;        // index
 	// statistics
 	uint64_t           progressHi;
 	uint64_t           progress;
@@ -196,6 +201,13 @@ struct database_t {
 		imprintIndexSize = 0;
 		imprintIndex = NULL;
 
+		// signature store
+		numSignature = 0;
+		maxSignature = 0;
+		signatures = NULL;
+		signatureIndexSize = 0;
+		signatureIndex = NULL;
+
 		progressHi = 0;
 		progress = 0;
 	};
@@ -208,10 +220,12 @@ struct database_t {
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
 		ALLOCFLAG_IMPRINT,
+		ALLOCFLAG_SIGNATURE,
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
+		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
 		// @formatter:on
 	};
 
@@ -247,6 +261,16 @@ struct database_t {
 			imprintIndexSize = ctx.raisePrime(imprintIndexSize);
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
+		}
+
+		// signature store
+		if (maxSignature) {
+			numSignature = 0; // do not start at 0
+			maxSignature = ctx.raiseProcent(maxSignature);
+			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*this->signatures));
+			signatureIndexSize = ctx.raisePrime(signatureIndexSize);
+			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*this->signatureIndex));
+			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
 
 	};
@@ -308,6 +332,23 @@ struct database_t {
 
 			imprintIndexSize = pDatabase->imprintIndexSize;
 			imprintIndex = pDatabase->imprintIndex;
+		}
+
+		// signature store
+		if (sections & database_t::ALLOCMASK_SIGNATURE) {
+			if (pDatabase->numSignature == 0) {
+				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			assert(maxSignature == 0);
+			maxSignature = pDatabase->maxSignature;
+			numSignature = pDatabase->numSignature;
+			signatures = pDatabase->signatures;
+
+			signatureIndexSize = pDatabase->signatureIndexSize;
+			signatureIndex = pDatabase->signatureIndex;
 		}
 	}
 
@@ -378,6 +419,8 @@ struct database_t {
 			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", dbHeader->offEnd, (uint64_t) sbuf.st_size);
 		if (dbHeader->magic_sizeofImprint != sizeof(imprint_t))
 			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", dbHeader->magic_sizeofImprint, sizeof(imprint_t));
+		if (dbHeader->magic_sizeofSignature != sizeof(signature_t))
+			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", dbHeader->magic_sizeofSignature, sizeof(signature_t));
 
 		flags = dbHeader->magic_flags;
 
@@ -404,6 +447,12 @@ struct database_t {
 		imprints = (imprint_t *) (rawDatabase + dbHeader->offImprints);
 		imprintIndexSize = dbHeader->imprintIndexSize;
 		imprintIndex = (uint32_t *) (rawDatabase + dbHeader->offImprintIndex);
+
+		// signatures
+		maxSignature = numSignature = dbHeader->numSignature;
+		signatures = (signature_t *) (rawDatabase + dbHeader->offSignatures);
+		signatureIndexSize = dbHeader->signatureIndexSize;
+		signatureIndex = (uint32_t *) (rawDatabase + dbHeader->offSignatureIndex);
 	};
 
 	/**
@@ -427,6 +476,10 @@ struct database_t {
 		if (allocFlags & ALLOCMASK_IMPRINT) {
 			ctx.myFree("database_t::imprints", imprints);
 			ctx.myFree("database_t::imprintIndex", imprintIndex);
+		}
+		if (allocFlags & ALLOCMASK_SIGNATURE) {
+			ctx.myFree("database_t::signatures", signatures);
+			ctx.myFree("database_t::signatureIndex", signatureIndex);
 		}
 
 		/*
@@ -476,6 +529,8 @@ struct database_t {
 		progressHi += sizeof(*this->revTransformNameIndex * this->transformIndexSize);
 		progressHi += sizeof(*this->imprints) * this->numImprint;
 		progressHi += sizeof(*this->imprintIndex) * this->imprintIndexSize;
+		progressHi += sizeof(*this->signatures) * this->numSignature;
+		progressHi += sizeof(*this->signatureIndex) * this->signatureIndexSize;
 		progress = 0;
 		ctx.tick = 0;
 
@@ -558,6 +613,27 @@ struct database_t {
 		}
 
 		/*
+		 * write signatures
+		 */
+		if (this->numSignature) {
+			// first entry must be zero
+			signature_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->signatures, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.offSignatures = flen;
+			fileHeader.numSignature = this->numSignature;
+			flen += writeData(outf, this->signatures, sizeof(*this->signatures) * this->numSignature);
+			if (this->signatureIndexSize) {
+				// Index
+				fileHeader.offSignatureIndex = flen;
+				fileHeader.signatureIndexSize = this->signatureIndexSize;
+				flen += writeData(outf, this->signatureIndex, sizeof(*this->signatureIndex) * this->signatureIndexSize);
+			}
+		}
+
+		/*
 		 * Rewrite header and close
 		 */
 
@@ -568,6 +644,7 @@ struct database_t {
 		fileHeader.magic_flags = this->flags;
 		fileHeader.magic_maxSlots = MAXSLOTS;
 		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
+		fileHeader.magic_sizeofSignature = sizeof(signature_t);
 		fileHeader.offEnd = flen;
 
 		// rewrite header
@@ -776,7 +853,7 @@ struct database_t {
 		// starting position
 		uint32_t crc = v.crc32();
 
-		uint32_t ix   = crc % imprintIndexSize;
+		uint32_t ix = crc % imprintIndexSize;
 
 		// increment when overflowing
 		uint32_t bump = ix;
@@ -834,19 +911,19 @@ struct database_t {
 	 * (MAXSLOTS used to be 8, and preparation are for 10)
 	 */
 
-	 /**
-	  * Associative lookup of a footprint
-	  *
-	  * Find any orientation of the footprint and return the matching structure and skin with identical effect
-	  *
-	  * @param {tinyTree_t} pTree - Tree containg expression
-	  * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
-	  * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
-	  * @param {uint32_t} sid - found structure id
-	  * @param {uint32_t} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
-	  * @return {boolean} - `true` if found, `false` if not.
-	  * @date 2020-03-16 21:20:18
-	  */
+	/**
+	 * Associative lookup of a footprint
+	 *
+	 * Find any orientation of the footprint and return the matching structure and skin with identical effect
+	 *
+	 * @param {tinyTree_t} pTree - Tree containg expression
+	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
+	 * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
+	 * @param {uint32_t} sid - found structure id
+	 * @param {uint32_t} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
+	 * @return {boolean} - `true` if found, `false` if not.
+	 * @date 2020-03-16 21:20:18
+	 */
 	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t *sid, uint32_t *tid) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
@@ -854,73 +931,73 @@ struct database_t {
 	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
 		 */
 
-		 if (this->interleave == this->interleaveFactor) {
-			 /*
-			  * index is populated with key cols, runtime scans rows
-			  * Because of the jumps, memory cache might be killed
-			  */
+		if (this->interleave == this->interleaveFactor) {
+			/*
+			 * index is populated with key cols, runtime scans rows
+			 * Because of the jumps, memory cache might be killed
+			 */
 
-			 // permutate all rows
-			 for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
+			// permutate all rows
+			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveFactor) {
 
-				 // find where the evaluator for the key is located in the evaluator store
-				 footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+				// find where the evaluator for the key is located in the evaluator store
+				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
 
-				 // apply the reverse transform
-				 pTree->eval(v);
+				// apply the reverse transform
+				pTree->eval(v);
 
-				 // search the resulting footprint in the cache/index
-				 uint32_t ix = this->lookupImprint(v[pTree->root]);
+				// search the resulting footprint in the cache/index
+				uint32_t ix = this->lookupImprint(v[pTree->root]);
 
-				 /*
-				  * Was something found
-				  */
-				 if (this->imprintIndex[ix] != 0) {
-					 /*
-					  * Is so, then found the stripe which is the starting point. iTransform is relative to that
-					  */
-					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					 *sid = pImprint->sid;
-					 *tid = pImprint->tid + iRow;
-					 return true;
-				 }
-			 }
-		 } else {
-			 /*
-			  * index is populated with key rows, runtime scans cols
-			  */
-			 footprint_t *v = pFwdEvaluator;
-
-			 // permutate all colums
-			 for (unsigned iCol = 0; iCol < interleaveFactor; iCol++) {
-
-				 // apply the tree to the store
-				 pTree->eval(v);
-
-				 // search the resulting footprint in the cache/index
-				 uint32_t ix = this->lookupImprint(v[pTree->root]);
-
-				 /*
-				  * Was something found
-				  */
-				 if (this->imprintIndex[ix] != 0) {
-					 /*
+				/*
+				 * Was something found
+				 */
+				if (this->imprintIndex[ix] != 0) {
+					/*
 					 * Is so, then found the stripe which is the starting point. iTransform is relative to that
 					 */
-					 const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
-					 *sid = pImprint->sid;
-					 /*
-					 * NOTE: Need to reverse the transform
-					 */
-					 *tid = this->revTransformIds[pImprint->tid + iCol];
-					 return true;
-				 }
+					const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					*sid = pImprint->sid;
+					*tid = pImprint->tid + iRow;
+					return true;
+				}
+			}
+		} else {
+			/*
+			 * index is populated with key rows, runtime scans cols
+			 */
+			footprint_t *v = pFwdEvaluator;
 
-				 v += tinyTree_t::TINYTREE_NEND;
-			 }
-		 }
-		 return false;
-	 }
+			// permutate all colums
+			for (unsigned iCol = 0; iCol < interleaveFactor; iCol++) {
+
+				// apply the tree to the store
+				pTree->eval(v);
+
+				// search the resulting footprint in the cache/index
+				uint32_t ix = this->lookupImprint(v[pTree->root]);
+
+				/*
+				 * Was something found
+				 */
+				if (this->imprintIndex[ix] != 0) {
+					/*
+					* Is so, then found the stripe which is the starting point. iTransform is relative to that
+					*/
+					const imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
+					*sid = pImprint->sid;
+					/*
+					* NOTE: Need to reverse the transform
+					*/
+					*tid = this->revTransformIds[pImprint->tid + iCol];
+					return true;
+				}
+
+				v += tinyTree_t::TINYTREE_NEND;
+			}
+		}
+		return false;
+	}
 
 	/**
 	* Associative lookup of a footprint
@@ -1008,7 +1085,62 @@ struct database_t {
 		}
 	}
 
+	/*
+	 * Signature store
+	 */
+
+	inline uint32_t lookupSignature(const char *name) {
+		ctx.cntHash++;
+
+		// calculate starting position
+		uint32_t crc32 = 0;
+		for (const char *pName = name; *pName; pName++)
+			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
+
+		uint32_t ix = crc32 % signatureIndexSize;
+		uint32_t bump = ix;
+		if (bump == 0)
+			bump = signatureIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		for (;;) {
+			ctx.cntCompare++;
+			if (this->signatureIndex[ix] == 0)
+				return ix; // "not-found"
+
+			const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
+
+			if (::strcmp(pSignature->name, name) == 0)
+				return ix; // "found"
+
+			// overflow, jump to next entry
+			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+			ix += bump;
+			if (ix >= signatureIndexSize)
+				ix -= signatureIndexSize;
+		}
+
+	}
+
+	inline uint32_t addSignature(const char *name) {
+		signature_t *pSignature = this->signatures + this->numSignature++;
+
+		if (this->numSignature >= this->maxSignature)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
+
+		// clear before use
+		memset(pSignature, 0, sizeof(*pSignature));
+
+		// only populate key fields
+		strcpy(pSignature->name, name);
+
+		return (uint32_t) (pSignature - this->signatures);
+	}
+
+
 #if defined(ENABLE_JANSSON)
+
 	/**
 	 * Encode dimensions as json object
 	 *
@@ -1024,10 +1156,13 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(header->transformIndexSize));
 		json_object_set_new_nocheck(jResult, "numImprints", json_integer(header->numImprints));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(header->imprintIndexSize));
+		json_object_set_new_nocheck(jResult, "numSignature", json_integer(header->numSignature));
+		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(header->signatureIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(header->offEnd));
 
 		return jResult;
 	}
+
 #endif
 
 };
