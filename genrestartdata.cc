@@ -369,8 +369,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Selftest passed\n", timeAsString());
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed\n", this->timeAsString(), __FUNCTION__);
 	}
 
 	/**

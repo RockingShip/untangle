@@ -109,8 +109,6 @@ struct gensignatureContext_t : context_t {
 	unsigned opt_text;
 	/// @var {number} --test, run without output
 	unsigned opt_test;
-	/// @var {number} --selftest, perform a selftest
-	unsigned opt_selftest;
 
 	/**
 	 * Constructor
@@ -125,7 +123,6 @@ struct gensignatureContext_t : context_t {
 		opt_keep = 0;
 		opt_maxImprint = 0;
 		opt_ratio = 3.0;
-		opt_selftest = 0;
 		opt_test = 0;
 		opt_text = 0;
 	}
@@ -133,362 +130,384 @@ struct gensignatureContext_t : context_t {
 };
 
 /**
- * @date 2020-03-10 21:46:10
+ * @date 2020-03-22 00:29:34
  *
- * Perform a selftest.
+ * Selftest wrapper
  *
- * For every single-node tree there a 8 possible operands: Zero, three variables and their inverts.
- * This totals to a collection of (8*8*8) 512 trees.
- *
- * For every tree:
- *  - normalise q,t,f triplet
- *  - Save tree as string
- *  - Load tree as string
- *  - Evaluate
- *  - Compare with independent generated result
- *
- * @param {gentransformContext_t} ctx - I/O context
- * @param {tree_t} pTree - worker tree
+ * @typedef {object}
  */
-void performSelfTestTree(context_t &ctx, tinyTree_t *pTree) {
+struct genrestartdataSelftest_t : gensignatureContext_t {
 
-	unsigned testNr = 0;
-	unsigned numPassed = 0;
-	footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
+	/// @var {number} --selftest, perform a selftest
+	unsigned opt_selftest;
 
-	/*
-	 * self-test with different program settings
+	/**
+	 * Constructor
 	 */
-	// @formatter:off
-	for (unsigned iFast=0; iFast<2; iFast++) // decode notation in fast mode
-	for (unsigned iSkin=0; iSkin<2; iSkin++) // use placeholder/skin notation
-	for (unsigned iQnTF=0; iQnTF<2; iQnTF++) { // force `QnTF` rewrites
-	// @formatter:on
+	genrestartdataSelftest_t() {
+		// arguments and options
+		opt_selftest = 0;
+	}
+
+	/**
+	 * @date 2020-03-10 21:46:10
+	 *
+	 * Perform a selftest.
+	 *
+	 * For every single-node tree there a 8 possible operands: Zero, three variables and their inverts.
+	 * This totals to a collection of (8*8*8) 512 trees.
+	 *
+	 * For every tree:
+	 *  - normalise q,t,f triplet
+	 *  - Save tree as string
+	 *  - Load tree as string
+	 *  - Evaluate
+	 *  - Compare with independent generated result
+	 *
+	 * @param {tree_t} pTree - worker tree
+	 */
+	void performSelfTestTree(tinyTree_t *pTree) {
+
+		unsigned testNr = 0;
+		unsigned numPassed = 0;
+		footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
 
 		/*
-		 * Test all 512 operand combinations. Zero, 3 endpoints and their 4 inverts (8*8*8=512)
+		 * self-test with different program settings
 		 */
-
 		// @formatter:off
-		for (uint32_t Fo = 0; Fo < tinyTree_t::TINYTREE_KSTART + 3; Fo++) // operand of F: 0, a, b, c
-		for (uint32_t Fi = 0; Fi < 2; Fi++)                               // inverting of F
-		for (uint32_t To = 0; To < tinyTree_t::TINYTREE_KSTART + 3; To++)
-		for (uint32_t Ti = 0; Ti < 2; Ti++)
-		for (uint32_t Qo = 0; Qo < tinyTree_t::TINYTREE_KSTART + 3; Qo++)
-		for (uint32_t Qi = 0; Qi < 2; Qi++) {
+		for (unsigned iFast=0; iFast<2; iFast++) // decode notation in fast mode
+		for (unsigned iSkin=0; iSkin<2; iSkin++) // use placeholder/skin notation
+		for (unsigned iQnTF=0; iQnTF<2; iQnTF++) { // force `QnTF` rewrites
 		// @formatter:on
 
-			// additional rangecheck
-			if (Qo && Qo < tinyTree_t::TINYTREE_KSTART) continue;
-			if (To && To < tinyTree_t::TINYTREE_KSTART) continue;
-			if (Fo && Fo < tinyTree_t::TINYTREE_KSTART) continue;
-
-			// bump test number
-			testNr++;
-
 			/*
-			 * Load the tree with a single operator
+			 * Test all 512 operand combinations. Zero, 3 endpoints and their 4 inverts (8*8*8=512)
 			 */
 
-			pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
-			pTree->clearTree();
-			pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
-
-			/*
-			 * save with placeholders and reload
-			 */
-			const char *treeName;
-
-			if (iSkin) {
-				char skin[MAXSLOTS + 1];
-
-				treeName = pTree->encode(pTree->root, skin);
-				if (iFast) {
-					pTree->decodeFast(treeName, skin);
-				} else {
-					int ret = pTree->decodeSafe(treeName, skin);
-					if (ret != 0) {
-						printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
-						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
-						exit(1);
-					}
-				}
-			} else {
-				treeName = pTree->encode(pTree->root, NULL);
-				if (iFast) {
-					pTree->decodeFast(treeName);
-				} else {
-					int ret = pTree->decodeSafe(treeName);
-					if (ret != 0) {
-						printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
-						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, ret);
-					}
-				}
-			}
-
-			/*
-			 * Evaluate tree
-			 */
-
-			// load test vector
-			pEval[0].bits[0] = 0b00000000; // v[0]
-			pEval[tinyTree_t::TINYTREE_KSTART + 0].bits[0] = 0b10101010; // v[1]
-			pEval[tinyTree_t::TINYTREE_KSTART + 1].bits[0] = 0b11001100; // v[2]
-			pEval[tinyTree_t::TINYTREE_KSTART + 2].bits[0] = 0b11110000; // v[3]
-
-			// evaluate
-			pTree->eval(pEval);
-
-			/*
-			 * The footprint contains the tree outcome for every possible value combination the endpoints can have
-			 * Loop through every state and verify the footprint is correct
-			 */
 			// @formatter:off
-			for (unsigned c = 0; c < 2; c++)
-			for (unsigned b = 0; b < 2; b++)
-			for (unsigned a = 0; a < 2; a++) {
+			for (uint32_t Fo = 0; Fo < tinyTree_t::TINYTREE_KSTART + 3; Fo++) // operand of F: 0, a, b, c
+			for (uint32_t Fi = 0; Fi < 2; Fi++)                               // inverting of F
+			for (uint32_t To = 0; To < tinyTree_t::TINYTREE_KSTART + 3; To++)
+			for (uint32_t Ti = 0; Ti < 2; Ti++)
+			for (uint32_t Qo = 0; Qo < tinyTree_t::TINYTREE_KSTART + 3; Qo++)
+			for (uint32_t Qi = 0; Qi < 2; Qi++) {
 			// @formatter:on
+
+				// additional rangecheck
+				if (Qo && Qo < tinyTree_t::TINYTREE_KSTART) continue;
+				if (To && To < tinyTree_t::TINYTREE_KSTART) continue;
+				if (Fo && Fo < tinyTree_t::TINYTREE_KSTART) continue;
 
 				// bump test number
 				testNr++;
 
-				uint32_t q, t, f;
+				/*
+				 * Load the tree with a single operator
+				 */
+
+				pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
+				pTree->clearTree();
+				pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 				/*
-				 * Substitute endpoints `a-c` with their actual values.
+				 * save with placeholders and reload
+				 */
+				const char *treeName;
+
+				if (iSkin) {
+					char skin[MAXSLOTS + 1];
+
+					treeName = pTree->encode(pTree->root, skin);
+					if (iFast) {
+						pTree->decodeFast(treeName, skin);
+					} else {
+						int ret = pTree->decodeSafe(treeName, skin);
+						if (ret != 0) {
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
+							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
+							exit(1);
+						}
+					}
+				} else {
+					treeName = pTree->encode(pTree->root, NULL);
+					if (iFast) {
+						pTree->decodeFast(treeName);
+					} else {
+						int ret = pTree->decodeSafe(treeName);
+						if (ret != 0) {
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
+							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, ret);
+						}
+					}
+				}
+
+				/*
+				 * Evaluate tree
+				 */
+
+				// load test vector
+				pEval[0].bits[0] = 0b00000000; // v[0]
+				pEval[tinyTree_t::TINYTREE_KSTART + 0].bits[0] = 0b10101010; // v[1]
+				pEval[tinyTree_t::TINYTREE_KSTART + 1].bits[0] = 0b11001100; // v[2]
+				pEval[tinyTree_t::TINYTREE_KSTART + 2].bits[0] = 0b11110000; // v[3]
+
+				// evaluate
+				pTree->eval(pEval);
+
+				/*
+				 * The footprint contains the tree outcome for every possible value combination the endpoints can have
+				 * Loop through every state and verify the footprint is correct
 				 */
 				// @formatter:off
-				switch (Qo) {
-					case 0:            q = 0; break;
-					case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
-					case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
-					case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
-				}
-				if (Qi) q ^= 1;
-
-				switch (To) {
-					case 0:            t = 0; break;
-					case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
-					case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
-					case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
-				}
-				if (Ti) t ^= 1;
-
-				switch (Fo) {
-					case 0:            f = 0; break;
-					case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
-					case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
-					case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
-				}
-				if (Fi) f ^= 1;
+				for (unsigned c = 0; c < 2; c++)
+				for (unsigned b = 0; b < 2; b++)
+				for (unsigned a = 0; a < 2; a++) {
 				// @formatter:on
 
-				/*
-				 * `normaliseNode()` creates a tree with the expression `Q?T:F"`
-				 * Calculate the outcome without using the tree.
-				 */
-				unsigned expected = q ? t : f;
+					// bump test number
+					testNr++;
 
-				// extract encountered from footprint.
-				uint32_t ix = c << 2 | b << 1 | a;
-				uint32_t encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
-				if (pTree->root & IBIT)
-					encountered ^= 1; // invert result
+					uint32_t q, t, f;
 
-				if (expected != encountered) {
-					printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
-					       __FUNCTION__, testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
-					exit(1);
+					/*
+					 * Substitute endpoints `a-c` with their actual values.
+					 */
+					// @formatter:off
+					switch (Qo) {
+						case 0:            q = 0; break;
+						case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
+						case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
+						case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
+					}
+					if (Qi) q ^= 1;
+
+					switch (To) {
+						case 0:            t = 0; break;
+						case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
+						case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
+						case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
+					}
+					if (Ti) t ^= 1;
+
+					switch (Fo) {
+						case 0:            f = 0; break;
+						case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
+						case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
+						case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
+					}
+					if (Fi) f ^= 1;
+					// @formatter:on
+
+					/*
+					 * `normaliseNode()` creates a tree with the expression `Q?T:F"`
+					 * Calculate the outcome without using the tree.
+					 */
+					unsigned expected = q ? t : f;
+
+					// extract encountered from footprint.
+					uint32_t ix = c << 2 | b << 1 | a;
+					uint32_t encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+					if (pTree->root & IBIT)
+						encountered ^= 1; // invert result
+
+					if (expected != encountered) {
+						printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
+						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						exit(1);
+					}
+					numPassed++;
 				}
-				numPassed++;
 			}
 		}
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %d tests\n", this->timeAsString(), __FUNCTION__, numPassed);
 	}
 
-	fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
-}
-
-/**
- * @date 2020-03-15 16:35:43
- *
- * Perform a selftest.
- *
- * Searching for footprints requires an associative.
- * A database lookup for a footprint will return an ordered structure and skin.
- * Evaluating the "structure/skin" will result in the requested footprint.
- *
- * Two extreme implementations are:
- *
- * - Store and index all 9! possible permutations of the footprint.
- *   Fastest runtime speed but at an extreme high storage cost.
- *
- * - Store the ordered structure.
- *   During runtime, apply all 9! skin permutations to the footprint
- *   and perform a database lookup to determine if a matching ordered structure exists.
- *   Most efficient data storage with an extreme high performance hit.
- *
- * The chosen implentation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
- * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
- *
- * Demonstrate that for any given footprint it will re-orientate
- * @param {gentransformContext_t} ctx - I/O context
- * @param {database_t} pStore - memory based database
- * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
- * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
- */
-void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
-
-	unsigned numPassed = 0;
-
-	tinyTree_t tree(ctx);
-
-	// test name. NOTE: this is deliberately "not ordered"
-	const char *pBasename = "abc!defg!!hi!";
-
-	/*
-	 * Basic test tree
-	 */
-
-	// test is test name can be decoded
-	tree.decodeFast(pBasename);
-
-	// test that tree is what was requested
-	assert(~tree.root & IBIT);
-	assert(::strcmp(pBasename, tree.encode(tree.root, NULL)) == 0);
-
-	/*
-	 * Basic test evaluator
-	 */
-	{
-		// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
-		assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
-		assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
-
-		// calculate `"abc!defg!!hi!"/cabdefghi"`
-		tree.decodeSafe("abc!defg!!hi!");
-		footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
-		tree.eval(pEncountered);
-
-		// calculate `"cab!defg!!hi!"` (manually applying forward transform)
-		tree.decodeSafe("cab!defg!!hi!");
-		footprint_t *pExpect = pEvalFwd;
-		tree.eval(pExpect);
-
-		// compare
-		if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
-			printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
-			       __FUNCTION__);
-			exit(1);
-		}
-
-		// test that cache lookups work
-		// calculate `"abc!de!fabc!!"`
-		tree.decodeSafe("abc!de!fabc!!");
-		tree.eval(pEvalFwd);
-
-		const char *pExpectedName = tree.encode(tree.root);
-
-		// compare
-		if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
-			printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
-			       __FUNCTION__, pExpectedName, "abc!de!f2!");
-			exit(1);
-		}
-	}
-
-	/*
-	 * @date 2020-03-17 00:34:54
+	/**
+	 * @date 2020-03-15 16:35:43
 	 *
-	 * Generate all possible situations
+	 * Perform a selftest.
 	 *
-	 * With regard to storage/speed trade-offs, only 4 row/column combos are viable.
-	 * Storage is based on worst-case scenario.
-	 * Actual storage needs to be tested/runtime decided.
+	 * Searching for footprints requires an associative.
+	 * A database lookup for a footprint will return an ordered structure and skin.
+	 * Evaluating the "structure/skin" will result in the requested footprint.
+	 *
+	 * Two extreme implementations are:
+	 *
+	 * - Store and index all 9! possible permutations of the footprint.
+	 *   Fastest runtime speed but at an extreme high storage cost.
+	 *
+	 * - Store the ordered structure.
+	 *   During runtime, apply all 9! skin permutations to the footprint
+	 *   and perform a database lookup to determine if a matching ordered structure exists.
+	 *   Most efficient data storage with an extreme high performance hit.
+	 *
+	 * The chosen implentation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
+	 * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
+	 *
+	 * Demonstrate that for any given footprint it will re-orientate
+	 * @param {database_t} pStore - memory based database
+	 * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
+	 * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
 	 */
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
-		if (pInterleave->numSlots != MAXSLOTS)
-			continue; // only process settings that match `MAXSLOTS`
+	void performSelfTestInterleave(database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
+
+		unsigned numPassed = 0;
+
+		tinyTree_t tree(*this);
+
+		// test name. NOTE: this is deliberately "not ordered"
+		const char *pBasename = "abc!defg!!hi!";
 
 		/*
-		 * Setup database and erase indices
+		 * Basic test tree
 		 */
 
-		// mode
-		pStore->interleave = pInterleave->numStored;
-		pStore->interleaveFactor = pInterleave->interleaveFactor;
-
-		// clear
-		memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
-		memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-
-		/*
-		 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
-		 */
-
+		// test is test name can be decoded
 		tree.decodeFast(pBasename);
 
-		// add to database
-		pStore->numImprint = 1;
-		pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
+		// test that tree is what was requested
+		assert(~tree.root & IBIT);
+		assert(::strcmp(pBasename, tree.encode(tree.root, NULL)) == 0);
 
 		/*
-		 * Lookup all possible permutations
+		 * Basic test evaluator
 		 */
+		{
+			// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
+			assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
+			assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
 
-		time_t seconds = ::time(NULL);
-		for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
+			// calculate `"abc!defg!!hi!"/cabdefghi"`
+			tree.decodeSafe("abc!defg!!hi!");
+			footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
+			tree.eval(pEncountered);
 
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				fprintf(stderr, "\r[%s] %.5f%%", ctx.timeAsString(), iTransform * 100.0 / MAXTRANSFORM);
-				ctx.tick = 0;
-			}
+			// calculate `"cab!defg!!hi!"` (manually applying forward transform)
+			tree.decodeSafe("cab!defg!!hi!");
+			footprint_t *pExpect = pEvalFwd;
+			tree.eval(pExpect);
 
-			// Load base name with skin
-			tree.decodeFast(pBasename, pStore->fwdTransformNames[iTransform]);
-
-			uint32_t sid, tid;
-
-			// lookup
-			if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid)) {
-				printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"tid\":\"%s\"}\n",
-				       __FUNCTION__, pStore->fwdTransformNames[iTransform]);
+			// compare
+			if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
+				printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
+				       __FUNCTION__);
 				exit(1);
 			}
 
-			// test that transform id's match
-			if (iTransform != tid) {
-				printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
-				       __FUNCTION__, tid, iTransform);
+			// test that cache lookups work
+			// calculate `"abc!de!fabc!!"`
+			tree.decodeSafe("abc!de!fabc!!");
+			tree.eval(pEvalFwd);
+
+			const char *pExpectedName = tree.encode(tree.root);
+
+			// compare
+			if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
+				printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+				       __FUNCTION__, pExpectedName, "abc!de!f2!");
 				exit(1);
 			}
-
-			numPassed++;
-
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
+		/*
+		 * @date 2020-03-17 00:34:54
+		 *
+		 * Generate all possible situations
+		 *
+		 * With regard to storage/speed trade-offs, only 4 row/column combos are viable.
+		 * Storage is based on worst-case scenario.
+		 * Actual storage needs to be tested/runtime decided.
+		 */
+		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
+			if (pInterleave->numSlots != MAXSLOTS)
+				continue; // only process settings that match `MAXSLOTS`
+
+			/*
+			 * Setup database and erase indices
+			 */
+
+			// mode
+			pStore->interleave = pInterleave->numStored;
+			pStore->interleaveFactor = pInterleave->interleaveFactor;
+
+			// clear
+			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
+			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+
+			/*
+			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
+			 */
+
+			tree.decodeFast(pBasename);
+
+			// add to database
+			pStore->numImprint = 1;
+			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
+
+			/*
+			 * Lookup all possible permutations
+			 */
+
+			time_t seconds = ::time(NULL);
+			for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
+
+				if (this->opt_verbose >= VERBOSE_TICK && this->tick) {
+					fprintf(stderr, "\r[%s] %.5f%%", this->timeAsString(), iTransform * 100.0 / MAXTRANSFORM);
+					this->tick = 0;
+				}
+
+				// Load base name with skin
+				tree.decodeFast(pBasename, pStore->fwdTransformNames[iTransform]);
+
+				uint32_t sid, tid;
+
+				// lookup
+				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid)) {
+					printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"tid\":\"%s\"}\n",
+					       __FUNCTION__, pStore->fwdTransformNames[iTransform]);
+					exit(1);
+				}
+
+				// test that transform id's match
+				if (iTransform != tid) {
+					printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+					       __FUNCTION__, tid, iTransform);
+					exit(1);
+				}
+
+				numPassed++;
+
+			}
+
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
 
 
-		seconds = ::time(NULL) - seconds;
-		if (seconds == 0)
-			seconds = 1;
+			seconds = ::time(NULL) - seconds;
+			if (seconds == 0)
+				seconds = 1;
 
-		// base estimated size on 791647 signatures
-		fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
-		        ctx.timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
-		        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
+			// base estimated size on 791647 signatures
+			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
+			        this->timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
+			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
-		// test that number of imprints match
-		if (pInterleave->numStored != pStore->numImprint - 1) {
-			printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
-			       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
-			exit(1);
+			// test that number of imprints match
+			if (pInterleave->numStored != pStore->numImprint - 1) {
+				printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+				       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
+				exit(1);
+			}
 		}
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %d tests\n", this->timeAsString(), __FUNCTION__, numPassed);
 	}
+};
 
-	fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
-}
 
 /*
  * I/O and Application context.
@@ -496,7 +515,7 @@ void performSelfTestInterleave(context_t &ctx, database_t *pStore, footprint_t *
  *
  * @global {gensignatureContext_t} Application
  */
-gensignatureContext_t app;
+genrestartdataSelftest_t app;
 
 /**
  * @date 2020-03-11 23:06:35
@@ -873,8 +892,8 @@ int main(int argc, char *const *argv) {
 		 *   that is, if `app` were global before `performSelfTestInterleave`,
 		 *   then removing `app` as argument would not require additional changing of code.
 		 */
-		performSelfTestTree(app, &tree);
-		performSelfTestInterleave(app, &store, pEvalCol, pEvalRow);
+		app.performSelfTestTree(&tree);
+		app.performSelfTestInterleave(&store, pEvalCol, pEvalRow);
 
 		exit(0);
 	}
