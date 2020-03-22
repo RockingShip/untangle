@@ -38,27 +38,9 @@
 #include <time.h>
 #include <signal.h>
 #include <getopt.h>
+#include "tinytree.h"
 #include "generator.h"
 #include "metrics.h"
-
-/*
- * NOTE: in trying to avoid a separate program to just test windowing...
- *
- *  `"restartdata.h"` is only needed for testing the windowing functionality
- *
- * If you are not developing:
- *   File timestamps got messed up, probably after a git clone and make has deleted `"restartdata.h"`
- *   Recover `"restartdata.h"` and do a `"touch restartdata.h"`
- *   Continue with building
- *
- * Otherwise:
- *  - Create an empty `"restartdata.h"`
- *  - compile, run and redirect output to `"restartdata.h"`
- *  - compile again
- *
- *  OR: Remove the include and compile. This will disable the windowing selftest
- */
-#include "restartdata.h"
 
 /**
  * @date 2020-03-19 20:20:53
@@ -200,8 +182,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	unsigned opt_selftest;
 	/// @var {number} --text, often used switch
 	unsigned opt_text;
-	/// @var {string[]} tree notation for `progress` points
-	char **selftestResults;
 
 	/**
 	 * Constructor
@@ -210,86 +190,12 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		// arguments and options
 		opt_selftest = 0;
 		opt_text = 0;
-
-		selftestResults = (char **) myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestResults));
 	}
 
 	/**
 	 * Destructor
 	 */
 	~genrestartdataSelftest_t() {
-		myFree("genrestartdataContext_t::selftestResults", selftestResults);
-
-	}
-
-	/**
-	 * @date 2020-03-21 17:25:47
-	 *
-	 * Selftest windowing by calling the generator with windowLo/Hi for each possible tree
-	 *
-	 * @param {generatorTree_t} tree - candidate tree
-	 */
-	void selftestFoundTreeCreate(generatorTree_t &tree) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
-			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
-			tick = 0;
-		}
-
-		assert(this->progress < 2000000);
-
-		const char *pName = tree.encode(tree.root);
-
-		// assert entry is unique
-		if (selftestResults[this->progress] != NULL) {
-			printf("{\"error\":\"entry not unique\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, selftestResults[this->progress], pName, this->progress);
-			exit(1);
-		}
-
-		// populate entry
-		selftestResults[this->progress] = ::strdup(pName);
-	}
-
-	/**
-	 * @date 2020-03-21 17:31:46
-	 *
-	 * Selftest windowing by calling generator without a window and test if results match.
-	 *
-	 * @param {generatorTree_t} tree - candidate tree
-	 */
-	void selftestFoundTreeVerify(generatorTree_t &tree) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
-			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
-			tick = 0;
-		}
-
-		assert(this->progress < 2000000);
-
-		const char *pName = tree.encode(tree.root);
-
-		// assert entry is present
-		if (selftestResults[this->progress] == NULL) {
-			printf("{\"error\":\"missing\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, pName, this->progress);
-			exit(1);
-		}
-
-		// compare
-		if (::strcmp(pName, selftestResults[this->progress]) != 0) {
-			printf("{\"error\":\"entry missmatch\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, selftestResults[this->progress], pName, this->progress);
-			exit(1);
-		}
-
-		// release resources
-		::free(selftestResults[this->progress]);
-		selftestResults[this->progress] = NULL;
 	}
 
 	/**
@@ -298,74 +204,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * Selftest windowing
 	 */
 	void selftestWindow(void) {
-		// set generator into `3n9 QnTF` mode
-		arg_qntf = 1;
-		arg_numNodes = 3;
-
-		generatorTree_t generator(*this);
-
-		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
-		assert(pMetrics);
-
-		unsigned endpointsLeft = pMetrics->numNodes * 2 + 1;
-
-		/*
-		 * Pass 1, slice dataset into single entries
-		 */
-		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Trying all window settings for %dn9%s\n", timeAsString(), pMetrics->numNodes, pMetrics->qntf ? "-QnTF" : "");
-
-		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
-			// clear tree
-			generator.clearGenerator();
-
-			// apply settings
-			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
-			generator.windowLo = windowLo;
-			generator.windowHi = windowLo + 1;
-#if defined(_RESTARTDATA_H)
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
-#endif
-			this->progressHi = pMetrics->numProgress;
-			this->progress = 0;
-			this->tick = 0;
-
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeCreate);
-		}
-
-		if (this->opt_verbose >= this->VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		/*
-		 * Pass 2, validate entries
-		 */
-		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Verifying results against non-windowed\n", timeAsString());
-
-		{
-			// clear tree
-			generator.clearGenerator();
-
-			// apply settings
-			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
-			generator.windowLo = 0;
-			generator.windowHi = 0;
-#if defined(_RESTARTDATA_H)
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
-#endif
-			this->progressHi = pMetrics->numProgress;
-			this->progress = 0;
-			this->tick = 0;
-
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreeVerify);
-		}
-
-		if (this->opt_verbose >= this->VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed\n", this->timeAsString(), __FUNCTION__);
 	}
 
 	/**
@@ -375,7 +213,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 */
-	void selftestFoundTreePrint(generatorTree_t &tree) {
+	void foundTreeDisplay(generatorTree_t &tree) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			if (progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), progress * 100.0 / progressHi);
@@ -405,9 +243,13 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	/**
 	 * @date 2020-03-21 20:09:49
  	 *
- 	 * Selftest windowing
+ 	 * Display all calls to `foundTree()` with n-node sized trees
+ 	 *
+ 	 * NOTE: this is a selftest because output is for a single generator whereas regular mode is multi generator.
+ 	 *
+ 	 * param {number} numNodes - Tree size
  	 */
-	void selftest(void) {
+	void performSelfTestPrint(unsigned numNodes) {
 		/*
 		 * Expecting a lot of output, redirect to a file or kill the screen
 		 */
@@ -419,18 +261,10 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		generatorTree_t generator(*this);
 
-		/*
-		 * quickly test that `tinyTree_t` does level-2 normalisation
-		 */
-		{
-			generator.decodeSafe("ab>ba+^");
-			const char *pName = generator.encode(generator.root);
-			assert(::strcmp(pName, "ab+ab>^") == 0);
-		}
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
-		unsigned endpointsLeft = arg_numNodes * 2 + 1;
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, numNodes);
+		unsigned endpointsLeft = numNodes * 2 + 1;
 
 		/*
 		 * Current version
@@ -439,26 +273,22 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
-#if defined(_RESTARTDATA_H)
-		if (pMetrics)
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
-#endif
 		this->progressHi = pMetrics ? pMetrics->numProgress : 0;
 		this->progress = 0;
 		this->tick = 0;
 
-		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::selftestFoundTreePrint);
+		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::foundTreeDisplay);
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
 		if (this->progress != this->progressHi) {
 			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-			       __FUNCTION__, this->progress, this->progressHi, this->arg_numNodes);
+			       __FUNCTION__, this->progress, this->progressHi, numNodes);
 			exit(1);
 		}
 
-		fprintf(stderr, "[%s] foundTree() for numNode=%d called %ld times\n", this->timeAsString(), this->arg_numNodes, this->progress);
+		fprintf(stderr, "[%s] foundTree() for numNode=%d called %ld times\n", this->timeAsString(), numNodes, this->progress);
 	}
 
 };
@@ -512,7 +342,7 @@ void sigalrmHandler(int sig) {
  * @date  2020-03-19 20:02:40
  */
 void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args) {
-	fprintf(stderr, "usage:\t%s\n\t%s --selftest [<numnode>]\n", argv[0], argv[0]);
+	fprintf(stderr, "usage:\t%s\n\t%s --selftest <numnode>\n", argv[0], argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
@@ -655,12 +485,8 @@ int main(int argc, char *const *argv) {
 		}
 	} else {
 		// selftest mode
-		if (argc - optind >= 0) {
-			// optional argument
-			if (argc - optind >= 1)
-				app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
-			else
-				app.arg_numNodes = 0;
+		if (argc - optind >= 1) {
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
 		} else {
 			usage(argv, false, &app);
 			exit(1);
@@ -679,17 +505,8 @@ int main(int argc, char *const *argv) {
 	 * Test
 	 */
 	if (app.opt_selftest) {
-#if !defined(_RESTARTDATA_H)
-		fprintf(stderr, "[%s] WARNING: \"restartdata.h\" not found or empty. Windowing selftest with restart disabled\n", app.timeAsString());
-#endif
-
-		if (app.arg_numNodes == 0) {
-			// call default selftest
-			app.selftestWindow();
-		} else {
-			// call selftest for specific setting
-			app.selftest();
-		}
+		// call selftest for specific setting
+		app.performSelfTestPrint(app.arg_numNodes);
 		exit(0);
 	}
 

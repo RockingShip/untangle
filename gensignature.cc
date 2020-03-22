@@ -31,7 +31,6 @@
  * - In that vastness of information matches are searched
  *
  * All those 512403385356 expressions can be rewritten in terms of 791647 unique expressions fitted with 363600 different skins.
- *
  */
 
 /*
@@ -63,6 +62,8 @@
 #include <sys/stat.h>
 #include "tinytree.h"
 #include "database.h"
+#include "generator.h"
+#include "restartdata.h"
 #include "metrics.h"
 
 #include "config.h"
@@ -109,7 +110,12 @@ struct gensignatureContext_t : context_t {
 	unsigned opt_text;
 	/// @var {number} --test, run without output
 	unsigned opt_test;
-
+	
+	/// @var {footprint_t[]} - Evaluator for forward transforms
+	footprint_t *pEvalFwd;
+	/// @var {footprint_t[]} - Evaluator for referse transforms
+	footprint_t *pEvalRev;
+	
 	/**
 	 * Constructor
 	 */
@@ -125,6 +131,9 @@ struct gensignatureContext_t : context_t {
 		opt_ratio = 3.0;
 		opt_test = 0;
 		opt_text = 0;
+
+		pEvalFwd = NULL;
+		pEvalRev = NULL;
 	}
 
 };
@@ -140,19 +149,21 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 	/// @var {number} --selftest, perform a selftest
 	unsigned opt_selftest;
+	/// @var {string[]} tree notation for `progress` points
+	char **selftestWindowResults;
 
 	/**
 	 * Constructor
 	 */
 	gensignatureSelftest_t() {
-		// arguments and options
 		opt_selftest = 0;
+		selftestWindowResults = NULL;
 	}
 
 	/**
 	 * @date 2020-03-10 21:46:10
 	 *
-	 * Perform a selftest.
+	 * Test that `tinyTree_t` is working as expected
 	 *
 	 * For every single-node tree there a 8 possible operands: Zero, three variables and their inverts.
 	 * This totals to a collection of (8*8*8) 512 trees.
@@ -163,14 +174,27 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 *  - Load tree as string
 	 *  - Evaluate
 	 *  - Compare with independent generated result
-	 *
-	 * @param {tree_t} pTree - worker tree
 	 */
-	void performSelfTestTree(tinyTree_t *pTree) {
+	void performSelfTestTree(void) {
 
 		unsigned testNr = 0;
 		unsigned numPassed = 0;
 		footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
+
+		tinyTree_t tree(*this);
+
+		/*
+		 * quickly test that `tinyTree_t` does level-2 normalisation
+		 */
+		{
+			tree.decodeSafe("ab>ba+^");
+			const char *pName = tree.encode(tree.root);
+			if(::strcmp(pName, "ab+ab>^") != 0) {
+				printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+				       __FUNCTION__, pName, "ab+ab>^");
+				exit(1);
+			}
+		}
 
 		/*
 		 * self-test with different program settings
@@ -206,9 +230,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				 * Load the tree with a single operator
 				 */
 
-				pTree->flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
-				pTree->clearTree();
-				pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+				tree.flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
+				tree.clearTree();
+				tree.root = tree.addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 				/*
 				 * save with placeholders and reload
@@ -218,11 +242,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				if (iSkin) {
 					char skin[MAXSLOTS + 1];
 
-					treeName = pTree->encode(pTree->root, skin);
+					treeName = tree.encode(tree.root, skin);
 					if (iFast) {
-						pTree->decodeFast(treeName, skin);
+						tree.decodeFast(treeName, skin);
 					} else {
-						int ret = pTree->decodeSafe(treeName, skin);
+						int ret = tree.decodeSafe(treeName, skin);
 						if (ret != 0) {
 							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
 							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
@@ -230,11 +254,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 						}
 					}
 				} else {
-					treeName = pTree->encode(pTree->root, NULL);
+					treeName = tree.encode(tree.root, NULL);
 					if (iFast) {
-						pTree->decodeFast(treeName);
+						tree.decodeFast(treeName);
 					} else {
-						int ret = pTree->decodeSafe(treeName);
+						int ret = tree.decodeSafe(treeName);
 						if (ret != 0) {
 							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
 							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, ret);
@@ -253,7 +277,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				pEval[tinyTree_t::TINYTREE_KSTART + 2].bits[0] = 0b11110000; // v[3]
 
 				// evaluate
-				pTree->eval(pEval);
+				tree.eval(pEval);
 
 				/*
 				 * The footprint contains the tree outcome for every possible value combination the endpoints can have
@@ -307,8 +331,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 					// extract encountered from footprint.
 					uint32_t ix = c << 2 | b << 1 | a;
-					uint32_t encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
-					if (pTree->root & IBIT)
+					uint32_t encountered = pEval[tree.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+					if (tree.root & IBIT)
 						encountered ^= 1; // invert result
 
 					if (expected != encountered) {
@@ -328,7 +352,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	/**
 	 * @date 2020-03-15 16:35:43
 	 *
-	 * Perform a selftest.
+	 * Test that associative imprint lookups are working as expected
 	 *
 	 * Searching for footprints requires an associative.
 	 * A database lookup for a footprint will return an ordered structure and skin.
@@ -344,7 +368,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 *   and perform a database lookup to determine if a matching ordered structure exists.
 	 *   Most efficient data storage with an extreme high performance hit.
 	 *
-	 * The chosen implentation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
+	 * The chosen implementation is to take advantage of interleaving properties as described for `performSelfTestInterleave()`
 	 * It describes that any transform permutatuion can be achieved by only knowing key column and row entries.
 	 *
 	 * Demonstrate that for any given footprint it will re-orientate
@@ -352,7 +376,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
 	 * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
 	 */
-	void performSelfTestInterleave(database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
+	void performSelfTestInterleave(database_t *pStore) {
 
 		unsigned numPassed = 0;
 
@@ -505,6 +529,154 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed %d tests\n", this->timeAsString(), __FUNCTION__, numPassed);
+	}
+
+	/**
+	 * @date 2020-03-21 17:25:47
+	 *
+	 * Selftest windowing by calling the generator with windowLo/Hi for each possible tree
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 */
+	void foundTreeWindowCreate(generatorTree_t &tree) {
+		if (opt_verbose >= VERBOSE_TICK && tick) {
+			if (progressHi)
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
+			else
+				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
+			tick = 0;
+		}
+
+		assert(this->progress < 2000000);
+
+		const char *pName = tree.encode(tree.root);
+
+		// assert entry is unique
+		if (selftestWindowResults[this->progress] != NULL) {
+			printf("{\"error\":\"entry not unique\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
+			       __FUNCTION__, selftestWindowResults[this->progress], pName, this->progress);
+			exit(1);
+		}
+
+		// populate entry
+		selftestWindowResults[this->progress] = ::strdup(pName);
+	}
+
+	/**
+	 * @date 2020-03-21 17:31:46
+	 *
+	 * Selftest windowing by calling generator without a window and test if results match.
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 */
+	void foundTreeWindowVerify(generatorTree_t &tree) {
+		if (opt_verbose >= VERBOSE_TICK && tick) {
+			if (progressHi)
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
+			else
+				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
+			tick = 0;
+		}
+
+		assert(this->progress < 2000000);
+
+		const char *pName = tree.encode(tree.root);
+
+		// assert entry is present
+		if (selftestWindowResults[this->progress] == NULL) {
+			printf("{\"error\":\"missing\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
+			       __FUNCTION__, pName, this->progress);
+			exit(1);
+		}
+
+		// compare
+		if (::strcmp(pName, selftestWindowResults[this->progress]) != 0) {
+			printf("{\"error\":\"entry missmatch\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
+			       __FUNCTION__, selftestWindowResults[this->progress], pName, this->progress);
+			exit(1);
+		}
+
+		// release resources
+		::free(selftestWindowResults[this->progress]);
+		selftestWindowResults[this->progress] = NULL;
+	}
+
+
+	/**
+	  * @date 2020-03-21 20:09:49
+	  *
+	  * Test that generator restart/windowing is working as expected
+	  *
+	  * First call the generator for all `windowLo/windowHi` settings that should select a single tree
+	  * Then test gathered collection matches a windowless invocation
+	  */
+	void performSelfTestWindow(void) {
+		// allocate resources
+		selftestWindowResults = (char **) myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
+
+		// set generator into `3n9 QnTF-only` mode
+		this->opt_flags &= ~context_t::MAGICMASK_QNTF;
+		arg_numNodes = 3;
+
+		generatorTree_t generator(*this);
+
+		// find metrics for setting
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, arg_numNodes);
+		assert(pMetrics);
+
+		unsigned endpointsLeft = pMetrics->numNodes * 2 + 1;
+
+		/*
+		 * Pass 1, slice dataset into single entries
+		 */
+
+		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
+			// clear tree
+			generator.clearGenerator();
+
+			// apply settings
+			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			generator.windowLo = windowLo;
+			generator.windowHi = windowLo + 1;
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
+			this->progressHi = pMetrics->numProgress;
+			this->progress = 0;
+			this->tick = 0;
+
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTreeWindowCreate);
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		/*
+		 * Pass 2, validate entries
+		 */
+
+		{
+			// clear tree
+			generator.clearGenerator();
+
+			// apply settings
+			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			generator.windowLo = 0;
+			generator.windowHi = 0;
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
+			this->progressHi = pMetrics->numProgress;
+			this->progress = 0;
+			this->tick = 0;
+
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTreeWindowVerify);
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		// release resources
+		myFree("genrestartdataContext_t::selftestResults", selftestWindowResults);
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed\n", this->timeAsString(), __FUNCTION__);
 	}
 };
 
@@ -869,17 +1041,14 @@ int main(int argc, char *const *argv) {
 	 * Create datastructures
 	 */
 
-	tinyTree_t tree(app);
-
 	// allocate evaluators
-	footprint_t *pEvalCol = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-	footprint_t *pEvalRow = new footprint_t[tinyTree_t::TINYTREE_NEND * MAXTRANSFORM];
-	assert(pEvalCol);
-	assert(pEvalRow);
+	app.pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	// initialise evaluators
-	tree.initialiseVector(app, pEvalCol, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(app, pEvalRow, MAXTRANSFORM, store.revTransformData);
+	tinyTree_t tree(app);
+	tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Test prerequisite
@@ -887,17 +1056,9 @@ int main(int argc, char *const *argv) {
 	if (app.opt_selftest) {
 		// perform selfchecks
 
-		/*
-		 * @date 2020-03-17 16:31:08
-		 * I usually avoid `&` in function declarations because it does not allow visual hints that it is pass by value.
-		 * Here are some observations:
-		 * - it is guaranteed to be non-NULL
-		 * - in function declarations it can be used as replacement/placeholder for global names
-		 *   that is, if `app` were global before `performSelfTestInterleave`,
-		 *   then removing `app` as argument would not require additional changing of code.
-		 */
-		app.performSelfTestTree(&tree);
-		app.performSelfTestInterleave(&store, pEvalCol, pEvalRow);
+		app.performSelfTestTree();
+		app.performSelfTestInterleave(&store);
+		app.performSelfTestWindow();
 
 		exit(0);
 	}
@@ -906,7 +1067,7 @@ int main(int argc, char *const *argv) {
 	 * Invoke main entrypoint of application context
 	 */
 
-//	app.main(store, pEvalCol, pEvalRow);
+//	app.main(store, pEvalFwd, pEvalRev);
 
 	/*
 	 * Save the database
