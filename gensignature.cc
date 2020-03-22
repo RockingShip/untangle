@@ -104,13 +104,19 @@ struct gensignatureContext_t : context_t {
 	unsigned opt_keep;
 	/// @var {number} Maximum number of imprints to be stored database
 	uint32_t opt_maxImprint;
+	/// @var {number} Maximum number of signatures to be stored database
+	uint32_t opt_maxSignature;
 	/// @var {number} index/data ratio
 	double opt_ratio;
+	/// @var {number} size of signature index WARNING: must be prime
+	uint32_t opt_signatureIndexSize;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
 	/// @var {number} --test, run without output
 	unsigned opt_test;
-	
+
+	/// @var {database_t} - Database store to place results
+	database_t *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
@@ -128,12 +134,102 @@ struct gensignatureContext_t : context_t {
 		opt_interleave = 720;
 		opt_keep = 0;
 		opt_maxImprint = 0;
+		opt_maxSignature = 0;
 		opt_ratio = 3.0;
+		opt_signatureIndexSize = 0;
 		opt_test = 0;
 		opt_text = 0;
 
+		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
+	}
+
+	/**
+	 * @date 2020-03-22 00:57:15
+	 *
+	 * found candidate.
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 */
+	void foundTree(generatorTree_t &tree) {
+		if (opt_verbose >= VERBOSE_TICK && tick) {
+			if (progressHi)
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), progress * 100.0 / progressHi);
+			else
+				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
+			tick = 0;
+		}
+
+		const char *pName = tree.encode(tree.root);
+
+		// lookup
+		uint32_t sid = 0;
+		uint32_t tid = 0;
+
+		pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
+
+		if (sid == 0) {
+			// add to database
+			sid = pStore->addSignature(pName);
+			tid = -1;
+			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, sid);
+
+			if (opt_text)
+				printf("%ld %d %s\n", progress, sid, pName);
+		}
+	}
+
+	/**
+	 * @date 2020-03-22 01:00:05
+	 *
+	 * Main entrypoint
+	 *
+	 * Create generator for given dataset and add newly unique signatures to the database
+	 *
+	 * @param {database_t} pStore - memory based database
+	 * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
+	 * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
+	 */
+	void main(database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
+		this->pStore = pStore;
+		this->pEvalFwd = pEvalFwd;
+		this->pEvalRev = pEvalRev;
+
+		pStore->numImprint = 1;
+		pStore->numSignature = 1;
+
+		// create generator
+		generatorTree_t generator(*this);
+
+		for (unsigned iRound=1; iRound<= arg_numNodes; iRound++) {
+			// find metrics for setting
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, iRound);
+			unsigned endpointsLeft = iRound * 2 + 1;
+
+			// clear tree
+			generator.clearGenerator();
+
+			// reset progress
+			this->progressHi = pMetrics ? pMetrics->numProgress : 0;
+			this->progress = 0;
+			this->tick = 0;
+
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureContext_t::foundTree);
+
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
+
+			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%d, /*numImprints=*/%d },\n",
+			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignature - 1, pStore->numImprint - 1);
+
+			if (this->progress != this->progressHi) {
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, iRound);
+			}
+		}
+
+		fprintf(stderr, "[%s] foundTree() for numNode=%d called %ld times\n", this->timeAsString(), arg_numNodes, this->progress);
 	}
 
 };
@@ -376,7 +472,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
 	 * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
 	 */
-	void performSelfTestInterleave(database_t *pStore) {
+	void performSelfTestInterleave(database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
 
 		unsigned numPassed = 0;
 
@@ -455,9 +551,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// mode
 			pStore->interleave = pInterleave->numStored;
-			pStore->interleaveFactor = pInterleave->interleaveFactor;
+			pStore->interleaveStep = pInterleave->interleaveStep;
 
-			// clear
+			// clear database imprint and index
 			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
 			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 
@@ -515,8 +611,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				seconds = 1;
 
 			// base estimated size on 791647 signatures
-			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleaveFactor*/=%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f}\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleaveFactor, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
+			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
+			        this->timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 			// test that number of imprints match
@@ -733,21 +829,23 @@ void sigalrmHandler(int sig) {
 void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 	fprintf(stderr, "usage: %s <output.db> <input.db> <numnode>\n\t%s --selftest <input.db>\n", argv[0], argv[0]);
 	if (verbose) {
-		fprintf(stderr, "\t   --force                 Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t-h --help                  This list\n");
-		fprintf(stderr, "\t   --imprintindex=<number> Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>   Imprint index interleave [default=%d]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --keep                  Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t   --maximprint=<number>   Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                 Say more\n");
-		fprintf(stderr, "\t   --ratio=<number>        Index/data ratio [default=%f]\n", app.opt_ratio);
-		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
-		fprintf(stderr, "\t   --test                  Run without output\n");
-		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", args->opt_timer);
-		fprintf(stderr, "\t-v --verbose               Say less\n");
+		fprintf(stderr, "\t   --force                   Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t-h --help                    This list\n");
+		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%d]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                   Say more\n");
+		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
+		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --test                    Run without output\n");
+		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t-v --verbose                 Say less\n");
 	}
 }
 
@@ -778,12 +876,14 @@ int main(int argc, char *const *argv) {
 			LO_INTERLEAVE,
 			LO_KEEP,
 			LO_MAXIMPRINT,
+			LO_MAXSIGNATURE,
 			LO_NOPARANOID,
 			LO_NOQNTF,
 			LO_PARANOID,
 			LO_QNTF,
 			LO_RATIO,
 			LO_SELFTEST,
+			LO_SIGNATUREINDEX,
 			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
@@ -796,26 +896,28 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",        1, 0, LO_DEBUG},
-			{"force",        0, 0, LO_FORCE},
-			{"help",         0, 0, LO_HELP},
-			{"imprintindex", 1, 0, LO_IMPRINTINDEX},
-			{"interleave",   1, 0, LO_INTERLEAVE},
-			{"keep",         0, 0, LO_KEEP},
-			{"maximprint",   1, 0, LO_MAXIMPRINT},
-			{"no-paranoid",  0, 0, LO_NOPARANOID},
-			{"no-qntf",      0, 0, LO_NOQNTF},
-			{"paranoid",     0, 0, LO_PARANOID},
-			{"qntf",         0, 0, LO_QNTF},
-			{"quiet",        2, 0, LO_QUIET},
-			{"ratio",        1, 0, LO_RATIO},
-			{"selftest",     0, 0, LO_SELFTEST},
-			{"test",         0, 0, LO_TEST},
-			{"text",         0, 0, LO_TEXT},
-			{"timer",        1, 0, LO_TIMER},
-			{"verbose",      2, 0, LO_VERBOSE},
+			{"debug",          1, 0, LO_DEBUG},
+			{"force",          0, 0, LO_FORCE},
+			{"help",           0, 0, LO_HELP},
+			{"imprintindex",   1, 0, LO_IMPRINTINDEX},
+			{"interleave",     1, 0, LO_INTERLEAVE},
+			{"keep",           0, 0, LO_KEEP},
+			{"maximprint",     1, 0, LO_MAXIMPRINT},
+			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
+			{"no-paranoid",    0, 0, LO_NOPARANOID},
+			{"no-qntf",        0, 0, LO_NOQNTF},
+			{"paranoid",       0, 0, LO_PARANOID},
+			{"qntf",           0, 0, LO_QNTF},
+			{"quiet",          2, 0, LO_QUIET},
+			{"ratio",          1, 0, LO_RATIO},
+			{"selftest",       0, 0, LO_SELFTEST},
+			{"signatureindex", 1, 0, LO_SIGNATUREINDEX},
+			{"test",           0, 0, LO_TEST},
+			{"text",           0, 0, LO_TEXT},
+			{"timer",          1, 0, LO_TIMER},
+			{"verbose",        2, 0, LO_VERBOSE},
 			//
-			{NULL,           0, 0, 0}
+			{NULL,             0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -864,6 +966,9 @@ int main(int argc, char *const *argv) {
 			case LO_MAXIMPRINT:
 				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 10);
 				break;
+			case LO_MAXSIGNATURE:
+				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 10);
+				break;
 			case LO_NOPARANOID:
 				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
@@ -885,6 +990,9 @@ int main(int argc, char *const *argv) {
 			case LO_SELFTEST:
 				app.opt_selftest++;
 				app.opt_test++;
+				break;
+			case LO_SIGNATUREINDEX:
+				app.opt_signatureIndexSize = (uint32_t) strtoul(optarg, NULL, 10);
 				break;
 			case LO_TEST:
 				app.opt_test++;
@@ -994,36 +1102,48 @@ int main(int argc, char *const *argv) {
 		assert(store.imprintIndexSize > store.maxImprint);
 	} else {
 		// settings for interleave
-		const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
-		assert(pInterleave);
+		{
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
+			assert(pMetrics); // was already checked
 
-		store.interleave = pInterleave->numStored;
-		store.interleaveFactor = pInterleave->interleaveFactor;
+			store.interleave = pMetrics->numStored;
+			store.interleaveStep = pMetrics->interleaveStep;
+		}
 
-		if (app.opt_maxImprint == 0)
-			store.maxImprint = getMaxImprints(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
-		else
+		if (app.opt_maxImprint == 0) {
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
+			store.maxImprint = pMetrics ? pMetrics->numImprints : 0;
+		} else {
 			store.maxImprint = app.opt_maxImprint;
+		}
 
 		if (app.opt_imprintIndexSize == 0)
 			store.imprintIndexSize = app.double2u32(store.maxImprint * app.opt_ratio);
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
-		if (app.opt_interleave == 0)
+		if (app.opt_maxSignature == 0) {
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
+			store.maxSignature = pMetrics ? pMetrics->numSignatures : 0;
+		} else {
+			store.maxSignature = app.opt_maxSignature;
+		}
+
+		if (app.opt_signatureIndexSize == 0)
+			store.signatureIndexSize = app.double2u32(store.maxSignature * app.opt_ratio);
+		else
+			store.signatureIndexSize = app.opt_signatureIndexSize;
+
+		if (store.interleave == 0 || store.interleaveStep == 0)
 			app.fatal("no preset for --interleave\n");
-		if (app.opt_maxImprint == 0)
+		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
 			app.fatal("no preset for --maximprint\n");
+		if (store.maxSignature == 0 || store.signatureIndexSize == 0)
+			app.fatal("no preset for --maxsignature\n");
 	}
 
 	// create new sections
 	store.create();
-
-	// dont let `create()` round dimensions
-	if (app.opt_selftest) {
-		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
-		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
-	}
 
 	// inherit from existing
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
@@ -1038,17 +1158,17 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
 
 	/*
-	 * Create datastructures
+	 * Create evaluator
 	 */
 
 	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	footprint_t *pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalFwd));
+	footprint_t *pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalRev));
 
 	// initialise evaluators
 	tinyTree_t tree(app);
-	tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+	tree.initialiseVector(app, pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(app, pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Test prerequisite
@@ -1056,8 +1176,12 @@ int main(int argc, char *const *argv) {
 	if (app.opt_selftest) {
 		// perform selfchecks
 
+		// dont let `create()` round dimensions
+		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
+		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
+
 		app.performSelfTestTree();
-		app.performSelfTestInterleave(&store);
+		app.performSelfTestInterleave(&store, pEvalFwd, pEvalRev);
 		app.performSelfTestWindow();
 
 		exit(0);
@@ -1067,7 +1191,7 @@ int main(int argc, char *const *argv) {
 	 * Invoke main entrypoint of application context
 	 */
 
-//	app.main(store, pEvalFwd, pEvalRev);
+	app.main(&store, pEvalFwd, pEvalRev);
 
 	/*
 	 * Save the database
