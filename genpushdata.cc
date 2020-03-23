@@ -15,6 +15,10 @@
  *
  * Templates are encoded as `"nextNumPlaceholders << 16 | TIBIT << 15 | Q << 10 | T << 5 | F << 0"`
  * QTF are positioned to match the same positions as on the runtime stack.
+ *
+ * @date 2020-03-23 04:08:05
+ *
+ * This code should be phased out in favour of creating it runtime as part of generator setup.
  */
 
 /*
@@ -92,8 +96,9 @@ enum {
 /// @global {number} - async indication that a timer interrupt occurred
 unsigned tick;
 
+// @date  2020-03-23 13:27:11 -- range: 0 < numPlaceholder <= MAXSLOTS
 // index tables pointing to start of data
-uint32_t pushIndex[MAXNODES * MAXSLOTS * 7];
+uint32_t pushIndex[MAXNODES * (MAXSLOTS + 1) * 7];
 
 /**
  * Test if a `Q,T,F` combo would flow through normalisation unchanged
@@ -156,39 +161,41 @@ uint32_t generateData(void) {
 	 */
 	for (unsigned iWildcard = 0; iWildcard < 0b111; iWildcard++) {
 
+		// @date  2020-03-23 13:27:11 -- range: 0 < numPlaceholder <= MAXSLOTS
+
 		// @formatter:off
 		for (unsigned numNode=0; numNode < MAXNODES; numNode++)
-		for (unsigned numPlaceholder=0; numPlaceholder < MAXSLOTS; numPlaceholder++) {
+		for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++) {
 		// @formatter:on
 
 			unsigned col = 0;
 
 			// Index position
-			unsigned ix = (iWildcard * MAXNODES + numNode) * MAXSLOTS + numPlaceholder;
+			unsigned ix = (iWildcard * MAXNODES + numNode) * (MAXSLOTS + 1) + numPlaceholder;
 
 			// test for proper section starts
 			if (numPlaceholder == 0 && numNode == 0) {
 				switch (iWildcard) {
 					case 0b000:
-						assert(PUSH_QTF * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_QTF * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b001:
-						assert(PUSH_QTP * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_QTP * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b010:
-						assert(PUSH_QPF * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_QPF * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b011:
-						assert(PUSH_QPP * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_QPP * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b100:
-						assert(PUSH_PTF * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_PTF * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b101:
-						assert(PUSH_PTP * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_PTP * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 					case 0b110:
-						assert(PUSH_PPF * (MAXNODES * MAXSLOTS) == ix);
+						assert(PUSH_PPF * (MAXNODES * (MAXSLOTS + 1)) == ix);
 						break;
 				}
 			}
@@ -222,7 +229,7 @@ uint32_t generateData(void) {
 
 				if (iWildcard & 0b100) {
 					Q = 0x7d; // assign unique value and break loop after finishing code block
-				} else if (newNumPlaceholder < MAXSLOTS) {
+				} else {
 					// Q must be a previously existing placeholder
 					if (Q > KSTART + newNumPlaceholder && Q < NSTART)
 						continue; // placeholder not created yet
@@ -230,15 +237,16 @@ uint32_t generateData(void) {
 					if (Q == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
+					if (newNumPlaceholder > MAXSLOTS)
+						continue; // skip if exceeds maximum
+
 					// verify that fielded does not overflow
 					assert(!(Q & ~PUSH_QTF_MASK));
-				} else {
-					continue; // skip if exceeds maximum
 				}
 
 				if (iWildcard & 0b010) {
 					To = 0x7e; // assign unique value and break loop after finishing code block
-				} else if (newNumPlaceholder < MAXSLOTS) {
+				} else {
 					// T must be a previously existing placeholder
 					if (To > KSTART + newNumPlaceholder && To < NSTART)
 						continue; // placeholder not created yet
@@ -246,15 +254,16 @@ uint32_t generateData(void) {
 					if (To == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
+					if (newNumPlaceholder > MAXSLOTS)
+						continue; // skip if exceeds maximum
+
 					// verify that fielded does not overflow
 					assert(!(To & ~PUSH_QTF_MASK));
-				} else {
-					continue; // skip if exceeds maximum
 				}
 
 				if (iWildcard & 0b001) {
 					F = 0x7f; // assign unique value and break loop after finishing code block
-				} else if (newNumPlaceholder < MAXSLOTS) {
+				} else {
 					// F must be a previously existing placeholder
 					if (F > KSTART + newNumPlaceholder && F < NSTART)
 						continue; // placeholder not created yet
@@ -262,10 +271,11 @@ uint32_t generateData(void) {
 					if (F == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
+					if (newNumPlaceholder > MAXSLOTS)
+						continue; // skip if exceeds maximum
+
 					// verify that fielded does not overflow
 					assert(!(F & ~PUSH_QTF_MASK));
-				} else {
-					continue; // skip if exceeds maximum
 				}
 
 				/*
@@ -327,7 +337,9 @@ uint32_t generateData(void) {
  */
 void generateIndex(void) {
 
-	printf("const uint32_t pushIndex[7][%d][%d] = { \n", MAXNODES, MAXSLOTS);
+	// @date  2020-03-23 13:27:11 -- range: 0 < numPlaceholder <= MAXSLOTS
+
+	printf("const uint32_t pushIndex[7][%d][%d] = { \n", MAXNODES, (MAXSLOTS + 1));
 
 	/*
 	 * Generate index
@@ -338,10 +350,10 @@ void generateIndex(void) {
 
 		for (unsigned numNode = 0; numNode < MAXNODES; numNode++) {
 			printf("\t{ ");
-			for (unsigned numPlaceholder = 0; numPlaceholder < MAXSLOTS; numPlaceholder++) {
+			for (unsigned numPlaceholder = 0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++) {
 
 				// Index position
-				unsigned ix = (iWildcard * MAXNODES + numNode) * MAXSLOTS + numPlaceholder;
+				unsigned ix = (iWildcard * MAXNODES + numNode) * (MAXSLOTS + 1) + numPlaceholder;
 
 				printf("0x%05x,", pushIndex[ix]);
 			}
@@ -428,7 +440,7 @@ int main(int argc, char *const *argv) {
 	printf("\n\n");
 
 	printf("enum {\n");
-	printf("\t// Maximum number of placeholders\n\tPUSH_MAXPLACEHOLDERS=%d,\n", MAXSLOTS);
+	printf("\t// Maximum number of slots\n\tPUSH_MAXSLOTS=%d,\n", MAXSLOTS);
 	printf("\t// Maximum number of nodes\n\tPUSH_MAXNODES=%d,\n", MAXNODES);
 	printf("\t// Should match `tinyTree_t::TINYTREE_KSTART\n\tPUSH_KSTART=%d,\n", KSTART);
 	printf("\t// Should match `tinyTree_t::TINYTREE_NSTART\n\tPUSH_NSTART=%d,\n", NSTART);

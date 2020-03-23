@@ -102,6 +102,9 @@ struct genrestartdataContext_t : context_t {
 
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
 			if (pMetrics) {
+				if (pMetrics->noauto)
+					continue; // skip automated handling
+
 				buildProgressIndex[arg_numNodes][arg_qntf] = generator.numFoundRestart;
 
 				// output section header
@@ -141,7 +144,7 @@ struct genrestartdataContext_t : context_t {
 					fprintf(stderr, "\r\e[K");
 
 				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
-					fprintf(stderr, "[%s] metricsGenerator_t { /*numSlots=*/%d, /*qntf=*/%d, /*numNodes=*/%d, /*numProgress=*/%ldLL}\n",
+					fprintf(stderr, "[%s] metricsGenerator_t { /*numSlots=*/%d, /*qntf=*/%d, /*numNodes=*/%d, /*numProgress=*/%12ldLL}\n",
 					        this->timeAsString(), MAXSLOTS, arg_qntf, arg_numNodes, this->progress);
 				}
 			}

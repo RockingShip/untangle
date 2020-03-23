@@ -153,12 +153,21 @@ struct gensignatureContext_t : context_t {
 	 *
 	 * found candidate.
 	 *
+	 * 2020-03-23 04:46:53
+	 *
+	 * Perform an associative lookup to determine signature footprint (sid) and orientation (tid)
+	 * expand collection of unique structures.
+	 *
+	 * If signature has swapping hints then apply the hint and deep-compare.
+	 * accept the
+	 *
+	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 */
 	void foundTree(generatorTree_t &tree) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), progress * 100.0 / progressHi);
+				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignature=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignature);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
 			tick = 0;
@@ -796,6 +805,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlots; pRound++) {
 
+			if (pRound->noauto)
+				continue; // skip automated handling
+
 			// find metrics for setting
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNodes);
 			assert(pMetrics);
@@ -834,7 +846,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
-			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*qntf=*/%d,/*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%d, /*numImprints=*/%d },\n",
+			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*qntf=*/%d,/*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%7d, /*numImprints=*/%10d },\n",
 			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNodes, pStore->numSignature, pStore->numImprint);
 
 			if (this->progress != this->progressHi) {

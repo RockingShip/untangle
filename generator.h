@@ -138,7 +138,7 @@ struct generatorTree_t : tinyTree_t {
 		// assert `pushdata.h` is usable
 		assert ((int) tinyTree_t::TINYTREE_KSTART == (int) PUSH_KSTART);
 		assert ((int) tinyTree_t::TINYTREE_NSTART == (int) PUSH_NSTART);
-		assert ((int) MAXSLOTS <= (int) PUSH_MAXPLACEHOLDERS);
+		assert ((int) MAXSLOTS <= (int) PUSH_MAXSLOTS);
 		assert ((int) tinyTree_t::TINYTREE_MAXNODES <= (int) PUSH_MAXNODES);
 
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32.

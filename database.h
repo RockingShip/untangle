@@ -23,6 +23,11 @@
  *      `collection_t* collection`         - Pointer to first entry in collection
  *      `uint32_t      collectionIndexSize - Index size. This must be prime
  *      `uint32_t      collectionIndex     - Start of index
+ *
+ * @date 2020-03-23 14:03:12
+ *
+ * `mmap()` is used to exploit the use of shared memory.
+ * When running parallel jobs the large imprint section can be shared.
  */
 
 /*
@@ -1042,8 +1047,8 @@ struct database_t {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
 					if (iCol == 0 || pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}",
-						       __PRETTY_FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid);
+						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
 					}
 				}
@@ -1077,8 +1082,8 @@ struct database_t {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
 					if (iRow == 0 || pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\"}\n",
-						       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid);
+						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
 					}
 				}
