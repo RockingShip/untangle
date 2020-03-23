@@ -137,6 +137,9 @@ struct metricsImprint_t {
 	/// @var {number} - Valid when match `MAXSLOTS`
 	unsigned numSlots;
 
+	/// @var {number} - Valid when match `qntf`
+	unsigned qntf;
+
 	/// @var {number} - Valid when match `interleave` (higher values implies more imprints per signature)
 	unsigned interleave;
 
@@ -147,9 +150,6 @@ struct metricsImprint_t {
 	 * non-Key
 	 */
 
-	/// @var {number} - Total number of signatures for settings
-	uint32_t numSignatures;
-
 	/// @var {number} - Total number of imprints for settings
 	uint32_t numImprints;
 
@@ -157,22 +157,47 @@ struct metricsImprint_t {
 } ;
 
 static const metricsImprint_t metricsImprint[] = {
-	{9, 504,  1, 6,      102,       0},
-	{9, 120,  1, 6,      170,       0},
-	{9, 3024, 1, 6,      200,       0},
-	{9, 720,  1, 6,      315,       0},
-	{9, 504,  2, 109,    6326,      0},
-	{9, 120,  2, 109,    8826,      0},
-	{9, 3024, 2, 109,    18705,     0},
-	{9, 720,  2, 109,    29742,     0},
-	{9, 120,  3, 5243,   545211,    0},
-	{9, 504,  3, 5243,   723550,    0},
-	{9, 3024, 3, 5243,   2861862,   0},
-	{9, 720,  3, 5243,   3032517,   0},
-	{9, 120,  4, 566597, 63530249,  0},
-	{9, 504,  4, 566597, 134897831, 0},
-	{9, 720,  4, 566597, 378396195, 0},
-	{9, 3024, 4, 566597, 648131162, 0},
+	{9, 1, 504,  0, 6,         0},
+	{9, 1, 120,  0, 7,         0},
+	{9, 1, 3024, 0, 7,         0},
+	{9, 1, 720,  0, 8,         0},
+	{9, 1, 504,  1, 62,        0},
+	{9, 1, 120,  1, 101,       0},
+	{9, 1, 3024, 1, 117,       0},
+	{9, 1, 720,  1, 181,       0},
+	{9, 1, 504,  2, 2177,      0},
+	{9, 1, 120,  2, 3177,      0},
+	{9, 1, 3024, 2, 6138,      0},
+	{9, 1, 720,  2, 9863,      0},
+	{9, 1, 120,  3, 126802,    0},
+	{9, 1, 504,  3, 149494,    0},
+	{9, 1, 3024, 3, 561057,    0},
+	{9, 1, 720,  3, 647618,    0},
+	{9, 1, 120,  4, 10425180,  0},
+	{9, 1, 504,  4, 19346575,  0},
+	{9, 1, 720,  4, 61887091,  0},
+	{9, 1, 3024, 4, 87860469,  0},
+	//
+	{9, 0, 504,  0, 6,         0},
+	{9, 0, 120,  0, 7,         0},
+	{9, 0, 3024, 0, 7,         0},
+	{9, 0, 720,  0, 8,         0},
+	{9, 0, 504,  1, 103,       0},
+	{9, 0, 120,  1, 171,       0},
+	{9, 0, 3024, 1, 201,       0},
+	{9, 0, 720,  1, 316,       0},
+	{9, 0, 504,  2, 6327,      0},
+	{9, 0, 120,  2, 8827,      0},
+	{9, 0, 3024, 2, 18706,     0},
+	{9, 0, 720,  2, 29743,     0},
+	{9, 0, 120,  3, 591412,    0},
+	{9, 0, 504,  3, 775393,    0},
+	{9, 0, 3024, 3, 3053157,   0},
+	{9, 0, 720,  3, 3283078,   0},
+	{9, 0, 120,  4, 89007120,  0}, //  8G memory
+	{9, 0, 504,  4, 181883642, 0}, // 15G memory
+	{9, 0, 720,  4, 531740476, 0}, // 45G memory
+	{9, 0, 3024, 4, 0,         0}, // too large
 	//
 	{0}
 };
@@ -183,15 +208,20 @@ static const metricsImprint_t metricsImprint[] = {
  * Get metrics for imprints
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
+ * @param {number} qntf - `QnTF-only` mode
  * @param {number} interleave - The interleave value communicated with user
  * @param {number} numNodes - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned interleave, unsigned numNodes) {
+const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNodes) {
+	// qntf is 0/1
+	if (qntf)
+		qntf = 1;
+
 	// walk through list
 	for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlots == numSlots && pMetrics->interleave == interleave && pMetrics->numNodes == numNodes)
+		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNodes == numNodes)
 			return pMetrics; // found
 	}
 	// not found
@@ -222,23 +252,28 @@ struct metricsGenerator_t {
 	/// @var {number} - Total number of `foundTrees()` called
 	uint64_t numProgress;
 
+	/// @var {number} - Total number of `foundTrees()` called
+	uint64_t numSignatures;
+
 	int zero; // to screen align data
 };
 
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 0, 1, 6,             0},
-	{9, 0, 2, 424,           0},
-	{9, 0, 3, 56744,         0}, // 2020-03-20 21:00:56
-	{9, 0, 4, 12273554,      0}, // 2020-03-20 21:01:22
-	{9, 0, 5, 3822190098LL,  0}, // 2020-03-20 21:02:54
-//	{9, 0, 6, 1556055783374LL, 0}, // 2020-03-20 18:45:50
+	{9, 1, 0, 0,             3,      0},
+	{9, 0, 0, 0,             3,      0},
+	{9, 1, 1, 4,             5,      0},
+	{9, 0, 1, 6,             7,      0},
+	{9, 1, 2, 180LL,         49,     0},
+	{9, 0, 2, 464LL,         110,    0},
+	{9, 1, 3, 21645LL,       1311,   0},
+	{9, 0, 3, 103240LL,      5666,   0},
+	{9, 1, 4, 4807294LL,     96363,  0},
+	{9, 0, 4, 43544252LL,    791647, 0},
+	{9, 1, 5, 1682420716LL,  0,      0},
+	{9, 0, 5, 29289824236LL, 0,      0},
 	//
-	{9, 1, 1, 4,             0},
-	{9, 1, 2, 154,           0},
-	{9, 1, 3, 10874,         0}, // 2020-03-20 21:04:38
-	{9, 1, 4, 1222578,       0}, // 2020-03-20 21:05:06
-	{9, 1, 5, 196525924,     0}, // 2020-03-20 21:07:59
-	{9, 1, 6, 41814086105LL, 0}, // 2020-03-20 21:28:31
+	//	{9, 1, 6, 41814086105LL, 0},
+	//	{9, 0, 6, 1556055783374LL, 0},
 	//
 	{0}
 };
@@ -254,7 +289,7 @@ static const metricsGenerator_t metricsGenerator[] = {
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
 const metricsGenerator_t * getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNodes) {
-	// qntf should be boolean
+	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
 

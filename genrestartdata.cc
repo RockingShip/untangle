@@ -199,14 +199,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	}
 
 	/**
-	 * @date 2020-03-21 17:36:59
-	 *
-	 * Selftest windowing
-	 */
-	void selftestWindow(void) {
-	}
-
-	/**
 	 * @date 2020-03-18 22:17:26
 	 *
 	 * found candidate.

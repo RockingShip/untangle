@@ -230,8 +230,6 @@ uint32_t generateData(void) {
 					if (Q == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
-					if (Q >= NSTART) continue; //!!
-
 					// verify that fielded does not overflow
 					assert(!(Q & ~PUSH_QTF_MASK));
 				} else {
@@ -248,8 +246,6 @@ uint32_t generateData(void) {
 					if (To == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
 
-					if (To >= NSTART) continue; //!!
-
 					// verify that fielded does not overflow
 					assert(!(To & ~PUSH_QTF_MASK));
 				} else {
@@ -265,8 +261,6 @@ uint32_t generateData(void) {
 					// bump placeholder if using for the first time
 					if (F == KSTART + newNumPlaceholder)
 						newNumPlaceholder++;
-
-					if (F >= NSTART) continue; //!!
 
 					// verify that fielded does not overflow
 					assert(!(F & ~PUSH_QTF_MASK));

@@ -106,6 +106,8 @@ struct gensignatureContext_t : context_t {
 	uint32_t opt_maxImprint;
 	/// @var {number} Maximum number of signatures to be stored database
 	uint32_t opt_maxSignature;
+	/// @var {number} --metrics, Collect metrics intended for "metrics.h"
+	unsigned opt_metrics;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} size of signature index WARNING: must be prime
@@ -121,7 +123,7 @@ struct gensignatureContext_t : context_t {
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
 	footprint_t *pEvalRev;
-	
+
 	/**
 	 * Constructor
 	 */
@@ -131,10 +133,11 @@ struct gensignatureContext_t : context_t {
 		arg_numNodes = 0;
 		opt_force = 0;
 		opt_imprintIndexSize = 0;
-		opt_interleave = 720;
+		opt_interleave = 504;
 		opt_keep = 0;
 		opt_maxImprint = 0;
 		opt_maxSignature = 0;
+		opt_metrics = 0;
 		opt_ratio = 3.0;
 		opt_signatureIndexSize = 0;
 		opt_test = 0;
@@ -202,9 +205,9 @@ struct gensignatureContext_t : context_t {
 		// create generator
 		generatorTree_t generator(*this);
 
-		for (unsigned iRound=1; iRound<= arg_numNodes; iRound++) {
+		for (unsigned iRound = 0; iRound <= arg_numNodes; iRound++) {
 			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, iRound);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, iRound);
 			unsigned endpointsLeft = iRound * 2 + 1;
 
 			// clear tree
@@ -215,13 +218,20 @@ struct gensignatureContext_t : context_t {
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureContext_t::foundTree);
+			if (iRound == 0) {
+				generator.root = 0;
+				foundTree(generator);
+				generator.root = 1;
+				foundTree(generator);
+			} else {
+				generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureContext_t::foundTree);
+			}
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
 			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%d, /*numImprints=*/%d },\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignature - 1, pStore->numImprint - 1);
+			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignature, pStore->numImprint);
 
 			if (this->progress != this->progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
@@ -285,7 +295,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		{
 			tree.decodeSafe("ab>ba+^");
 			const char *pName = tree.encode(tree.root);
-			if(::strcmp(pName, "ab+ab>^") != 0) {
+			if (::strcmp(pName, "ab+ab>^") != 0) {
 				printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
 				       __FUNCTION__, pName, "ab+ab>^");
 				exit(1);
@@ -717,7 +727,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		generatorTree_t generator(*this);
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNodes * 2 + 1;
@@ -731,7 +741,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// apply settings
-			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
@@ -754,7 +764,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// apply settings
-			generator.flags = (pMetrics->qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = 0;
 			generator.windowHi = 0;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
@@ -774,6 +784,66 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", this->timeAsString(), __FUNCTION__);
 	}
+
+	void performMetrics(database_t *pStore, footprint_t *pEvalFwd, footprint_t *pEvalRev) {
+		this->pStore = pStore;
+		this->pEvalFwd = pEvalFwd;
+		this->pEvalRev = pEvalRev;
+
+
+		// create generator
+		generatorTree_t generator(*this);
+
+		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlots; pRound++) {
+
+			// find metrics for setting
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNodes);
+			assert(pMetrics);
+			const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, pRound->interleave);
+			assert(pInterleave);
+
+			// prepare database
+			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
+			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+			memset(pStore->signatures, 0, sizeof(*pStore->signatures) * pStore->maxSignature);
+			memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
+			pStore->numImprint = 1;
+			pStore->numSignature = 1;
+			pStore->interleave = pInterleave->numStored;
+			pStore->interleaveStep = pInterleave->interleaveStep;
+
+			// prepare generator
+			generator.flags = pRound->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			generator.clearGenerator();
+
+			// prepare I/O context
+			this->progressHi = pMetrics ? pMetrics->numProgress : 0;
+			this->progress = 0;
+			this->tick = 0;
+
+			// special case (root only)
+			generator.root = 0;
+			foundTree(generator);
+			generator.root = 1;
+			foundTree(generator);
+
+			// regulars
+			unsigned endpointsLeft = pRound->numNodes * 2 + 1;
+			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTree);
+
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
+
+			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*qntf=*/%d,/*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%d, /*numImprints=*/%d },\n",
+			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNodes, pStore->numSignature, pStore->numImprint);
+
+			if (this->progress != this->progressHi) {
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, pRound->numNodes);
+			}
+		}
+	}
+
 };
 
 
@@ -836,6 +906,7 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
 		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
@@ -877,6 +948,7 @@ int main(int argc, char *const *argv) {
 			LO_KEEP,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
+			LO_METRICS,
 			LO_NOPARANOID,
 			LO_NOQNTF,
 			LO_PARANOID,
@@ -904,6 +976,7 @@ int main(int argc, char *const *argv) {
 			{"keep",           0, 0, LO_KEEP},
 			{"maximprint",     1, 0, LO_MAXIMPRINT},
 			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
+			{"metrics",        0, 0, LO_METRICS},
 			{"no-paranoid",    0, 0, LO_NOPARANOID},
 			{"no-qntf",        0, 0, LO_NOQNTF},
 			{"paranoid",       0, 0, LO_PARANOID},
@@ -968,6 +1041,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_MAXSIGNATURE:
 				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 10);
+				break;
+			case LO_METRICS:
+				app.opt_metrics++;
 				break;
 			case LO_NOPARANOID:
 				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
@@ -1090,6 +1166,15 @@ int main(int argc, char *const *argv) {
 	 * The ratio between index and data size is called `ratio`.
 	 */
 
+	// settings for interleave
+	{
+		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
+		assert(pMetrics); // was already checked
+
+		store.interleave = pMetrics->numStored;
+		store.interleaveStep = pMetrics->interleaveStep;
+	}
+
 	if (app.opt_selftest) {
 		// force dimensions when self testing. Need to store a single footprint
 		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
@@ -1101,17 +1186,9 @@ int main(int argc, char *const *argv) {
 		 */
 		assert(store.imprintIndexSize > store.maxImprint);
 	} else {
-		// settings for interleave
-		{
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
-			assert(pMetrics); // was already checked
-
-			store.interleave = pMetrics->numStored;
-			store.interleaveStep = pMetrics->interleaveStep;
-		}
 
 		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
 			store.maxImprint = pMetrics ? pMetrics->numImprints : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
@@ -1123,7 +1200,7 @@ int main(int argc, char *const *argv) {
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxSignature == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_interleave, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxSignature = pMetrics ? pMetrics->numSignatures : 0;
 		} else {
 			store.maxSignature = app.opt_maxSignature;
@@ -1191,7 +1268,12 @@ int main(int argc, char *const *argv) {
 	 * Invoke main entrypoint of application context
 	 */
 
-	app.main(&store, pEvalFwd, pEvalRev);
+	if (app.opt_metrics) {
+		app.performMetrics(&store, pEvalFwd, pEvalRev);
+		exit(0);
+	} else {
+		app.main(&store, pEvalFwd, pEvalRev);
+	}
 
 	/*
 	 * Save the database
