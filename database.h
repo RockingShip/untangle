@@ -76,9 +76,9 @@
  *
  * The database file header
  *
- * @typedef {object} FileHeader_t
+ * @typedef {object} fileHeader_t
  */
-struct FileHeader_t {
+struct fileHeader_t {
 	// environment metrics
 	uint32_t magic;                  // magic+version
 	uint32_t magic_flags;            // conditions it was created
@@ -143,7 +143,7 @@ struct database_t {
 	// @formatter:off
 	int                hndl;
 	const uint8_t      *rawDatabase;            // base location of mmap segment
-	const FileHeader_t *dbHeader;               // segment header
+	fileHeader_t       fileHeader;                // file header
 	uint32_t           flags;                   // creation constraints
 	uint32_t           allocFlags;              // memory constraints
 	// transforms
@@ -185,7 +185,7 @@ struct database_t {
 
 		hndl = 0;
 		rawDatabase = NULL;
-		dbHeader = NULL;
+		memset(&fileHeader, 0, sizeof(fileHeader));
 		allocFlags = 0;
 
 		// transform store
@@ -415,48 +415,48 @@ struct database_t {
 			hndl = 0;
 		}
 
-		dbHeader = (FileHeader_t *) rawDatabase;
-		if (dbHeader->magic != FILE_MAGIC)
-			ctx.fatal("db version missmatch. Encountered %08x, Expected %08x, \n", dbHeader->magic, FILE_MAGIC);
-		if (dbHeader->magic_maxSlots != MAXSLOTS)
-			ctx.fatal("db magic_maxslots. Encountered %d, Expected %d\n", dbHeader->magic_maxSlots, MAXSLOTS);
-		if (dbHeader->offEnd != (uint64_t) sbuf.st_size)
-			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", dbHeader->offEnd, (uint64_t) sbuf.st_size);
-		if (dbHeader->magic_sizeofImprint != sizeof(imprint_t))
-			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", dbHeader->magic_sizeofImprint, sizeof(imprint_t));
-		if (dbHeader->magic_sizeofSignature != sizeof(signature_t))
-			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", dbHeader->magic_sizeofSignature, sizeof(signature_t));
+		::memcpy(&fileHeader, rawDatabase, sizeof(fileHeader));
+		if (fileHeader.magic != FILE_MAGIC)
+			ctx.fatal("db version missmatch. Encountered %08x, Expected %08x, \n", fileHeader.magic, FILE_MAGIC);
+		if (fileHeader.magic_maxSlots != MAXSLOTS)
+			ctx.fatal("db magic_maxslots. Encountered %d, Expected %d\n", fileHeader.magic_maxSlots, MAXSLOTS);
+		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
+			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", fileHeader.offEnd, (uint64_t) sbuf.st_size);
+		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
+			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
+		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
+			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
 
-		flags = dbHeader->magic_flags;
+		flags = fileHeader.magic_flags;
 
 		/*
 		 * map sections to starting positions in data
 		 */
 
 		// transforms
-		maxTransform = numTransform = dbHeader->numTransform;
-		fwdTransformData = (uint64_t *) (rawDatabase + dbHeader->offFwdTransforms);
-		revTransformData = (uint64_t *) (rawDatabase + dbHeader->offRevTransforms);
-		fwdTransformNames = (transformName_t *) (rawDatabase + dbHeader->offFwdTransformNames);
-		revTransformNames = (transformName_t *) (rawDatabase + dbHeader->offRevTransformNames);
-		revTransformIds = (uint32_t *) (rawDatabase + dbHeader->offRevTransformIds);
-		transformIndexSize = dbHeader->transformIndexSize;
-		fwdTransformNameIndex = (uint32_t *) (rawDatabase + dbHeader->offFwdTransformNameIndex);
-		revTransformNameIndex = (uint32_t *) (rawDatabase + dbHeader->offRevTransformNameIndex);
+		maxTransform = numTransform = fileHeader.numTransform;
+		fwdTransformData = (uint64_t *) (rawDatabase + fileHeader.offFwdTransforms);
+		revTransformData = (uint64_t *) (rawDatabase + fileHeader.offRevTransforms);
+		fwdTransformNames = (transformName_t *) (rawDatabase + fileHeader.offFwdTransformNames);
+		revTransformNames = (transformName_t *) (rawDatabase + fileHeader.offRevTransformNames);
+		revTransformIds = (uint32_t *) (rawDatabase + fileHeader.offRevTransformIds);
+		transformIndexSize = fileHeader.transformIndexSize;
+		fwdTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offFwdTransformNameIndex);
+		revTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offRevTransformNameIndex);
 
 		// imprints
-		interleave = dbHeader->interleave;
-		interleaveStep = dbHeader->interleaveStep;
-		maxImprint = numImprint = dbHeader->numImprints;
-		imprints = (imprint_t *) (rawDatabase + dbHeader->offImprints);
-		imprintIndexSize = dbHeader->imprintIndexSize;
-		imprintIndex = (uint32_t *) (rawDatabase + dbHeader->offImprintIndex);
+		interleave = fileHeader.interleave;
+		interleaveStep = fileHeader.interleaveStep;
+		maxImprint = numImprint = fileHeader.numImprints;
+		imprints = (imprint_t *) (rawDatabase + fileHeader.offImprints);
+		imprintIndexSize = fileHeader.imprintIndexSize;
+		imprintIndex = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
 
 		// signatures
-		maxSignature = numSignature = dbHeader->numSignature;
-		signatures = (signature_t *) (rawDatabase + dbHeader->offSignatures);
-		signatureIndexSize = dbHeader->signatureIndexSize;
-		signatureIndex = (uint32_t *) (rawDatabase + dbHeader->offSignatureIndex);
+		maxSignature = numSignature = fileHeader.numSignature;
+		signatures = (signature_t *) (rawDatabase + fileHeader.offSignatures);
+		signatureIndexSize = fileHeader.signatureIndexSize;
+		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
 	};
 
 	/**
@@ -493,7 +493,7 @@ struct database_t {
 			/*
 			 * Database was opened with `mmap()`
 			 */
-			if (::munmap((void *) rawDatabase, dbHeader->offEnd))
+			if (::munmap((void *) rawDatabase, fileHeader.offEnd))
 				ctx.fatal("munmap() returned: %m\n");
 			if (::close(hndl))
 				ctx.fatal("close() returned: %m\n");
@@ -513,10 +513,6 @@ struct database_t {
 	 * @param {string} fileName - File to write to
 	 */
 	void save(const char *fileName) {
-
-		// activate a local header
-		static FileHeader_t fileHeader;
-		dbHeader = &fileHeader;
 
 		::memset(&fileHeader, 0, sizeof(fileHeader));
 
@@ -1152,19 +1148,18 @@ struct database_t {
 	 *
 	 * @date 2020-03-12 19:36:56
 	 */
-	static json_t *headerInfo(json_t *jResult, const FileHeader_t *header) {
+	json_t *jsonInfo(json_t *jResult) {
 		if (jResult == NULL)
 			jResult = json_object();
-		json_object_set_new_nocheck(jResult, "flags", json_integer(header->magic_flags));
-		json_object_set_new_nocheck(jResult, "maxSlots", json_integer(header->magic_maxSlots));
-		json_object_set_new_nocheck(jResult, "interleave", json_integer(header->interleave));
-		json_object_set_new_nocheck(jResult, "numTransform", json_integer(header->numTransform));
-		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(header->transformIndexSize));
-		json_object_set_new_nocheck(jResult, "numImprints", json_integer(header->numImprints));
-		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(header->imprintIndexSize));
-		json_object_set_new_nocheck(jResult, "numSignature", json_integer(header->numSignature));
-		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(header->signatureIndexSize));
-		json_object_set_new_nocheck(jResult, "size", json_integer(header->offEnd));
+		json_object_set_new_nocheck(jResult, "flags", json_integer(this->flags));
+		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
+		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
+		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
+		json_object_set_new_nocheck(jResult, "numImprints", json_integer(this->numImprint));
+		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
+		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
+		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
+		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader.offEnd));
 
 		return jResult;
 	}

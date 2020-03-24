@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-11 21:53:16
@@ -1006,7 +1006,7 @@ int main(int argc, char *const *argv) {
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-		store.headerInfo(jResult, store.dbHeader);
+		store.jsonInfo(jResult);
 		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 #endif
