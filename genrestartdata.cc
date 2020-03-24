@@ -115,8 +115,8 @@ struct genrestartdataContext_t : context_t {
 
 				// apply settings
 				generator.flags = (arg_qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
-				this->progressHi = pMetrics->numProgress;
-				this->progress = 0;
+
+				setupETA(pMetrics->numProgress);
 				this->tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
@@ -210,11 +210,23 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 */
 	void foundTreeDisplay(generatorTree_t &tree) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), progress * 100.0 / progressHi);
-			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
 			tick = 0;
+			if (progressHi) {
+				int perSecond = this->updateETA();
+				int eta = (int) ((progressHi - progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS);
+			} else {
+				fprintf(stderr, "\r\e[K[%s] %lu",
+				        timeAsString(), progress);
+			}
 		}
 
 		/*
@@ -268,8 +280,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
-		this->progressHi = pMetrics ? pMetrics->numProgress : 0;
-		this->progress = 0;
+		this->setupETA(pMetrics ? pMetrics->numProgress : 0);
 		this->tick = 0;
 
 		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::foundTreeDisplay);

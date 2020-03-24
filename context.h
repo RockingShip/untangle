@@ -114,10 +114,22 @@ struct context_t {
 	/// @var {uint64_t} - number of compares in baseTree::hash() (collisions)
 	uint64_t cntCompare;
 
-	/// @var {uint64_t} - Upper limit of progress tracker
-	uint64_t progressHi;
 	/// @var {uint64_t} - Current position of progress tracker
 	uint64_t progress;
+	/// @var {uint64_t} - Upper limit of progress tracker
+	uint64_t progressHi;
+	/// @var {double} - feedback coefficient for average operations/second
+	double progressCoef;
+	/// @var {double} - Starting Coefficient. To dampen eta prediction when training
+	double progressCoefMin;
+	/// @var {double} - Target coefficient after training
+	double progressCoefMax;
+	/// @var {double} - Coefficient training multiplier
+	double progressCoefMultiplier;
+	/// @var {uint64_t} - progress during last inverval
+	uint64_t progressLast;
+	/// @var {double} - ETA speed
+	double progressSpeed;
 
 	/**
 	 * Constructor
@@ -133,6 +145,12 @@ struct context_t {
 		cntCompare = 0;
 		progress = 0;
 		progressHi = 0;
+		progressCoef = 0;
+		progressCoefMin = 0.01;
+		progressCoefMax = 1.00;
+		progressCoefMultiplier = 1.05;
+		progressLast = 0;
+		progressSpeed = 0;
 	}
 
 	/**
@@ -285,6 +303,53 @@ struct context_t {
 		if (u64 > 4294000079)
 			return 4294000079;
 		return (uint32_t) u64;
+	}
+
+	/**
+	 * @date 2020-03-24 00:15:48
+	 *
+	 * Setup progress for ETA
+	 *
+	 * @param {uint64_t} progressHi - Expected end condition
+	 */
+	void setupETA(uint64_t progressHi) {
+		this->progress      = 0;
+		this->progressHi    = progressHi;
+		this->progressCoef  = this->progressCoefMin;
+		this->progressLast  = 0;
+		this->progressSpeed = 0;
+	}
+
+	/**
+	 * @date 2020-03-24 00:13:19
+	 *
+	 * Update progress and return ETA.
+	 * Principle is that of R/C circuits used in electronics
+	 *
+	 * @return {number} - expected increment per second
+	 */
+	uint32_t updateETA(void) {
+		// update speed
+		if (progressSpeed == 0)
+			progressSpeed = (int) (progress - progressLast); // first time
+		else
+			progressSpeed += ((int) (progress - progressLast) - progressSpeed) * progressCoef; // update
+
+		// training
+		progressCoef *= progressCoefMultiplier;
+		if (progressCoef > progressCoefMax)
+			progressCoef = progressCoefMax; // end of training
+
+		int perInterval = progressSpeed;
+		if (!perInterval)
+			perInterval = 1; // avoid zero
+		int perSecond = perInterval / opt_timer;
+		if (!perSecond)
+			perSecond = 1; // avoid zero
+
+		progressLast = progress;
+
+		return perSecond;
 	}
 
 };

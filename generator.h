@@ -556,11 +556,25 @@ struct generatorTree_t : tinyTree_t {
 				 * Generate restart data
 				 */
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					if (ctx.progressHi)
-						fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), ctx.progress * 100.0 / ctx.progressHi);
-					else
-						fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), ctx.progress);
 					ctx.tick = 0;
+
+					if (ctx.progressHi) {
+						int perSecond = ctx.updateETA();
+
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+					} else {
+						fprintf(stderr, "\r\e[K[%s] %lu",
+						        ctx.timeAsString(), ctx.progress);
+					}
 				}
 
 				// tree is incomplete and requires a slightly different notation
