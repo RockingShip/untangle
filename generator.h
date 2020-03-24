@@ -59,7 +59,6 @@
 #include <assert.h>
 #include <string.h>
 #include "tinytree.h"
-#include "pushdata.h"
 
 /**
  * @date 2020-03-17 20:22:08
@@ -84,9 +83,6 @@ struct generatorTree_t : tinyTree_t {
 		PACKED_MASK = (1 << PACKED_WIDTH) - 1,
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
-		PACKED_TIBIT = 1 << (PACKED_WIDTH * 3),
-
-		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
 		PACKED_FPOS = (PACKED_WIDTH * 0),
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
@@ -94,6 +90,15 @@ struct generatorTree_t : tinyTree_t {
 
 		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
 		PACKED_QPOS = (PACKED_WIDTH * 2),
+
+		/// @constant {number} - Position of `inverted-T` bit
+		PACKED_TIPOS = (PACKED_WIDTH * 3),
+
+		/// @constant {number} - Maximum length of tree name. leaf + (3 operands + 1 opcode) per node + root-invert + terminator
+		PACKED_TIBIT = 1 << PACKED_TIPOS,
+
+		/// @constant {number} - Size of packed word in bits
+		PACKED_SIZE = 16,
 
 		/// @constant {number} - used for `pIsType[]` to indicate type of node
 		PACKED_OR = 0x01,
@@ -103,6 +108,18 @@ struct generatorTree_t : tinyTree_t {
 		PACKED_AND = 0x10,
 		PACKED_QTF = 0x20,
 		PACKED_UNORDERED = 0x40,
+
+		/// @constant {number} - size of `pTemplateData[]` (166448 for `QnTF-only`, 314772 otherwise)
+		TEMPLATE_MAXDATA = 320000,
+
+		/// @constant {number} - Different sections in `pTemplateData[]`
+		TEMPLATE_QTF = 0b000,
+		TEMPLATE_QTP = 0b001,
+		TEMPLATE_QPF = 0b010,
+		TEMPLATE_QPP = 0b011,
+		TEMPLATE_PTF = 0b100,
+		TEMPLATE_PTP = 0b101,
+		TEMPLATE_PPF = 0b110,
 	};
 
 	/// @var {number[]} lookup table for `push()` index by packed `QTF`
@@ -135,6 +152,12 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {number} Number of restart entries found
 	uint64_t numFoundRestart;
 
+	/// @var {number[]} template data for generator
+	uint32_t *pTemplateData;
+
+	/// @var {number[7][10][10]} starting offset in `templateData[]`. `templateIndex[SECTION][numNode][numPlaceholder]`
+	uint32_t templateIndex[7][tinyTree_t::TINYTREE_MAXNODES][MAXSLOTS + 1];
+
 	/**
 	 * @date 2020-03-18 18:45:33
 	 *
@@ -143,25 +166,21 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {context_t} ctx - I/O context
 	 */
 	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx) {
-		// assert `pushdata.h` is usable
-		assert ((int) tinyTree_t::TINYTREE_KSTART == (int) PUSH_KSTART);
-		assert ((int) tinyTree_t::TINYTREE_NSTART == (int) PUSH_NSTART);
-		assert ((int) MAXSLOTS <= (int) PUSH_MAXSLOTS);
-		assert ((int) tinyTree_t::TINYTREE_MAXNODES <= (int) PUSH_MAXNODES);
-
-		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32.
-		assert(TINYTREE_NEND < 32);
+		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
+		assert(TINYTREE_NEND < 32 - 3);
 
 		windowLo = 0;
 		windowHi = 0;
 		pRestartData = NULL;
 		restartTick = 0;
 		numFoundRestart = 0;
+		memset(templateIndex, 0, sizeof(templateIndex));
 
 		// allocate structures
-		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << 16, sizeof(*this->pIsType));
-		pCacheQTF = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheQTF", 1 << 16, sizeof(*this->pCacheQTF));
-		pCacheVersion = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheVersion", 1 << 16, sizeof(*this->pCacheVersion));
+		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << PACKED_SIZE, sizeof(*this->pIsType));
+		pCacheQTF = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheQTF", 1 << PACKED_SIZE, sizeof(*this->pCacheQTF));
+		pCacheVersion = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheVersion", 1 << PACKED_SIZE, sizeof(*this->pCacheVersion));
+		pTemplateData = (uint32_t *) ctx.myAlloc("generatorTree_t::pTemplateData", TEMPLATE_MAXDATA, sizeof(*pTemplateData));
 
 		// clear versioned memory
 		iVersion = 0;
@@ -179,6 +198,7 @@ struct generatorTree_t : tinyTree_t {
 		ctx.myFree("generatorTree_t::pIsType", this->pIsType);
 		ctx.myFree("generatorTree_t::pCacheQTF", this->pCacheQTF);
 		ctx.myFree("generatorTree_t::pCacheVersion", this->pCacheVersion);
+		ctx.myFree("generatorTree_t::pTemplateData", this->pTemplateData);
 	}
 
 	/**
@@ -190,7 +210,7 @@ struct generatorTree_t : tinyTree_t {
 		// bump incarnation.
 		if (iVersion == 0) {
 			// clear versioned memory
-			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1 << 16)));
+			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1 << PACKED_SIZE)));
 		}
 		iVersion++; // when overflows, next call will clear
 
@@ -211,9 +231,9 @@ struct generatorTree_t : tinyTree_t {
 
 		// @formatter:off
 		for (uint32_t Ti = 0; Ti < 2; Ti++)
-		for (uint32_t F = 0; F < tinyTree_t::TINYTREE_NEND; F++)
-		for (uint32_t To = 0; To < tinyTree_t::TINYTREE_NEND; To++)
-		for (uint32_t Q = 0; Q < tinyTree_t::TINYTREE_NEND; Q++) {
+		for (uint32_t F = 0; F < (1 << PACKED_WIDTH); F++)
+		for (uint32_t To = 0; To < (1 << PACKED_WIDTH); To++)
+		for (uint32_t Q = 0; Q < (1 << PACKED_WIDTH); Q++) {
 		// @formatter:on
 
 			// create packed notation
@@ -277,6 +297,139 @@ struct generatorTree_t : tinyTree_t {
 			if ((pIsType[ix] & PACKED_AND) && Q > To)
 				pIsType[ix] |= PACKED_UNORDERED;
 		}
+
+		/*
+		 * @date 2020-03-18 10:52:57
+		 *
+		 * Wildcard values represent node-references that are popped from the stack during runtime.
+		 * Zero means no wildcard, otherwise it must be a value greater than NSTART
+		 */
+
+		uint32_t numTemplateData = 1; // skip initial zero
+
+		/*
+		 * Run in multiple rounds, each round is a 3-bit mask, each bit indicating which operands are wildcards
+		 * Do not include all bits set because that implies at runtime all operands were popped from stack with optimized handling
+		 */
+		for (unsigned iWildcard = 0; iWildcard < 0b111; iWildcard++) {
+
+			// @date  2020-03-23 13:27:11 -- range: 0 < numPlaceholder <= MAXSLOTS
+
+			// @formatter:off
+			for (unsigned numNode=0; numNode < tinyTree_t::TINYTREE_MAXNODES; numNode++)
+			for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++) {
+			// @formatter:on
+
+				/*
+				 * Iterate through all possible `Q,T,F` possibilities
+				 * First all the `QnTF` (Ti=1), then all the `QTF` (Ti=0)
+				 *
+				 * This to allow early bailout of list handling in `QnTF` mode.
+				 */
+
+				templateIndex[iWildcard][numNode][numPlaceholder] = numTemplateData;
+
+				// @formatter:off
+				for (int Ti = 1; Ti >= 0; Ti--)
+				for (unsigned Q = 0; Q < tinyTree_t::TINYTREE_NSTART + numNode; Q++)
+				for (unsigned To = 0; To < tinyTree_t::TINYTREE_NSTART + numNode; To++)
+				for (unsigned F = 0; F < tinyTree_t::TINYTREE_NSTART + numNode; F++) {
+				// @formatter:on
+
+					if (!Ti && (this->flags & context_t::MAGICMASK_QNTF)) {
+						// reject `non-QnTF` template in `QnTF-only` invocation
+						continue;
+					}
+
+					unsigned nextPlaceholder = numPlaceholder;
+
+					/*
+					 * Test if some placeholders are wildcards.
+					 * Wildcards get runtime replaced by popped values from the stack
+					 * The replacement values must be higher than the end-loop condition
+					 *
+					 * @date 2020-03-24 19:45:38
+					 *   Generator will never exceed 6-7 nodes.
+					 *   Wildcard replacements should fit in 5 bits because of `pIsTYpe[]`
+					 *   Use top-3 id's that fit in 5 bits
+					 */
+					if (iWildcard & 0b100) {
+						Q = 0x1d; // assign unique value and break loop after finishing code block
+					} else {
+						// Q must be a previously existing placeholder
+						if (Q > tinyTree_t::TINYTREE_KSTART + nextPlaceholder && Q < tinyTree_t::TINYTREE_NSTART)
+							continue; // placeholder not created yet
+						// bump placeholder if using for the first time
+						if (Q == tinyTree_t::TINYTREE_KSTART + nextPlaceholder)
+							nextPlaceholder++;
+
+						if (nextPlaceholder > MAXSLOTS)
+							continue; // skip if exceeds maximum
+
+						// verify that fielded does not overflow
+						assert(!(Q & ~PACKED_MASK));
+					}
+
+					if (iWildcard & 0b010) {
+						To = 0x1e; // assign unique value and break loop after finishing code block
+					} else {
+						// T must be a previously existing placeholder
+						if (To > tinyTree_t::TINYTREE_KSTART + nextPlaceholder && To < tinyTree_t::TINYTREE_NSTART)
+							continue; // placeholder not created yet
+						// bump placeholder if using for the first time
+						if (To == tinyTree_t::TINYTREE_KSTART + nextPlaceholder)
+							nextPlaceholder++;
+
+						if (nextPlaceholder > MAXSLOTS)
+							continue; // skip if exceeds maximum
+
+						// verify that fielded does not overflow
+						assert(!(To & ~PACKED_MASK));
+					}
+
+					if (iWildcard & 0b001) {
+						F = 0x1f; // assign unique value and break loop after finishing code block
+					} else {
+						// F must be a previously existing placeholder
+						if (F > tinyTree_t::TINYTREE_KSTART + nextPlaceholder && F < tinyTree_t::TINYTREE_NSTART)
+							continue; // placeholder not created yet
+						// bump placeholder if using for the first time
+						if (F == tinyTree_t::TINYTREE_KSTART + nextPlaceholder)
+							nextPlaceholder++;
+
+						if (nextPlaceholder > MAXSLOTS)
+							continue; // skip if exceeds maximum
+
+						// verify that fielded does not overflow
+						assert(!(F & ~PACKED_MASK));
+					}
+
+					// create packed notation
+					uint32_t qtf = (Ti << PACKED_TIPOS) | (Q << PACKED_QPOS) | (To << PACKED_TPOS) | (F << PACKED_FPOS);
+
+					if (pIsType[qtf] == 0)
+						continue; // must be normalised
+					if (pIsType[qtf] & PACKED_UNORDERED)
+						continue; // must be ordered
+
+					// zero out wildcards
+					uint32_t outQ = (Q == 0x1d) ? 0 : Q;
+					uint32_t outT = (To == 0x1e) ? 0 : To;
+					uint32_t outF = (F == 0x1f) ? 0 : F;
+
+					// add template
+					pTemplateData[numTemplateData++] = (nextPlaceholder << PACKED_SIZE) | (Ti << PACKED_TIPOS) | outQ << PACKED_QPOS | outT << PACKED_TPOS | outF << PACKED_FPOS;
+				}
+
+				// end of section
+				pTemplateData[numTemplateData++] = 0;
+			}
+
+			// bump data index
+		}
+
+//		fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
+		assert(numTemplateData <= TEMPLATE_MAXDATA);
 	}
 
 	/**
@@ -652,19 +805,14 @@ struct generatorTree_t : tinyTree_t {
 			 */
 
 			// point to start of state table index by number of already assigned placeholders and nodes
-			const uint32_t *pData = pushData + pushIndex[PUSH_QTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+			const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_QTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 			while (*pData) {
-				if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-					pData++;
-					continue; // bailout when QnTF is exhausted
-				}
-
 				// NOTE: template endpoints are always ordered
 
 				uint32_t R = this->push(*pData & 0xffff); // unpack and push operands
 				if (R) {
-					unsigned numUnique = (*pData >> 16);
+					unsigned numUnique = (*pData >> PACKED_SIZE);
 					if (endpointsLeft == 3 && stack == 0)
 						this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 					else
@@ -695,15 +843,10 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = pop0 << PACKED_QPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_PTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_PTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
-
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
 
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
@@ -713,7 +856,7 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push(merged); // merge Q, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -733,15 +876,10 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = pop0 << PACKED_TPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_QPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_QPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
-
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
 
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
@@ -751,7 +889,7 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push(merged); // merge T, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -771,15 +909,10 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = pop0 << PACKED_FPOS;
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_QTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_QTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
-
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
 
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
@@ -789,7 +922,7 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push(merged); // merge F, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -811,12 +944,12 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = (pop0 << PACKED_TPOS) | (pop0 << PACKED_FPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
 
-					if (~*pData & PUSH_TIBIT) {
+					if (~*pData & PACKED_TIBIT) {
 						pData++;
 						continue; // only `QnTF` allowed. stop when exhausted
 					}
@@ -829,7 +962,7 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 2 && stack == 0) {
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						} else {
@@ -862,25 +995,20 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = (pop1 << PACKED_QPOS) | (pop0 << PACKED_TPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_PPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_PPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
 
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
-
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
-							pData++;
+						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
 					uint32_t R = this->push(merged); // merge Q+T, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -900,25 +1028,20 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = (pop1 << PACKED_QPOS) | (pop0 << PACKED_FPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_PTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_PTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
 
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
-
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
-							pData++;
+						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
 					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -938,15 +1061,10 @@ struct generatorTree_t : tinyTree_t {
 				uint32_t qtf = (pop1 << PACKED_TPOS) | (pop0 << PACKED_FPOS);
 
 				// point to start of state table index by number of already assigned placeholders and nodes
-				const uint32_t *pData = pushData + pushIndex[PUSH_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
+				const uint32_t *pData = pTemplateData + templateIndex[TEMPLATE_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
 					uint32_t merged = (*pData & 0xffff) | qtf;
-
-					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
-						pData++;
-						continue; // bailout when QnTF is exhausted
-					}
 
 					// keep tree ordered and drop `XOR`
 					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
@@ -956,7 +1074,7 @@ struct generatorTree_t : tinyTree_t {
 
 					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
-						unsigned numUnique = (*pData >> 16);
+						unsigned numUnique = (*pData >> PACKED_SIZE);
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember, numUnique); // All placeholders used and stack unwound
 						else
@@ -1008,7 +1126,7 @@ struct generatorTree_t : tinyTree_t {
 
 			{
 				// QnTF
-				uint32_t R = this->push(PUSH_TIBIT | qtf); // push with inverted T
+				uint32_t R = this->push(PACKED_TIBIT | qtf); // push with inverted T
 				if (R) {
 					if (endpointsLeft == 0 && stack == 0)
 						this->callFoundTree(cbObject, cbMember, numPlaceholder); // All placeholders used and stack unwound

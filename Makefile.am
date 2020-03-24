@@ -6,21 +6,17 @@ EXTRA_DIST = \
 MAINTAINERCLEANFILES = primedata.h restartdata.h
 DISTCLEANFILES =
 MOSTLYCLEANFILES =
-CLEANFILES = pushdata.h
-BUILT_SOURCES = genprimedata genpushdata genrestartdata
+CLEANFILES =
+BUILT_SOURCES = genprimedata genrestartdata
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genprimedata genpushdata genrestartdata
+	eval gentransform tlookup gensignature genprimedata genrestartdata
 
 # genprimedata is fast and output is small, include in distribution
 
 primedata.h : genprimedata.cc
 	./genprimedata > primedata.h
-
-# pushdata is fast and output is big, exclude from distribution
-pushdata.h : genpushdata.cc
-	./genpushdata > pushdata.h
 
 # genrestartdata is slow and output is small, include in distribution
 restartdata.h : genrestartdata.cc
@@ -52,16 +48,11 @@ tlookup.$(OBJEXT) : primedata.h
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
 gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h generator.h restartdata.h metrics.h
-nodist_gensignature_SOURCES = pushdata.h
-gensignature.$(OBJEXT) : primedata.h pushdata.h restartdata.h
+gensignature.$(OBJEXT) : primedata.h restartdata.h
 
 # @date 2020-03-14 18:11:10
 genprimedata_SOURCES = genprimedata.cc
 
-# @date 2020-03-18 10:50:29
-genpushdata_SOURCES = genpushdata.cc
-
 # @date 2020-03-18 18:04:50
 genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h primedata.h datadef.h generator.h metrics.h
-nodist_genrestartdata_SOURCES = pushdata.h
-genrestartdata.$(OBJEXT) : primedata.h pushdata.h
+genrestartdata.$(OBJEXT) : primedata.h

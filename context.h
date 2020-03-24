@@ -121,12 +121,12 @@ struct context_t {
 	/// @var {double} - feedback coefficient for average operations/second
 	double progressCoef;
 	/// @var {double} - Starting Coefficient. To dampen eta prediction when training
-	double progressCoefMin;
+	double progressCoefStart;
 	/// @var {double} - Target coefficient after training
-	double progressCoefMax;
-	/// @var {double} - Coefficient training multiplier
+	double progressCoefEnd;
+	/// @var {double} - Coefficient training multiplier. Training is slide from large damping to less to catch initial spikes.
 	double progressCoefMultiplier;
-	/// @var {uint64_t} - progress during last inverval
+	/// @var {uint64_t} - progress during last interval
 	uint64_t progressLast;
 	/// @var {double} - progress speed
 	double progressSpeed;
@@ -146,9 +146,9 @@ struct context_t {
 		progress = 0;
 		progressHi = 0;
 		progressCoef = 0;
-		progressCoefMin = 0.01;
-		progressCoefMax = 1.00;
-		progressCoefMultiplier = 1.05;
+		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
+		progressCoefEnd   = 0.10; // dampen speed changes at Training end (low responsive)
+		progressCoefMultiplier = 0.9072878562; //  #seconds as #th root of (end/start). set for 20 second training
 		progressLast = 0;
 		progressSpeed = 0;
 	}
@@ -315,7 +315,7 @@ struct context_t {
 	void setupSpeed(uint64_t progressHi) {
 		this->progress      = 0;
 		this->progressHi    = progressHi;
-		this->progressCoef  = this->progressCoefMin;
+		this->progressCoef  = this->progressCoefStart;
 		this->progressLast  = 0;
 		this->progressSpeed = 0;
 	}
@@ -337,8 +337,10 @@ struct context_t {
 
 		// training
 		progressCoef *= progressCoefMultiplier;
-		if (progressCoef > progressCoefMax)
-			progressCoef = progressCoefMax; // end of training
+		if (progressCoefMultiplier > 1 && progressCoef > progressCoefEnd)
+			progressCoef = progressCoefEnd; // end of training
+		if (progressCoefMultiplier < 1 && progressCoef < progressCoefEnd)
+			progressCoef = progressCoefEnd; // end of training
 
 		int perInterval = progressSpeed;
 		if (!perInterval)

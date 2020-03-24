@@ -40,10 +40,8 @@ jansson-*
 eval
 genprimedata
 genrestartdata
-genpushdata
 gensignature
 gentransform
-pushdata.h
 tlookup
 
 *.bak
