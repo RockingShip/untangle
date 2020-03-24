@@ -16,6 +16,8 @@
  *  - Tree deep-comparison
  *  - Packed `QTF` notation
  *
+ *  Basically, `generator_t` is a tree notation decoder (like `decode()`) with a wildcard as notation
+ *
  * @date 2020-03-17 23:54:39
  *
  * Building `QnTF` datasets is two-pass:
@@ -27,6 +29,11 @@
  *
  *  It generates fully normalised and naturally ordered trees for further processing.
  *  With this version, all calls to `foundTree()` are notation unique.
+ *
+ *  @date 2020-03-24 02:31:46
+ *
+ * Duplicates calls to `foundTree()` can happen.
+ * It happens when substituted popped values are also present as a template.
  */
 
 /*
@@ -95,6 +102,7 @@ struct generatorTree_t : tinyTree_t {
 		PACKED_QnTF = 0x08,
 		PACKED_AND = 0x10,
 		PACKED_QTF = 0x20,
+		PACKED_UNORDERED = 0x40,
 	};
 
 	/// @var {number[]} lookup table for `push()` index by packed `QTF`
@@ -255,6 +263,19 @@ struct generatorTree_t : tinyTree_t {
 				else
 					pIsType[ix] |= PACKED_QTF;
 			}
+
+			/*
+			 * @date 2020-03-23 23:09:54
+			 *
+			 * Test if dyadics are ordered
+			 * NOTE: testing against id (as opposed to deep compare) is sufficient because tree is fully normalised
+			 */
+			if ((pIsType[ix] & PACKED_OR) && Q > F)
+				pIsType[ix] |= PACKED_UNORDERED;
+			if ((pIsType[ix] & PACKED_XOR) && Q > F)
+				pIsType[ix] |= PACKED_UNORDERED;
+			if ((pIsType[ix] & PACKED_AND) && Q > To)
+				pIsType[ix] |= PACKED_UNORDERED;
 		}
 	}
 
@@ -657,7 +678,6 @@ struct generatorTree_t : tinyTree_t {
 		if (endpointsLeft >= 2) {
 			/*
 			 * `<pop>` `T` `F`
-			 * If `T` or `F` would be zero and the node dyadic, then ordering would fail because `<pop>` is always higher.
 			 */
 			{
 				// runtime values to merge into template
@@ -667,14 +687,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_PTF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					// NOTE: template endpoints are always ordered
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
+						pData++;
+						continue; // bailout when QnTF is exhausted
+					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q, unpack and push operands
+					uint32_t R = this->push(merged); // merge Q, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -689,7 +715,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 * `Q` `<pop>` `F`
-			 * If `F` is zero then node can be `GT` if `T` is inverted or `AND` otherwise
 			 */
 			{
 				// runtime values to merge into template
@@ -699,14 +724,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_QPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					// NOTE: `F` is templated, might be 0 which makes it an `GT` (which is never ordered) or `AND` (which is always ordered because `Q` is lower than `<pop>`
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
+						pData++;
+						continue; // bailout when QnTF is exhausted
+					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge T, unpack and push operands
+					uint32_t R = this->push(merged); // merge T, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -721,7 +752,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 * `Q` `T` `<pop>`
-			 * If `T` is zero then node can be `OR` if `T` is inverted or `LT` otherwise which is non-normalised.
 			 */
 			{
 				// runtime values to merge into template
@@ -731,14 +761,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_QTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					// NOTE: `T` is templated which might be ~0 making it `OR`. `Q` is always lower than `<pop>` making it always ordered
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
+						pData++;
+						continue; // bailout when QnTF is exhausted
+					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge F, unpack and push operands
+					uint32_t R = this->push(merged); // merge F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -753,7 +789,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 *  `Q` XOR `<pop>`
-			 * <pop> is higher than `Q` and therefore always ordered
 			 *
 			 * NOTE: Node has invisible endpoint
 			 */
@@ -765,14 +800,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if (~*pData & PUSH_TIBIT) {
 						pData++;
 						continue; // only `QnTF` allowed. stop when exhausted
 					}
 
-					// NOTE: `Q` is templated, which is always lower than `<pop>` making it always ordered
+					// keep tree ordered
+					if (pIsType[merged] & PACKED_UNORDERED) {
+						pData++;
+						continue; // bailout when QnTF is exhausted
+					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
+					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 2 && stack == 0) {
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -800,8 +841,6 @@ struct generatorTree_t : tinyTree_t {
 		if (endpointsLeft >= 1) {
 			/*
 			 * `<pop>` `<pop>` `F`
-			 * If `F` is zero then node can be `GT` if `T` is inverted or `AND` otherwise
-			 *
 			 */
 			{
 				// runtime values to merge into template
@@ -811,20 +850,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_PPF][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					// NOTE: `F` is templated, might be 0 which makes it an `GT` (which is never ordered) or `AND`
-					if (pIsType[(*pData & 0xffff) | qtf] & PACKED_AND) {
-						if (this->compare(pop1, pop0) > 0) {
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
 							pData++;
-							continue;
-						}
+						continue; // bailout when QnTF is exhausted
 					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+T, unpack and push operands
+					uint32_t R = this->push(merged); // merge Q+T, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -839,8 +878,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 * `<pop>` `T` `<pop>`
-			 * If `T` is zero then node can be `OR` if `T` is inverted or `LT` otherwise which is non-normalsed.
-			 *
 			 */
 			{
 				// runtime values to merge into template
@@ -850,20 +887,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_PTP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					// NOTE: `T` is templated, might be ~0 which makes it an `OR`
-					if (pIsType[(*pData & 0xffff) | qtf] & PACKED_OR) {
-						if (this->compare(pop1, pop0) > 0) {
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
 							pData++;
-							continue;
-						}
+						continue; // bailout when QnTF is exhausted
 					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
+					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -878,7 +915,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 * `Q` `<pop>` `<pop>`
-			 * Never a dyadic or XOR
 			 */
 			{
 				// runtime values to merge into template
@@ -888,12 +924,20 @@ struct generatorTree_t : tinyTree_t {
 				const uint32_t *pData = pushData + pushIndex[PUSH_QPP][this->count - tinyTree_t::TINYTREE_NSTART][numPlaceholder];
 
 				while (*pData) {
+					uint32_t merged = (*pData & 0xffff) | qtf;
+
 					if ((~*pData & PUSH_TIBIT) && (this->flags & context_t::MAGICMASK_QNTF)) {
 						pData++;
 						continue; // bailout when QnTF is exhausted
 					}
 
-					uint32_t R = this->push((*pData & 0xffff) | qtf); // merge Q+F, unpack and push operands
+					// keep tree ordered and drop `XOR`
+					if (pIsType[merged] & (PACKED_UNORDERED | PACKED_XOR)) {
+						pData++;
+						continue; // bailout when QnTF is exhausted
+					}
+
+					uint32_t R = this->push(merged); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)
 							this->callFoundTree(cbObject, cbMember); // All placeholders used and stack unwound
@@ -908,7 +952,6 @@ struct generatorTree_t : tinyTree_t {
 
 			/*
 			 *  `<pop>` XOR `<pop>`
-			 * XOR needs ordering test
 			 *
 			 * NOTE: Node has invisible endpoint
 			 */
@@ -916,9 +959,9 @@ struct generatorTree_t : tinyTree_t {
 				// runtime values to merge into template
 				uint32_t qtf = PACKED_TIBIT | (pop1 << PACKED_QPOS) | (pop0 << PACKED_TPOS) | (pop0 << PACKED_FPOS);
 
-				// NOTE: make sure pop1 < pop0
+				// keep tree ordered
 
-				if (this->compare(pop1, pop0) < 0) {
+				if (~pIsType[qtf] & PACKED_UNORDERED) {
 					uint32_t R = this->push(qtf); // merge Q+F, unpack and push operands
 					if (R) {
 						if (endpointsLeft == 1 && stack == 0)

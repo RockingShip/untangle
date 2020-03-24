@@ -261,17 +261,52 @@ struct tinyTree_t {
 
 
 			/*
-			 * Push references
+			 * Push natural walking order
+			 * deep Q, deep T, deep F, endpoint Q, endpoint T, endpoint F
+			 *
 			 */
+			if (pNodeL->F) {
+				if (pNodeL->F < tinyTree_t::TINYTREE_NSTART && pNodeR->F < tinyTree_t::TINYTREE_NSTART) {
 			stackL[stackPos] = pNodeL->F;
 			stackR[stackPos] = pNodeR->F;
 			stackPos++;
+				}
+			}
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART && (pNodeR->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART) {
 			stackL[stackPos] = pNodeL->T & ~IBIT;
 			stackR[stackPos] = pNodeR->T & ~IBIT;
 			stackPos++;
+				}
+			}
+			if (pNodeL->Q) {
+				if (pNodeL->Q < tinyTree_t::TINYTREE_NSTART && pNodeR->Q < tinyTree_t::TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
+				}
+			}
+			if (pNodeL->F) {
+				if (pNodeL->F >= tinyTree_t::TINYTREE_NSTART || pNodeR->F >= tinyTree_t::TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
+				}
+			}
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART || (pNodeR->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
+				}
+			}
+			if (pNodeL->Q) {
+				if (pNodeL->Q >= tinyTree_t::TINYTREE_NSTART || pNodeR->Q >= tinyTree_t::TINYTREE_NSTART) {
 			stackL[stackPos] = pNodeL->Q;
 			stackR[stackPos] = pNodeR->Q;
 			stackPos++;
+				}
+			}
 
 		} while (stackPos > 0);
 
