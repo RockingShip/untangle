@@ -127,7 +127,10 @@ const char * getAllowedInterleaves(unsigned numSlots) {
 /**
  * @date 2020-03-17 14:06:58
  *
- * Metrics describing imprints
+ * Metrics describing imprints.
+ *
+ * Imprints drive associative lookups of footprints and hog memory.
+ * These metrics assist in speed/memory trade-offs
  */
 struct metricsImprint_t {
 	/*
@@ -178,7 +181,7 @@ static const metricsImprint_t metricsImprint[] = {
 	{9, 1, 120,  4, 10425180,  0},
 	{9, 1, 504,  4, 19346575,  0},
 	{9, 1, 720,  4, 61887091,  0},
-	{9, 1, 3024, 4, 87860469,  0},
+	{9, 1, 3024, 4, 87859871,  0},
 	//
 	{9, 0, 504,  0, 6,         0},
 	{9, 0, 120,  0, 7,         0},
@@ -197,8 +200,8 @@ static const metricsImprint_t metricsImprint[] = {
 	{9, 0, 3024, 3, 3053155,   0},
 	{9, 0, 720,  3, 3283078,   0},
 	{9, 0, 120,  4, 89007120,  0}, //  8G memory
-	{9, 0, 504,  4, 181883640, 0}, // 15G memory
-	{9, 0, 720,  4, 531740476, 0}, // 45G memory
+	{9, 0, 504,  4, 181883670, 0}, // 15G memory
+	{9, 0, 720,  4, 531738316, 0}, // 45G memory
 	{9, 0, 3024, 4, 0,         1}, // too large
 	//
 	{0}
@@ -233,7 +236,10 @@ const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned qntf, uns
 /**
  * @date 2020-03-20 00:42:42
  *
- * Metrics describing generator
+ * Metrics describing generator.
+ *
+ * Primarily used to calculate generator progress.
+ * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignatures).
  */
 struct metricsGenerator_t {
 	/*
@@ -254,28 +260,31 @@ struct metricsGenerator_t {
 	/// @var {number} - Total number of `foundTrees()` called. Provided by `genrestartdata`
 	uint64_t numProgress;
 
-	/// @var {number} - Total number of `foundTrees()` called. Provided by `gensignature`
-	uint64_t numSignatures;
+	/// @var {number} - Total candidate (unique `foundTrees()` calls). Provided by `genrestartdata --text`
+	uint64_t numCandidates; // (including mandatory zero entry)
+
+	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature`
+	uint64_t numSignatures; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
 };
 
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 1, 0, 0,               3,      0},
-	{9, 0, 0, 0,               3,      0},
-	{9, 1, 1, 4,               5,      0},
-	{9, 0, 1, 6,               7,      0},
-	{9, 1, 2, 180LL,           49,     0},
-	{9, 0, 2, 464LL,           110,    0},
-	{9, 1, 3, 21645LL,         1311,   0},
-	{9, 0, 3, 103240LL,        5666,   0},
-	{9, 1, 4, 4807294LL,       96363,  0},
-	{9, 0, 4, 43544252LL,      791647, 0},
-	{9, 1, 5, 1682570505LL,    0,      0},
-	{9, 0, 5, 29294210033LL,   0,      0},
-	{9, 1, 6, 844977719085LL,  0,      0},
-	{9, 0, 6, 1556055783374LL, 0,      1},
+	{9, 1, 0, 0,               3,        3,      0},
+	{9, 0, 0, 0,               3,        3,      0},
+	{9, 1, 1, 4,               5,        5,      0},
+	{9, 0, 1, 6,               7,        7,      0},
+	{9, 1, 2, 154LL,           155,      49,     0},
+	{9, 0, 2, 424LL,           425,      110,    0},
+	{9, 1, 3, 17535LL,         15241,    1311,   0},
+	{9, 0, 3, 92258LL,         80135,    5666,   0},
+	{9, 1, 4, 3766074LL,       2862593,  96363,  0},
+	{9, 0, 4, 38399264LL,      29143481, 791647, 0},
+	{9, 1, 5, 1286037101LL,    0,        0,      0},
+	{9, 0, 5, 25583691074LL,   0,        0,      0},
+	{9, 1, 6, 633200151789LL,  0,        0,      0},
+	{9, 0, 6, 1556055783374LL, 0,        0,      1},
 	//
 	{0}
 };

@@ -161,10 +161,10 @@ struct gensignatureContext_t : context_t {
 	 * If signature has swapping hints then apply the hint and deep-compare.
 	 * accept the
 	 *
-	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTree(generatorTree_t &tree) {
+	void foundTree(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			if (progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignature=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignature);
@@ -224,8 +224,8 @@ struct gensignatureContext_t : context_t {
 		this->pEvalFwd = pEvalFwd;
 		this->pEvalRev = pEvalRev;
 
-		pStore->numImprint = 1;
-		pStore->numSignature = 1;
+		pStore->numImprint = 1; // skip mandatory zero entry
+		pStore->numSignature = 1; // skip mandatory zero entry
 
 		// create generator
 		generatorTree_t generator(*this);
@@ -243,12 +243,12 @@ struct gensignatureContext_t : context_t {
 			this->tick = 0;
 
 			if (iRound == 0) {
-				generator.root = 0;
-				foundTree(generator);
-				generator.root = 1;
-				foundTree(generator);
+				generator.root = 0; // "0""
+				foundTree(generator, 0);
+				generator.root = 1; // "a"
+				foundTree(generator, 1);
 			} else {
-				generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureContext_t::foundTree);
+				generator.generateTrees(endpointsLeft, 0, 0, this,(generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
 			}
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -598,7 +598,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			tree.decodeFast(pBasename);
 
 			// add to database
-			pStore->numImprint = 1;
+			pStore->numImprint = 1; // skip mandatory zero entry
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
 
 			/*
@@ -667,8 +667,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling the generator with windowLo/Hi for each possible tree
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeWindowCreate(generatorTree_t &tree) {
+	void foundTreeWindowCreate(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -698,8 +699,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling generator without a window and test if results match.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeWindowVerify(generatorTree_t &tree) {
+	void foundTreeWindowVerify(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -773,7 +775,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTreeWindowCreate);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowCreate);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -796,7 +798,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			this->progress = 0;
 			this->tick = 0;
 
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTreeWindowVerify);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowVerify);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -834,8 +836,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 			memset(pStore->signatures, 0, sizeof(*pStore->signatures) * pStore->maxSignature);
 			memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
-			pStore->numImprint = 1;
-			pStore->numSignature = 1;
+			pStore->numImprint = 1; // skip mandatory zero entry
+			pStore->numSignature = 1; // skip mandatory zero entry
 			pStore->interleave = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
@@ -848,14 +850,14 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			this->tick = 0;
 
 			// special case (root only)
-			generator.root = 0;
-			foundTree(generator);
-			generator.root = 1;
-			foundTree(generator);
+			generator.root = 0; // "0"
+			foundTree(generator, 0);
+			generator.root = 1; // "a"
+			foundTree(generator, 1);
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNodes * 2 + 1;
-			generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &gensignatureSelftest_t::foundTree);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTree);
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");

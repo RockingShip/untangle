@@ -153,7 +153,7 @@ uint32_t generateData(void) {
 	 */
 
 	printf("const uint32_t pushData[] = { 0,\n\n");
-	uint32_t numData = 1;
+	uint32_t numData = 1; // skip initial zero
 
 	/*
 	 * Run in multiple rounds, each round is a 3-bit mask, each bit indicating which operands are wildcards

@@ -7,6 +7,12 @@
  * It generates fully normalised and naturally ordered trees for further processing.
  * With this version, all calls to `foundTree()` are notation unique.
  *
+ * Usage:
+ *   `"./genrestart"`
+ *      to generate `restartdata.h`
+ *   `"./genrestart --text [--qntf] <numnode>"`
+ *      to generate a textual list of candidates
+ *
  * Selfcheck consists of brute-force checking windowing and restarting of a `3n9-QnTF` generator.
  * Or a simple query if `a `numNode` argument is supplied with optional `--qntf`.
  * For the latter `--text` can also be supplied to display all trees caught by `foundTree()`
@@ -40,6 +46,7 @@
 #include <getopt.h>
 #include "tinytree.h"
 #include "generator.h"
+#include "database.h" // use signatures as candidates
 #include "metrics.h"
 
 /**
@@ -177,6 +184,11 @@ struct genrestartdataContext_t : context_t {
  */
 struct genrestartdataSelftest_t : genrestartdataContext_t {
 
+	enum {
+		/// @constant {number} Arbitrary worstcase maximum number of expected candidates (higher than 4n9 metrics)
+		MAXCANDIDATES = 40000000,
+	};
+
 	/*
 	 * User specified program arguments and options
 	 */
@@ -186,6 +198,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	/// @var {number} --text, often used switch
 	unsigned opt_text;
 
+	/// @var {database_t} - Database store to place results
+	database_t *pStore;
+
 	/**
 	 * Constructor
 	 */
@@ -193,6 +208,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		// arguments and options
 		opt_selftest = 0;
 		opt_text = 0;
+		pStore = NULL;
 	}
 
 	/**
@@ -202,13 +218,14 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	}
 
 	/**
-	 * @date 2020-03-18 22:17:26
+	 * @date 2020-03-24 13:20:42
 	 *
-	 * found candidate.
+	 * Found candidate. Treat as signature and count uniques
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeDisplay(generatorTree_t &tree) {
+	void foundTreeCandidate(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
@@ -221,60 +238,59 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu",
-				        timeAsString(), progress);
+				fprintf(stderr, "\r\e[K[%s] %lu |  numCandidate=%d",
+				        timeAsString(), progress, pStore->numSignature);
 			}
 		}
 
-		/*
-		 * Debug mode used to create restart metrics and dump generated trees
-		 */
-		if (opt_text) {
-#if 1
-			// display candidate
-			printf("%s\n", tree.encode(tree.root));
-#else
-			// simple tree dump for the very paranoia
-			for (unsigned i = TINYTREE_NSTART; i < this->count; i++) {
-				uint32_t qtf = packedN[i];
-				printf("%d%x%x%x ", (qtf & PACKED_TIBIT) ? 1 : 0, (qtf >> PACKED_QPOS) & PACKED_MASK, (qtf >> PACKED_TPOS) & PACKED_MASK, (qtf >> PACKED_FPOS) & PACKED_MASK);
-			}
-			printf("\n");
-#endif
+		// create candidate name
+		const char *pName = tree.encode(tree.root);
+
+		// lookup..
+		uint32_t ix = pStore->lookupSignature(pName);
+
+		// ...and add if not found
+		if (pStore->signatureIndex[ix] == 0) {
+			printf("%s %d %d\n", pName, tree.count - tinyTree_t::TINYTREE_NSTART, numUnique);
+
+			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
 	}
 
 	/**
-	 * @date 2020-03-21 20:09:49
+	 * @date 2020-03-24 13:22:57
  	 *
- 	 * Display all calls to `foundTree()` with n-node sized trees
+ 	 * Display all candidates as passed to `foundTree()`
  	 *
- 	 * NOTE: this is a selftest because output is for a single generator whereas regular mode is multi generator.
+ 	 * Candidates with back-references might be found more than once.
  	 *
  	 * param {number} numNodes - Tree size
  	 */
-	void performSelfTestPrint(unsigned numNodes) {
+	void performListCandidates(unsigned numNodes) {
 		/*
 		 * Expecting a lot of output, redirect to a file or kill the screen
 		 */
 
-		if (this->opt_text && isatty(1)) {
-			fprintf(stderr, "stdout not redirected\n");
-			exit(1);
-		}
+		/*
+		 * Setup database
+		 */
 
-		generatorTree_t generator(*this);
+		pStore = new database_t(*this);
 
+		pStore->maxSignature = MAXCANDIDATES;
+		pStore->signatureIndexSize = this->double2u32(pStore->maxSignature * 4.0);
+		pStore->create();
 
-		// find metrics for setting
-		unsigned endpointsLeft = numNodes * 2 + 1;
+		pStore->numSignature = 1; // skip mandatory zero entry
 
 		/*
-		 * Current version
+		 * Setup generator
 		 */
+		generatorTree_t generator(*this);
+
 		// clear tree
 		generator.clearGenerator();
 
@@ -283,18 +299,32 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		this->tick = 0;
 
-		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::foundTreeDisplay);
+		/*
+		 * Run generator
+		 */
+
+		if (numNodes == 0) {
+			generator.root = 0;
+			foundTreeCandidate(generator, 0);
+			generator.root = 1;
+			foundTreeCandidate(generator, 1);
+		} else {
+			unsigned endpointsLeft = numNodes * 2 + 1;
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
+		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (this->progress != this->progressHi) {
-			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-			       __FUNCTION__, this->progress, this->progressHi, numNodes);
-			exit(1);
-		}
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] numSlots=%d, numNodes=%d, progressHi=%ld numCandidates=%d\n",
+			        this->timeAsString(), MAXSLOTS, numNodes, this->progress, pStore->numSignature);
 
-		fprintf(stderr, "[%s] foundTree() for numNode=%d called %ld times\n", this->timeAsString(), numNodes, this->progress);
+		/*
+		 * Cleanup
+		 */
+		delete pStore;
+		pStore = NULL;
 	}
 
 };
@@ -348,7 +378,9 @@ void sigalrmHandler(int sig) {
  * @date  2020-03-19 20:02:40
  */
 void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args) {
-	fprintf(stderr, "usage:\t%s\n\t%s --selftest <numnode>\n", argv[0], argv[0]);
+	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
+	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates\n", argv[0]);
+
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
@@ -482,17 +514,17 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Program arguments
 	 */
-	if (!app.opt_selftest) {
-		// regular mode
-		if (argc - optind >= 0) {
+	if (app.opt_text != 0) {
+		// text mode
+		if (argc - optind >= 1) {
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
 		} else {
 			usage(argv, false, &app);
 			exit(1);
 		}
 	} else {
-		// selftest mode
-		if (argc - optind >= 1) {
-			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+		// regular mode
+		if (argc - optind >= 0) {
 		} else {
 			usage(argv, false, &app);
 			exit(1);
@@ -508,30 +540,39 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
-	 * Test
+	 * Invoke
 	 */
+
 	if (app.opt_selftest) {
-		// call selftest for specific setting
-		app.performSelfTestPrint(app.arg_numNodes);
-		exit(0);
+		/*
+		 * self tests
+		 */
+	} else if (app.opt_text) {
+			/*
+			* list candidates
+			*/
+
+			if (isatty(1)) {
+				fprintf(stderr, "stdout not redirected\n");
+				exit(1);
+			}
+
+			app.performListCandidates(app.arg_numNodes);
+		}
+	} else {
+		/*
+		 * regular mode
+		 */
+
+		if (isatty(1)) {
+			fprintf(stderr, "stdout not redirected\n");
+			exit(1);
+		}
+
+		printf("// generated by %s on \"%s\"\n\n", argv[0], timeAsString());
+
+		app.main();
 	}
-
-	/*
-	 * Invoke current code
-	 */
-
-	/*
-	 * Invoke main entrypoint of application context
-	 */
-
-	if (isatty(1)) {
-		fprintf(stderr, "stdout not redirected\n");
-		exit(1);
-	}
-
-	printf("// generated by %s on \"%s\"\n\n", argv[0], timeAsString());
-
-	app.main();
 
 	return 0;
 }

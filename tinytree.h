@@ -610,11 +610,11 @@ struct tinyTree_t {
 	 */
 	enum {
 		DERR_OK,                // success
-		DERR_SYNTAX,            // unknown character in name
-		DERR_PLACEHOLDER,       // placeholder not an lowercase endpoint
+		DERR_SYNTAX,            // unknown character in notation
+		DERR_PLACEHOLDER,       // placeholder not a lowercase endpoint
 		DERR_OVERFLOW,          // stack overflow, might imply too big
 		DERR_UNDERFLOW,         // stack underflow, notation not balanced
-		DERR_INCOMPLETE,        // stuff still on stack. missing opcodes
+		DERR_INCOMPLETE,        // notation too short
 		DERR_SIZE,              // notation too large for tree
 	};
 
