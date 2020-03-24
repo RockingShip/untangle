@@ -60,7 +60,7 @@ int main() {
 
 	printf("%d", bit);
     }
-    printf("%d\n");
+	printf("\n");
 
     return 0;
 }

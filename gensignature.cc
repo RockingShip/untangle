@@ -171,9 +171,23 @@ struct gensignatureContext_t : context_t {
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
 			tick = 0;
-		}
+			if (progressHi) {
+				int perSecond = this->updateSpeed();
+				int eta = (int) ((progressHi - progress) / perSecond);
 
-		const char *pName = tree.encode(tree.root);
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
+			} else {
+				fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
+			}
+		}
 
 		// lookup
 		uint32_t sid = 0;
@@ -182,6 +196,8 @@ struct gensignatureContext_t : context_t {
 		pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
 
 		if (sid == 0) {
+			const char *pName = tree.encode(tree.root);
+
 			// add to database
 			sid = pStore->addSignature(pName);
 			tid = -1;
@@ -223,8 +239,7 @@ struct gensignatureContext_t : context_t {
 			generator.clearGenerator();
 
 			// reset progress
-			this->progressHi = pMetrics ? pMetrics->numProgress : 0;
-			this->progress = 0;
+			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			this->tick = 0;
 
 			if (iRound == 0) {
@@ -655,11 +670,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	void foundTreeWindowCreate(generatorTree_t &tree) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
+			tick = 0;
 			if (progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
-			tick = 0;
 		}
 
 		assert(this->progress < 2000000);
@@ -686,11 +701,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	void foundTreeWindowVerify(generatorTree_t &tree) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
+			tick = 0;
 			if (progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
-			tick = 0;
 		}
 
 		assert(this->progress < 2000000);
@@ -829,8 +844,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// prepare I/O context
-			this->progressHi = pMetrics ? pMetrics->numProgress : 0;
-			this->progress = 0;
+			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			this->tick = 0;
 
 			// special case (root only)

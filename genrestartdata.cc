@@ -116,7 +116,7 @@ struct genrestartdataContext_t : context_t {
 				// apply settings
 				generator.flags = (arg_qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 
-				setupETA(pMetrics->numProgress);
+				setupSpeed(pMetrics->numProgress);
 				this->tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
@@ -212,7 +212,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
-				int perSecond = this->updateETA();
+				int perSecond = this->updateSpeed();
 				int eta = (int) ((progressHi - progress) / perSecond);
 
 				int etaH = eta / 3600;
@@ -270,7 +270,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, numNodes);
 		unsigned endpointsLeft = numNodes * 2 + 1;
 
 		/*
@@ -280,7 +279,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
-		this->setupETA(pMetrics ? pMetrics->numProgress : 0);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNodes);
+		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		this->tick = 0;
 
 		generator.generateTrees(endpointsLeft, 0, 0, this, (void (context_t::*)(generatorTree_t &)) &genrestartdataSelftest_t::foundTreeDisplay);

@@ -128,7 +128,7 @@ struct context_t {
 	double progressCoefMultiplier;
 	/// @var {uint64_t} - progress during last inverval
 	uint64_t progressLast;
-	/// @var {double} - ETA speed
+	/// @var {double} - progress speed
 	double progressSpeed;
 
 	/**
@@ -308,11 +308,11 @@ struct context_t {
 	/**
 	 * @date 2020-03-24 00:15:48
 	 *
-	 * Setup progress for ETA
+	 * Setup progress with speed guesstimation
 	 *
 	 * @param {uint64_t} progressHi - Expected end condition
 	 */
-	void setupETA(uint64_t progressHi) {
+	void setupSpeed(uint64_t progressHi) {
 		this->progress      = 0;
 		this->progressHi    = progressHi;
 		this->progressCoef  = this->progressCoefMin;
@@ -323,12 +323,12 @@ struct context_t {
 	/**
 	 * @date 2020-03-24 00:13:19
 	 *
-	 * Update progress and return ETA.
+	 * Update progress and return speed guesstimation.
 	 * Principle is that of R/C circuits used in electronics
 	 *
 	 * @return {number} - expected increment per second
 	 */
-	uint32_t updateETA(void) {
+	uint32_t updateSpeed(void) {
 		// update speed
 		if (progressSpeed == 0)
 			progressSpeed = (int) (progress - progressLast); // first time
@@ -343,6 +343,9 @@ struct context_t {
 		int perInterval = progressSpeed;
 		if (!perInterval)
 			perInterval = 1; // avoid zero
+
+		// NOTE: this is only called on a timer event, thus "opt_timer > 0"
+		// if the timer interval is more than one second, scale speed accordingly
 		int perSecond = perInterval / opt_timer;
 		if (!perSecond)
 			perSecond = 1; // avoid zero

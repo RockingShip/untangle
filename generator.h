@@ -559,7 +559,7 @@ struct generatorTree_t : tinyTree_t {
 					ctx.tick = 0;
 
 					if (ctx.progressHi) {
-						int perSecond = ctx.updateETA();
+						int perSecond = ctx.updateSpeed();
 
 						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
