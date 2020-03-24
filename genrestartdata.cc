@@ -151,7 +151,7 @@ struct genrestartdataContext_t : context_t {
 					fprintf(stderr, "\r\e[K");
 
 				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
-					fprintf(stderr, "[%s] metricsGenerator_t { /*numSlots=*/%d, /*qntf=*/%d, /*numNodes=*/%d, /*numProgress=*/%12ldLL}\n",
+					fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld\n",
 					        this->timeAsString(), MAXSLOTS, arg_qntf, arg_numNodes, this->progress);
 				}
 			}
@@ -183,11 +183,6 @@ struct genrestartdataContext_t : context_t {
  * @typedef {object}
  */
 struct genrestartdataSelftest_t : genrestartdataContext_t {
-
-	enum {
-		/// @constant {number} Arbitrary worstcase maximum number of expected candidates (higher than 4n9 metrics)
-		MAXCANDIDATES = 40000000,
-	};
 
 	/*
 	 * User specified program arguments and options
@@ -269,21 +264,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
  	 *
  	 * param {number} numNodes - Tree size
  	 */
-	void performListCandidates(unsigned numNodes) {
-		/*
-		 * Expecting a lot of output, redirect to a file or kill the screen
-		 */
+	void performListCandidates(database_t *pStore, unsigned numNodes) {
 
-		/*
-		 * Setup database
-		 */
-
-		pStore = new database_t(*this);
-
-		pStore->maxSignature = MAXCANDIDATES;
-		pStore->signatureIndexSize = this->double2u32(pStore->maxSignature * 4.0);
-		pStore->create();
-
+		this->pStore = pStore;
 		pStore->numSignature = 1; // skip mandatory zero entry
 
 		/*
@@ -317,14 +300,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlots=%d, numNodes=%d, progressHi=%ld numCandidates=%d\n",
-			        this->timeAsString(), MAXSLOTS, numNodes, this->progress, pStore->numSignature);
-
-		/*
-		 * Cleanup
-		 */
-		delete pStore;
-		pStore = NULL;
+			fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld numCandidates=%d\n",
+			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNodes, this->progress, pStore->numSignature);
 	}
 
 };
@@ -539,6 +516,30 @@ int main(int argc, char *const *argv) {
 		::alarm(1);
 	}
 
+
+	/*
+	 * create optional storage for `--text`
+	 */
+	database_t *pStore = NULL;
+
+	if (app.opt_text) {
+		pStore = new database_t(app);
+
+		pStore->maxSignature = app.arg_numNodes < 5 ? 40000000 : 900000000; // some hardcoded upper limit taken from `metricsGenerator`
+		pStore->signatureIndexSize = app.double2u32(pStore->maxSignature * 4.0);
+
+		pStore->create();
+	}
+
+	/*
+	 * Statistics
+	 */
+
+	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
+		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
+	if (app.totalAllocated >= 30000000000)
+		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
+
 	/*
 	 * Invoke
 	 */
@@ -548,17 +549,16 @@ int main(int argc, char *const *argv) {
 		 * self tests
 		 */
 	} else if (app.opt_text) {
-			/*
-			* list candidates
-			*/
+		/*
+		 * list candidates
+		 */
 
-			if (isatty(1)) {
-				fprintf(stderr, "stdout not redirected\n");
-				exit(1);
-			}
-
-			app.performListCandidates(app.arg_numNodes);
+		if (isatty(1)) {
+			fprintf(stderr, "stdout not redirected\n");
+			exit(1);
 		}
+
+		app.performListCandidates(pStore, app.arg_numNodes);
 	} else {
 		/*
 		 * regular mode

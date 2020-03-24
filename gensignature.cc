@@ -1253,6 +1253,10 @@ int main(int argc, char *const *argv) {
 	// inherit from existing
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
 
+	// allocate evaluators
+	footprint_t *pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalFwd));
+	footprint_t *pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalRev));
+
 	/*
 	 * Statistics
 	 */
@@ -1261,14 +1265,6 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
 	if (app.totalAllocated >= 30000000000)
 		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
-
-	/*
-	 * Create evaluator
-	 */
-
-	// allocate evaluators
-	footprint_t *pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalFwd));
-	footprint_t *pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*pEvalRev));
 
 	// initialise evaluators
 	tinyTree_t tree(app);
