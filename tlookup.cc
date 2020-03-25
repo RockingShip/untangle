@@ -276,10 +276,10 @@ int main(int argc, char *const *argv) {
 				usage(argv, true, &app);
 				exit(0);
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
 				break;
 
 			case '?':

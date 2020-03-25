@@ -883,7 +883,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_FORCE:
 				app.opt_force++;
@@ -895,7 +895,7 @@ int main(int argc, char *const *argv) {
 				app.opt_keep++;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
 				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
@@ -908,10 +908,10 @@ int main(int argc, char *const *argv) {
 				app.opt_text++;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
 				break;
 
 			case '?':

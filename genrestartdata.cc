@@ -190,7 +190,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 	/// @var {number} --selftest, perform a selftest
 	unsigned opt_selftest;
-	/// @var {number} --text, often used switch
+	/// @var {number} --text, text mode, list candidates
 	unsigned opt_text;
 
 	/// @var {database_t} - Database store to place results
@@ -446,7 +446,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
 				usage(argv, true, &app);
@@ -464,7 +464,7 @@ int main(int argc, char *const *argv) {
 				app.opt_flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
 				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
@@ -473,10 +473,10 @@ int main(int argc, char *const *argv) {
 				app.opt_text++;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -494,7 +494,7 @@ int main(int argc, char *const *argv) {
 	if (app.opt_text != 0) {
 		// text mode
 		if (argc - optind >= 1) {
-			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
 		} else {
 			usage(argv, false, &app);
 			exit(1);
@@ -526,7 +526,7 @@ int main(int argc, char *const *argv) {
 		pStore = new database_t(app);
 
 		pStore->maxSignature = app.arg_numNodes < 5 ? 40000000 : 900000000; // some hardcoded upper limit taken from `metricsGenerator`
-		pStore->signatureIndexSize = app.double2u32(pStore->maxSignature * 4.0);
+		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignature * 4.0);
 
 		pStore->create();
 	}

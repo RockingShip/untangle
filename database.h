@@ -96,7 +96,7 @@ struct fileHeader_t {
 	// section sizes
 	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
-	uint32_t numImprints;
+	uint32_t numImprint;
 	uint32_t imprintIndexSize;
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
@@ -260,20 +260,18 @@ struct database_t {
 		// imprint store
 		if (maxImprint) {
 			assert(interleave && interleaveStep);
-			numImprint = 0; // do not start at 0
-			maxImprint = ctx.raiseProcent(maxImprint);
+			assert(ctx.isPrime(imprintIndexSize));
+			numImprint = 1; // do not start at 1
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*this->imprints));
-			imprintIndexSize = ctx.raisePrime(imprintIndexSize);
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
 
 		// signature store
 		if (maxSignature) {
-			numSignature = 0; // do not start at 0
-			maxSignature = ctx.raiseProcent(maxSignature);
+			assert(ctx.isPrime(signatureIndexSize));
+			numSignature = 0; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*this->signatures));
-			signatureIndexSize = ctx.raisePrime(signatureIndexSize);
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*this->signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
@@ -447,7 +445,7 @@ struct database_t {
 		// imprints
 		interleave = fileHeader.interleave;
 		interleaveStep = fileHeader.interleaveStep;
-		maxImprint = numImprint = fileHeader.numImprints;
+		maxImprint = numImprint = fileHeader.numImprint;
 		imprints = (imprint_t *) (rawDatabase + fileHeader.offImprints);
 		imprintIndexSize = fileHeader.imprintIndexSize;
 		imprintIndex = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
@@ -602,7 +600,7 @@ struct database_t {
 
 			// collection
 			fileHeader.offImprints = flen;
-			fileHeader.numImprints = this->numImprint;
+			fileHeader.numImprint = this->numImprint;
 			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprint);
 			if (this->imprintIndexSize) {
 				// Index
@@ -889,7 +887,7 @@ struct database_t {
 	inline uint32_t addImprint(const footprint_t &v) {
 		imprint_t *pImprint = this->imprints + this->numImprint++;
 
-		if (this->numImprint >= this->maxImprint)
+		if (this->numImprint > this->maxImprint)
 			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
 
 		// only populate key fields
@@ -1128,7 +1126,7 @@ struct database_t {
 	inline uint32_t addSignature(const char *name) {
 		signature_t *pSignature = this->signatures + this->numSignature++;
 
-		if (this->numSignature >= this->maxSignature)
+		if (this->numSignature > this->maxSignature)
 			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
 
 		// clear before use
@@ -1155,7 +1153,7 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
-		json_object_set_new_nocheck(jResult, "numImprints", json_integer(this->numImprint));
+		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));

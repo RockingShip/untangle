@@ -3,20 +3,15 @@ EXTRA_DIST = \
 	LICENSE CHANGELOG.md INSTALL.md README.md \
 	.gitignore
 
-MAINTAINERCLEANFILES = primedata.h restartdata.h
+MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
 MOSTLYCLEANFILES =
 CLEANFILES =
-BUILT_SOURCES = genprimedata genrestartdata
+BUILT_SOURCES = genrestartdata
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genprimedata genrestartdata
-
-# genprimedata is fast and output is small, include in distribution
-
-primedata.h : genprimedata.cc
-	./genprimedata > primedata.h
+	eval gentransform tlookup gensignature genrestartdata
 
 # genrestartdata is slow and output is small, include in distribution
 restartdata.h : genrestartdata.cc
@@ -37,22 +32,16 @@ eval_SOURCES = eval.cc
 
 # @date 2020-03-11 21:53:16
 gentransform_LDADD = $(LDADD)
-gentransform_SOURCES = gentransform.cc database.h datadef.h context.h primedata.h tinytree.h
-gentransform.$(OBJEXT) : primedata.h
+gentransform_SOURCES = gentransform.cc database.h datadef.h context.h tinytree.h
 
 # @date 2020-03-13 12:56:11
 tlookup_LDADD = $(LDADD)
-tlookup_SOURCES = tlookup.cc database.h datadef.h context.h primedata.h tinytree.h
-tlookup.$(OBJEXT) : primedata.h
+tlookup_SOURCES = tlookup.cc database.h datadef.h context.h tinytree.h
 
 # @date 2020-03-14 11:09:15
 gensignature_LDADD = $(LDADD)
-gensignature_SOURCES = gensignature.cc tinytree.h context.h primedata.h datadef.h database.h generator.h restartdata.h metrics.h
-gensignature.$(OBJEXT) : primedata.h restartdata.h
-
-# @date 2020-03-14 18:11:10
-genprimedata_SOURCES = genprimedata.cc
+gensignature_SOURCES = gensignature.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+gensignature.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-18 18:04:50
-genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h primedata.h datadef.h generator.h metrics.h
-genrestartdata.$(OBJEXT) : primedata.h
+genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h datadef.h generator.h metrics.h

@@ -2463,7 +2463,7 @@ int main(int argc, char *const *argv) {
 				opt_quiet++;
 				break;
 			case LO_SEED:
-				opt_seed = strtoul(optarg, NULL, 10);
+				opt_seed = strtoul(optarg, NULL, 0);
 				break;
 			case LO_SELFTEST:
 				performSelfTest(pTree, pFootprints);

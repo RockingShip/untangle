@@ -30,6 +30,10 @@
  *
  * Metrics for supported imprint index interleaving
  * `numStored` and `numRuntime` are worse case for footprints with 9 unique slots.
+ *
+ * @date 2020-03-25 03:09:01
+ *
+ * Note that speed/storage is based on worst-case 4n9 structures with 9 unique endpoints
  */
 struct metricsInterleave_t {
 	/*
@@ -153,8 +157,8 @@ struct metricsImprint_t {
 	 * non-Key
 	 */
 
-	/// @var {number} - Total number of imprints for settings. Provided by `gensignature`
-	uint32_t numImprints;
+	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
+	uint32_t numImprint;
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
@@ -239,7 +243,7 @@ const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned qntf, uns
  * Metrics describing generator.
  *
  * Primarily used to calculate generator progress.
- * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignatures).
+ * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignature).
  */
 struct metricsGenerator_t {
 	/*
@@ -264,7 +268,7 @@ struct metricsGenerator_t {
 	uint64_t numCandidates; // (including mandatory zero entry)
 
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature`
-	uint64_t numSignatures; // (including mandatory zero entry)
+	uint64_t numSignature; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;

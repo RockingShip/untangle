@@ -1045,7 +1045,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_FORCE:
 				app.opt_force++;
@@ -1054,10 +1054,10 @@ int main(int argc, char *const *argv) {
 				usage(argv, true, &app);
 				exit(0);
 			case LO_IMPRINTINDEX:
-				app.opt_imprintIndexSize = (uint32_t) strtoul(optarg, NULL, 10);
+				app.opt_imprintIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
-				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 10);
+				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 					app.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
@@ -1065,10 +1065,10 @@ int main(int argc, char *const *argv) {
 				app.opt_keep++;
 				break;
 			case LO_MAXIMPRINT:
-				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 10);
+				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 10);
+				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_METRICS:
 				app.opt_metrics++;
@@ -1086,7 +1086,7 @@ int main(int argc, char *const *argv) {
 				app.opt_flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
@@ -1096,7 +1096,7 @@ int main(int argc, char *const *argv) {
 				app.opt_test++;
 				break;
 			case LO_SIGNATUREINDEX:
-				app.opt_signatureIndexSize = (uint32_t) strtoul(optarg, NULL, 10);
+				app.opt_signatureIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TEST:
 				app.opt_test++;
@@ -1105,10 +1105,10 @@ int main(int argc, char *const *argv) {
 				app.opt_text++;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
+				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -1137,7 +1137,7 @@ int main(int argc, char *const *argv) {
 		if (argc - optind >= 3) {
 			app.arg_outputDatabase = argv[optind++];
 			app.arg_inputDatabase = argv[optind++];
-			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 10);
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
 		} else {
 			usage(argv, false, &app);
 			exit(1);
@@ -1217,25 +1217,25 @@ int main(int argc, char *const *argv) {
 
 		if (app.opt_maxImprint == 0) {
 			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
-			store.maxImprint = pMetrics ? pMetrics->numImprints : 0;
+			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
 		}
 
 		if (app.opt_imprintIndexSize == 0)
-			store.imprintIndexSize = app.double2u32(store.maxImprint * app.opt_ratio);
+			store.imprintIndexSize = app.nextPrime(store.maxImprint * app.opt_ratio);
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxSignature == 0) {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
-			store.maxSignature = pMetrics ? pMetrics->numSignatures : 0;
+			store.maxSignature = pMetrics ? pMetrics->numSignature : 0;
 		} else {
 			store.maxSignature = app.opt_maxSignature;
 		}
 
 		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = app.double2u32(store.maxSignature * app.opt_ratio);
+			store.signatureIndexSize = app.nextPrime(store.maxSignature * app.opt_ratio);
 		else
 			store.signatureIndexSize = app.opt_signatureIndexSize;
 

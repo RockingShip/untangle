@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <signal.h>
-#include "primedata.h"
 
 /// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
 #define IBIT 0x80000000
@@ -227,51 +226,50 @@ struct context_t {
 	}
 
 	/**
-	 * @date 2020-03-15 19:21:50
+	 * @date 2020-03-25 02:29:23
 	 *
-	 * Raise value to next prime.
+	 * Simple test to determine if number is prime
 	 *
-	 * @param {number} n - number to raise
+	 * @param {uint64_t} n - number to test. 64 bits to catch weird overflows by caller
+	 * @return {boolean} `true` if prime, `false` otherwise
 	 */
-	uint32_t raisePrime(uint32_t n) {
-		if (n == 0)
-			return 0;
+	bool isPrime(uint64_t n) {
+		if (n % 2 == 0)
+			return false;
 
-		// do not exceed 32 bits unsigned
-		if (n > 4294000079 - n / 100)
-			return 4294000079;
-
-		// raise at least 1%
-		n += n / 100;
-
-		for (unsigned i = 0;; i++) {
-			if (n <= primeData[i])
-				return primeData[i];
+		for (uint32_t i = 3; n / i >= i; i++) {
+			if ((n % i) == 0)
+				return false;
 		}
-		assert(0);
+
+		return true;
 	}
 
 	/**
-	 * @date 2020-03-15 19:42:19
+	 * @date 2020-03-25 02:30:30
 	 *
-	 * Raise value 1%.
+	 * Raise number to next prime
 	 *
-	 * @param {number} n - number to raise
+	 * @param {uint64_t} n - number to test
+	 * @return {uint32_t} next highest prime, limited to 2^32-5
 	 */
-	uint32_t raiseProcent(uint32_t n) {
-		if (n == 0)
-			return 0; // zero is zero
+	uint32_t nextPrime(uint64_t n) {
+		// limit to highest possible
+		if (n >= 4294967291)
+			return 4294967291;
+		if (n < 3)
+			return 3;
 
-		if (n > 4294000079 - n / 100)
-			return 4294000079;
+		// If even then increment
+		if (~n & 1)
+			n++;
 
-		// raise 1%
-		if (n < 100)
-			n++; // increment small numbers
-		else
-			n += n / 100; // raise 1%
-
+		// increment until prime found;
+		for (;;) {
+			if (isPrime(n))
 		return n;
+			n += 2;
+		}
 	}
 
 	/**
@@ -285,24 +283,6 @@ struct context_t {
 		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
 		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : ""
 		);
-	}
-
-	/**
-	 * @date 2020-03-17 17:28:20
-	 *
-	 * Convert a double to uint32_t, and lower to highest allowed prime if necessary
-	 *
-	 * @param {double} d - number to convert
-	 */
-	uint32_t double2u32(double d) {
-		if (d < 0)
-			return 0;
-
-		uint64_t u64 = d;
-
-		if (u64 > 4294000079)
-			return 4294000079;
-		return (uint32_t) u64;
 	}
 
 	/**

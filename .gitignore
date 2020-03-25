@@ -38,7 +38,6 @@ jansson-*
 
 # generated files
 eval
-genprimedata
 genrestartdata
 gensignature
 gentransform
