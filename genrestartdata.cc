@@ -220,7 +220,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeCandidate(generatorTree_t &tree, unsigned numUnique) {
+	void foundTreeCandidate(generatorTree_t &tree, const char *pName, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
@@ -241,15 +241,12 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			}
 		}
 
-		// create candidate name
-		const char *pName = tree.encode(tree.root);
-
 		// lookup..
 		uint32_t ix = pStore->lookupSignature(pName);
 
 		// ...and add if not found
 		if (pStore->signatureIndex[ix] == 0) {
-			printf("%s %d %d\n", pName, tree.count - tinyTree_t::TINYTREE_NSTART, numUnique);
+			printf("%ld\t%s\t%d\t%d\n", progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numUnique);
 
 			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
@@ -288,9 +285,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		if (numNodes == 0) {
 			generator.root = 0;
-			foundTreeCandidate(generator, 0);
+			foundTreeCandidate(generator, "0", 0);
 			generator.root = 1;
-			foundTreeCandidate(generator, 1);
+			foundTreeCandidate(generator, "a", 1);
 		} else {
 			unsigned endpointsLeft = numNodes * 2 + 1;
 			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);

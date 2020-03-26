@@ -158,6 +158,10 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {number[7][10][10]} starting offset in `templateData[]`. `templateIndex[SECTION][numNode][numPlaceholder]`
 	uint32_t templateIndex[7][tinyTree_t::TINYTREE_MAXNODES][MAXSLOTS + 1];
 
+	/// @var {tintTree_t} Tree needed to re-order endpoints before calling `foundTree()`
+	tinyTree_t foundTree;
+
+
 	/**
 	 * @date 2020-03-18 18:45:33
 	 *
@@ -165,7 +169,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @param {context_t} ctx - I/O context
 	 */
-	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx) {
+	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
 		assert(TINYTREE_NEND < 32 - 3);
 
@@ -350,7 +354,7 @@ struct generatorTree_t : tinyTree_t {
 					 *
 					 * @date 2020-03-24 19:45:38
 					 *   Generator will never exceed 6-7 nodes.
-					 *   Wildcard replacements should fit in 5 bits because of `pIsTYpe[]`
+					 *   Wildcard replacements should fit in 5 bits because of `pIsType[]`
 					 *   Use top-3 id's that fit in 5 bits
 					 */
 					if (iWildcard & 0b100) {
@@ -613,7 +617,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @typedef {callback} generateTreeCallback_t
 	 */
-	typedef void(context_t::* generateTreeCallback_t)(generatorTree_t &, unsigned);
+	typedef void(context_t::* generateTreeCallback_t)(tinyTree_t &, const char *, unsigned);
 
 	/**
 	 * @date 2020-03-18 22:17:26
@@ -639,9 +643,14 @@ struct generatorTree_t : tinyTree_t {
 			return;
 		}
 
+		// reconstruct tree
+		char name[TINYTREE_NAMELEN + 1];
+		char skin[MAXSLOTS + 1];
+		foundTree.reconstruct(*this, name, skin);
+
 		// invoke the callback
 		if (cbObject != NULL) {
-			(*cbObject.*cbMember)(*this, numUnique);
+			(*cbObject.*cbMember)(foundTree, name, numUnique);
 		}
 
 		// bump counter after processing

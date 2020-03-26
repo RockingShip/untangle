@@ -164,7 +164,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTree(generatorTree_t &tree, unsigned numUnique) {
+	void foundTree(generatorTree_t &tree, const char *pName, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			if (progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignature=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignature);
@@ -196,15 +196,13 @@ struct gensignatureContext_t : context_t {
 		pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
 
 		if (sid == 0) {
-			const char *pName = tree.encode(tree.root);
-
 			// add to database
 			sid = pStore->addSignature(pName);
 			tid = -1;
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, sid);
 
 			if (opt_text)
-				printf("%ld %d %s\n", progress, sid, pName);
+				printf("%ld\t%d\t%s\n", progress, sid, pName);
 		}
 	}
 
@@ -243,12 +241,12 @@ struct gensignatureContext_t : context_t {
 			this->tick = 0;
 
 			if (iRound == 0) {
-				generator.root = 0; // "0""
-				foundTree(generator, 0);
+				generator.root = 0; // "0"
+				foundTree(generator, "0", 0);
 				generator.root = 1; // "a"
-				foundTree(generator, 1);
+				foundTree(generator, "a", 1);
 			} else {
-				generator.generateTrees(endpointsLeft, 0, 0, this,(generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
+				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
 			}
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -669,7 +667,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeWindowCreate(generatorTree_t &tree, unsigned numUnique) {
+	void foundTreeWindowCreate(generatorTree_t &tree, const char *pName, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -679,8 +677,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		}
 
 		assert(this->progress < 2000000);
-
-		const char *pName = tree.encode(tree.root);
 
 		// assert entry is unique
 		if (selftestWindowResults[this->progress] != NULL) {
@@ -701,7 +697,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeWindowVerify(generatorTree_t &tree, unsigned numUnique) {
+	void foundTreeWindowVerify(generatorTree_t &tree, const char *pName, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -711,8 +707,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		}
 
 		assert(this->progress < 2000000);
-
-		const char *pName = tree.encode(tree.root);
 
 		// assert entry is present
 		if (selftestWindowResults[this->progress] == NULL) {
@@ -851,9 +845,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// special case (root only)
 			generator.root = 0; // "0"
-			foundTree(generator, 0);
+			foundTree(generator, "0", 0);
 			generator.root = 1; // "a"
-			foundTree(generator, 1);
+			foundTree(generator, "a", 1);
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNodes * 2 + 1;

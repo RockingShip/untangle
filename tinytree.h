@@ -857,6 +857,8 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-13 21:11:04
+	 *
 	 * Parse notation and construct tree accordingly.
 	 * Notation is taken literally and not normalised
 	 *
@@ -864,7 +866,6 @@ struct tinyTree_t {
 	 *
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
-	 * @date 2020-03-13 21:11:04
 	 */
 	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
 
@@ -1078,19 +1079,17 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-13 22:12:24
+	 *
 	 * Encode a notation describing the tree in "placeholder/skin" notation.
 	 * Within the placeholders, endpoints are assigned in order of natural path which can be used as index for the skin to determine the actual endpoint.
 	 *
 	 * @param {number} id - entrypoint
-	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
-	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
-	 * @date 2020-03-13 22:12:24
+	 * @param {string} pName - The notation describing the tree
+	 * @param {string} pSkin - Skin
 	 */
-	const char *encode(uint32_t id, char *pSkin = NULL) {
+	void encode(uint32_t id, char *pName, char *pSkin) {
 
-		static char nameStorage[TINYTREE_NAMELEN + 1];
-
-		char *pName = nameStorage;
 		unsigned nameLen = 0;
 
 		// temporary stack storage for postfix notation
@@ -1101,35 +1100,6 @@ struct tinyTree_t {
 
 		uint32_t beenThere = 0;
 		uint32_t beenWhat[TINYTREE_NEND];
-
-		if ((id & ~IBIT) < TINYTREE_NSTART) {
-			if (pSkin) {
-				if ((id & ~IBIT) == 0) {
-					pName[nameLen++] = '0';
-					pSkin[0] = 0;
-				} else {
-					pSkin[0] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
-					pSkin[1] = 0;
-					pName[nameLen++] = 'a';
-				}
-
-			} else {
-				if ((id & ~IBIT) == 0) {
-					pName[nameLen++] = '0';
-				} else {
-					pName[nameLen++] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
-				}
-			}
-
-			// test for root invert
-			if (id & IBIT)
-				pName[nameLen++] = '~';
-
-			// terminator
-			pName[nameLen] = 0;
-
-			return nameStorage;
-		}
 
 		/*
 		 * For skins, walk the tree depth-first to enumerate the placeholders
@@ -1370,8 +1340,232 @@ struct tinyTree_t {
 		// terminator
 		assert(nameLen <= TINYTREE_NAMELEN);
 		pName[nameLen] = 0;
+	}
 
-		return nameStorage;
+	/**
+	 * @date 2020-03-26 15:02:28
+	 *
+	 * Simple wrapper with static storage for `encode()`
+	 *
+	 * @param {number} id - entrypoint
+	 * @param {string} pSkin - optional Skin
+	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
+	 */
+	const char *encode(uint32_t id, char *pSkin = NULL) {
+
+		static char staticName[TINYTREE_NAMELEN + 1];
+
+		encode(id, staticName, pSkin);
+
+		return staticName;
+	}
+
+	/**
+	 * @date 2020-03-26 13:43:17
+	 *
+	 * Copy a given tree and re-construct in tree walking order and placeholder/skin
+	 *
+	 * Also output zero-terminated "placeholder/skin".
+	 *
+	 * @param {tinyTree_t} rhs - source tree
+	 * @param {string} pName - output, notation of tree
+	 * @param {string} pSkin - output, accompanying skin for placeholders
+	 * @param pPlaceholders
+	 */
+	void reconstruct(const tinyTree_t &rhs, char *pName, char *pSkin) {
+		// temporary stack storage for postfix notation
+		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		int stackPos = 0;
+
+		unsigned nameLen = 0; // length of notation
+		unsigned numPlaceholders = 0; // first free placeholder
+
+		// nodes already processed
+		uint32_t beenThere;
+		uint32_t beenWhat[TINYTREE_NEND];
+		// mark `zero` processed
+		beenThere = (1 << 0);
+		beenWhat[0] = 0;
+
+		this->clearTree();
+
+		// push start on stack
+		stack[stackPos++] = rhs.root & ~IBIT;
+
+		/*
+		 * Pass-1, reconstruct path
+		 */
+		do {
+			// pop stack
+			uint32_t curr = stack[--stackPos];
+
+			const tinyNode_t *pNode = rhs.N + curr;
+			const uint32_t Q = pNode->Q;
+			const uint32_t To = pNode->T & ~IBIT;
+			const uint32_t Ti = pNode->T & IBIT;
+			const uint32_t F = pNode->F;
+
+			// determine if node already handled
+			if (~beenThere & (1 << curr)) {
+				/// first time
+
+				// push id so it visits again a second time
+				stack[stackPos++] = curr;
+
+				// push unvisited references
+				if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
+					stack[stackPos++] = Q;
+
+				// done, flag no endpoint assignment done
+				beenThere |= (1 << curr);
+				beenWhat[curr] = 0;
+
+			} else if (beenWhat[curr] == 0) {
+
+				// now that operands are complete, assign new endpoints
+				if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
+					beenThere |= (1 << Q);
+					beenWhat[Q] = TINYTREE_KSTART + numPlaceholders;
+					pSkin[numPlaceholders++] = (char) ('a' + Q - TINYTREE_KSTART);
+				}
+
+				if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
+					beenThere |= (1 << To);
+					beenWhat[To] = TINYTREE_KSTART + numPlaceholders;
+					pSkin[numPlaceholders++] = (char) ('a' + To - TINYTREE_KSTART);
+				}
+
+				if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
+					beenThere |= (1 << F);
+					beenWhat[F] = TINYTREE_KSTART + numPlaceholders;
+					pSkin[numPlaceholders++] = (char) ('a' + F - TINYTREE_KSTART);
+				}
+
+				// populate new node
+				tinyNode_t *pNewNode = this->N + this->count;
+				pNewNode->Q = beenWhat[Q];
+				pNewNode->T = beenWhat[To] ^ Ti;
+				pNewNode->F = beenWhat[F];
+
+				// flaq endpoints assigned
+				beenWhat[curr] = this->count++;
+			}
+
+		} while (stackPos > 0);
+
+		// set root
+		this->root = beenWhat[rhs.root & ~IBIT] ^ (rhs.root & IBIT);
+
+		/*
+		 * Pass-2, Create notation
+		 */
+
+		// push start on stack
+		stack[stackPos++] = this->root & ~IBIT;
+
+		// reset, but consider endpoints proper placeholders
+		beenThere = (1 << 0);
+
+		uint32_t numNode = TINYTREE_NSTART;
+
+		do {
+			// pop stack
+			uint32_t curr = stack[--stackPos];
+
+			if (curr < TINYTREE_NSTART) {
+				if (curr == 0) {
+					// `zero`
+					pName[nameLen++] = '0';
+				} else {
+					// existing placeholder
+					pName[nameLen++] = 'a' + beenWhat[curr] - TINYTREE_KSTART;
+				}
+
+				continue;
+			}
+
+			const tinyNode_t *pNode = this->N + curr;
+			const uint32_t Q = pNode->Q;
+			const uint32_t To = pNode->T & ~IBIT;
+			const uint32_t Ti = pNode->T & IBIT;
+			const uint32_t F = pNode->F;
+
+			// determine if node already handled
+			if (~beenThere & (1 << curr)) {
+				/// first time
+
+				// push id so it visits again a second time
+				stack[stackPos++] = curr;
+
+				// push unvisited endpoints
+				if (F >= TINYTREE_KSTART)
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_KSTART)
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_KSTART)
+					stack[stackPos++] = Q;
+
+				// done, flag no endpoint assignment done
+				beenThere |= (1 << curr);
+				beenWhat[curr] = 0;
+
+			} else if (beenWhat[curr] == 0) {
+				// node complete, output operator
+
+				if (Ti) {
+					if (F == 0) {
+						// GT Q?!T:0
+						pName[nameLen++] = '>';
+					} else if (To == 0) {
+						// OR Q?!0:F
+						pName[nameLen++] = '+';
+					} else if (F == To) {
+						// XOR Q?!F:F
+						pName[nameLen++] = '^';
+					} else {
+						// QnTF Q?!T:F
+						pName[nameLen++] = '!';
+					}
+				} else {
+					if (F == 0) {
+						// AND Q?T:0
+						pName[nameLen++] = '&';
+					} else if (To == 0) {
+						// LT Q?0:F
+						pName[nameLen++] = '<';
+					} else if (F == To) {
+						// SELF Q?F:F
+						assert(!"Q?F:F");
+					} else {
+						// QTF Q?T:F
+						pName[nameLen++] = '?';
+					}
+				}
+
+				// flaq endpoints assigned
+				beenWhat[curr] = numNode++;
+			} else {
+				// back-reference to previous node
+
+				uint32_t backref = numNode - beenWhat[curr];
+				assert(backref <= 9);
+				pName[nameLen++] = '0' + backref;
+			}
+
+		} while (stackPos > 0);
+
+		// append inverted-root
+		if (this->root & IBIT)
+			pName[nameLen++] = '~';
+
+		assert(numPlaceholders <= MAXSLOTS);
+		pSkin[numPlaceholders] = 0;
+		assert(nameLen <= TINYTREE_NAMELEN);
+		pName[nameLen] = 0;
 	}
 
 	/**
