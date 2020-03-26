@@ -503,14 +503,14 @@ struct generatorTree_t : tinyTree_t {
 		if (typ & (PACKED_OR | PACKED_XOR | PACKED_AND)) {
 			if (typ & PACKED_OR) {
 				// swap `OR` if unordered
-				if (compare(pNode->Q, pNode->F, true) > 0) {
+				if (this->compare(pNode->Q, *this, pNode->F, true) > 0) {
 					uint32_t savQ = pNode->Q;
 					pNode->Q = pNode->F;
 					pNode->F = savQ;
 				}
 			} else if (typ & PACKED_XOR) {
 				// swap `XOR` if unordered
-				if (compare(pNode->Q, pNode->F, true) > 0) {
+				if (this->compare(pNode->Q, *this, pNode->F, true) > 0) {
 					uint32_t savQ = pNode->Q;
 					pNode->Q = pNode->F;
 					pNode->F = savQ;
@@ -518,7 +518,7 @@ struct generatorTree_t : tinyTree_t {
 				}
 			} else {
 				// swap `AND` if unordered
-				if (compare(pNode->Q, pNode->T, true) > 0) {
+				if (this->compare(pNode->Q, *this, pNode->T, true) > 0) {
 					uint32_t savQ = pNode->Q;
 					pNode->Q = pNode->T;
 					pNode->T = savQ;

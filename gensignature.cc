@@ -31,6 +31,11 @@
  * - In that vastness of information matches are searched
  *
  * All those 512403385356 expressions can be rewritten in terms of 791647 unique expressions fitted with 363600 different skins.
+ *
+ * @date 2020-03-23 03:39:32
+ *
+ *   `--text` displays resulting signature collection
+ *   `--text=2` displays all candidates
  */
 
 /*
@@ -103,9 +108,9 @@ struct gensignatureContext_t : context_t {
 	/// @var {number} --keep, do not delete output database in case of errors
 	unsigned opt_keep;
 	/// @var {number} Maximum number of imprints to be stored database
-	uint32_t opt_maxImprint;
+	uint32_t opt_maxImprints;
 	/// @var {number} Maximum number of signatures to be stored database
-	uint32_t opt_maxSignature;
+	uint32_t opt_maxSignatures;
 	/// @var {number} --metrics, Collect metrics intended for "metrics.h"
 	unsigned opt_metrics;
 	/// @var {number} index/data ratio
@@ -135,8 +140,8 @@ struct gensignatureContext_t : context_t {
 		opt_imprintIndexSize = 0;
 		opt_interleave = METRICS_DEFAULT_INTERLEAVE;
 		opt_keep = 0;
-		opt_maxImprint = 0;
-		opt_maxSignature = 0;
+		opt_maxImprints = 0;
+		opt_maxSignatures = 0;
 		opt_metrics = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
@@ -164,7 +169,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTree(generatorTree_t &tree, const char *pName, unsigned numUnique) {
+	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholders) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
@@ -185,21 +190,109 @@ struct gensignatureContext_t : context_t {
 			}
 		}
 
+		/*
+		 * Create name, it's expensive so now is the right moment
+		 */
+		unsigned numEndpoints = 0;
+		unsigned numBackRef = 0;
+
+		for (const char *p = pNameR; *p; p++) {
+			if (islower(*p)) {
+				numEndpoints++;
+			} else if (isdigit(*p)) {
+				numBackRef++;
+			}
+		}
+
 		// lookup
 		uint32_t sid = 0;
 		uint32_t tid = 0;
 
-		pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
+		pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
 
+		// add to datastore if not found
 		if (sid == 0) {
-			// add to database
-			sid = pStore->addSignature(pName);
-			tid = -1;
-			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, sid);
+			// add signature to database
+			sid = pStore->addSignature(pNameR);
+			// add to imprints to index
+			pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, sid);
 
-			if (opt_text)
-				printf("%ld\t%d\t%s\n", progress, sid, pName);
+			signature_t *pSignature = pStore->signatures + sid;
+			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+			pSignature->numEndpoints = numEndpoints;
+			pSignature->numPlaceholders = numPlaceholders;
+			pSignature->numBackRefs = numBackRef;
+
+			if (opt_text == 2) {
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numEndpoints, pSignature->numPlaceholders, pSignature->numBackRefs);
+			}
+
+			return;
 		}
+
+		/*
+		 * !! NOTE: The following selection is just for the display name.
+		 *          Better choices will be analysed later.
+		 */
+
+		signature_t *pSignature = pStore->signatures + sid;
+
+		int cmp = 0; // "<0" if "best < caldidate", ">0" if "best > caldidate"
+
+		// Test for prime goal: reducing number of nodes
+		if (cmp == 0)
+			cmp = pSignature->size - (treeR.count - tinyTree_t::TINYTREE_NSTART);
+
+		// Test for secondary goal: reduce number of unique endpoints, thus connections
+		if (cmp == 0)
+			cmp = pSignature->numPlaceholders - numPlaceholders;
+
+		// Test for preferred display selection: least number of endpoints
+		if (cmp == 0)
+			cmp = pSignature->numEndpoints - numEndpoints;
+
+		// Test for preferred display selection: least number of back-references
+		if (cmp == 0)
+			cmp = pSignature->numBackRefs - numBackRef;
+
+		// distinguish between shallow compare or deep compare
+		if (cmp < 0)
+			cmp = '-';
+		else if (cmp > 0)
+			cmp = '+';
+		else
+			cmp = '=';
+
+		/*
+		 * Compare layouts, expensive
+		 */
+		if (cmp == '=') {
+			tinyTree_t treeL(*this);
+			treeL.decodeFast(pSignature->name);
+
+			cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+
+			if (cmp < 0)
+				cmp = '<';
+			else if (cmp > 0)
+				cmp = '>';
+			else
+				cmp = '=';
+		}
+
+		/*
+		 * Update record if candidate is better
+		 */
+		if (cmp == '>' || cmp == '+') {
+			::strcpy(pSignature->name, pNameR);
+			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+			pSignature->numPlaceholders = numPlaceholders;
+			pSignature->numEndpoints = numEndpoints;
+			pSignature->numBackRefs = numBackRef;
+		}
+
+		if (opt_text == 2)
+			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numEndpoints, pSignature->numPlaceholders, pSignature->numBackRefs);
 	}
 
 	/**
@@ -1076,8 +1169,8 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%d]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --maximprints=<number>    Maximum number of imprints [default=%u]\n", app.opt_maxImprints);
+		fprintf(stderr, "\t   --maxsignatures=<number>  Maximum number of signatures [default=%u]\n", app.opt_maxSignatures);
 		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
 		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
@@ -1118,8 +1211,8 @@ int main(int argc, char *const *argv) {
 			LO_IMPRINTINDEX,
 			LO_INTERLEAVE,
 			LO_KEEP,
-			LO_MAXIMPRINT,
-			LO_MAXSIGNATURE,
+			LO_MAXIMPRINTS,
+			LO_MAXSIGNATURES,
 			LO_METRICS,
 			LO_NOPARANOID,
 			LO_NOQNTF,
@@ -1146,8 +1239,8 @@ int main(int argc, char *const *argv) {
 			{"imprintindex",   1, 0, LO_IMPRINTINDEX},
 			{"interleave",     1, 0, LO_INTERLEAVE},
 			{"keep",           0, 0, LO_KEEP},
-			{"maximprint",     1, 0, LO_MAXIMPRINT},
-			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
+			{"maximprints",    1, 0, LO_MAXIMPRINTS},
+			{"maxsignatures",  1, 0, LO_MAXSIGNATURES},
 			{"metrics",        0, 0, LO_METRICS},
 			{"no-paranoid",    0, 0, LO_NOPARANOID},
 			{"no-qntf",        0, 0, LO_NOQNTF},
@@ -1158,7 +1251,7 @@ int main(int argc, char *const *argv) {
 			{"selftest",       0, 0, LO_SELFTEST},
 			{"signatureindex", 1, 0, LO_SIGNATUREINDEX},
 			{"test",           0, 0, LO_TEST},
-			{"text",           0, 0, LO_TEXT},
+			{"text",           2, 0, LO_TEXT},
 			{"timer",          1, 0, LO_TIMER},
 			{"verbose",        2, 0, LO_VERBOSE},
 			//
@@ -1208,11 +1301,11 @@ int main(int argc, char *const *argv) {
 			case LO_KEEP:
 				app.opt_keep++;
 				break;
-			case LO_MAXIMPRINT:
-				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
+			case LO_MAXIMPRINTS:
+				app.opt_maxImprints = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
-			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 0);
+			case LO_MAXSIGNATURES:
+				app.opt_maxSignatures = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_METRICS:
 				app.opt_metrics++;
@@ -1362,46 +1455,46 @@ int main(int argc, char *const *argv) {
 			app.opt_ratio = 6.0;
 
 			// get worse-case values
-			if (app.opt_maxImprint == 0) {
+			if (app.opt_maxImprints == 0) {
 				for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 
-					if (app.opt_maxImprint < pMetrics->numImprints)
-						app.opt_maxImprint = pMetrics->numImprints;
+					if (app.opt_maxImprints < pMetrics->numImprints)
+						app.opt_maxImprints = pMetrics->numImprints;
 				}
 
 				// Give extra 5% expansion space
-				if (app.opt_maxImprint > UINT32_MAX - app.opt_maxImprint / 20)
-					app.opt_maxImprint = UINT32_MAX;
+				if (app.opt_maxImprints > UINT32_MAX - app.opt_maxImprints / 20)
+					app.opt_maxImprints = UINT32_MAX;
 				else
-					app.opt_maxImprint += app.opt_maxImprint / 20;
+					app.opt_maxImprints += app.opt_maxImprints / 20;
 			}
-			if (app.opt_maxImprint == 0) {
+			if (app.opt_maxImprints == 0) {
 				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 
-					if (app.opt_maxSignature < pMetrics->numSignatures)
-						app.opt_maxSignature = pMetrics->numSignatures;
+					if (app.opt_maxSignatures < pMetrics->numSignatures)
+						app.opt_maxSignatures = pMetrics->numSignatures;
 				}
 
 				// Give extra 5% expansion space
-				if (app.opt_maxSignature > UINT32_MAX - app.opt_maxSignature / 20)
-					app.opt_maxSignature = UINT32_MAX;
+				if (app.opt_maxSignatures > UINT32_MAX - app.opt_maxSignatures / 20)
+					app.opt_maxSignatures = UINT32_MAX;
 				else
-					app.opt_maxSignature += app.opt_maxSignature / 20;
+					app.opt_maxSignatures += app.opt_maxSignatures / 20;
 			}
 
 			if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprints=%d maxSignatures=%d\n", app.timeAsString(), app.opt_ratio, app.opt_maxImprint, app.opt_maxSignature);
+				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprints=%d maxSignatures=%d\n", app.timeAsString(), app.opt_ratio, app.opt_maxImprints, app.opt_maxSignatures);
 		}
 
-		if (app.opt_maxImprint == 0) {
+		if (app.opt_maxImprints == 0) {
 			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
 			store.maxImprints = pMetrics ? pMetrics->numImprints : 0;
 		} else {
-			store.maxImprints = app.opt_maxImprint;
+			store.maxImprints = app.opt_maxImprints;
 		}
 
 		if (app.opt_imprintIndexSize == 0)
@@ -1409,11 +1502,11 @@ int main(int argc, char *const *argv) {
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
-		if (app.opt_maxSignature == 0) {
+		if (app.opt_maxSignatures == 0) {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxSignatures = pMetrics ? pMetrics->numSignatures : 0;
 		} else {
-			store.maxSignatures = app.opt_maxSignature;
+			store.maxSignatures = app.opt_maxSignatures;
 		}
 
 		if (app.opt_signatureIndexSize == 0)
@@ -1424,9 +1517,9 @@ int main(int argc, char *const *argv) {
 		if (store.interleave == 0 || store.interleaveStep == 0)
 			app.fatal("no preset for --interleave\n");
 		if (store.maxImprints == 0 || store.imprintIndexSize == 0)
-			app.fatal("no preset for --maximprint\n");
+			app.fatal("no preset for --maximprints\n");
 		if (store.maxSignatures == 0 || store.signatureIndexSize == 0)
-			app.fatal("no preset for --maxsignature\n");
+			app.fatal("no preset for --maxsignatures\n");
 	}
 
 	// create new sections

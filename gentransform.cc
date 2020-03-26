@@ -409,7 +409,7 @@ struct gentransformContext_t : context_t {
 		 */
 		if (opt_text) {
 			for (uint32_t t = 0; t < pStore->numTransform; t++)
-				printf("%d: %s %s %d\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
+				printf("%d\t%s\t%s\t%d\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
 		}
 
 		if (opt_verbose >= VERBOSE_SUMMARY)
@@ -794,8 +794,11 @@ void sigalrmHandler(int sig) {
  * @date  2020-03-11 22:30:36
  */
 void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
-	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.db>  -- Create initial database containing transforms\n", argv[0]);
+	fprintf(stderr, "       %s --selftest   -- Test prerequisites\n", argv[0]);
+
 	if (verbose) {
+		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help            This list\n");
 		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");

@@ -147,8 +147,14 @@ struct signature_t {
 	/// @var {number} size of tree in nodes
 	uint8_t  size;
 
+	/// @var {number} number of endpoints
+	uint8_t  numEndpoints;
+
 	/// @var {number} number of unique endpoints
-	uint8_t  numUnique;
+	uint8_t  numPlaceholders;
+
+	/// @var {number} number of back-references
+	uint8_t  numBackRefs;
 
 	/// @var {staing} Notation/name of signature. With space for inverted root and terminator
 	char name[SIGNAMELENGTH];

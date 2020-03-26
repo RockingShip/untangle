@@ -65,8 +65,6 @@ struct genrestartdataContext_t : context_t {
 
 	/// @var {number} size of structures used in this invocation
 	unsigned arg_numNodes;
-	/// @var {number} non-zero if in `QnTF`-only mode
-	unsigned arg_qntf;
 
 	/**
 	 * Constructor
@@ -74,7 +72,6 @@ struct genrestartdataContext_t : context_t {
 	genrestartdataContext_t() {
 		// arguments and options
 		arg_numNodes = 0;
-		arg_qntf = 0;
 	}
 
 	/**
@@ -98,30 +95,31 @@ struct genrestartdataContext_t : context_t {
 		generator.numFoundRestart = 1; // skip first zero
 
 		// @formatter:off
-		for (arg_numNodes = 0; arg_numNodes < tinyTree_t::TINYTREE_MAXNODES; arg_numNodes++)
-		for (arg_qntf = 1; arg_qntf != (unsigned)-1; arg_qntf--) {
+		for (unsigned numArgs = 0; numArgs < tinyTree_t::TINYTREE_MAXNODES; numArgs++)
+		for (int iQnTF = 1; iQnTF >= 0; iQnTF--) {
 		// @formatter:on
 
 			// mark section not in use
-			buildProgressIndex[arg_numNodes][arg_qntf] = 0;
+			buildProgressIndex[numArgs][iQnTF] = 0;
 
-			unsigned endpointsLeft = arg_numNodes * 2 + 1;
+			unsigned endpointsLeft = numArgs * 2 + 1;
 
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_qntf, arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iQnTF, numArgs);
 			if (pMetrics) {
 				if (pMetrics->noauto)
 					continue; // skip automated handling
 
-				buildProgressIndex[arg_numNodes][arg_qntf] = generator.numFoundRestart;
+				buildProgressIndex[numArgs][iQnTF] = generator.numFoundRestart;
 
 				// output section header
-				printf("// %ld: numNode=%d qntf=%d \n", generator.numFoundRestart, arg_numNodes, arg_qntf);
+				printf("// %ld: numNode=%d qntf=%d \n", generator.numFoundRestart, numArgs, iQnTF);
+
+				// apply settings
+				generator.flags = (iQnTF) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+				generator.initialiseGenerator();
 
 				// clear tree
 				generator.clearGenerator();
-
-				// apply settings
-				generator.flags = (arg_qntf) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 
 				setupSpeed(pMetrics->numProgress);
 				this->tick = 0;
@@ -130,7 +128,7 @@ struct genrestartdataContext_t : context_t {
 				generator.generateTrees(endpointsLeft, 0, 0, NULL, NULL);
 
 				// was there any output
-				if (buildProgressIndex[arg_numNodes][arg_qntf] != generator.numFoundRestart) {
+				if (buildProgressIndex[numArgs][iQnTF] != generator.numFoundRestart) {
 					// yes, output section delimiter
 					printf(" 0xffffffffffffffffLL,");
 					generator.numFoundRestart++;
@@ -144,7 +142,7 @@ struct genrestartdataContext_t : context_t {
 					printf("\n");
 				} else {
 					// no, erase index entry
-					buildProgressIndex[arg_numNodes][arg_qntf] = 0;
+					buildProgressIndex[numArgs][iQnTF] = 0;
 				}
 
 				if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -152,7 +150,7 @@ struct genrestartdataContext_t : context_t {
 
 				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
 					fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld\n",
-					        this->timeAsString(), MAXSLOTS, arg_qntf, arg_numNodes, this->progress);
+					        this->timeAsString(), MAXSLOTS, iQnTF, numArgs, this->progress);
 				}
 			}
 		}

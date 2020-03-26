@@ -173,7 +173,7 @@ struct tinyTree_t {
 	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
 	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
 	 */
-	int compare(uint32_t lhs, uint32_t rhs, bool layoutOnly = false) {
+	int compare(uint32_t lhs, const tinyTree_t &treeR, uint32_t rhs, bool layoutOnly = false) {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -230,7 +230,7 @@ struct tinyTree_t {
 
 			// decode L and R
 			const tinyNode_t *pNodeL = this->N + L;
-			const tinyNode_t *pNodeR = this->N + R;
+			const tinyNode_t *pNodeR = treeR.N + R;
 
 			/*
 			 * Reminder:
@@ -490,7 +490,7 @@ struct tinyTree_t {
 
 		if (T == IBIT) {
 			// `OR` ordering
-			if (this->compare(Q, F) > 0) {
+			if (this->compare(Q, *this, F) > 0) {
 				// swap
 				uint32_t savQ = Q;
 				Q = F;
@@ -499,7 +499,7 @@ struct tinyTree_t {
 		}
 		if (F == (T ^ IBIT)) {
 			// `XOR` ordering
-			if (this->compare(Q, F) > 0) {
+			if (this->compare(Q, *this, F) > 0) {
 				// swap
 				uint32_t savQ = Q;
 				Q = F;
@@ -509,7 +509,7 @@ struct tinyTree_t {
 		}
 		if (F == 0 && (~T & IBIT)) {
 			// `AND` ordering
-			if (this->compare(Q, T) > 0) {
+			if (this->compare(Q, *this, T) > 0) {
 				// swap
 				uint32_t savQ = Q;
 				Q = T;
