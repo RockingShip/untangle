@@ -218,8 +218,7 @@ struct generatorTree_t : tinyTree_t {
 		}
 		iVersion++; // when overflows, next call will clear
 
-		this->count = TINYTREE_NSTART; // rewind first free node
-		this->root = 0; // set result to zero-reference
+		this->clearTree();
 	}
 
 	/**
@@ -437,118 +436,6 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
-	 * @date 2020-03-20 18:19:45
-	 *
-	 * Level-2 normalisation: dyadic ordering.
-	 *
-	 * Comparing the operand reference id's is not sufficient to determining ordering.
-	 *
-	 * For example `"ab+cd>&~"` and `"cd>ab+&~"` would be considered 2 different trees.
-	 *
-	 * To find them identical a deep inspection must occur
-	 *
-	 * @param {number} lhs - entrypoint to right side
-	 * @param {number} rhs - entrypoint to right side
-	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
-	 */
-	int compare(uint32_t lhs, uint32_t rhs) {
-
-		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int stackPos = 0;
-
-		assert(~lhs & IBIT);
-		assert(~rhs & IBIT);
-
-		stackL[stackPos] = lhs;
-		stackR[stackPos] = rhs;
-		stackPos++;
-
-		uint32_t beenThere = 0;
-		uint8_t beenWhere[TINYTREE_NEND];
-
-		do {
-			// pop stack
-			--stackPos;
-			uint32_t L = stackL[stackPos];
-			uint32_t R = stackR[stackPos];
-
-			/*
-			 * compare endpoints/references
-			 */
-			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART)
-				return -1; // `end` < `ref`
-			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART)
-				return +1; // `ref` > `end`
-
-			/*
-			 * compare contents
-			 */
-			if (L < TINYTREE_NSTART) {
-				if (L < R)
-					return -1; // `lhs` < `rhs`
-				if (L > R)
-					return +1; // `lhs` < `rhs`
-
-				// continue with next stack entry
-				continue;
-			}
-
-			/*
-			 * Been here before
-			 */
-			if (beenThere & (1 << L)) {
-				if (beenWhere[L] == R)
-					continue; // yes
-			}
-			beenThere |= 1 << L;
-			beenWhere[L] = R;
-
-			// decode L and R
-			L = packedN[L];
-			R = packedN[R];
-
-			/*
-			 * Reminder:
-			 *  [ 2] a ? ~0 : b                  "+" OR
-			 *  [ 6] a ? ~b : 0                  ">" GT
-			 *  [ 8] a ? ~b : b                  "^" XOR
-			 *  [ 9] a ? ~b : c                  "!" QnTF
-			 *  [16] a ?  b : 0                  "&" AND
-			 *  [19] a ?  b : c                  "?" QTF
-			 */
-
-			assert(pIsType[L]);
-			assert(pIsType[R]);
-
-			/*
-			 * compare structure
-			 */
-			if (pIsType[L] < pIsType[R])
-				return -1; // `L` < `R`
-			if (pIsType[L] > pIsType[R])
-				return +1; // `L` > `R`
-
-			/*
-			 * Push references
-			 */
-			stackL[stackPos] = (L >> PACKED_FPOS) & PACKED_MASK;
-			stackR[stackPos] = (R >> PACKED_FPOS) & PACKED_MASK;
-			stackPos++;
-			stackL[stackPos] = (L >> PACKED_TPOS) & PACKED_MASK;
-			stackR[stackPos] = (R >> PACKED_TPOS) & PACKED_MASK;
-			stackPos++;
-			stackL[stackPos] = (L >> PACKED_QPOS) & PACKED_MASK;
-			stackR[stackPos] = (R >> PACKED_QPOS) & PACKED_MASK;
-			stackPos++;
-
-		} while (stackPos > 0);
-
-		// identical
-		return 0;
-	}
-
-	/**
 	 * @date 2020-03-18 18:15:57
 	 *
 	 * Push/add packed node to tree
@@ -581,6 +468,12 @@ struct generatorTree_t : tinyTree_t {
 		pCacheQTF[qtf] = nid;
 		pCacheVersion[qtf] = iVersion;
 
+		// save root
+		this->root = nid;
+
+		// sqve type of node so `qtf` can be modified
+		uint32_t typ = pIsType[qtf];
+
 		// populate node
 		tinyNode_t *pNode = this->N + nid;
 		pNode->F = qtf & PACKED_MASK;
@@ -591,8 +484,47 @@ struct generatorTree_t : tinyTree_t {
 		qtf >>= PACKED_WIDTH;
 		if (qtf)
 			pNode->T ^= IBIT;
-		// save root
-		this->root = nid;
+
+		/*
+		 * @date 2020-03-26 12:27:30
+		 *
+		 * "abc?d1^^" is the same as "dabc?^2^", the difference that the top-level `XOR` is swapped.
+		 *
+		 * The first is from the generator which (for speed) compares by id,
+		 * the second if by `tinyTree_t` which does deep-compare.
+		 *
+		 * The generator used `packedN[]` which needs to be converted to `N[]`.
+		 * During conversion, apply deep-compare.
+		 *
+		 * However, swapping the operands of symmeteric dyadics changes the tree walk path.
+		 *
+		 * `"ab>cd+^"` would change into `"cd+ab>^"` which is actually `"ab+cd>^/cdab"`
+		 */
+		if (typ & (PACKED_OR | PACKED_XOR | PACKED_AND)) {
+			if (typ & PACKED_OR) {
+				// swap `OR` if unordered
+				if (compare(pNode->Q, pNode->F, true) > 0) {
+					uint32_t savQ = pNode->Q;
+					pNode->Q = pNode->F;
+					pNode->F = savQ;
+				}
+			} else if (typ & PACKED_XOR) {
+				// swap `XOR` if unordered
+				if (compare(pNode->Q, pNode->F, true) > 0) {
+					uint32_t savQ = pNode->Q;
+					pNode->Q = pNode->F;
+					pNode->F = savQ;
+					pNode->T = savQ ^ IBIT;
+				}
+			} else {
+				// swap `AND` if unordered
+				if (compare(pNode->Q, pNode->T, true) > 0) {
+					uint32_t savQ = pNode->Q;
+					pNode->Q = pNode->T;
+					pNode->T = savQ;
+				}
+			}
+		}
 
 		return nid;
 	}
@@ -643,7 +575,7 @@ struct generatorTree_t : tinyTree_t {
 			return;
 		}
 
-		// reconstruct tree
+		// re-order endpoints
 		char name[TINYTREE_NAMELEN + 1];
 		char skin[MAXSLOTS + 1];
 		foundTree.reconstruct(*this, name, skin);

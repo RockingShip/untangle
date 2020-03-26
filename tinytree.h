@@ -170,9 +170,10 @@ struct tinyTree_t {
 	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
+	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
 	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
 	 */
-	int compare(uint32_t lhs, uint32_t rhs) {
+	int compare(uint32_t lhs, uint32_t rhs, bool layoutOnly = false) {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -206,6 +207,8 @@ struct tinyTree_t {
 			 * compare contents
 			 */
 			if (L < TINYTREE_NSTART) {
+				if (layoutOnly)
+					continue; // ignore endpoint values
 				if (L < R)
 					return -1; // `lhs` < `rhs`
 				if (L > R)
