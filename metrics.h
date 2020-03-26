@@ -5,6 +5,18 @@
  * @date 2020-03-17 14:06:32
  *
  * Presets and metrics
+ *
+ * @date 2020-03-25 01:00:45
+ *
+ * Imprints and ratio
+ *
+ * Ratios are used to scale the index in relation to amount of data.
+ * The index is a hash table lookup with overflow on collision.
+ * When the index has the same number of entries as the data then collisions are certain to happen.
+ * The excess on index entries reduces the chance of collisions.
+ * Using `crc32` as hash function produces a good evenly spread index starting point.
+ * Index sizes must be prime. For speed, The code raises that to the next 1M boundary   and the code raises that to the
+ *
  */
 
 /*
@@ -24,6 +36,17 @@
  *	You should have received a copy of the GNU General Public License
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/*
+ * @date 2020-03-25 15:06:54
+ */
+enum {
+	// default interleave (taken from `ratioMetrics_X[]`)
+	METRICS_DEFAULT_INTERLEAVE = 120, // This allows for a shared 8G imprint . on machines with 32G memory this gives about 4 workers with each 4G local and 8G shared memory
+
+	// default ratio (taken from `ratioMetrics_X[]`). NOTE: Times 10!
+	METRICS_DEFAULT_RATIO = 50, // NOTE: Its actually 5.0
+};
 
 /**
  * @date 2020-03-17 14:06:58
@@ -65,7 +88,7 @@ struct metricsInterleave_t {
 	float storage;
 
 	int zero; // to screen align data
-} ;
+};
 
 static const metricsInterleave_t metricsInterleave[] = {
 	{9, 120,  3024, 120, 8850,   6.896,   0}, // runtime slowest
@@ -86,7 +109,7 @@ static const metricsInterleave_t metricsInterleave[] = {
  * @param {number} interleave - The interleave value communicated with user (numStored)
  * @return {metricsInterleave_t} Reference to match or NULL if not found
  */
-const metricsInterleave_t * getMetricsInterleave(unsigned numSlots, unsigned interleave) {
+const metricsInterleave_t *getMetricsInterleave(unsigned numSlots, unsigned interleave) {
 
 	// walk through list
 	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
@@ -106,7 +129,7 @@ const metricsInterleave_t * getMetricsInterleave(unsigned numSlots, unsigned int
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @return {string} Comma separated list of allowed interleaves
  */
-const char * getAllowedInterleaves(unsigned numSlots) {
+const char *getAllowedInterleaves(unsigned numSlots) {
 	static char sbuf[256];
 	unsigned spos = 0;
 
@@ -118,7 +141,7 @@ const char * getAllowedInterleaves(unsigned numSlots) {
 				sbuf[spos++] = ',';
 			}
 			// interleave
-			spos += sprintf(sbuf+spos,"%d", pInterleave->numStored);
+			spos += sprintf(sbuf + spos, "%d", pInterleave->numStored);
 		}
 	}
 
@@ -158,55 +181,64 @@ struct metricsImprint_t {
 	 */
 
 	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
-	uint32_t numImprint;
+	uint32_t numImprints;
+
+	/// @var {double} - Estimated `database_t::lookupImprintAssociative()` in M/s. Provided by `gensignature --metrics`
+	double speed; // NOTE: based on random collection which changes per run.
+
+	/// @var {double} - Estimated storage in Gb. Provided by `gensignature --metrics`
+	double storage;
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
-} ;
+};
 
-// @date 2020-03-23 14:06:19 -- recalculating these metrics cost about 30 minutes
+/*
+ * @date 2020-03-23 14:06:19
+ *   recalculating these metrics cost about 30 minutes
+ */
 static const metricsImprint_t metricsImprint[] = {
-	{9, 1, 504,  0, 6,         0},
-	{9, 1, 120,  0, 7,         0},
-	{9, 1, 3024, 0, 7,         0},
-	{9, 1, 720,  0, 8,         0},
-	{9, 1, 504,  1, 67,        0},
-	{9, 1, 120,  1, 107,       0},
-	{9, 1, 3024, 1, 123,       0},
-	{9, 1, 720,  1, 188,       0},
-	{9, 1, 504,  2, 2176,      0},
-	{9, 1, 120,  2, 3177,      0},
-	{9, 1, 3024, 2, 6137,      0},
-	{9, 1, 720,  2, 9863,      0},
-	{9, 1, 120,  3, 126802,    0},
-	{9, 1, 504,  3, 149494,    0},
-	{9, 1, 3024, 3, 561057,    0},
-	{9, 1, 720,  3, 647618,    0},
-	{9, 1, 120,  4, 10425180,  0},
-	{9, 1, 504,  4, 19346575,  0},
-	{9, 1, 720,  4, 61887091,  0},
-	{9, 1, 3024, 4, 87859871,  0},
+	{9, 1, 504,  0, 6,         103.774, 0.000,  0},
+	{9, 1, 120,  0, 7,         62.566,  0.000,  0},
+	{9, 1, 3024, 0, 7,         65.534,  0.000,  0},
+	{9, 1, 720,  0, 8,         51.256,  0.000,  0},
+	{9, 1, 504,  1, 67,        57.586,  0.000,  0},
+	{9, 1, 120,  1, 107,       45.747,  0.000,  0},
+	{9, 1, 3024, 1, 123,       51.530,  0.000,  0},
+	{9, 1, 720,  1, 188,       45.316,  0.000,  0},
+	{9, 1, 504,  2, 2176,      34.543,  0.000,  0},
+	{9, 1, 120,  2, 3177,      30.567,  0.000,  0},
+	{9, 1, 3024, 2, 6137,      34.707,  0.001,  0},
+	{9, 1, 720,  2, 9863,      30.290,  0.001,  0},
+	{9, 1, 120,  3, 126802,    15.363,  0.012,  0},
+	{9, 1, 504,  3, 149493,    23.876,  0.014,  0},
+	{9, 1, 3024, 3, 561056,    13.512,  0.052,  0},
+	{9, 1, 720,  3, 647618,    11.317,  0.060,  0},
+	{9, 1, 120,  4, 10425350,  8.257,   0.959,  0}, // <-- default
+	{9, 1, 504,  4, 19344991,  9.890,   1.780,  0},
+	{9, 1, 720,  4, 61887451,  7.309,   5.694,  0},
+	{9, 1, 3024, 4, 87855543,  8.219,   8.083,  0},
 	//
-	{9, 0, 504,  0, 6,         0},
-	{9, 0, 120,  0, 7,         0},
-	{9, 0, 3024, 0, 7,         0},
-	{9, 0, 720,  0, 8,         0},
-	{9, 0, 504,  1, 108,       0},
-	{9, 0, 120,  1, 177,       0},
-	{9, 0, 3024, 1, 207,       0},
-	{9, 0, 720,  1, 323,       0},
-	{9, 0, 504,  2, 6327,      0},
-	{9, 0, 120,  2, 8827,      0},
-	{9, 0, 3024, 2, 18706,     0},
-	{9, 0, 720,  2, 29743,     0},
-	{9, 0, 120,  3, 591412,    0},
-	{9, 0, 504,  3, 775391,    0},
-	{9, 0, 3024, 3, 3053155,   0},
-	{9, 0, 720,  3, 3283078,   0},
-	{9, 0, 120,  4, 89007120,  0}, //  8G memory
-	{9, 0, 504,  4, 181883670, 0}, // 15G memory
-	{9, 0, 720,  4, 531738316, 0}, // 45G memory
-	{9, 0, 3024, 4, 0,         1}, // too large
+	{9, 0, 504,  0, 6,         98.814,  0.000,  0},
+	{9, 0, 120,  0, 7,         60.968,  0.000,  0},
+	{9, 0, 3024, 0, 7,         71.219,  0.000,  0},
+	{9, 0, 720,  0, 8,         53.418,  0.000,  0},
+	{9, 0, 504,  1, 108,       57.83,   0.000,  0},
+	{9, 0, 120,  1, 177,       42.62,   0.000,  0},
+	{9, 0, 3024, 1, 207,       51.21,   0.000,  0},
+	{9, 0, 720,  1, 323,       45.26,   0.000,  0},
+	{9, 0, 504,  2, 6327,      36.729,  0.001,  0},
+	{9, 0, 120,  2, 8827,      30.542,  0.001,  0},
+	{9, 0, 3024, 2, 18706,     34.517,  0.002,  0},
+	{9, 0, 720,  2, 29743,     31.412,  0.003,  0},
+	{9, 0, 120,  3, 591412,    11.830,  0.054,  0},
+	{9, 0, 504,  3, 775391,    14.745,  0.071,  0},
+	{9, 0, 3024, 3, 3053155,   10.399,  0.281,  0},
+	{9, 0, 720,  3, 3283078,   9.194,   0.302,  0},
+	{9, 0, 120,  4, 89009210,  7.968,   8.189,  0}, // <-- default
+	{9, 0, 504,  4, 181875063, 8.737,   16.733, 0},
+	{9, 0, 720,  4, 531744076, 5.872,   48.920, 0},
+	{9, 0, 3024, 4, 0,         0,       0,      1},
 	//
 	{0}
 };
@@ -222,7 +254,7 @@ static const metricsImprint_t metricsImprint[] = {
  * @param {number} numNodes - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNodes) {
+const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNodes) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
@@ -243,7 +275,7 @@ const metricsImprint_t * getMetricsImprint(unsigned numSlots, unsigned qntf, uns
  * Metrics describing generator.
  *
  * Primarily used to calculate generator progress.
- * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignature).
+ * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignatures).
  */
 struct metricsGenerator_t {
 	/*
@@ -267,28 +299,28 @@ struct metricsGenerator_t {
 	/// @var {number} - Total candidate (unique `foundTrees()` calls). Provided by `genrestartdata --text`
 	uint64_t numCandidates; // (including mandatory zero entry)
 
-	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature`
-	uint64_t numSignature; // (including mandatory zero entry)
+	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
+	uint64_t numSignatures; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
 };
 
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 1, 0, 0,               3,         3,      0},
-	{9, 0, 0, 0,               3,         3,      0},
-	{9, 1, 1, 4,               5,         5,      0},
-	{9, 0, 1, 6,               7,         7,      0},
-	{9, 1, 2, 154,             155,       49,     0},
-	{9, 0, 2, 424,             425,       110,    0},
-	{9, 1, 3, 17535,           15229,     1311,   0},
-	{9, 0, 3, 92258,           80090,     5666,   0},
-	{9, 1, 4, 3766074,         2855297,   96363,  0},
-	{9, 0, 4, 38399264,        29085581,  791647, 0},
-	{9, 1, 5, 1286037101,      860812548, 0,      0}, // numCandidates takes about 15 minutes
-	{9, 0, 5, 25583691074,     0,         0,      0},
-	{9, 1, 6, 633200151789,    0,         0,      0}, // numProgress takes about 80 minutes
-	{9, 0, 6, 1556055783374,   0,         0,      1}, // some historic value
+	{9, 1, 0, 0,             3,         3,      0},
+	{9, 0, 0, 0,             3,         3,      0},
+	{9, 1, 1, 4,             5,         7,      0},
+	{9, 0, 1, 6,             7,         9,      0},
+	{9, 1, 2, 154,           155,       49,     0},
+	{9, 0, 2, 424,           425,       110,    0},
+	{9, 1, 3, 17535,         15229,     1311,   0},
+	{9, 0, 3, 92258,         80090,     5666,   0},
+	{9, 1, 4, 3766074,       2855297,   96363,  0},
+	{9, 0, 4, 38399264,      29085581,  791647, 0},
+	{9, 1, 5, 1286037101,    860812548, 0,      0}, // numCandidates takes about 15 minutes
+	{9, 0, 5, 25583691074,   0,         0,      0},
+	{9, 1, 6, 633200151789,  0,         0,      0}, // numProgress takes about 80 minutes
+	{9, 0, 6, 1556055783374, 0,         0,      1}, // some historic value
 	//
 	{0}
 };
@@ -303,7 +335,7 @@ static const metricsGenerator_t metricsGenerator[] = {
  * @param {number} numNodes - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsGenerator_t * getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNodes) {
+const metricsGenerator_t *getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNodes) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
@@ -317,5 +349,75 @@ const metricsGenerator_t * getMetricsGenerator(unsigned numSlots, unsigned qntf,
 	// not found
 	return NULL;
 }
+
+/**
+ * @date 2020-03-25 13:58:50
+ *
+ * Ratio statistics
+ * Metrics were collected for all 4-node trees and ratio settings.
+ * It shows: speed in associative lookups per second, required storage and the average number of cache hits per footprint lookup.
+ *
+ * The interleave influences CPU cache and how it might thrash it.
+ * The cache hits influences how often 72 byte large structures get compared.
+ *
+ * These metrics are a side project and were a pain to get.
+ * They were created to get an impression of the effects of settings and are once-only never again. (use `gensignature --metrics --debug=0x80000000`)
+ *
+ * Measurements were performed on random signature lookups with random skins.
+ */
+
+double ratioMetrics_QnTF[][8][3] = {
+	// each triplet = [speed M/s, Storage Gb, avg. cache hits per lookup }
+	//
+	//      QnTF-i120                 QnTF-i504                QnTF-i720                QnTF-i3024
+	{{6.273, 0.834, 2.19980}, {7.282,  1.548, 2.20292}, {5.429, 4.951, 2.22969}, {5.989, 7.029, 2.23827}}, // r=2.0
+	{{6.482, 0.842, 1.98826}, {7.657,  1.563, 1.99072}, {5.616, 5.000, 2.01456}, {6.186, 7.099, 2.02260}}, // r=2.2
+	{{6.717, 0.851, 1.83789}, {7.915,  1.579, 1.84022}, {5.808, 5.050, 1.86352}, {6.386, 7.169, 1.87256}}, // r=2.4
+	{{6.920, 0.859, 1.72671}, {8.159,  1.594, 1.72928}, {5.981, 5.099, 1.74997}, {6.582, 7.240, 1.76004}}, // r=2.6
+	{{6.804, 0.867, 1.64085}, {8.388,  1.610, 1.64357}, {6.160, 5.149, 1.66456}, {6.767, 7.310, 1.67317}}, // r=2.8
+	{{7.286, 0.876, 1.57307}, {8.595,  1.625, 1.57605}, {6.318, 5.199, 1.59544}, {6.952, 7.380, 1.60419}}, // r=3.0
+	{{7.410, 0.884, 1.51754}, {8.775,  1.641, 1.51986}, {6.463, 5.248, 1.53945}, {7.128, 7.451, 1.54795}}, // r=3.2
+	{{7.664, 0.892, 1.47205}, {8.963,  1.656, 1.47469}, {6.608, 5.298, 1.49299}, {7.290, 7.521, 1.50156}}, // r=3.4
+	{{7.808, 0.901, 1.43356}, {9.116,  1.672, 1.43613}, {6.725, 5.347, 1.45419}, {7.438, 7.591, 1.46225}}, // r=3.6
+	{{7.922, 0.909, 1.40114}, {9.271,  1.687, 1.40350}, {6.843, 5.397, 1.42139}, {7.575, 7.661, 1.42874}}, // r=3.8
+	{{8.049, 0.917, 1.37305}, {9.386,  1.702, 1.37499}, {6.944, 5.446, 1.39251}, {7.636, 7.732, 1.40023}}, // r=4.0
+	{{8.160, 0.926, 1.34836}, {9.516,  1.718, 1.35068}, {7.041, 5.496, 1.36786}, {7.534, 7.802, 1.37574}}, // r=4.2
+	{{8.277, 0.934, 1.32680}, {9.644,  1.733, 1.32891}, {7.146, 5.545, 1.34577}, {7.576, 7.872, 1.35339}}, // r=4.4
+	{{8.317, 0.942, 1.30788}, {9.738,  1.749, 1.31003}, {7.232, 5.595, 1.32615}, {7.759, 7.943, 1.33406}}, // r=4.6
+	{{8.374, 0.951, 1.29044}, {9.819,  1.764, 1.29306}, {7.295, 5.644, 1.30923}, {8.058, 8.013, 1.31674}}, // r=4.8
+	{{8.492, 0.959, 1.27572}, {9.924,  1.780, 1.27809}, {7.364, 5.694, 1.29369}, {8.117, 8.083, 1.30103}}, // r=5.0 // <-- default
+	{{8.555, 0.967, 1.26199}, {9.995,  1.795, 1.26405}, {7.421, 5.743, 1.27965}, {7.996, 8.153, 1.28761}}, // r=5.2
+	{{8.631, 0.976, 1.24966}, {10.056, 1.811, 1.25178}, {7.475, 5.793, 1.26718}, {8.091, 8.224, 1.27408}}, // r=5.4
+	{{8.672, 0.984, 1.23835}, {10.115, 1.826, 1.24093}, {7.517, 5.842, 1.25582}, {8.145, 8.294, 1.26343}}, // r=5.6
+	{{8.773, 0.992, 1.22804}, {10.184, 1.842, 1.23040}, {7.562, 5.892, 1.24485}, {8.211, 8.364, 1.25297}}, // r=5.8
+	{{8.826, 1.001, 1.21849}, {10.248, 1.857, 1.22058}, {7.607, 5.941, 1.23593}, {8.284, 8.435, 1.24294}}, // r=6.0
+};
+
+double ratioMetrics_QTF[][8][3] = {
+	// each triplet = [speed M/s, Storage Gb, avg. cache hits per lookup }
+	//
+	//      QTF-i120                 QTF-i504                  QTF-i720
+	{{5.617, 7.120, 2.25985}, {6.233, 14.551, 2.31815}, {4.150, 42.539, 2.55734}}, // r=2.0
+	{{5.932, 7.192, 2.03981}, {6.675, 14.696, 2.09536}, {4.177, 42.964, 2.32632}}, // r=2.2
+	{{5.997, 7.263, 1.88737}, {6.947, 14.842, 1.93758}, {4.142, 43.390, 2.15550}}, // r=2.4
+	{{6.167, 7.334, 1.77228}, {7.162, 14.987, 1.81931}, {4.154, 43.815, 2.01615}}, // r=2.6
+	{{6.431, 7.405, 1.68384}, {7.374, 15.133, 1.73038}, {4.160, 44.241, 1.91585}}, // r=2.8
+	{{6.381, 7.476, 1.61325}, {7.550, 15.278, 1.65648}, {4.017, 44.666, 1.84370}}, // r=3.0
+	{{6.854, 7.548, 1.55580}, {7.709, 15.424, 1.60000}, {4.087, 45.091, 1.78206}}, // r=3.2
+	{{6.701, 7.619, 1.50961}, {7.837, 15.569, 1.54905}, {4.367, 45.517, 1.72809}}, // r=3.4
+	{{6.999, 7.690, 1.47022}, {8.007, 15.715, 1.51026}, {4.404, 45.942, 1.67997}}, // r=3.6
+	{{7.245, 7.761, 1.43604}, {8.134, 15.860, 1.47532}, {4.447, 46.368, 1.63405}}, // r=3.8
+	{{7.348, 7.832, 1.40726}, {7.805, 16.006, 1.44362}, {4.274, 46.793, 1.58934}}, // r=4.0
+	{{7.471, 7.904, 1.38213}, {7.874, 16.151, 1.41935}, {4.266, 47.218, 1.56701}}, // r=4.2
+	{{7.239, 7.975, 1.35932}, {7.840, 16.297, 1.39619}, {4.621, 47.644, 1.55028}}, // r=4.4
+	{{7.495, 8.046, 1.33970}, {7.903, 16.442, 1.37516}, {4.678, 48.069, 1.53416}}, // r=4.6
+	{{7.744, 8.117, 1.32176}, {7.770, 16.588, 1.35627}, {4.689, 48.495, 1.51815}}, // r=4.8
+	{{7.657, 8.189, 1.30637}, {8.009, 16.733, 1.34191}, {4.823, 48.920, 1.50416}}, // r=5.0 // <-- default
+	{{7.609, 8.260, 1.29253}, {7.291, 16.879, 1.32796}, {4.302, 49.345, 1.49021}}, // r=5.2
+	{{7.692, 8.331, 1.27904}, {7.198, 17.024, 1.31472}, {4.636, 49.771, 1.47606}}, // r=5.4
+	{{7.893, 8.402, 1.26828}, {7.910, 17.170, 1.30138}, {4.752, 50.196, 1.46501}}, // r=5.6
+	{{8.017, 8.473, 1.25734}, {6.945, 17.315, 1.28865}, {4.989, 50.621, 1.45427}}, // r=5.8
+	{{7.773, 8.545, 1.24682}, {7.504, 17.461, 1.27884}, {4.891, 51.047, 1.44327}}, // r=6.0
+};
 
 #endif

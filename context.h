@@ -81,10 +81,16 @@ struct context_t {
 	/*
 	 * @date 2020-03-19 19:51:15
 	 *
-	 * Debug settings
+	 * Debug settings. Usually flags you don't want to spend effort on adding extra program options
 	 */
 	enum {
 		// @formatter:off
+		// common flags go from low to high
+
+		// un-common flags go from high to low
+		DEBUGFLAG_GEN_RATIO     = 31,    // Let `gensignature --metrics`
+
+		DEBUGMASK_GEN_RATIO     = 1 << DEBUGFLAG_GEN_RATIO,
 		// @formatter:on
 	};
 

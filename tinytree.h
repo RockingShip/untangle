@@ -1104,6 +1104,35 @@ struct tinyTree_t {
 		uint32_t beenThere = 0;
 		uint32_t beenWhat[TINYTREE_NEND];
 
+		if ((id & ~IBIT) < TINYTREE_NSTART) {
+			if (pSkin) {
+				if ((id & ~IBIT) == 0) {
+					pName[nameLen++] = '0';
+					pSkin[0] = 0;
+				} else {
+					pSkin[0] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
+					pSkin[1] = 0;
+					pName[nameLen++] = 'a';
+				}
+
+			} else {
+				if ((id & ~IBIT) == 0) {
+					pName[nameLen++] = '0';
+				} else {
+					pName[nameLen++] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
+				}
+			}
+
+			// test for root invert
+			if (id & IBIT)
+				pName[nameLen++] = '~';
+
+			// terminator
+			pName[nameLen] = 0;
+
+			return;
+		}
+
 		/*
 		 * For skins, walk the tree depth-first to enumerate the placeholders
 		 */
