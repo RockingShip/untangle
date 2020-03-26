@@ -234,10 +234,10 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignatures);
 			} else {
 				fprintf(stderr, "\r\e[K[%s] %lu |  numCandidate=%d",
-				        timeAsString(), progress, pStore->numSignature);
+				        timeAsString(), progress, pStore->numSignatures);
 			}
 		}
 
@@ -264,7 +264,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	void performListCandidates(database_t *pStore, unsigned numNodes) {
 
 		this->pStore = pStore;
-		pStore->numSignature = 1; // skip mandatory zero entry
+		pStore->numSignatures = 1; // skip mandatory zero entry
 
 		/*
 		 * Setup generator
@@ -298,7 +298,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld numCandidates=%d\n",
-			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNodes, this->progress, pStore->numSignature);
+			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNodes, this->progress, pStore->numSignatures);
 	}
 
 };
@@ -522,8 +522,8 @@ int main(int argc, char *const *argv) {
 	if (app.opt_text) {
 		pStore = new database_t(app);
 
-		pStore->maxSignature = app.arg_numNodes < 5 ? 40000000 : 900000000; // some hardcoded upper limit taken from `metricsGenerator`
-		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignature * 4.0);
+		pStore->maxSignatures = app.arg_numNodes < 5 ? 40000000 : 900000000; // some hardcoded upper limit taken from `metricsGenerator`
+		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignatures * METRICS_DEFAULT_RATIO);
 
 		pStore->create();
 	}
