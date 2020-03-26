@@ -362,17 +362,52 @@ struct tree_t {
 
 
 			/*
-			 * Push references
+			 * Push natural walking order
+			 * deep Q, deep T, deep F, endpoint Q, endpoint T, endpoint F
+			 *
 			 */
-			stackL[stackPos] = pNodeL->F;
-			stackR[stackPos] = pNodeR->F;
-			stackPos++;
-			stackL[stackPos] = pNodeL->T & ~IBIT;
-			stackR[stackPos] = pNodeR->T & ~IBIT;
-			stackPos++;
-			stackL[stackPos] = pNodeL->Q;
-			stackR[stackPos] = pNodeR->Q;
-			stackPos++;
+			if (pNodeL->F) {
+				if (pNodeL->F < nstart && pNodeR->F < nstart) {
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
+				}
+			}
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) < nstart && (pNodeR->T & ~IBIT) < nstart) {
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
+				}
+			}
+			if (pNodeL->Q) {
+				if (pNodeL->Q < nstart && pNodeR->Q < nstart) {
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
+				}
+			}
+			if (pNodeL->F) {
+				if (pNodeL->F >= nstart || pNodeR->F >= nstart) {
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
+				}
+			}
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) >= nstart || (pNodeR->T & ~IBIT) >= nstart) {
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
+				}
+			}
+			if (pNodeL->Q) {
+				if (pNodeL->Q >= nstart || pNodeR->Q >= nstart) {
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
+				}
+			}
 
 		} while (stackPos > 0);
 
