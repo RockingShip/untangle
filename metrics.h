@@ -173,15 +173,15 @@ struct metricsImprint_t {
 	/// @var {number} - Valid when match `interleave` (higher values implies more imprints per signature)
 	unsigned interleave;
 
-	/// @var {number} - Valid when match `numNodes` (higher values implies more signatures)
-	unsigned numNodes;
+	/// @var {number} - Valid when match `numNode` (higher values implies more signatures)
+	unsigned numNode;
 
 	/*
 	 * non-Key
 	 */
 
 	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
-	uint32_t numImprints;
+	uint32_t numImprint;
 
 	/// @var {double} - Estimated `database_t::lookupImprintAssociative()` in M/s. Provided by `gensignature --metrics`
 	double speed; // NOTE: based on random collection which changes per run.
@@ -253,10 +253,10 @@ static const metricsImprint_t metricsImprint[] = {
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @param {number} qntf - `QnTF-only` mode
  * @param {number} interleave - The interleave value communicated with user
- * @param {number} numNodes - signature size in number of nodes
+ * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNodes) {
+const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNode) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
@@ -264,7 +264,7 @@ const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsi
 	// walk through list
 	for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNodes == numNodes)
+		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found
@@ -277,7 +277,7 @@ const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsi
  * Metrics describing generator.
  *
  * Primarily used to calculate generator progress.
- * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignatures).
+ * It also reflects effectiveness of normalisation levels 1+2 (numCandidate) and level 3 (numSignature).
  */
 struct metricsGenerator_t {
 	/*
@@ -288,8 +288,8 @@ struct metricsGenerator_t {
 	unsigned numSlots;
 	/// @var {number} - `QnTF` mode
 	unsigned qntf;
-	/// @var {number} - Valid when match `numNodes` (higher values implies more signatures)
-	unsigned numNodes;
+	/// @var {number} - Valid when match `numNode` (higher values implies more signatures)
+	unsigned numNode;
 
 	/*
 	 * non-Key
@@ -299,10 +299,10 @@ struct metricsGenerator_t {
 	uint64_t numProgress;
 
 	/// @var {number} - Total candidate (unique `foundTrees()` calls). Provided by `genrestartdata --text`
-	uint64_t numCandidates; // (including mandatory zero entry)
+	uint64_t numCandidate; // (including mandatory zero entry)
 
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
-	uint64_t numSignatures; // (including mandatory zero entry)
+	uint64_t numSignature; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
@@ -320,7 +320,7 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 3, 92258,         80090,     5666,     0},
 	{9, 1, 4, 3766074,       2811679,   96363,    0},
 	{9, 0, 4, 38399264,      28635825,  791647,   0},
-	{9, 1, 5, 1286037101,    825798040, 10233318, 0}, // numCandidates takes about 15 minutes. numSignatures is from historic metrics
+	{9, 1, 5, 1286037101,    825798040, 10233318, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
 	{9, 0, 5, 25583691074,   0,         0,        0},
 	{9, 1, 6, 633200151789,  0,         0,        0}, // numProgress takes about 80 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        1}, // from historic metrics
@@ -335,10 +335,10 @@ static const metricsGenerator_t metricsGenerator[] = {
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @param {number} interleave - The interleave value communicated with user
- * @param {number} numNodes - signature size in number of nodes
+ * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsGenerator_t *getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNodes) {
+const metricsGenerator_t *getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNode) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
@@ -346,7 +346,7 @@ const metricsGenerator_t *getMetricsGenerator(unsigned numSlots, unsigned qntf, 
 	// walk through list
 	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->numNodes == numNodes)
+		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found

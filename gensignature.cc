@@ -108,9 +108,9 @@ struct gensignatureContext_t : context_t {
 	/// @var {number} --keep, do not delete output database in case of errors
 	unsigned opt_keep;
 	/// @var {number} Maximum number of imprints to be stored database
-	uint32_t opt_maxImprints;
+	uint32_t opt_maxImprint;
 	/// @var {number} Maximum number of signatures to be stored database
-	uint32_t opt_maxSignatures;
+	uint32_t opt_maxSignature;
 	/// @var {number} --metrics, Collect metrics intended for "metrics.h"
 	unsigned opt_metrics;
 	/// @var {number} index/data ratio
@@ -140,8 +140,8 @@ struct gensignatureContext_t : context_t {
 		opt_imprintIndexSize = 0;
 		opt_interleave = METRICS_DEFAULT_INTERLEAVE;
 		opt_keep = 0;
-		opt_maxImprints = 0;
-		opt_maxSignatures = 0;
+		opt_maxImprint = 0;
+		opt_maxSignature = 0;
 		opt_metrics = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
@@ -158,13 +158,21 @@ struct gensignatureContext_t : context_t {
 	 *
 	 * found candidate.
 	 *
-	 * 2020-03-23 04:46:53
+	 * @date 2020-03-23 04:46:53
 	 *
 	 * Perform an associative lookup to determine signature footprint (sid) and orientation (tid)
 	 * expand collection of unique structures.
 	 *
 	 * If signature has swapping hints then apply the hint and deep-compare.
 	 * accept the
+	 *
+	 * @date 2020-03-27 02:47:42
+	 *
+	 * At this point in time the generator seems to be functional.
+	 * It aagrees with metrics from the previous major version.
+	 * Unexpected surprise is the two mode assosiactive index.
+	 * leading to a better speed. The previous version had interleave 504.
+	 * All the calls to this function are the uniques
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
@@ -182,11 +190,11 @@ struct gensignatureContext_t : context_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignatures=%d numImprints=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignatures, pStore->numImprints);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu | numSignatures=%d numImprints=%d",
-				        timeAsString(), progress, pStore->numSignatures, pStore->numImprints);
+				fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
 			}
 		}
 
@@ -309,8 +317,8 @@ struct gensignatureContext_t : context_t {
 	void main(database_t *pStore) {
 		this->pStore = pStore;
 
-		pStore->numImprints = 1; // skip mandatory zero entry
-		pStore->numSignatures = 1; // skip mandatory zero entry
+		pStore->numImprint = 1; // skip mandatory zero entry
+		pStore->numSignature = 1; // skip mandatory zero entry
 
 		// create generator
 		generatorTree_t generator(*this);
@@ -343,8 +351,8 @@ struct gensignatureContext_t : context_t {
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
-			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*interleave=*/%d, /*numNodes=*/%d, /*numSignatures=*/%d, /*numImprints=*/%d },\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignatures, pStore->numImprints);
+			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*interleave=*/%d, /*numNode=*/%d, /*numSignature=*/%d, /*numImprint=*/%d },\n",
+			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignature, pStore->numImprint);
 
 			if (this->progress != this->progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
@@ -677,7 +685,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
-			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprints);
+			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
 			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 
 			/*
@@ -687,7 +695,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			tree.decodeFast(pBasename);
 
 			// add to database
-			pStore->numImprints = 1; // skip mandatory zero entry
+			pStore->numImprint = 1; // skip mandatory zero entry
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
 
 			/*
@@ -735,13 +743,13 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// base estimated size on 791647 signatures
 			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprints - 1, MAXTRANSFORM / (pStore->numImprints - 1),
-			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprints) / 1.0e9);
+			        this->timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
+			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 			// test that number of imprints match
-			if (pInterleave->numStored != pStore->numImprints - 1) {
-				printf("{\"error\":\"numImprints missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
-				       __FUNCTION__, pStore->numImprints - 1, pInterleave->numStored);
+			if (pInterleave->numStored != pStore->numImprint - 1) {
+				printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+				       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
 				exit(1);
 			}
 		}
@@ -841,7 +849,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
 
-		unsigned endpointsLeft = pMetrics->numNodes * 2 + 1;
+		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
 
 		/*
 		 * Pass 1, slice dataset into single entries
@@ -855,7 +863,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
 			this->progressHi = pMetrics->numProgress;
 			this->progress = 0;
 			this->tick = 0;
@@ -878,7 +886,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = 0;
 			generator.windowHi = 0;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNodes][pMetrics->qntf];
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
 			this->progressHi = pMetrics->numProgress;
 			this->progress = 0;
 			this->tick = 0;
@@ -908,7 +916,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	void foundTreeMetrics(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignatures=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignatures);
+				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignature=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignature);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
 			tick = 0;
@@ -922,11 +930,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignatures=%d numImprints=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignatures, pStore->numImprints);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu | numSignatures=%d numImprints=%d",
-				        timeAsString(), progress, pStore->numSignatures, pStore->numImprints);
+				fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
 			}
 		}
 
@@ -960,10 +968,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				continue; // skip automated handling
 
 			// set index to default ratio
-			pStore->imprintIndexSize = this->nextPrime(pRound->numImprints * (METRICS_DEFAULT_RATIO / 10.0));
+			pStore->imprintIndexSize = this->nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
 
 			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNode);
 			assert(pMetrics);
 			const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, pRound->interleave);
 			assert(pInterleave);
@@ -971,8 +979,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			// prepare database
 			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 			memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
-			pStore->numImprints = 1; // skip mandatory zero entry
-			pStore->numSignatures = 1; // skip mandatory zero entry
+			pStore->numImprint = 1; // skip mandatory zero entry
+			pStore->numSignature = 1; // skip mandatory zero entry
 			pStore->interleave = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
@@ -992,7 +1000,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			foundTree(generator, "a", 1);
 
 			// regulars
-			unsigned endpointsLeft = pRound->numNodes * 2 + 1;
+			unsigned endpointsLeft = pRound->numNode * 2 + 1;
 			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeMetrics);
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -1015,7 +1023,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				// do random lookups for 10 seconds
 				for (this->tick = 0; this->tick < 5;) {
 					// load random signature with random tree
-					uint32_t sid = (rand() % (pStore->numSignatures - 1)) + 1;
+					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
 
 					// load tree
@@ -1028,15 +1036,15 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				}
 
 				speed = this->cntHash / 5.0 / 1e6;
-				storage = ((sizeof(*pStore->imprints) * pStore->numImprints) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
+				storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 			}
 
-			fprintf(stderr, "[%s] numSlots=%d qntf=%d interleave=%-4d numNodes=%d numSignatures=%d numImprints=%d speed=%.3fM/s storage=%.3fGb\n",
-			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNodes, pStore->numSignatures, pStore->numImprints, speed, storage);
+			fprintf(stderr, "[%s] numSlots=%d qntf=%d interleave=%-4d numNode=%d numSignature=%d numImprint=%d speed=%.3fM/s storage=%.3fGb\n",
+			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode, pStore->numSignature, pStore->numImprint, speed, storage);
 
 			if (this->progress != this->progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-				       __FUNCTION__, this->progress, this->progressHi, pRound->numNodes);
+				       __FUNCTION__, this->progress, this->progressHi, pRound->numNode);
 			}
 
 			/*
@@ -1046,29 +1054,29 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			// what you wish...
 			if (~this->opt_debug & DEBUGMASK_GEN_RATIO)
 				continue;
-			if (pRound->numNodes < 4)
+			if (pRound->numNode < 4)
 				continue; // no point for smaller trees
 
 			for (unsigned iRatio = 20; iRatio <= 60; iRatio += 2) {
-				pStore->imprintIndexSize = this->nextPrime(pRound->numImprints * (iRatio / 10.0));
+				pStore->imprintIndexSize = this->nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
 				memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-				pStore->numImprints = 1; // skip mandatory zero entry
+				pStore->numImprint = 1; // skip mandatory zero entry
 				this->cntHash = 0;
 				this->cntCompare = 0;
 
-				fprintf(stderr, "[%d %d %.1f]", pStore->numImprints, pStore->imprintIndexSize, iRatio / 10.0);
+				fprintf(stderr, "[%d %d %.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
 
 				// reindex
-				for (uint32_t iSid = 1; iSid < pStore->numSignatures; iSid++) {
+				for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 					const signature_t *pSignature = pStore->signatures + iSid;
 
 					generator.decodeFast(pSignature->name);
 					pStore->addImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, iSid);
 				}
 
-				fprintf(stderr, "[%d %d %.1f %ld %ld %.5f]", pStore->numImprints, pStore->imprintIndexSize, iRatio / 10.0, this->cntHash, this->cntCompare, (double) this->cntCompare / this->cntHash);
+				fprintf(stderr, "[%d %d %.1f %ld %ld %.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, this->cntHash, this->cntCompare, (double) this->cntCompare / this->cntHash);
 
 				/*
 				 * perform a speedtest
@@ -1085,7 +1093,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				// do random lookups for 10 seconds
 				for (this->tick = 0; this->tick < 5;) {
 					// load random signature with random tree
-					uint32_t sid = (rand() % (pStore->numSignatures - 1)) + 1;
+					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
 
 					// load tree
@@ -1099,7 +1107,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 				fprintf(stderr, "[speed=%7.3fM/s storage=%7.3fG hits=%.5f]\n",
 				        this->cntHash / 5.0 / 1e6,
-				        ((sizeof(*pStore->imprints) * pStore->numImprints) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
+				        ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
 				        (double) this->cntCompare / this->cntHash);
 			}
 		}
@@ -1169,8 +1177,8 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%d]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t   --maximprints=<number>    Maximum number of imprints [default=%u]\n", app.opt_maxImprints);
-		fprintf(stderr, "\t   --maxsignatures=<number>  Maximum number of signatures [default=%u]\n", app.opt_maxSignatures);
+		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
 		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
@@ -1211,8 +1219,8 @@ int main(int argc, char *const *argv) {
 			LO_IMPRINTINDEX,
 			LO_INTERLEAVE,
 			LO_KEEP,
-			LO_MAXIMPRINTS,
-			LO_MAXSIGNATURES,
+			LO_MAXIMPRINT,
+			LO_MAXSIGNATURE,
 			LO_METRICS,
 			LO_NOPARANOID,
 			LO_NOQNTF,
@@ -1239,8 +1247,8 @@ int main(int argc, char *const *argv) {
 			{"imprintindex",   1, 0, LO_IMPRINTINDEX},
 			{"interleave",     1, 0, LO_INTERLEAVE},
 			{"keep",           0, 0, LO_KEEP},
-			{"maximprints",    1, 0, LO_MAXIMPRINTS},
-			{"maxsignatures",  1, 0, LO_MAXSIGNATURES},
+			{"maximprint",     1, 0, LO_MAXIMPRINT},
+			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
 			{"metrics",        0, 0, LO_METRICS},
 			{"no-paranoid",    0, 0, LO_NOPARANOID},
 			{"no-qntf",        0, 0, LO_NOQNTF},
@@ -1301,11 +1309,11 @@ int main(int argc, char *const *argv) {
 			case LO_KEEP:
 				app.opt_keep++;
 				break;
-			case LO_MAXIMPRINTS:
-				app.opt_maxImprints = (uint32_t) strtoul(optarg, NULL, 0);
+			case LO_MAXIMPRINT:
+				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
-			case LO_MAXSIGNATURES:
-				app.opt_maxSignatures = (uint32_t) strtoul(optarg, NULL, 0);
+			case LO_MAXSIGNATURE:
+				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_METRICS:
 				app.opt_metrics++;
@@ -1441,90 +1449,90 @@ int main(int argc, char *const *argv) {
 
 	if (app.opt_selftest) {
 		// force dimensions when self testing. Need to store a single footprint
-		store.maxImprints = MAXTRANSFORM + 10; // = 362880+10
+		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
 		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
 
 		/*
 		 * @date 2020-03-17 16:11:36
 		 * constraint: index needs to be larger than number of data entries
 		 */
-		assert(store.imprintIndexSize > store.maxImprints);
+		assert(store.imprintIndexSize > store.maxImprint);
 	} else {
 		// for metrics: set ratio to maximum because all ratio settings will be probed
 		if (app.opt_metrics) {
 			app.opt_ratio = 6.0;
 
 			// get worse-case values
-			if (app.opt_maxImprints == 0) {
+			if (app.opt_maxImprint == 0) {
 				for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 
-					if (app.opt_maxImprints < pMetrics->numImprints)
-						app.opt_maxImprints = pMetrics->numImprints;
+					if (app.opt_maxImprint < pMetrics->numImprint)
+						app.opt_maxImprint = pMetrics->numImprint;
 				}
 
 				// Give extra 5% expansion space
-				if (app.opt_maxImprints > UINT32_MAX - app.opt_maxImprints / 20)
-					app.opt_maxImprints = UINT32_MAX;
+				if (app.opt_maxImprint > UINT32_MAX - app.opt_maxImprint / 20)
+					app.opt_maxImprint = UINT32_MAX;
 				else
-					app.opt_maxImprints += app.opt_maxImprints / 20;
+					app.opt_maxImprint += app.opt_maxImprint / 20;
 			}
-			if (app.opt_maxSignatures == 0) {
+			if (app.opt_maxSignature == 0) {
 				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 
-					if (app.opt_maxSignatures < pMetrics->numSignatures)
-						app.opt_maxSignatures = pMetrics->numSignatures;
+					if (app.opt_maxSignature < pMetrics->numSignature)
+						app.opt_maxSignature = pMetrics->numSignature;
 				}
 
 				// Give extra 5% expansion space
-				if (app.opt_maxSignatures > UINT32_MAX - app.opt_maxSignatures / 20)
-					app.opt_maxSignatures = UINT32_MAX;
+				if (app.opt_maxSignature > UINT32_MAX - app.opt_maxSignature / 20)
+					app.opt_maxSignature = UINT32_MAX;
 				else
-					app.opt_maxSignatures += app.opt_maxSignatures / 20;
+					app.opt_maxSignature += app.opt_maxSignature / 20;
 			}
 
 			if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprints=%d maxSignatures=%d\n", app.timeAsString(), app.opt_ratio, app.opt_maxImprints, app.opt_maxSignatures);
+				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprint=%d maxSignature=%d\n", app.timeAsString(), app.opt_ratio, app.opt_maxImprint, app.opt_maxSignature);
 		}
 
-		if (app.opt_maxImprints == 0) {
+		if (app.opt_maxImprint == 0) {
 			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
-			store.maxImprints = pMetrics ? pMetrics->numImprints : 0;
+			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
-			store.maxImprints = app.opt_maxImprints;
+			store.maxImprint = app.opt_maxImprint;
 		}
 
 		if (app.opt_imprintIndexSize == 0)
-			store.imprintIndexSize = app.nextPrime(store.maxImprints * app.opt_ratio);
+			store.imprintIndexSize = app.nextPrime(store.maxImprint * app.opt_ratio);
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
-		if (app.opt_maxSignatures == 0) {
+		if (app.opt_maxSignature == 0) {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
-			store.maxSignatures = pMetrics ? pMetrics->numSignatures : 0;
+			store.maxSignature = pMetrics ? pMetrics->numSignature : 0;
 		} else {
-			store.maxSignatures = app.opt_maxSignatures;
+			store.maxSignature = app.opt_maxSignature;
 		}
 
 		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = app.nextPrime(store.maxSignatures * app.opt_ratio);
+			store.signatureIndexSize = app.nextPrime(store.maxSignature * app.opt_ratio);
 		else
 			store.signatureIndexSize = app.opt_signatureIndexSize;
 
 		if (store.interleave == 0 || store.interleaveStep == 0)
 			app.fatal("no preset for --interleave\n");
-		if (store.maxImprints == 0 || store.imprintIndexSize == 0)
-			app.fatal("no preset for --maximprints\n");
-		if (store.maxSignatures == 0 || store.signatureIndexSize == 0)
-			app.fatal("no preset for --maxsignatures\n");
+		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
+			app.fatal("no preset for --maximprint\n");
+		if (store.maxSignature == 0 || store.signatureIndexSize == 0)
+			app.fatal("no preset for --maxsignature\n");
 	}
 
 	// create new sections
 	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
-		fprintf(stderr, "[%s] Store create: maxImprints=%d maxSignatures=%d\n", app.timeAsString(), store.maxSignatures, store.maxImprints);
+		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", app.timeAsString(), store.maxSignature, store.maxImprint);
 
 	store.create();
 
@@ -1558,7 +1566,7 @@ int main(int argc, char *const *argv) {
 		 * self tests
 		 */
 		// dont let `create()` round dimensions
-		store.maxImprints = MAXTRANSFORM + 10; // = 362880+10
+		store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
 		store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
 
 		app.performSelfTestTree();

@@ -154,7 +154,7 @@ struct genrestartdataContext_t : context_t {
 					fprintf(stderr, "\r\e[K");
 
 				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
-					fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld\n",
+					fprintf(stderr, "[%s] numSlots=%d qntf=%d numNode=%d numProgress=%ld\n",
 					        this->timeAsString(), MAXSLOTS, iQnTF, numArgs, this->progress);
 				}
 			}
@@ -240,10 +240,10 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignatures);
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
 			} else {
 				fprintf(stderr, "\r\e[K[%s] %lu |  numCandidate=%d",
-				        timeAsString(), progress, pStore->numSignatures);
+				        timeAsString(), progress, pStore->numSignature);
 			}
 		}
 
@@ -280,12 +280,12 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
  	 *
  	 * Candidates with back-references might be found more than once.
  	 *
- 	 * param {number} numNodes - Tree size
+ 	 * param {number} numNode - Tree size
  	 */
-	void performListCandidates(database_t *pStore, unsigned numNodes) {
+	void performListCandidates(database_t *pStore, unsigned numNode) {
 
 		this->pStore = pStore;
-		pStore->numSignatures = 1; // skip mandatory zero entry
+		pStore->numSignature = 1; // skip mandatory zero entry
 
 		/*
 		 * Setup generator
@@ -296,7 +296,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
 		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		this->tick = 0;
 
@@ -304,13 +304,13 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 * Run generator
 		 */
 
-		if (numNodes == 0) {
+		if (numNode == 0) {
 			generator.root = 0;
 			foundTreeCandidate(generator, "0", 0);
 			generator.root = 1;
 			foundTreeCandidate(generator, "a", 1);
 		} else {
-			unsigned endpointsLeft = numNodes * 2 + 1;
+			unsigned endpointsLeft = numNode * 2 + 1;
 			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
 		}
 
@@ -318,8 +318,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlots=%d qntf=%d numNodes=%d numProgress=%ld numCandidates=%d\n",
-			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNodes, this->progress, pStore->numSignatures);
+			fprintf(stderr, "[%s] numSlots=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
+			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, this->progress, pStore->numSignature);
 	}
 
 };
@@ -551,8 +551,8 @@ int main(int argc, char *const *argv) {
 			exit(1);
 		}
 
-		pStore->maxSignatures = pMetrics->numCandidates;
-		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignatures * (METRICS_DEFAULT_RATIO / 10.0));
+		pStore->maxSignature = pMetrics->numCandidate;
+		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
 
 		pStore->create();
 	}

@@ -96,9 +96,9 @@ struct fileHeader_t {
 	// section sizes
 	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
-	uint32_t numImprints;
+	uint32_t numImprint;
 	uint32_t imprintIndexSize;
-	uint32_t numSignatures;
+	uint32_t numSignature;
 	uint32_t signatureIndexSize;
 	uint32_t numPatternFirst;
 	uint32_t patternFirstIndexSize;
@@ -160,14 +160,14 @@ struct database_t {
 	// imprint store
 	uint32_t           interleave;                  // imprint interleave factor (display value)
 	uint32_t           interleaveStep;              // imprint interleave factor (interleave distance)
-	uint32_t           numImprints;                 // number of elements in collection
-	uint32_t           maxImprints;                 // maximum size of collection
+	uint32_t           numImprint;                 // number of elements in collection
+	uint32_t           maxImprint;                 // maximum size of collection
 	imprint_t          *imprints;                   // imprint collection
 	uint32_t           imprintIndexSize;            // index size (must be prime)
 	uint32_t           *imprintIndex;               // index
 	// signature store
-	uint32_t           numSignatures;               // number of signatures
-	uint32_t           maxSignatures;               // maximum size of collection
+	uint32_t           numSignature;               // number of signatures
+	uint32_t           maxSignature;               // maximum size of collection
 	signature_t        *signatures;                 // signature collection
 	uint32_t           signatureIndexSize;          // index size (must be prime)
 	uint32_t           *signatureIndex;             // index
@@ -200,15 +200,15 @@ struct database_t {
 		// imprint store
 		interleave = 0;
 		interleaveStep = 0;
-		numImprints = 0;
-		maxImprints = 0;
+		numImprint = 0;
+		maxImprint = 0;
 		imprints = NULL;
 		imprintIndexSize = 0;
 		imprintIndex = NULL;
 
 		// signature store
-		numSignatures = 0;
-		maxSignatures = 0;
+		numSignature = 0;
+		maxSignature = 0;
 		signatures = NULL;
 		signatureIndexSize = 0;
 		signatureIndex = NULL;
@@ -258,28 +258,28 @@ struct database_t {
 		}
 
 		// imprint store
-		if (maxImprints) {
+		if (maxImprint) {
 			// increase with 5%
-			if (maxImprints < UINT32_MAX - maxImprints / 20)
-				maxImprints += maxImprints / 20;
+			if (maxImprint < UINT32_MAX - maxImprint / 20)
+				maxImprint += maxImprint / 20;
 
 			assert(interleave && interleaveStep);
 			assert(ctx.isPrime(imprintIndexSize));
-			numImprints = 1; // do not start at 1
-			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprints, sizeof(*this->imprints));
+			numImprint = 1; // do not start at 1
+			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*this->imprints));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
 
 		// signature store
-		if (maxSignatures) {
+		if (maxSignature) {
 			// increase with 5%
-			if (maxSignatures < UINT32_MAX - maxSignatures / 20)
-				maxSignatures += maxSignatures / 20;
+			if (maxSignature < UINT32_MAX - maxSignature / 20)
+				maxSignature += maxSignature / 20;
 
 			assert(ctx.isPrime(signatureIndexSize));
-			numSignatures = 0; // do not start at 1
-			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignatures, sizeof(*this->signatures));
+			numSignature = 0; // do not start at 1
+			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*this->signatures));
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*this->signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
@@ -327,7 +327,7 @@ struct database_t {
 
 		// imprint store
 		if (sections & database_t::ALLOCMASK_IMPRINT) {
-			if (pDatabase->numImprints == 0) {
+			if (pDatabase->numImprint == 0) {
 				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
@@ -336,9 +336,9 @@ struct database_t {
 			interleave = pDatabase->interleave;
 			interleaveStep = pDatabase->interleaveStep;
 
-			assert(maxImprints == 0);
-			maxImprints = pDatabase->maxImprints;
-			numImprints = pDatabase->numImprints;
+			assert(maxImprint == 0);
+			maxImprint = pDatabase->maxImprint;
+			numImprint = pDatabase->numImprint;
 			imprints = pDatabase->imprints;
 
 			imprintIndexSize = pDatabase->imprintIndexSize;
@@ -347,15 +347,15 @@ struct database_t {
 
 		// signature store
 		if (sections & database_t::ALLOCMASK_SIGNATURE) {
-			if (pDatabase->numSignatures == 0) {
+			if (pDatabase->numSignature == 0) {
 				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			assert(maxSignatures == 0);
-			maxSignatures = pDatabase->maxSignatures;
-			numSignatures = pDatabase->numSignatures;
+			assert(maxSignature == 0);
+			maxSignature = pDatabase->maxSignature;
+			numSignature = pDatabase->numSignature;
 			signatures = pDatabase->signatures;
 
 			signatureIndexSize = pDatabase->signatureIndexSize;
@@ -453,13 +453,13 @@ struct database_t {
 		// imprints
 		interleave = fileHeader.interleave;
 		interleaveStep = fileHeader.interleaveStep;
-		maxImprints = numImprints = fileHeader.numImprints;
+		maxImprint = numImprint = fileHeader.numImprint;
 		imprints = (imprint_t *) (rawDatabase + fileHeader.offImprints);
 		imprintIndexSize = fileHeader.imprintIndexSize;
 		imprintIndex = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
 
 		// signatures
-		maxSignatures = numSignatures = fileHeader.numSignatures;
+		maxSignature = numSignature = fileHeader.numSignature;
 		signatures = (signature_t *) (rawDatabase + fileHeader.offSignatures);
 		signatureIndexSize = fileHeader.signatureIndexSize;
 		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
@@ -533,9 +533,9 @@ struct database_t {
 		progressHi += sizeof(*this->revTransformIds) * this->numTransform;
 		progressHi += sizeof(*this->fwdTransformNameIndex * this->transformIndexSize);
 		progressHi += sizeof(*this->revTransformNameIndex * this->transformIndexSize);
-		progressHi += sizeof(*this->imprints) * this->numImprints;
+		progressHi += sizeof(*this->imprints) * this->numImprint;
 		progressHi += sizeof(*this->imprintIndex) * this->imprintIndexSize;
-		progressHi += sizeof(*this->signatures) * this->numSignatures;
+		progressHi += sizeof(*this->signatures) * this->numSignature;
 		progressHi += sizeof(*this->signatureIndex) * this->signatureIndexSize;
 		progress = 0;
 		ctx.tick = 0;
@@ -597,7 +597,7 @@ struct database_t {
 		/*
 		 * write imprints
 		 */
-		if (this->numImprints) {
+		if (this->numImprint) {
 			fileHeader.interleave = interleave;
 			fileHeader.interleaveStep = interleaveStep;
 
@@ -608,8 +608,8 @@ struct database_t {
 
 			// collection
 			fileHeader.offImprints = flen;
-			fileHeader.numImprints = this->numImprints;
-			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprints);
+			fileHeader.numImprint = this->numImprint;
+			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprint);
 			if (this->imprintIndexSize) {
 				// Index
 				fileHeader.offImprintIndex = flen;
@@ -621,7 +621,7 @@ struct database_t {
 		/*
 		 * write signatures
 		 */
-		if (this->numSignatures) {
+		if (this->numSignature) {
 			// first entry must be zero
 			signature_t zero;
 			::memset(&zero, 0, sizeof(zero));
@@ -629,8 +629,8 @@ struct database_t {
 
 			// collection
 			fileHeader.offSignatures = flen;
-			fileHeader.numSignatures = this->numSignatures;
-			flen += writeData(outf, this->signatures, sizeof(*this->signatures) * this->numSignatures);
+			fileHeader.numSignature = this->numSignature;
+			flen += writeData(outf, this->signatures, sizeof(*this->signatures) * this->numSignature);
 			if (this->signatureIndexSize) {
 				// Index
 				fileHeader.offSignatureIndex = flen;
@@ -893,10 +893,10 @@ struct database_t {
 	 * @return {number} imprint id which should be stored in the index.
 	 */
 	inline uint32_t addImprint(const footprint_t &v) {
-		imprint_t *pImprint = this->imprints + this->numImprints++;
+		imprint_t *pImprint = this->imprints + this->numImprint++;
 
-		if (this->numImprints > this->maxImprints)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprints);
+		if (this->numImprint > this->maxImprint)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
 
 		// only populate key fields
 		pImprint->footprint = v;
@@ -1132,10 +1132,10 @@ struct database_t {
 	}
 
 	inline uint32_t addSignature(const char *name) {
-		signature_t *pSignature = this->signatures + this->numSignatures++;
+		signature_t *pSignature = this->signatures + this->numSignature++;
 
-		if (this->numSignatures > this->maxSignatures)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignatures);
+		if (this->numSignature > this->maxSignature)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
 
 		// clear before use
 		memset(pSignature, 0, sizeof(*pSignature));
@@ -1161,9 +1161,9 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
-		json_object_set_new_nocheck(jResult, "numImprints", json_integer(this->numImprints));
+		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
-		json_object_set_new_nocheck(jResult, "numSignatures", json_integer(this->numSignatures));
+		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader.offEnd));
 
