@@ -148,13 +148,13 @@ struct signature_t {
 	uint8_t  size;
 
 	/// @var {number} number of endpoints
-	uint8_t  numEndpoints;
+	uint8_t  numEndpoint;
 
 	/// @var {number} number of unique endpoints
-	uint8_t  numPlaceholders;
+	uint8_t  numPlaceholder;
 
 	/// @var {number} number of back-references
-	uint8_t  numBackRefs;
+	uint8_t  numBackRef;
 
 	/// @var {staing} Notation/name of signature. With space for inverted root and terminator
 	char name[SIGNAMELENGTH];

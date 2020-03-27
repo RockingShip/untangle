@@ -1137,7 +1137,7 @@ struct tinyTree_t {
 		 * For skins, walk the tree depth-first to enumerate the placeholders
 		 */
 		if (pSkin) {
-			unsigned skinLen = 0;
+			unsigned numPlaceholder = 0;
 
 			nextNode = TINYTREE_NSTART;
 
@@ -1145,6 +1145,7 @@ struct tinyTree_t {
 			stack[stackPos++] = id & ~IBIT;
 
 			beenThere = (1 << 0); // set "been to zero"
+			beenWhat[0] = 0;
 
 			do {
 				// pop stack
@@ -1153,7 +1154,7 @@ struct tinyTree_t {
 				const tinyNode_t *pNode = this->N + curr;
 				const uint32_t Q = pNode->Q;
 				const uint32_t To = pNode->T & ~IBIT;
-				const uint32_t Ti = pNode->T & IBIT;
+//				const uint32_t Ti = pNode->T & IBIT;
 				const uint32_t F = pNode->F;
 
 				// determine if node already handled
@@ -1163,44 +1164,13 @@ struct tinyTree_t {
 					// push id so it visits again a second time
 					stack[stackPos++] = curr;
 
-					if (Ti) {
-						if (F == 0) {
-							// GT Q?!T:0
-							if (To >= TINYTREE_NSTART) stack[stackPos++] = To;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						} else if (To == 0) {
-							// OR Q?!0:F
-							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						} else if (F == To) {
-							// XOR Q?!F:F
-							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						} else {
-							// QnTF Q?!T:F
-							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
-							if (To >= TINYTREE_NSTART) stack[stackPos++] = To;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						}
-					} else {
-						if (F == 0) {
-							// AND Q?T:0
-							if (To >= TINYTREE_NSTART) stack[stackPos++] = To;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						} else if (To == 0) {
-							// LT Q?0:F
-							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						} else if (F == To) {
-							// SELF Q?F:F
-							assert(!"Q?F:F");
-						} else {
-							// QTF Q?T:F
-							if (F >= TINYTREE_NSTART) stack[stackPos++] = F;
-							if (To >= TINYTREE_NSTART) stack[stackPos++] = To;
-							if (Q >= TINYTREE_NSTART) stack[stackPos++] = Q;
-						}
-					}
+				// push unvisited references
+				if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
+					stack[stackPos++] = Q;
 
 					// done, flag no endpoint assignment done
 					beenThere |= (1 << curr);
@@ -1211,20 +1181,20 @@ struct tinyTree_t {
 
 					if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
 						beenThere |= (1 << Q);
-						beenWhat[Q] = 'a' + skinLen;
-						pSkin[skinLen++] = (char) ('a' + Q - TINYTREE_KSTART);
+						beenWhat[Q] = TINYTREE_KSTART + numPlaceholder;
+						pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
 					}
 
 					if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
 						beenThere |= (1 << To);
-						beenWhat[To] = 'a' + skinLen;
-						pSkin[skinLen++] = (char) ('a' + To - TINYTREE_KSTART);
+						beenWhat[To] = TINYTREE_KSTART + numPlaceholder;
+						pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
 					}
 
 					if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
 						beenThere |= (1 << F);
-						beenWhat[F] = 'a' + skinLen;
-						pSkin[skinLen++] = (char) ('a' + F - TINYTREE_KSTART);
+						beenWhat[F] = TINYTREE_KSTART + numPlaceholder;
+						pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
 					}
 
 					// flaq endpoints assigned
@@ -1233,16 +1203,17 @@ struct tinyTree_t {
 
 			} while (stackPos > 0);
 
-			assert(skinLen <= MAXSLOTS);
-			pSkin[skinLen] = 0;
+			assert(numPlaceholder <= MAXSLOTS);
+			pSkin[numPlaceholder] = 0;
 		}
-
-		nextNode = TINYTREE_NSTART;
 
 		stackPos = 0;
 		stack[stackPos++] = id & ~IBIT;
 
-		beenThere = (1 << 0); // re-walk the tree
+		// re-walk the tree
+		beenThere = (1 << 0);
+
+		nextNode = TINYTREE_NSTART;
 
 		do {
 			// pop stack
@@ -1255,7 +1226,7 @@ struct tinyTree_t {
 				else if (!pSkin)
 					pName[nameLen++] = 'a' + curr - TINYTREE_KSTART; // endpoint
 				else
-					pName[nameLen++] = (char) beenWhat[curr]; // placeholder
+					pName[nameLen++] = 'a' + beenWhat[curr] - TINYTREE_KSTART; // placeholder
 
 				continue;
 			}
@@ -1270,56 +1241,23 @@ struct tinyTree_t {
 			if (~beenThere & (1 << curr)) {
 				/// first time
 
-				// push id so it visits again after expanding
+				// push id so it visits again a second time after expanding
 				stack[stackPos++] = curr;
-				// flaq no endpoint assignment done
-				beenWhat[curr] = 0;
 
-				if (Ti) {
-					if (F == 0) {
-						// GT Q?!T:0
-						stack[stackPos++] = To;
-						stack[stackPos++] = Q;
-					} else if (To == 0) {
-						// OR Q?!0:F
-						stack[stackPos++] = F;
-						stack[stackPos++] = Q;
-					} else if (F == To) {
-						// XOR Q?!F:F
-						stack[stackPos++] = F;
-						stack[stackPos++] = Q;
-					} else {
-						// QnTF Q?!T:F
-						stack[stackPos++] = F;
-						stack[stackPos++] = To;
-						stack[stackPos++] = Q;
-					}
-				} else {
-					if (F == 0) {
-						// AND Q?T:0
-						stack[stackPos++] = To;
-						stack[stackPos++] = Q;
-					} else if (To == 0) {
-						// LT Q?0:F
-						stack[stackPos++] = F;
-						stack[stackPos++] = Q;
-					} else if (F == To) {
-						// SELF Q?F:F
-						assert(!"Q?F:F");
-					} else {
-						// QTF Q?T:F
-						stack[stackPos++] = F;
-						stack[stackPos++] = To;
-						stack[stackPos++] = Q;
-					}
-				}
+				// push non-zero endpoints
+				if (F >= TINYTREE_KSTART)
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_KSTART)
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_KSTART)
+					stack[stackPos++] = Q;
 
-				// done, flag no opcode done
+				// done, flag no operator done
 				beenThere |= (1 << curr);
 				beenWhat[curr] = 0;
 
 			} else if (beenWhat[curr] == 0) {
-				// node complete, append opcode
+				// node complete, output operator
 
 				if (Ti) {
 					if (F == 0) {
@@ -1351,7 +1289,7 @@ struct tinyTree_t {
 					}
 				}
 
-				// flag opcode appended assigned
+				// flag operator done
 				beenWhat[curr] = nextNode++;
 
 			} else {
@@ -1365,7 +1303,7 @@ struct tinyTree_t {
 
 		} while (stackPos > 0);
 
-		// test for root invert
+		// test for inverted-root
 		if (id & IBIT)
 			pName[nameLen++] = '~';
 
@@ -1410,7 +1348,7 @@ struct tinyTree_t {
 		int stackPos = 0;
 
 		unsigned nameLen = 0; // length of notation
-		unsigned numPlaceholders = 0; // first free placeholder
+		unsigned numPlaceholder = 0; // first free placeholder
 
 		// nodes already processed
 		uint32_t beenThere;
@@ -1491,20 +1429,20 @@ struct tinyTree_t {
 
 				if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
 					beenThere |= (1 << Q);
-					beenWhat[Q] = TINYTREE_KSTART + numPlaceholders;
-					pSkin[numPlaceholders++] = (char) ('a' + Q - TINYTREE_KSTART);
+					beenWhat[Q] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
 				}
 
 				if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
 					beenThere |= (1 << To);
-					beenWhat[To] = TINYTREE_KSTART + numPlaceholders;
-					pSkin[numPlaceholders++] = (char) ('a' + To - TINYTREE_KSTART);
+					beenWhat[To] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
 				}
 
 				if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
 					beenThere |= (1 << F);
-					beenWhat[F] = TINYTREE_KSTART + numPlaceholders;
-					pSkin[numPlaceholders++] = (char) ('a' + F - TINYTREE_KSTART);
+					beenWhat[F] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
 				}
 
 				/*
@@ -1522,6 +1460,9 @@ struct tinyTree_t {
 
 		} while (stackPos > 0);
 
+		assert(numPlaceholder <= MAXSLOTS);
+		pSkin[numPlaceholder] = 0;
+
 		// set root
 		this->root = beenWhat[rhs.root & ~IBIT] ^ (rhs.root & IBIT);
 
@@ -1535,7 +1476,7 @@ struct tinyTree_t {
 		// reset, but consider endpoints proper placeholders
 		beenThere = (1 << 0);
 
-		uint32_t numNode = TINYTREE_NSTART;
+		uint32_t nextNode = TINYTREE_NSTART;
 
 		do {
 			// pop stack
@@ -1612,11 +1553,11 @@ struct tinyTree_t {
 				}
 
 				// flaq endpoints assigned
-				beenWhat[curr] = numNode++;
+				beenWhat[curr] = nextNode++;
 			} else {
 				// back-reference to previous node
 
-				uint32_t backref = numNode - beenWhat[curr];
+				uint32_t backref = nextNode - beenWhat[curr];
 				assert(backref <= 9);
 				pName[nameLen++] = '0' + backref;
 			}
@@ -1627,8 +1568,8 @@ struct tinyTree_t {
 		if (this->root & IBIT)
 			pName[nameLen++] = '~';
 
-		assert(numPlaceholders <= MAXSLOTS);
-		pSkin[numPlaceholders] = 0;
+		assert(numPlaceholder <= MAXSLOTS);
+		pSkin[numPlaceholder] = 0;
 		assert(nameLen <= TINYTREE_NAMELEN);
 		pName[nameLen] = 0;
 	}

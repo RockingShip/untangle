@@ -20,7 +20,7 @@
  * @date 2020-03-27 00:18:13
  *
  * Textual output:
- *   <candidateId> <name> <crc> <numNode> <numPlaceholder>
+ *   <candidateId> <name> <numNode> <numPlaceholder>
  */
 
 /*

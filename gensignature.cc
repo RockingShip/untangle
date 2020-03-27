@@ -177,7 +177,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholders) {
+	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
@@ -201,12 +201,12 @@ struct gensignatureContext_t : context_t {
 		/*
 		 * Create name, it's expensive so now is the right moment
 		 */
-		unsigned numEndpoints = 0;
+		unsigned numEndpoint = 0;
 		unsigned numBackRef = 0;
 
 		for (const char *p = pNameR; *p; p++) {
 			if (islower(*p)) {
-				numEndpoints++;
+				numEndpoint++;
 			} else if (isdigit(*p)) {
 				numBackRef++;
 			}
@@ -227,12 +227,12 @@ struct gensignatureContext_t : context_t {
 
 			signature_t *pSignature = pStore->signatures + sid;
 			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
-			pSignature->numEndpoints = numEndpoints;
-			pSignature->numPlaceholders = numPlaceholders;
-			pSignature->numBackRefs = numBackRef;
+			pSignature->numEndpoint = numEndpoint;
+			pSignature->numPlaceholder = numPlaceholder;
+			pSignature->numBackRef = numBackRef;
 
 			if (opt_text == 2) {
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numEndpoints, pSignature->numPlaceholders, pSignature->numBackRefs);
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
 			}
 
 			return;
@@ -253,15 +253,15 @@ struct gensignatureContext_t : context_t {
 
 		// Test for secondary goal: reduce number of unique endpoints, thus connections
 		if (cmp == 0)
-			cmp = pSignature->numPlaceholders - numPlaceholders;
+			cmp = pSignature->numPlaceholder - numPlaceholder;
 
 		// Test for preferred display selection: least number of endpoints
 		if (cmp == 0)
-			cmp = pSignature->numEndpoints - numEndpoints;
+			cmp = pSignature->numEndpoint - numEndpoint;
 
 		// Test for preferred display selection: least number of back-references
 		if (cmp == 0)
-			cmp = pSignature->numBackRefs - numBackRef;
+			cmp = pSignature->numBackRef - numBackRef;
 
 		// distinguish between shallow compare or deep compare
 		if (cmp < 0)
@@ -294,13 +294,13 @@ struct gensignatureContext_t : context_t {
 		if (cmp == '>' || cmp == '+') {
 			::strcpy(pSignature->name, pNameR);
 			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
-			pSignature->numPlaceholders = numPlaceholders;
-			pSignature->numEndpoints = numEndpoints;
-			pSignature->numBackRefs = numBackRef;
+			pSignature->numPlaceholder = numPlaceholder;
+			pSignature->numEndpoint = numEndpoint;
+			pSignature->numBackRef = numBackRef;
 		}
 
 		if (opt_text == 2)
-			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numEndpoints, pSignature->numPlaceholders, pSignature->numBackRefs);
+			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
 	}
 
 	/**
