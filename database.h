@@ -142,35 +142,35 @@ struct database_t {
 
 	// @formatter:off
 	int                hndl;
-	const uint8_t      *rawDatabase;            // base location of mmap segment
-	fileHeader_t       fileHeader;                // file header
-	uint32_t           flags;                   // creation constraints
-	uint32_t           allocFlags;              // memory constraints
+	const uint8_t      *rawDatabase;                // base location of mmap segment
+	fileHeader_t       fileHeader;                  // file header
+	uint32_t           flags;                       // creation constraints
+	uint32_t           allocFlags;                  // memory constraints
 	// transforms
-	uint32_t           numTransform;            // number of elements in collection
-	uint32_t           maxTransform;            // maximum size of collection
-	uint64_t           *fwdTransformData;       // forward transform (binary)
-	uint64_t           *revTransformData;       // reverse transform (binary)
-	transformName_t    *fwdTransformNames;      // forward transform (string)
-	transformName_t    *revTransformNames;      // reverse transform (string)
-	uint32_t           *revTransformIds;        // reverse transform (id)
-	uint32_t           transformIndexSize;      // index size (must be prime)
-	uint32_t           *fwdTransformNameIndex;  // fwdTransformNames index
-	uint32_t           *revTransformNameIndex;  // revTransformNames index
+	uint32_t           numTransform;                // number of elements in collection
+	uint32_t           maxTransform;                // maximum size of collection
+	uint64_t           *fwdTransformData;           // forward transform (binary)
+	uint64_t           *revTransformData;           // reverse transform (binary)
+	transformName_t    *fwdTransformNames;          // forward transform (string)
+	transformName_t    *revTransformNames;          // reverse transform (string)
+	uint32_t           *revTransformIds;            // reverse transform (id)
+	uint32_t           transformIndexSize;          // index size (must be prime)
+	uint32_t           *fwdTransformNameIndex;      // fwdTransformNames index
+	uint32_t           *revTransformNameIndex;      // revTransformNames index
 	// imprint store
-	uint32_t           interleave;             // imprint interleave factor (display value)
-	uint32_t           interleaveStep;         // imprint interleave factor (interleave distance)
-	uint32_t           numImprints;             // number of elements in collection
-	uint32_t           maxImprints;             // maximum size of collection
-	imprint_t          *imprints;              // imprint collection
-	uint32_t           imprintIndexSize;       // index size (must be prime)
-	uint32_t           *imprintIndex;          // index
+	uint32_t           interleave;                  // imprint interleave factor (display value)
+	uint32_t           interleaveStep;              // imprint interleave factor (interleave distance)
+	uint32_t           numImprints;                 // number of elements in collection
+	uint32_t           maxImprints;                 // maximum size of collection
+	imprint_t          *imprints;                   // imprint collection
+	uint32_t           imprintIndexSize;            // index size (must be prime)
+	uint32_t           *imprintIndex;               // index
 	// signature store
-	uint32_t           numSignatures;          // number of signatures
-	uint32_t           maxSignatures;          // maximum size of collection
-	signature_t        *signatures;            // signature collection
-	uint32_t           signatureIndexSize;     // index size (must be prime)
-	uint32_t           *signatureIndex;        // index
+	uint32_t           numSignatures;               // number of signatures
+	uint32_t           maxSignatures;               // maximum size of collection
+	signature_t        *signatures;                 // signature collection
+	uint32_t           signatureIndexSize;          // index size (must be prime)
+	uint32_t           *signatureIndex;             // index
 	// statistics
 	uint64_t           progressHi;
 	uint64_t           progress;
@@ -259,6 +259,10 @@ struct database_t {
 
 		// imprint store
 		if (maxImprints) {
+			// increase with 5%
+			if (maxImprints < UINT32_MAX - maxImprints / 20)
+				maxImprints += maxImprints / 20;
+
 			assert(interleave && interleaveStep);
 			assert(ctx.isPrime(imprintIndexSize));
 			numImprints = 1; // do not start at 1
@@ -269,6 +273,10 @@ struct database_t {
 
 		// signature store
 		if (maxSignatures) {
+			// increase with 5%
+			if (maxSignatures < UINT32_MAX - maxSignatures / 20)
+				maxSignatures += maxSignatures / 20;
+
 			assert(ctx.isPrime(signatureIndexSize));
 			numSignatures = 0; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignatures, sizeof(*this->signatures));

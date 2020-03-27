@@ -468,11 +468,10 @@ struct generatorTree_t : tinyTree_t {
 		pCacheQTF[qtf] = nid;
 		pCacheVersion[qtf] = iVersion;
 
-		// save root
-		this->root = nid;
-
-		// sqve type of node so `qtf` can be modified
+#if 0
+		// save type of node so `qtf` can be modified
 		uint32_t typ = pIsType[qtf];
+#endif
 
 		// populate node
 		tinyNode_t *pNode = this->N + nid;
@@ -485,6 +484,7 @@ struct generatorTree_t : tinyTree_t {
 		if (qtf)
 			pNode->T ^= IBIT;
 
+#if 0
 		/*
 		 * @date 2020-03-26 12:27:30
 		 *
@@ -496,14 +496,25 @@ struct generatorTree_t : tinyTree_t {
 		 * The generator used `packedN[]` which needs to be converted to `N[]`.
 		 * During conversion, apply deep-compare.
 		 *
-		 * However, swapping the operands of symmeteric dyadics changes the tree walk path.
+		 * However, swapping the operands of symmetric dyadics changes the tree walk path.
 		 *
 		 * `"ab>cd+^"` would change into `"cd+ab>^"` which is actually `"ab+cd>^/cdab"`
+		 *
+		 * @date 2020-03-26 23:07:48
+		 *
+		 * Turn out this doesn't work.
+		 * When reconstructing an ordered tree from a non-ordered generated one, all the endpoints get re-assigned.
+		 * This re-assignment has the side effect that `compare()` outcomes are different.
+		 * `tinyTree_t::reconstruct()` re-orders on the fly before a `compare()` is called.
+		 *
+		 * Drop this code and leave for historics.
 		 */
+		assert(!"never enable this code");
 		if (typ & (PACKED_OR | PACKED_XOR | PACKED_AND)) {
 			if (typ & PACKED_OR) {
 				// swap `OR` if unordered
 				if (this->compare(pNode->Q, *this, pNode->F, true) > 0) {
+					assert(pNode->T == IBIT);
 					uint32_t savQ = pNode->Q;
 					pNode->Q = pNode->F;
 					pNode->F = savQ;
@@ -525,6 +536,7 @@ struct generatorTree_t : tinyTree_t {
 				}
 			}
 		}
+#endif
 
 		return nid;
 	}
@@ -574,6 +586,9 @@ struct generatorTree_t : tinyTree_t {
 			ctx.progress++;
 			return;
 		}
+
+		// set root
+		this->root = this->count - 1;
 
 		// re-order endpoints
 		char name[TINYTREE_NAMELEN + 1];

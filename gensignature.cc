@@ -1470,7 +1470,7 @@ int main(int argc, char *const *argv) {
 				else
 					app.opt_maxImprints += app.opt_maxImprints / 20;
 			}
-			if (app.opt_maxImprints == 0) {
+			if (app.opt_maxSignatures == 0) {
 				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;

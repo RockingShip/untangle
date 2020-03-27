@@ -16,6 +16,11 @@
  * Selfcheck consists of brute-force checking windowing and restarting of a `3n9-QnTF` generator.
  * Or a simple query if `a `numNode` argument is supplied with optional `--qntf`.
  * For the latter `--text` can also be supplied to display all trees caught by `foundTree()`
+ *
+ * @date 2020-03-27 00:18:13
+ *
+ * Textual output:
+ *   <candidateId> <name> <crc> <numNode> <numPlaceholder>
  */
 
 /*
@@ -216,9 +221,12 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * Found candidate. Treat as signature and count uniques
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {number} numUnique - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeCandidate(generatorTree_t &tree, const char *pName, unsigned numUnique) {
+	void foundTreeCandidate(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+		/*
+		 * Ticker
+		 */
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi) {
@@ -239,12 +247,27 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			}
 		}
 
+		/*
+		 * Test that the tree and name match
+		 */
+		const char *pTestName = tree.encode(tree.root);
+		if (strcmp(pName, pTestName) != 0) {
+			printf("{\"error\":\"tree doesn't match name\",\"where\":\"%s\",\"tree\":\"%s\",\"name\":\"%s\"}\n",
+			       __FUNCTION__, pTestName, pName);
+			exit(1);
+		}
+
+		/*
+		 * Got candidate
+		 */
+
 		// lookup..
 		uint32_t ix = pStore->lookupSignature(pName);
 
 		// ...and add if not found
 		if (pStore->signatureIndex[ix] == 0) {
-			printf("%ld\t%s\t%d\t%d\n", progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numUnique);
+
+			printf("%ld\t%s\t%d\t%d\n", progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
 
 			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
@@ -351,7 +374,8 @@ void sigalrmHandler(int sig) {
  */
 void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
-	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates\n", argv[0]);
+	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates with given node size\n", argv[0]);
+	fprintf(stderr, "       %s --selftest       -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -518,10 +542,17 @@ int main(int argc, char *const *argv) {
 	database_t *pStore = NULL;
 
 	if (app.opt_text) {
+		// create database to detect duplicates
 		pStore = new database_t(app);
 
-		pStore->maxSignatures = app.arg_numNodes < 5 ? 40000000 : 900000000; // some hardcoded upper limit taken from `metricsGenerator`
-		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignatures * METRICS_DEFAULT_RATIO);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
+		if (!pMetrics) {
+			fprintf(stderr, "preset for numNode not found\n");
+			exit(1);
+		}
+
+		pStore->maxSignatures = pMetrics->numCandidates;
+		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignatures * (METRICS_DEFAULT_RATIO / 10.0));
 
 		pStore->create();
 	}

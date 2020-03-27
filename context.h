@@ -152,7 +152,7 @@ struct context_t {
 		progressHi = 0;
 		progressCoef = 0;
 		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
-		progressCoefEnd   = 0.10; // dampen speed changes at Training end (low responsive)
+		progressCoefEnd = 0.10; // dampen speed changes at Training end (low responsive)
 		progressCoefMultiplier = 0.9072878562; //  #seconds as #th root of (end/start). set for 20 second training
 		progressLast = 0;
 		progressSpeed = 0;
@@ -273,7 +273,7 @@ struct context_t {
 		// increment until prime found;
 		for (;;) {
 			if (isPrime(n))
-		return n;
+				return n;
 			n += 2;
 		}
 	}
@@ -299,10 +299,10 @@ struct context_t {
 	 * @param {uint64_t} progressHi - Expected end condition
 	 */
 	void setupSpeed(uint64_t progressHi) {
-		this->progress      = 0;
-		this->progressHi    = progressHi;
-		this->progressCoef  = this->progressCoefStart;
-		this->progressLast  = 0;
+		this->progress = 0;
+		this->progressHi = progressHi;
+		this->progressCoef = this->progressCoefStart;
+		this->progressLast = 0;
 		this->progressSpeed = 0;
 	}
 

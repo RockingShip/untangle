@@ -270,16 +270,16 @@ struct tinyTree_t {
 			 */
 			if (pNodeL->F) {
 				if (pNodeL->F < tinyTree_t::TINYTREE_NSTART && pNodeR->F < tinyTree_t::TINYTREE_NSTART) {
-			stackL[stackPos] = pNodeL->F;
-			stackR[stackPos] = pNodeR->F;
-			stackPos++;
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
 				}
 			}
 			if (pNodeL->T & ~IBIT) {
 				if ((pNodeL->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART && (pNodeR->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART) {
-			stackL[stackPos] = pNodeL->T & ~IBIT;
-			stackR[stackPos] = pNodeR->T & ~IBIT;
-			stackPos++;
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
 				}
 			}
 			if (pNodeL->Q) {
@@ -305,9 +305,9 @@ struct tinyTree_t {
 			}
 			if (pNodeL->Q) {
 				if (pNodeL->Q >= tinyTree_t::TINYTREE_NSTART || pNodeR->Q >= tinyTree_t::TINYTREE_NSTART) {
-			stackL[stackPos] = pNodeL->Q;
-			stackR[stackPos] = pNodeR->Q;
-			stackPos++;
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
 				}
 			}
 
@@ -1432,10 +1432,10 @@ struct tinyTree_t {
 			uint32_t curr = stack[--stackPos];
 
 			const tinyNode_t *pNode = rhs.N + curr;
-			const uint32_t Q = pNode->Q;
-			const uint32_t To = pNode->T & ~IBIT;
-			const uint32_t Ti = pNode->T & IBIT;
-			const uint32_t F = pNode->F;
+			uint32_t Q = pNode->Q;
+			uint32_t To = pNode->T & ~IBIT;
+			uint32_t Ti = pNode->T & IBIT;
+			uint32_t F = pNode->F;
 
 			// determine if node already handled
 			if (~beenThere & (1 << curr)) {
@@ -1458,7 +1458,37 @@ struct tinyTree_t {
 
 			} else if (beenWhat[curr] == 0) {
 
-				// now that operands are complete, assign new endpoints
+				/*
+				 * reorder first
+				 */
+				if (To == 0 && Ti) {
+					// swap `OR` if unordered
+					if (this->compare(Q, *this, F) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+					}
+				} else if (To == F) {
+					// swap `XOR` if unordered
+					if (this->compare(Q, *this, F) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+						To = savQ;
+					}
+				} else if (F == 0 && !Ti) {
+					// swap `AND` if unordered
+					if (this->compare(Q, *this, To) > 0) {
+						uint32_t savQ = Q;
+						Q = To;
+						To = savQ;
+					}
+				}
+
+				/*
+				 * now that operands are complete and ordered, assign them new placeholders
+				 */
+
 				if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
 					beenThere |= (1 << Q);
 					beenWhat[Q] = TINYTREE_KSTART + numPlaceholders;
@@ -1477,7 +1507,10 @@ struct tinyTree_t {
 					pSkin[numPlaceholders++] = (char) ('a' + F - TINYTREE_KSTART);
 				}
 
-				// populate new node
+				/*
+				 * populate new node
+				 */
+
 				tinyNode_t *pNewNode = this->N + this->count;
 				pNewNode->Q = beenWhat[Q];
 				pNewNode->T = beenWhat[To] ^ Ti;
@@ -1513,8 +1546,8 @@ struct tinyTree_t {
 					// `zero`
 					pName[nameLen++] = '0';
 				} else {
-					// existing placeholder
-					pName[nameLen++] = 'a' + beenWhat[curr] - TINYTREE_KSTART;
+					// assigned placeholder (not original endpoint)
+					pName[nameLen++] = 'a' + curr - TINYTREE_KSTART;
 				}
 
 				continue;
@@ -1533,7 +1566,7 @@ struct tinyTree_t {
 				// push id so it visits again a second time
 				stack[stackPos++] = curr;
 
-				// push unvisited endpoints
+				// push non-zero endpoints
 				if (F >= TINYTREE_KSTART)
 					stack[stackPos++] = F;
 				if (To != F && To >= TINYTREE_KSTART)
@@ -1725,32 +1758,25 @@ struct tinyTree_t {
 				uint64_t transformMask = *pTransformData;
 
 				// v[(i/64)+0*4] should be 0
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				// @formatter:off
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 3 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 3 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 4 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 4 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 5 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 5 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 6 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 6 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 7 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 7 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 8 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 8 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
-				if (i & (1LL << (transformMask & 15)))
-					v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				// @formatter:on
 			}
 
 			v += footprint_t::QUADPERFOOTPRINT * TINYTREE_NEND;
