@@ -168,6 +168,15 @@ struct tinyTree_t {
 	 *
 	 * To find them identical a deep inspection must occur
 	 *
+	 * @date 2020-03-28 14:59:04
+	 *
+	 * Examining the sorted list of signatures, the highest entry is `"abc?dec?f?2g?"(1)`
+	 * Which seems puzzling because intuitively it would seem `"abc?def?g?2h?"(2)`
+	 * `(2)` is not highest because it comes before `"abc?de?2?f?gh"(3)`
+	 * This is because the common part is (using capitals as placeholders) `"ABC?DEF?G?HI?"`
+	 * `"A"` is replaced by `"abc?"` to get `(2)` and `"H"` is replaced by `"abc?"` to get `(3).
+	 * The position of replacing (the deeper down the higher the scoring) makes `(2)` < `(3)`
+	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
 	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
@@ -182,12 +191,31 @@ struct tinyTree_t {
 		assert(~lhs & IBIT);
 		assert(~rhs & IBIT);
 
+		// placeholders/skin
+		unsigned numPlaceholderL = 0;
+		unsigned numPlaceholderR = 0;
+		char skinL[MAXSLOTS + 1];
+		char skinR[MAXSLOTS + 1];
+
+		// nodes already processed
+		uint32_t beenThereL;
+		uint32_t beenThereR;
+		uint32_t beenWhatL[TINYTREE_NEND];
+		uint32_t beenWhatR[TINYTREE_NEND];
+
+		// mark `zero` processed
+		beenThereL = (1 << 0);
+		beenThereR = (1 << 0);
+		beenWhatL[0] = 0;
+		beenWhatR[0] = 0;
+
+		// compare sometimes skips parts and assumes L/R idential. `cmp` marks this happened.
+		int cmp = 0;
+
+		// push root to start
 		stackL[stackPos] = lhs;
 		stackR[stackPos] = rhs;
 		stackPos++;
-
-		uint32_t beenThere = 0;
-		uint8_t beenWhere[TINYTREE_NEND];
 
 		do {
 			// pop stack
@@ -198,20 +226,38 @@ struct tinyTree_t {
 			/*
 			 * compare endpoints/references
 			 */
-			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART)
-				return -1; // `end` < `ref`
-			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART)
-				return +1; // `ref` > `end`
+			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART) {
+				// `end` < `ref`
+				if (cmp == 0)
+					cmp = -1; // only first counts
+				continue;
+			}
+			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART) {
+				// `ref` > `end`
+				if (cmp == 0)
+					cmp = +1; // only first counts
+				continue;
+			}
 
 			/*
 			 * compare contents
 			 */
 			if (L < TINYTREE_NSTART) {
-				if (layoutOnly)
-					continue; // ignore endpoint values
-				if (L < R)
+				if (~beenThereL & (1 << L)) {
+					beenThereL |= (1 << L);
+					beenWhatL[L] = TINYTREE_KSTART + numPlaceholderL;
+					skinL[numPlaceholderL++] = (char) ('a' + L - TINYTREE_KSTART);
+				}
+				if (~beenThereR & (1 << R)) {
+					beenThereR |= (1 << R);
+					beenWhatR[R] = TINYTREE_KSTART + numPlaceholderR;
+					skinR[numPlaceholderR++] = (char) ('a' + R - TINYTREE_KSTART);
+				}
+
+				// compare the placeholder because those have been renumbered taking into account skipped parts of the tree
+				if (beenWhatL[L] < beenWhatR[R])
 					return -1; // `lhs` < `rhs`
-				if (L > R)
+				if (beenWhatL[L] > beenWhatR[R])
 					return +1; // `lhs` < `rhs`
 
 				// continue with next stack entry
@@ -221,12 +267,12 @@ struct tinyTree_t {
 			/*
 			 * Been here before
 			 */
-			if (beenThere & (1 << L)) {
-				if (beenWhere[L] == R)
+			if (beenThereL & (1 << L)) {
+				if (beenWhatL[L] == R)
 					continue; // yes
 			}
-			beenThere |= 1 << L;
-			beenWhere[L] = R;
+			beenThereL |= 1 << L;
+			beenWhatL[L] = R;
 
 			// decode L and R
 			const tinyNode_t *pNodeL = this->N + L;
@@ -267,44 +313,58 @@ struct tinyTree_t {
 			 * Push natural walking order
 			 * deep Q, deep T, deep F, endpoint Q, endpoint T, endpoint F
 			 *
+			 * @date 2020-03-28 12:21:19
+			 *
+			 * From a greater scope, trees can be connected to form greater structures.
+			 * Endpoints not necessarily need to be variables, they can also be references to roots of other trees.
+			 *
+			 * Alternative compare walk is to first compare the shared part (L/R pairs are both references) and then the others
+			 *
+			 * @date 2020-03-28 12:38:02
+			 *
+			 * If one side is zero, then (according the the 8 `"if"` above, then the other side is that too
+			 *
+			 * Skipping references will create jumps so there is a need for placeholders and skins.
+			 * If the `'compare()"` detects identical layout, then compare the skins.
+			 *
 			 */
 			if (pNodeL->F) {
-				if (pNodeL->F < tinyTree_t::TINYTREE_NSTART && pNodeR->F < tinyTree_t::TINYTREE_NSTART) {
+				if (pNodeL->F < tinyTree_t::TINYTREE_NSTART || pNodeR->F < tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->F;
 					stackR[stackPos] = pNodeR->F;
 					stackPos++;
 				}
 			}
 			if (pNodeL->T & ~IBIT) {
-				if ((pNodeL->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART && (pNodeR->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART) {
+				if ((pNodeL->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART || (pNodeR->T & ~IBIT) < tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->T & ~IBIT;
 					stackR[stackPos] = pNodeR->T & ~IBIT;
 					stackPos++;
 				}
 			}
 			if (pNodeL->Q) {
-				if (pNodeL->Q < tinyTree_t::TINYTREE_NSTART && pNodeR->Q < tinyTree_t::TINYTREE_NSTART) {
+				if (pNodeL->Q < tinyTree_t::TINYTREE_NSTART || pNodeR->Q < tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->Q;
 					stackR[stackPos] = pNodeR->Q;
 					stackPos++;
 				}
 			}
 			if (pNodeL->F) {
-				if (pNodeL->F >= tinyTree_t::TINYTREE_NSTART || pNodeR->F >= tinyTree_t::TINYTREE_NSTART) {
+				if (pNodeL->F >= tinyTree_t::TINYTREE_NSTART && pNodeR->F >= tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->F;
 					stackR[stackPos] = pNodeR->F;
 					stackPos++;
 				}
 			}
 			if (pNodeL->T & ~IBIT) {
-				if ((pNodeL->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART || (pNodeR->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART) {
+				if ((pNodeL->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART && (pNodeR->T & ~IBIT) >= tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->T & ~IBIT;
 					stackR[stackPos] = pNodeR->T & ~IBIT;
 					stackPos++;
 				}
 			}
 			if (pNodeL->Q) {
-				if (pNodeL->Q >= tinyTree_t::TINYTREE_NSTART || pNodeR->Q >= tinyTree_t::TINYTREE_NSTART) {
+				if (pNodeL->Q >= tinyTree_t::TINYTREE_NSTART && pNodeR->Q >= tinyTree_t::TINYTREE_NSTART) {
 					stackL[stackPos] = pNodeL->Q;
 					stackR[stackPos] = pNodeR->Q;
 					stackPos++;
@@ -313,8 +373,21 @@ struct tinyTree_t {
 
 		} while (stackPos > 0);
 
-		// identical
+		// If common parts matched, test if parts were skipped
+		if (cmp)
+			return cmp;
+
+		/*
+		 * perform a skin compare
+		 */
+
+		if (layoutOnly)
 		return 0;
+
+		skinL[numPlaceholderL] = 0;
+		skinR[numPlaceholderR] = 0;
+
+		return ::strcmp(skinL, skinR);
 	}
 
 	/**
@@ -1141,11 +1214,16 @@ struct tinyTree_t {
 
 			nextNode = TINYTREE_NSTART;
 
+			// nodes already processed
+			uint32_t beenThere;
+			uint32_t beenWhat[TINYTREE_NEND];
+
+			// mark `zero` processed
+			beenThere = (1 << 0);
+			beenWhat[0] = 0;
+
 			stackPos = 0;
 			stack[stackPos++] = id & ~IBIT;
-
-			beenThere = (1 << 0); // set "been to zero"
-			beenWhat[0] = 0;
 
 			do {
 				// pop stack
@@ -1353,11 +1431,12 @@ struct tinyTree_t {
 		// nodes already processed
 		uint32_t beenThere;
 		uint32_t beenWhat[TINYTREE_NEND];
+
+		this->clearTree();
+
 		// mark `zero` processed
 		beenThere = (1 << 0);
 		beenWhat[0] = 0;
-
-		this->clearTree();
 
 		// push start on stack
 		stack[stackPos++] = rhs.root & ~IBIT;
