@@ -672,8 +672,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		 * Storage is based on worst-case scenario.
 		 * Actual storage needs to be tested/runtime decided.
 		 */
-		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
-			if (pInterleave->numSlots != MAXSLOTS)
+		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+			if (pInterleave->numSlot != MAXSLOTS)
 				continue; // only process settings that match `MAXSLOTS`
 
 			/*
@@ -742,7 +742,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				seconds = 1;
 
 			// base estimated size on 791647 signatures
-			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlots=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
+			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlot=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
 			        this->timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
@@ -962,7 +962,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
-		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlots; pRound++) {
+		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlot; pRound++) {
 
 			if (pRound->noauto)
 				continue; // skip automated handling
@@ -1039,7 +1039,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 			}
 
-			fprintf(stderr, "[%s] numSlots=%d qntf=%d interleave=%-4d numNode=%d numSignature=%d numImprint=%d speed=%.3fM/s storage=%.3fGb\n",
+			fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%-4d numNode=%d numSignature=%d numImprint=%d speed=%.3fM/s storage=%.3fGb\n",
 			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode, pStore->numSignature, pStore->numImprint, speed, storage);
 
 			if (this->progress != this->progressHi) {
@@ -1464,7 +1464,7 @@ int main(int argc, char *const *argv) {
 
 			// get worse-case values
 			if (app.opt_maxImprint == 0) {
-				for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
+				for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlot; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 
@@ -1479,7 +1479,7 @@ int main(int argc, char *const *argv) {
 					app.opt_maxImprint += app.opt_maxImprint / 20;
 			}
 			if (app.opt_maxSignature == 0) {
-				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
+				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
 					if (pMetrics->noauto)
 						continue;
 

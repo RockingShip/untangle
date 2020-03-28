@@ -154,7 +154,7 @@ struct genrestartdataContext_t : context_t {
 					fprintf(stderr, "\r\e[K");
 
 				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
-					fprintf(stderr, "[%s] numSlots=%d qntf=%d numNode=%d numProgress=%ld\n",
+					fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld\n",
 					        this->timeAsString(), MAXSLOTS, iQnTF, numArgs, this->progress);
 				}
 			}
@@ -318,7 +318,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlots=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
+			fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
 			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, this->progress, pStore->numSignature);
 	}
 

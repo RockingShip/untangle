@@ -64,7 +64,7 @@ struct metricsInterleave_t {
 	 */
 
 	/// @var {number} - Valid when match MAXSLOTS
-	unsigned numSlots;
+	unsigned numSlot;
 
 	/// @var {number} - How many row/columns need to be stored in database. This value is communicated with user.
 	unsigned numStored;
@@ -109,11 +109,11 @@ static const metricsInterleave_t metricsInterleave[] = {
  * @param {number} interleave - The interleave value communicated with user (numStored)
  * @return {metricsInterleave_t} Reference to match or NULL if not found
  */
-const metricsInterleave_t *getMetricsInterleave(unsigned numSlots, unsigned interleave) {
+const metricsInterleave_t *getMetricsInterleave(unsigned numSlot, unsigned interleave) {
 
 	// walk through list
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
-		if (pInterleave->numSlots == numSlots && pInterleave->numStored == interleave)
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+		if (pInterleave->numSlot == numSlot && pInterleave->numStored == interleave)
 			return pInterleave;
 	}
 
@@ -129,13 +129,13 @@ const metricsInterleave_t *getMetricsInterleave(unsigned numSlots, unsigned inte
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
  * @return {string} Comma separated list of allowed interleaves
  */
-const char *getAllowedInterleaves(unsigned numSlots) {
+const char *getAllowedInterleaves(unsigned numSlot) {
 	static char sbuf[256];
 	unsigned spos = 0;
 
 	// walk through list
-	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlots; pInterleave++) {
-		if (pInterleave->numSlots == numSlots) {
+	for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+		if (pInterleave->numSlot == numSlot) {
 			// delimiter
 			if (spos) {
 				sbuf[spos++] = ',';
@@ -165,7 +165,7 @@ struct metricsImprint_t {
 	 */
 
 	/// @var {number} - Valid when match `MAXSLOTS`
-	unsigned numSlots;
+	unsigned numSlot;
 
 	/// @var {number} - Valid when match `qntf`
 	unsigned qntf;
@@ -256,15 +256,15 @@ static const metricsImprint_t metricsImprint[] = {
  * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsImprint_t *getMetricsImprint(unsigned numSlots, unsigned qntf, unsigned interleave, unsigned numNode) {
+const metricsImprint_t *getMetricsImprint(unsigned numSlot, unsigned qntf, unsigned interleave, unsigned numNode) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
 
 	// walk through list
-	for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlots; pMetrics++) {
+	for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNode == numNode)
+		if (pMetrics->numSlot == numSlot && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found
@@ -285,7 +285,7 @@ struct metricsGenerator_t {
 	 */
 
 	/// @var {number} - Valid when match MAXSLOTS
-	unsigned numSlots;
+	unsigned numSlot;
 	/// @var {number} - `QnTF` mode
 	unsigned qntf;
 	/// @var {number} - Valid when match `numNode` (higher values implies more signatures)
@@ -338,15 +338,15 @@ static const metricsGenerator_t metricsGenerator[] = {
  * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsGenerator_t *getMetricsGenerator(unsigned numSlots, unsigned qntf, unsigned numNode) {
+const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned qntf, unsigned numNode) {
 	// qntf is 0/1
 	if (qntf)
 		qntf = 1;
 
 	// walk through list
-	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlots; pMetrics++) {
+	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlots == numSlots && pMetrics->qntf == qntf && pMetrics->numNode == numNode)
+		if (pMetrics->numSlot == numSlot && pMetrics->qntf == qntf && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found
