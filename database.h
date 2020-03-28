@@ -278,7 +278,7 @@ struct database_t {
 				maxSignature += maxSignature / 20;
 
 			assert(ctx.isPrime(signatureIndexSize));
-			numSignature = 0; // do not start at 1
+			numSignature = 1; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*this->signatures));
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*this->signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATURE;

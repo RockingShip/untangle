@@ -154,6 +154,96 @@ struct gensignatureContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-03-27 13:59:20
+	 *
+	 * Load signature records and re-index to current settings
+	 *
+	 * @param {database_t} pStore - Database to write to
+	 * @param {database_t} pDB - database to read from
+	 */
+	void loadSignatures(database_t *pStore, const database_t *pDB) {
+		fprintf(stderr, "loading\n");
+
+		tinyTree_t tree(*this);
+
+		if (this->opt_verbose >= VERBOSE_ACTIONS)
+			fprintf(stderr, "\r\e[K[%s] Loading signatures\n", timeAsString());
+
+		this->setupSpeed(pDB->numSignature);
+		this->tick = 0;
+
+		for (uint32_t iSid = 1; iSid < pDB->numSignature; iSid++) {
+			if (opt_verbose >= VERBOSE_TICK && tick) {
+				tick = 0;
+				if (progressHi) {
+					int perSecond = this->updateSpeed();
+					int eta = (int) ((progressHi - progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
+				} else {
+					fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
+					        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
+				}
+			}
+			this->progress++;
+
+			const signature_t *pDbSignature = pDB->signatures + iSid;
+
+			/*
+			 * Lookup to verify it is unique
+			 */
+
+			// load signature name
+			tree.decodeFast(pDbSignature->name);
+
+			// perform lookup
+			uint32_t sid = 0, tid = 0;
+			pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+
+			// It should not exist
+			if (sid != 0) {
+				printf("{\"error\":\"duplicate signature  \",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d,\"name\":\"%s\"}\n",
+				       __FUNCTION__, sid, iSid, pDbSignature->name);
+				exit(1);
+			}
+
+			/*
+			 * Add signature to database
+			 */
+
+			// add signature to database
+			sid = pStore->addSignature(pDbSignature->name);
+			// add to index
+			uint32_t ix = pStore->lookupSignature(pDbSignature->name);
+			pStore->signatureIndex[ix] = sid;
+			// add to imprints to index
+			pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, sid);
+
+			// populate non-ket fields
+			signature_t *pStoreSignature = pStore->signatures + sid;
+			pStoreSignature->size = tree.count - tinyTree_t::TINYTREE_NSTART;
+			pStoreSignature->numEndpoint = pDbSignature->numEndpoint;
+			pStoreSignature->numPlaceholder = pDbSignature->numPlaceholder;
+			pStoreSignature->numBackRef = pDbSignature->numBackRef;
+		}
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "\r\e[K[%s] Loaded numSignature=%d numImprint=%d\n", timeAsString(), pStore->numSignature, pStore->numImprint);
+
+	}
+
+	int numReject ;
+
+	/**
 	 * @date 2020-03-22 00:57:15
 	 *
 	 * found candidate.
@@ -169,10 +259,10 @@ struct gensignatureContext_t : context_t {
 	 * @date 2020-03-27 02:47:42
 	 *
 	 * At this point in time the generator seems to be functional.
-	 * It aagrees with metrics from the previous major version.
-	 * Unexpected surprise is the two mode assosiactive index.
-	 * leading to a better speed. The previous version had interleave 504.
-	 * All the calls to this function are the uniques
+	 * It agrees with metrics from the previous major version.
+	 * Unexpected surprise is the two mode associative index.
+	 * The previous version had (slower) interleave 504.
+	 * All the trees passed to this function are natural ordered trees.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numUnique - number of unique endpoints in tree
@@ -199,7 +289,48 @@ struct gensignatureContext_t : context_t {
 		}
 
 		/*
-		 * Create name, it's expensive so now is the right moment
+		 * @date 2020-03-28 16:21:44
+		 *
+		 * Reject all names that do not have certified top-level components.
+		 * Components are always smaller that the current tree,
+		 * implying that components were already present before program invocation and therefor certified.
+		 */
+		{
+			char skin[MAXSLOTS + 1];
+
+			uint32_t Q = treeR.N[treeR.root].Q;
+			if (Q) {
+				const char *pComponentName = treeR.encode(Q, skin);
+				uint32_t ix = pStore->lookupSignature(pComponentName);
+				if (pStore->signatureIndex[ix] == 0) {
+					numReject++;
+					return;
+				}
+			}
+
+			uint32_t To = treeR.N[treeR.root].T & ~IBIT;
+			if (To) {
+				const char *pComponentName = treeR.encode(To, skin);
+				uint32_t ix = pStore->lookupSignature(pComponentName);
+				if (pStore->signatureIndex[ix] == 0) {
+					numReject++;
+					return;
+				}
+			}
+
+			uint32_t F = treeR.N[treeR.root].F;
+			if (F) {
+				const char *pComponentName = treeR.encode(F, skin);
+				uint32_t ix = pStore->lookupSignature(pComponentName);
+				if (pStore->signatureIndex[ix] == 0) {
+					numReject++;
+					return;
+				}
+			}
+		}
+
+		/*
+		 * Calculate `signature_t` non-key values
 		 */
 		unsigned numEndpoint = 0;
 		unsigned numBackRef = 0;
@@ -245,7 +376,7 @@ struct gensignatureContext_t : context_t {
 
 		signature_t *pSignature = pStore->signatures + sid;
 
-		int cmp = 0; // "<0" if "best < caldidate", ">0" if "best > caldidate"
+		int cmp = 0; // "<0" if "best < caldidate", ">0" if "best > candidate"
 
 		// Test for prime goal: reducing number of nodes
 		if (cmp == 0)
@@ -304,6 +435,35 @@ struct gensignatureContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-03-27 17:05:07
+	 *
+	 * Compare function for `qsort_r`
+	 *
+	 * @param {signature_t} lhs - left hand side signature
+	 * @param {signature_t} rhs - right hand side signature
+	 * @param {context_t} state - I/O contect needed to create trees
+	 * @return
+	 */
+	static int compar(const void *lhs, const void *rhs, void *state) {
+		if (lhs == rhs)
+			return 0;
+
+		const signature_t *pSignatureL = (const signature_t *) lhs;
+		const signature_t *pSignatureR = (const signature_t *) rhs;
+		context_t *pApp = (context_t *) state;
+
+		// load trees
+		tinyTree_t treeL(*pApp);
+		tinyTree_t treeR(*pApp);
+
+		treeL.decodeFast(pSignatureL->name);
+		treeR.decodeFast(pSignatureR->name);
+
+		// compare
+		return treeL.compare(treeL.root, treeR, treeR.root);
+	}
+
+	/**
 	 * @date 2020-03-22 01:00:05
 	 *
 	 * Main entrypoint
@@ -317,19 +477,14 @@ struct gensignatureContext_t : context_t {
 	void main(database_t *pStore) {
 		this->pStore = pStore;
 
-		pStore->numImprint = 1; // skip mandatory zero entry
-		pStore->numSignature = 1; // skip mandatory zero entry
-
-		// create generator
+		/*
+		 * create generator
+		 */
 		generatorTree_t generator(*this);
 
-		for (unsigned iRound = 0; iRound <= arg_numNodes; iRound++) {
-			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %dn%d%s\n", timeAsString(), iRound, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
-
 			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, iRound);
-			unsigned endpointsLeft = iRound * 2 + 1;
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
 			// clear tree
 			generator.clearGenerator();
@@ -338,29 +493,62 @@ struct gensignatureContext_t : context_t {
 			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			this->tick = 0;
 
-			// always add the mandatory signatures
+		/*
+		 * Generate candidates
+		 */
+		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Generating candidates for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+
+		numReject = 0;
+
+		if (arg_numNodes == 0) {
 			generator.root = 0; // "0"
 			foundTree(generator, "0", 0);
 			generator.root = 1; // "a"
 			foundTree(generator, "a", 1);
-
-			// then the generated
-			if (iRound > 0)
+		} else {
 				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
+		}
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
-			fprintf(stderr, "[%s] metricsImprint_t { /*numSlots=*/%d, /*interleave=*/%d, /*numNode=*/%d, /*numSignature=*/%d, /*numImprint=*/%d },\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleave, iRound, pStore->numSignature, pStore->numImprint);
-
 			if (this->progress != this->progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-				       __FUNCTION__, this->progress, this->progressHi, iRound);
+			       __FUNCTION__, this->progress, this->progressHi, arg_numNodes);
+		}
+
+		// @date 2020-03-28 16:49:30
+		// bumping into the same issue as the previous version that it might not be possible to have all signatures with certified components
+		// going to git-push in the state it currently is and try some drastic alternative
+		fprintf(stderr, "numReject=%d\n", numReject);
+
+
+		/*
+		 * Sort signatures. skip first reserved entry
+		 */
+
+		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Sorting signature names\n", timeAsString());
+
+		qsort_r(pStore->signatures + 1, pStore->numSignature - 1, sizeof(*pStore->signatures), compar, this);
+
+		/*
+		 * List result
+		 */
+		if (opt_text == 1) {
+			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+				const signature_t *pSignature = pStore->signatures + iSid;
+				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
 			}
 		}
 
-		fprintf(stderr, "[%s] foundTree() for numNode=%d called %ld times\n", this->timeAsString(), arg_numNodes, this->progress);
+		/*
+		 * Done
+		 */
+		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%d numImprint=%d\n",
+		        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, progress, pStore->numSignature, pStore->numImprint);
+
 	}
 
 };
@@ -979,8 +1167,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			// prepare database
 			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 			memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
-			pStore->numImprint = 1; // skip mandatory zero entry
-			pStore->numSignature = 1; // skip mandatory zero entry
+			pStore->numImprint = 1; // skip reserved first entry
+			pStore->numSignature = 1; // skip reserved first entry
 			pStore->interleave = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
@@ -1418,7 +1606,7 @@ int main(int argc, char *const *argv) {
 	if (db.flags && app.opt_verbose >= app.VERBOSE_SUMMARY)
 		app.logFlags(db.flags);
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_INITIALIZE)
+	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
 
@@ -1561,6 +1749,11 @@ int main(int argc, char *const *argv) {
 	 * Invoke
 	 */
 
+	if (app.opt_text && isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
+
 	if (app.opt_selftest) {
 		/*
 		 * self tests
@@ -1586,6 +1779,11 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
+	 * Inject signatures from old database
+	 */
+	app.loadSignatures(&store, &db);
+
+	/*
 	 * Invoke main entrypoint of application context
 	 */
 	app.main(&store);
@@ -1608,6 +1806,8 @@ int main(int argc, char *const *argv) {
 		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		if (!isatty(1))
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 #endif
 
