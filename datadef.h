@@ -121,7 +121,7 @@ struct imprint_t {
 struct signature_t {
 	enum {
 		/// @constant {number} (numnode*3+1+1/*root invert*/+1/*terminator*/) For 5n9 signatures (4n9 is default) that would be 18
-		SIGNAMELENGTH = (5 * 3 + 1 + 1 + 1),
+		SIGNATURENAMELENGTH = (5 * 3 + 1 + 1 + 1),
 	};
 
 	enum {
@@ -156,8 +156,49 @@ struct signature_t {
 	/// @var {number} number of back-references
 	uint8_t numBackRef;
 
-	/// @var {staing} Notation/name of signature. With space for inverted root and terminator
-	char name[SIGNAMELENGTH];
+	/// @var {string} Notation/name of signature. With space for inverted root and terminator
+	char name[SIGNATURENAMELENGTH];
+};
+
+/*
+ * @date 2020-03-29 22:07:22
+ *
+ * Candidates passed to `foundTree()`.
+ *
+ * Contains broken down and references to components and signatures
+ */
+struct candidate_t {
+
+	/// @var {number} Signature id to which signature group this candidate belongs
+	uint32_t sid;
+
+	/// @var {number} Candidate id of `Q` component
+	uint32_t Qcid;
+
+	/// @var {number} Signature id of `Q` component
+	uint32_t Qsid;
+
+	/// @var {number} Candidate id of `T` component
+	uint32_t Tcid;
+
+	/// @var {number} Candidate id of `T` component
+	uint32_t Tsid;
+
+	/// @var {number} Candidate id of `F` component
+	uint32_t Fcid;
+
+	/// @var {number} Candidate id of `F` component
+	uint32_t Fsid;
+
+	/// @var {number} Candidate id of next candidate in signature group
+	uint32_t next;
+
+	/*
+	 * the following are 8-bit values and align better if placed last
+	 */
+
+	/// @var {string} Notation/name of signature. With space for inverted root and terminator
+	char name[signature_t::SIGNATURENAMELENGTH];
 };
 
 #endif
