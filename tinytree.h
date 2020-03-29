@@ -177,10 +177,21 @@ struct tinyTree_t {
 	 * `"A"` is replaced by `"abc?"` to get `(2)` and `"H"` is replaced by `"abc?"` to get `(3).
 	 * The position of replacing (the deeper down the higher the scoring) makes `(2)` < `(3)`
 	 *
+	 * @date
+	 *
+	 * Return values are
+	 *  -3 common part different. `"lhs < rhs"`
+	 *  -2 common with extensions. `"lhs is closer to common"`
+	 *  -1 same layout only `"lhs-endpoints < rhs-endpoints"`
+	 *   0 identical
+	 *  +1 same layout only `"lhs-endpoints > rhs-endpoints"`
+	 *  +2 common with extensions. `"rhs is closer to common"`
+	 *  +3 common part different. `"lhs > rhs"`
+	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
 	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
-	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
+	 * @return {number} `<0` if `lhs<rhs`, `0` if `lhs==rhs` and `>0` if `lhs>rhs`
 	 */
 	int compare(uint32_t lhs, const tinyTree_t &treeR, uint32_t rhs, bool layoutOnly = false) {
 
@@ -229,13 +240,13 @@ struct tinyTree_t {
 			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART) {
 				// `end` < `ref`
 				if (cmp == 0)
-					cmp = -1; // only first counts
+					cmp = -2; // only first counts
 				continue;
 			}
 			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART) {
 				// `ref` > `end`
 				if (cmp == 0)
-					cmp = +1; // only first counts
+					cmp = +2; // only first counts
 				continue;
 			}
 
@@ -256,9 +267,9 @@ struct tinyTree_t {
 
 				// compare the placeholder because those have been renumbered taking into account skipped parts of the tree
 				if (beenWhatL[L] < beenWhatR[R])
-					return -1; // `lhs` < `rhs`
+					return -3; // `lhs` < `rhs`
 				if (beenWhatL[L] > beenWhatR[R])
-					return +1; // `lhs` < `rhs`
+					return +3; // `lhs` < `rhs`
 
 				// continue with next stack entry
 				continue;
@@ -292,21 +303,21 @@ struct tinyTree_t {
 			 * compare structure
 			 */
 			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT))
-				return -1; // `QnTF` < `QTF`
+				return -3; // `QnTF` < `QTF`
 			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT))
-				return +1; // `QTF` > `QnTF`
+				return +3; // `QTF` > `QnTF`
 			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
-				return -1; // `OR` < !`OR`
+				return -3; // `OR` < !`OR`
 			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
-				return +1; // !`OR` > `OR`
+				return +3; // !`OR` > `OR`
 			if (pNodeL->F == 0 && pNodeR->F != 0)
-				return -1; // `GT` < !`GT` or `AND` < !`AND`
+				return -3; // `GT` < !`GT` or `AND` < !`AND`
 			if (pNodeL->F != 0 && pNodeR->F == 0)
-				return +1; // !`GT` > `GT` or !`AND` > `AND`
+				return +3; // !`GT` > `GT` or !`AND` > `AND`
 			if (pNodeL->F == (pNodeL->T ^ IBIT) && pNodeR->F != (pNodeR->T ^ IBIT))
-				return -1; // `XOR` < !`XOR`
+				return -3; // `XOR` < !`XOR`
 			if (pNodeL->F != (pNodeL->T ^ IBIT) && pNodeR->F == (pNodeR->T ^ IBIT))
-				return +1; // !`XOR` > `XOR`
+				return +3; // !`XOR` > `XOR`
 
 
 			/*
@@ -382,12 +393,17 @@ struct tinyTree_t {
 		 */
 
 		if (layoutOnly)
-		return 0;
+			return 0;
 
 		skinL[numPlaceholderL] = 0;
 		skinR[numPlaceholderR] = 0;
 
-		return ::strcmp(skinL, skinR);
+		cmp = ::strcmp(skinL, skinR);
+		if (cmp < 0)
+			return -1;
+		if (cmp > 0)
+			return +1;
+		return 0;
 	}
 
 	/**
@@ -1242,13 +1258,13 @@ struct tinyTree_t {
 					// push id so it visits again a second time
 					stack[stackPos++] = curr;
 
-				// push unvisited references
-				if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
-					stack[stackPos++] = F;
-				if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
-					stack[stackPos++] = To;
-				if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
-					stack[stackPos++] = Q;
+					// push unvisited references
+					if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
+						stack[stackPos++] = F;
+					if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
+						stack[stackPos++] = To;
+					if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
+						stack[stackPos++] = Q;
 
 					// done, flag no endpoint assignment done
 					beenThere |= (1 << curr);
@@ -1476,35 +1492,8 @@ struct tinyTree_t {
 			} else if (beenWhat[curr] == 0) {
 
 				/*
-				 * reorder first
-				 */
-				if (To == 0 && Ti) {
-					// swap `OR` if unordered
-					if (this->compare(Q, *this, F) > 0) {
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-					}
-				} else if (To == F) {
-					// swap `XOR` if unordered
-					if (this->compare(Q, *this, F) > 0) {
-						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
-						To = savQ;
-					}
-				} else if (F == 0 && !Ti) {
-					// swap `AND` if unordered
-					if (this->compare(Q, *this, To) > 0) {
-						uint32_t savQ = Q;
-						Q = To;
-						To = savQ;
-					}
-				}
-
-				/*
-				 * now that operands are complete and ordered, assign them new placeholders
-				 */
+				 * now that operands are complete, assign them new placeholders
+                                 */
 
 				if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
 					beenThere |= (1 << Q);
@@ -1523,6 +1512,46 @@ struct tinyTree_t {
 					beenWhat[F] = TINYTREE_KSTART + numPlaceholder;
 					pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
 				}
+
+				/*
+				 * @date 2020-03-29 14:20:38
+				 *
+				 * The generator might offer weird ordering like the raw tree: `"{ {1,~0,2}, {1,~2,0}, {10,11,0}, {11,10,12} }"`
+				 * The top-level dives into `"[11]"` first, marking that as `"beenWhat[10]=11"`
+				 * This needs the `compare()` to be fed with `beenWhat[Q,T,F]`
+				 * That is why endpoints get assigned after being ordered(compare), some of the `beenWhat` can be uninitialised.
+				 * If the two operands are newly assigned endpoints, they get ordered in sequence originally found (and don't swap).
+				 *
+				 * So: if both operands are references, use `beenWhat[]` for deep compare,
+				 *     otherwise use plain `Q,T,F` safely as `compare()` falls back to a `ref/end` comparison
+				 *
+				 * The result has surprising effects like rejecting `"ab+ac+2&&"` in favour of `"ab+1ac+&&"`.
+				 */
+
+				if (To == 0 && Ti) {
+					// swap `OR` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[F]) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+					}
+				} else if (To == F) {
+					// swap `XOR` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[F]) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+						To = savQ;
+					}
+				} else if (F == 0 && !Ti) {
+					// swap `AND` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[To]) > 0) {
+						uint32_t savQ = Q;
+						Q = To;
+						To = savQ;
+					}
+				}
+
 
 				/*
 				 * populate new node

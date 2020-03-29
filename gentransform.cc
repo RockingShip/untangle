@@ -562,7 +562,7 @@ void performSelfTestMatch(gentransformContext_t &app, database_t *pStore) {
 		numPassed++;
 	}
 
-	fprintf(stderr,"[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
+	fprintf(stderr, "[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /**
@@ -744,7 +744,7 @@ void performSelfTestInterleave(gentransformContext_t &app, database_t *pStore) {
 		}
 	}
 
-	fprintf(stderr,"[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
+	fprintf(stderr, "[%s] %s() passed %d tests\n", app.timeAsString(), __FUNCTION__, numPassed);
 }
 
 /*
@@ -1011,6 +1011,8 @@ int main(int argc, char *const *argv) {
 		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		if (!isatty(1))
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 #endif
 

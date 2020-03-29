@@ -308,7 +308,7 @@ struct metricsGenerator_t {
 	int noauto;
 };
 
-// @date 2020-03-27 00:31:41 - last updated
+// @date 2020-03-29 21:20:03 - last updated
 static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 0, 0,             3,         3,        0},
 	{9, 0, 0, 0,             3,         3,        0},
@@ -318,9 +318,9 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 2, 424,           425,       110,      0},
 	{9, 1, 3, 17535,         15229,     1311,     0},
 	{9, 0, 3, 92258,         80090,     5666,     0},
-	{9, 1, 4, 3766074,       2811679,   96363,    0},
-	{9, 0, 4, 38399264,      28635825,  791647,   0},
-	{9, 1, 5, 1286037101,    825798040, 10233318, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
+	{9, 1, 4, 3766074,       2799167,   96363,    0},
+	{9, 0, 4, 38399264,      28521537,  791647,   0},
+	{9, 1, 5, 1286037101,    817901390, 10233318, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
 	{9, 0, 5, 25583691074,   0,         0,        0},
 	{9, 1, 6, 633200151789,  0,         0,        0}, // numProgress takes about 80 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        1}, // from historic metrics

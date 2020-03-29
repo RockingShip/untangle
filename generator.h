@@ -698,22 +698,21 @@ struct generatorTree_t : tinyTree_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					ctx.tick = 0;
 
-					if (ctx.progressHi) {
-						int perSecond = ctx.updateSpeed();
+					int perSecond = ctx.updateSpeed();
+					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
 
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
+					if (ctx.progress < ctx.progressHi) {
 						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
 						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
 					} else {
-						fprintf(stderr, "\r\e[K[%s] %lu",
-						        ctx.timeAsString(), ctx.progress);
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
+						        ctx.timeAsString(), ctx.progress, perSecond);
 					}
 				}
 

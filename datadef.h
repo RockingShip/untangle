@@ -109,8 +109,8 @@ struct footprint_t {
  */
 struct imprint_t {
 	footprint_t footprint; // footprint
-	uint32_t    sid;       // signature
-	uint32_t    tid;       // skin/transform
+	uint32_t sid;          // signature
+	uint32_t tid;          // skin/transform
 };
 
 /*
@@ -142,19 +142,19 @@ struct signature_t {
 	 */
 
 	/// @var {number} flags
-	uint8_t  flags;
+	uint8_t flags;
 
 	/// @var {number} size of tree in nodes
-	uint8_t  size;
+	uint8_t size;
 
 	/// @var {number} number of endpoints
-	uint8_t  numEndpoint;
+	uint8_t numEndpoint;
 
 	/// @var {number} number of unique endpoints
-	uint8_t  numPlaceholder;
+	uint8_t numPlaceholder;
 
 	/// @var {number} number of back-references
-	uint8_t  numBackRef;
+	uint8_t numBackRef;
 
 	/// @var {staing} Notation/name of signature. With space for inverted root and terminator
 	char name[SIGNAMELENGTH];

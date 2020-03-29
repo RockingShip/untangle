@@ -175,21 +175,22 @@ struct gensignatureContext_t : context_t {
 		for (uint32_t iSid = 1; iSid < pDB->numSignature; iSid++) {
 			if (opt_verbose >= VERBOSE_TICK && tick) {
 				tick = 0;
-				if (progressHi) {
-					int perSecond = this->updateSpeed();
-					int eta = (int) ((progressHi - progress) / perSecond);
 
-					int etaH = eta / 3600;
-					eta %= 3600;
-					int etaM = eta / 60;
-					eta %= 60;
-					int etaS = eta;
+				int perSecond = this->updateSpeed();
+				int eta = (int) ((progressHi - progress) / perSecond);
 
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				if (progress < progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
 					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 				} else {
-					fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
-					        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
+					        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
 				}
 			}
 			this->progress++;
@@ -241,7 +242,7 @@ struct gensignatureContext_t : context_t {
 
 	}
 
-	int numReject ;
+	int numReject;
 
 	/**
 	 * @date 2020-03-22 00:57:15
@@ -270,21 +271,22 @@ struct gensignatureContext_t : context_t {
 	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
-			if (progressHi) {
-				int perSecond = this->updateSpeed();
-				int eta = (int) ((progressHi - progress) / perSecond);
 
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
+			int perSecond = this->updateSpeed();
+			int eta = (int) ((progressHi - progress) / perSecond);
 
+			int etaH = eta / 3600;
+			eta %= 3600;
+			int etaM = eta / 60;
+			eta %= 60;
+			int etaS = eta;
+
+			if (progress < progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
 				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
-				        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
 			}
 		}
 
@@ -482,16 +484,16 @@ struct gensignatureContext_t : context_t {
 		 */
 		generatorTree_t generator(*this);
 
-			// find metrics for setting
+		// find metrics for setting
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
-			// clear tree
-			generator.clearGenerator();
+		// clear tree
+		generator.clearGenerator();
 
-			// reset progress
-			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-			this->tick = 0;
+		// reset progress
+		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+		this->tick = 0;
 
 		/*
 		 * Generate candidates
@@ -507,14 +509,14 @@ struct gensignatureContext_t : context_t {
 			generator.root = 1; // "a"
 			foundTree(generator, "a", 1);
 		} else {
-				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
 		}
 
-			if (this->opt_verbose >= this->VERBOSE_TICK)
-				fprintf(stderr, "\r\e[K");
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
 
-			if (this->progress != this->progressHi) {
-				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
+		if (this->progress != this->progressHi) {
+			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
 			       __FUNCTION__, this->progress, this->progressHi, arg_numNodes);
 		}
 
@@ -1103,26 +1105,23 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	void foundTreeMetrics(generatorTree_t &tree, unsigned numUnique) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%, numSignature=%d", timeAsString(), progress * 100.0 / progressHi, pStore->numSignature);
-			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), progress);
 			tick = 0;
-			if (progressHi) {
-				int perSecond = this->updateSpeed();
-				int eta = (int) ((progressHi - progress) / perSecond);
 
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
+			int perSecond = this->updateSpeed();
+			int eta = (int) ((progressHi - progress) / perSecond);
 
+			int etaH = eta / 3600;
+			eta %= 3600;
+			int etaM = eta / 60;
+			eta %= 60;
+			int etaS = eta;
+
+			if (progress < progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
 				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu | numSignature=%d numImprint=%d",
-				        timeAsString(), progress, pStore->numSignature, pStore->numImprint);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
 			}
 		}
 
@@ -1588,6 +1587,11 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
+	if (app.opt_text && isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
+
 	// register timer handler
 	if (app.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
@@ -1749,11 +1753,6 @@ int main(int argc, char *const *argv) {
 	 * Invoke
 	 */
 
-	if (app.opt_text && isatty(1)) {
-		fprintf(stderr, "stdout not redirected\n");
-		exit(1);
-	}
-
 	if (app.opt_selftest) {
 		/*
 		 * self tests
@@ -1781,7 +1780,8 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Inject signatures from old database
 	 */
-	app.loadSignatures(&store, &db);
+	if (db.numSignature > 1)
+		app.loadSignatures(&store, &db);
 
 	/*
 	 * Invoke main entrypoint of application context

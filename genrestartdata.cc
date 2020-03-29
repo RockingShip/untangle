@@ -229,21 +229,22 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 */
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
-			if (progressHi) {
-				int perSecond = this->updateSpeed();
-				int eta = (int) ((progressHi - progress) / perSecond);
 
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
+			int perSecond = this->updateSpeed();
+			int eta = (int) ((progressHi - progress) / perSecond);
 
+			int etaH = eta / 3600;
+			eta %= 3600;
+			int etaM = eta / 60;
+			eta %= 60;
+			int etaS = eta;
+
+			if (progress < progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
 				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
 			} else {
-				fprintf(stderr, "\r\e[K[%s] %lu |  numCandidate=%d",
-				        timeAsString(), progress, pStore->numSignature);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%d",
+				        timeAsString(), progress, perSecond, pStore->numSignature);
 			}
 		}
 
@@ -527,6 +528,11 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
+	if (app.opt_text && isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
+
 	/*
 	 * register timer handler
 	 */
@@ -569,11 +575,6 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Invoke
 	 */
-
-	if (app.opt_text && isatty(1)) {
-		fprintf(stderr, "stdout not redirected\n");
-		exit(1);
-	}
 
 	if (app.opt_selftest) {
 		/*

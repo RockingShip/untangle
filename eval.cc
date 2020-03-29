@@ -18,6 +18,11 @@
  *   - Normalisations: 1:inverting, 1:function grouping, 2:dyadic ordering
  *   - Caching
  *   - Evaluating
+ *
+ *  @date 2020-03-29 15:17:13
+ *
+ *  There is a known issue that `encode()` with a entrypoint other than te root might not properly order endpoints.
+ *  `"./eval 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
  */
 
 /*
@@ -135,7 +140,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
 		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
 		fprintf(stderr, "\t   --shrinkwrap Adjust nstart to highest found endpount\n");
-		fprintf(stderr, "\t-n --skin       Display notation with placeholders and skin mapping\n");
+		fprintf(stderr, "\t-s --skin       Display notation with placeholders and skin mapping\n");
 		fprintf(stderr, "\t-v --verbose    Say less\n");
 		fprintf(stderr, "\t-Q --Q          Select top-level Q\n");
 		fprintf(stderr, "\t-T --T          Select top-level T\n");
@@ -144,6 +149,8 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
+ * @date 2020-03-06 23:23:32
+ *
  * struct representing a 512 bit vector, each bit representing the outcome of the unified operator for every possible state 9 variables can take
  * The vector is split into a collection of 64bit wide words.
  *
@@ -152,7 +159,6 @@ void usage(char *const *argv, bool verbose) {
  * As this is a reference implementation, `SIMD` instructions should be avoided.
  *
  * @typedef {number[]}
- * @date 2020-03-06 23:23:32
  */
 struct footprint_t {
 	/// @constant {number} QUADPERFOOTPRINT - Size of footprint in terms of uint64_t
@@ -164,10 +170,11 @@ struct footprint_t {
 };
 
 /**
+ * @date 2020-03-06 21:14:47
+ *
  * Language structure representing the unified operator
  *
  * @typedef {object}
- * @date 2020-03-06 21:14:47
  */
 struct node_t {
 	/// @var {number} - reference to `"question"`
@@ -179,10 +186,11 @@ struct node_t {
 };
 
 /**
+ * @date 2020-03-06 21:45:08
+ *
  * Language structure representing the fractal tree
  *
  * @typedef {object}
- * @date 2020-03-06 21:45:08
  */
 struct tree_t {
 
@@ -202,11 +210,12 @@ struct tree_t {
 	uint32_t root;
 
 	/**
+ 	 * @date 2020-03-06 21:46:08
+ 	 *
 	 * Constructor
 	 *
 	 * @param {number} kstart - index of first endpoint
  	 * @param {number} kstart - nstart of first node
- 	 * @date 2020-03-06 21:46:08
 	 */
 
 	inline tree_t(uint32_t kstart, uint32_t nstart)
@@ -214,22 +223,24 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-06 22:30:00
+	 *
 	 * Copy constructor
 	 *
 	 * @param {tree_t} rhs - right hans side of assignment
 	 * @return {tree_t} deep copy of object
-	 * @date 2020-03-06 22:30:00
 	 */
 	inline tree_t(const tree_t &rhs) {
 		assert(!"copy constructor not supported");
 	}
 
 	/**
+	 * @date 2020-03-06 21:47:08
+	 *
 	 * Assignment operator
 	 *
 	 * @param {tree_t} rhs - right hans side of assignment
 	 * @return {tree_t} deep copy of object
-	 * @date 2020-03-06 21:47:08
 	 */
 	inline tree_t &operator=(const tree_t &rhs) {
 		assert(!"assignment constructor not supported");
@@ -250,9 +261,9 @@ struct tree_t {
 	}
 
 	/**
-	 * Erase the contents
-	 *
 	 * @date 2020-03-06 22:27:36
+	 *
+	 * Erase the contents
 	 */
 	inline void clear(void) {
 		this->count = this->nstart; // rewind first free node
@@ -416,6 +427,8 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-09 16:27:10
+	 *
 	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
 	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
@@ -424,7 +437,6 @@ struct tree_t {
 	 * @param {number} T
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
-	 * @date 2020-03-09 16:27:10
 	 */
 	uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
@@ -671,13 +683,14 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-09 10:31:50
+	 *
 	 * scan notation, find highest endpoint and decode optional skin
 	 *
 	 * @param {string} pName - notation and skin separated by '/'
 	 * @param {number[1]} pHighestEndpoint - return highest found endpoint in either notation or skin
 	 * @param {number[1]} pNumSkin - return number of skin elements. This might be higher than the number of placeholders
 	 * @param {number[]} pSkin - decoded list skins elements
-	 * @date 2020-03-09 10:31:50
 	 */
 	void decodeEndpoints(const char *pName, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
 
@@ -773,6 +786,8 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-09 17:05:36
+	 *
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
@@ -782,7 +797,6 @@ struct tree_t {
 	 * @param {number} numSkin - size of `pSkin[]`
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
-	 * @date 2020-03-09 17:05:36
 	 */
 	int decodeSafe(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
@@ -1150,6 +1164,8 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-07 00:12:44
+	 *
 	 * Parse notation and construct tree accordingly.
 	 * Notation is taken literally and not normalised
 	 *
@@ -1159,7 +1175,6 @@ struct tree_t {
 	 * @param {number} numSkin - size of `pSkin[]`
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
-	 * @date 2020-03-07 00:12:44
 	 */
 	int decodeFast(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
 
@@ -1515,13 +1530,14 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-10 22:22:33
+	 *
 	 * Parse notation and construct tree accordingly.
 	 * Notation is assumed to be normalised.
 	 *
 	 * @param {string} pName - The notation describing the tree
 	 * @param {boolean} shrinkwrap - Shrinkwrap nstart
 	 * @return non-zero when parsing failed
-	 * @date 2020-03-10 22:22:33
 	 */
 	int decode(const char *pName, bool shrinkwrap) {
 		uint32_t highestEndpoint, numSkin;
@@ -1571,12 +1587,13 @@ struct tree_t {
 	bool placeholdersInSync;
 
 	/**
+	 * @date 2020-03-10 20:20:55
+	 *
 	 * Encoding with placeholders is two-pass.
 	 * Pass-1 locating and assigning placeholders
 	 * Pass-2 emiting variable length placeholder names
 	 *
 	 * @param {number} id - index of node to encode
-	 * @date 2020-03-10 20:20:55
 	 */
 	void encodePlaceholders(uint32_t id) {
 
@@ -1643,6 +1660,8 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-08 22:26:23
+	 *
 	 * Encode the tree index of a given node in "placeholder/skin" notation.
 	 * for endpoints (id < nstart) emit placeholder as index to `pSkin` containing actual endpoint
 	 * for nodes (id >= nstart) emit back reference reflecting the relative distance
@@ -1652,7 +1671,6 @@ struct tree_t {
 	 * NOTE: uses recursion which might break on extremely large trees, which is not expected for this program.
 	 *
 	 * @param {number} id - index of node to encode
-	 * @date 2020-03-08 22:26:23
 	 */
 	void encodeOperand(uint32_t id) {
 
@@ -1728,10 +1746,11 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-08 20:52:41
+	 *
 	 * Compose the notation of a given node in "placeholder/skin" notation.
 	 *
 	 * @param {number} id - index of node to encode
-	 * @date 2020-03-08 20:52:41
 	 */
 	void encodeQTF(uint32_t id) {
 
@@ -1805,13 +1824,19 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-08 20:52:41
+	 *
 	 * Encode a notation describing the tree in "placeholder/skin" notation.
 	 * Within the placeholders, endpoints are assigned in order of natural path which can be used as index for the skin to determine the actual endpoint.
+	 *
+	 * @date 2020-03-29 15:17:13
+	 *
+	 *  There is a known issue that `encode()` with a entrypoint other than te root might not properly order endpoints.
+	 *  `"./eval 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
 	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
-	 * @date 2020-03-08 20:52:41
 	 */
 	const char *encode(uint32_t id, bool withPlaceholders) {
 
@@ -1921,6 +1946,8 @@ struct tree_t {
 	}
 
 	/**
+	 * @date 2020-03-09 19:36:17
+	 *
          * Evaluate the tree and store the result in v[]
          *
          * `this->N` contains the unified operators.
@@ -1935,7 +1962,6 @@ struct tree_t {
          * As this is a reference implementation, `SIMD` instructions should be avoided.
          *
 	 * @param {vector[]} v - the evaluated result of the unified operators
-	 * @date 2020-03-09 19:36:17
 	 */
 	inline void eval(footprint_t *v) const {
 		// for all operators eligible for evaluation...
@@ -1965,6 +1991,8 @@ struct tree_t {
 };
 
 /**
+ * @date 2020-03-10 21:25:24
+ *
  * Initialise test vector.
  *
  * Example expression stored in data-vector (`v[]`) and tree (`N[]`)
@@ -1987,7 +2015,6 @@ struct tree_t {
  * @param {footprint_t) pFootprint - footprint to initialise
  * @param {footprint_t) kstart - kstart of tree
  * @param {footprint_t) nstart - nstart of tree
- * @date 2020-03-10 21:25:24
  */
 void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart) {
 
@@ -2222,6 +2249,8 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 }
 
 /**
+ * @date 2020-03-10 21:46:10
+ *
  * Perform a selftest.
  *
  * For every single-node tree there a 8 possible operands: Zero, three variables and their inverts.
@@ -2236,7 +2265,6 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
  *
  * @param {tree_t} pTree - worker tree
  * @param {footprint_t} pEval - evaluation vector
- * @date 2020-03-10 21:46:10
  */
 void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
@@ -2395,12 +2423,13 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 }
 
 /**
+ * @date   2020-03-06 20:22:23
+ *
  * Program main entry point
  *
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-06 20:22:23
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);
