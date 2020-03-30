@@ -85,7 +85,7 @@ struct fileHeader_t {
 	uint32_t magic_maxSlots;
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofSignature;
-	uint32_t magic_sizeofCandidate;
+	uint32_t magic_sizeofMember;
 	uint32_t magic_sizeofPatternFirst;
 	uint32_t magic_sizeofPatternSecond;
 	uint32_t magic_sizeofGrow;
@@ -101,8 +101,8 @@ struct fileHeader_t {
 	uint32_t imprintIndexSize;
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
-	uint32_t numCandidate;
-	uint32_t candidateIndexSize;
+	uint32_t numMember;
+	uint32_t memberIndexSize;
 	uint32_t numPatternFirst;
 	uint32_t patternFirstIndexSize;
 	uint32_t numPatternSecond;
@@ -122,9 +122,9 @@ struct fileHeader_t {
 	uint64_t offImprintIndex;
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
-	uint64_t offCandidate;
-	uint64_t offCandidateRoots;
-	uint64_t offCandidateIndex;
+	uint64_t offMember;
+	uint64_t offMemberRoots;
+	uint64_t offMemberIndex;
 	uint64_t offPatternFirst;
 	uint64_t offPatternFirstIndex;
 	uint64_t offPatternSecond;
@@ -177,13 +177,13 @@ struct database_t {
 	signature_t        *signatures;                 // signature collection
 	uint32_t           signatureIndexSize;          // index size (must be prime)
 	uint32_t           *signatureIndex;             // index
-	// candidate store
-	uint32_t           numCandidate;                // number of candidates
-	uint32_t           maxCandidate;                // maximum size of collection
-	candidate_t        *candidates;                 // candidate collection
-	uint32_t           *candidateRoots;             // First candidate of signature group
-	uint32_t           candidateIndexSize;          // index size (must be prime)
-	uint32_t           *candidateIndex;             // index
+	// member store
+	uint32_t           numMember;                   // number of members
+	uint32_t           maxMember;                   // maximum size of collection
+	member_t           *members;                    // member collection
+	uint32_t           *memberRoots;                // First member of signature group
+	uint32_t           memberIndexSize;             // index size (must be prime)
+	uint32_t           *memberIndex;                // index
 	// @formatter:on
 
 	/**
@@ -223,13 +223,13 @@ struct database_t {
 		signatureIndexSize = 0;
 		signatureIndex = NULL;
 
-		// candidate store
-		numCandidate = 0;
-		maxCandidate = 0;
-		candidates = NULL;
-		candidateRoots = NULL;
-		candidateIndexSize = 0;
-		candidateIndex = NULL;
+		// member store
+		numMember = 0;
+		maxMember = 0;
+		members = NULL;
+		memberRoots = NULL;
+		memberIndexSize = 0;
+		memberIndex = NULL;
 	};
 
 	/**
@@ -241,13 +241,13 @@ struct database_t {
 		ALLOCFLAG_TRANSFORM = 0,
 		ALLOCFLAG_IMPRINT,
 		ALLOCFLAG_SIGNATURE,
-		ALLOCFLAG_CANDIDATE,
+		ALLOCFLAG_MEMBER,
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
-		ALLOCMASK_CANDIDATE          = 1 << ALLOCFLAG_CANDIDATE,
+		ALLOCMASK_CANDIDATE          = 1 << ALLOCFLAG_MEMBER,
 		// @formatter:on
 	};
 
@@ -283,8 +283,8 @@ struct database_t {
 			assert(interleave && interleaveStep);
 			assert(ctx.isPrime(imprintIndexSize));
 			numImprint = 1; // do not start at 1
-			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*this->imprints));
-			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*this->imprintIndex));
+			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
+			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
 
@@ -296,22 +296,22 @@ struct database_t {
 
 			assert(ctx.isPrime(signatureIndexSize));
 			numSignature = 1; // do not start at 1
-			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*this->signatures));
-			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*this->signatureIndex));
+			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
+			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
 
-		// candidate store
-		if (maxCandidate) {
+		// member store
+		if (maxMember) {
 			// increase with 5%
-			if (maxCandidate < UINT32_MAX - maxCandidate / 20)
-				maxCandidate += maxCandidate / 20;
+			if (maxMember < UINT32_MAX - maxMember / 20)
+				maxMember += maxMember / 20;
 
-			assert(ctx.isPrime(candidateIndexSize));
-			numCandidate = 1; // do not start at 1
-			candidates = (candidate_t *) ctx.myAlloc("database_t::candidates", maxCandidate, sizeof(*this->candidates));
-			candidateRoots = (uint32_t *) ctx.myAlloc("database_t::candidateRoots", maxCandidate, sizeof(*this->candidateRoots));
-			candidateIndex = (uint32_t *) ctx.myAlloc("database_t::candidateIndex", candidateIndexSize, sizeof(*this->candidateIndex));
+			assert(ctx.isPrime(memberIndexSize));
+			numMember = 1; // do not start at 1
+			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
+			memberRoots = (uint32_t *) ctx.myAlloc("database_t::memberRoots", maxMember, sizeof(*memberRoots));
+			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
 			allocFlags |= ALLOCMASK_CANDIDATE;
 		}
 
@@ -393,22 +393,22 @@ struct database_t {
 			signatureIndex = pDatabase->signatureIndex;
 		}
 
-		// candidate store
+		// member store
 		if (sections & database_t::ALLOCMASK_CANDIDATE) {
-			if (pDatabase->numCandidate == 0) {
-				printf("{\"error\":\"Missing candidate section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+			if (pDatabase->numMember == 0) {
+				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			assert(maxCandidate == 0);
-			maxCandidate = pDatabase->maxCandidate;
-			numCandidate = pDatabase->numCandidate;
-			candidates = pDatabase->candidates;
-			candidateRoots = pDatabase->candidateRoots;
+			assert(maxMember == 0);
+			maxMember = pDatabase->maxMember;
+			numMember = pDatabase->numMember;
+			members = pDatabase->members;
+			memberRoots = pDatabase->memberRoots;
 
-			candidateIndexSize = pDatabase->candidateIndexSize;
-			candidateIndex = pDatabase->candidateIndex;
+			memberIndexSize = pDatabase->memberIndexSize;
+			memberIndex = pDatabase->memberIndex;
 		}
 	}
 
@@ -481,8 +481,8 @@ struct database_t {
 			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
 			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
-		if (fileHeader.magic_sizeofCandidate != sizeof(candidate_t))
-			ctx.fatal("db magic_sizeofCandidate. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofCandidate, sizeof(candidate_t));
+		if (fileHeader.magic_sizeofMember != sizeof(member_t))
+			ctx.fatal("db magic_sizeofMember. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofMember, sizeof(member_t));
 
 		flags = fileHeader.magic_flags;
 
@@ -515,12 +515,12 @@ struct database_t {
 		signatureIndexSize = fileHeader.signatureIndexSize;
 		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
 
-		// candidates
-		maxCandidate = numCandidate = fileHeader.numCandidate;
-		candidates = (candidate_t *) (rawDatabase + fileHeader.offCandidate);
-		candidateRoots = (uint32_t *) (rawDatabase + fileHeader.offCandidateRoots);
-		candidateIndexSize = fileHeader.candidateIndexSize;
-		candidateIndex = (uint32_t *) (rawDatabase + fileHeader.offCandidateIndex);
+		// members
+		maxMember = numMember = fileHeader.numMember;
+		members = (member_t *) (rawDatabase + fileHeader.offMember);
+		memberRoots = (uint32_t *) (rawDatabase + fileHeader.offMemberRoots);
+		memberIndexSize = fileHeader.memberIndexSize;
+		memberIndex = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
 	};
 
 	/**
@@ -550,9 +550,9 @@ struct database_t {
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
 		}
 		if (allocFlags & ALLOCMASK_CANDIDATE) {
-			ctx.myFree("database_t::candidates", candidates);
-			ctx.myFree("database_t::candidateRoots", candidateRoots);
-			ctx.myFree("database_t::candidateIndex", candidateIndex);
+			ctx.myFree("database_t::members", members);
+			ctx.myFree("database_t::memberRoots", memberRoots);
+			ctx.myFree("database_t::memberIndex", memberIndex);
 		}
 
 		/*
@@ -600,9 +600,9 @@ struct database_t {
 		ctx.progressHi += sizeof(*this->imprintIndex) * this->imprintIndexSize;
 		ctx.progressHi += sizeof(*this->signatures) * this->numSignature;
 		ctx.progressHi += sizeof(*this->signatureIndex) * this->signatureIndexSize;
-		ctx.progressHi += sizeof(*this->candidates) * this->numCandidate;
-		ctx.progressHi += sizeof(*this->candidateRoots) * this->numCandidate;
-		ctx.progressHi += sizeof(*this->candidateIndex) * this->candidateIndexSize;
+		ctx.progressHi += sizeof(*this->members) * this->numMember;
+		ctx.progressHi += sizeof(*this->memberRoots) * this->numMember;
+		ctx.progressHi += sizeof(*this->memberIndex) * this->memberIndexSize;
 		ctx.progress = 0;
 		ctx.tick = 0;
 
@@ -706,24 +706,24 @@ struct database_t {
 		}
 
 		/*
-		 * write candidates
+		 * write members
 		 */
-		if (this->numCandidate) {
+		if (this->numMember) {
 			// first entry must be zero
-			candidate_t zero;
+			member_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->candidates, &zero, sizeof(zero)) == 0);
+			assert(::memcmp(this->members, &zero, sizeof(zero)) == 0);
 
 			// collection
-			fileHeader.offCandidate = flen;
-			fileHeader.numCandidate = this->numCandidate;
-			flen += writeData(outf, this->candidates, sizeof(*this->candidates) * this->numCandidate);
-			flen += writeData(outf, this->candidateRoots, sizeof(*this->candidateRoots) * this->numCandidate);
-			if (this->candidateIndexSize) {
+			fileHeader.offMember = flen;
+			fileHeader.numMember = this->numMember;
+			flen += writeData(outf, this->members, sizeof(*this->members) * this->numMember);
+			flen += writeData(outf, this->memberRoots, sizeof(*this->memberRoots) * this->numMember);
+			if (this->memberIndexSize) {
 				// Index
-				fileHeader.offCandidateIndex = flen;
-				fileHeader.candidateIndexSize = this->candidateIndexSize;
-				flen += writeData(outf, this->candidateIndex, sizeof(*this->candidateIndex) * this->candidateIndexSize);
+				fileHeader.offMemberIndex = flen;
+				fileHeader.memberIndexSize = this->memberIndexSize;
+				flen += writeData(outf, this->memberIndex, sizeof(*this->memberIndex) * this->memberIndexSize);
 			}
 		}
 
@@ -739,7 +739,7 @@ struct database_t {
 		fileHeader.magic_maxSlots = MAXSLOTS;
 		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
-		fileHeader.magic_sizeofCandidate = sizeof(candidate_t);
+		fileHeader.magic_sizeofMember = sizeof(member_t);
 		fileHeader.offEnd = flen;
 
 		// rewrite header
@@ -1236,10 +1236,10 @@ struct database_t {
 	}
 
 	/*
-	 * Candidate store
+	 * Member store
 	 */
 
-	inline uint32_t lookupCandidate(const char *name) {
+	inline uint32_t lookupMember(const char *name) {
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -1247,45 +1247,45 @@ struct database_t {
 		for (const char *pName = name; *pName; pName++)
 			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
 
-		uint32_t ix = crc32 % candidateIndexSize;
+		uint32_t ix = crc32 % memberIndexSize;
 		uint32_t bump = ix;
 		if (bump == 0)
-			bump = candidateIndexSize - 1; // may never be zero
+			bump = memberIndexSize - 1; // may never be zero
 		if (bump > 2147000041)
 			bump = 2147000041; // may never exceed last 32bit prime
 
 		for (;;) {
 			ctx.cntCompare++;
-			if (this->candidateIndex[ix] == 0)
+			if (this->memberIndex[ix] == 0)
 				return ix; // "not-found"
 
-			const candidate_t *pCandidate = this->candidates + this->candidateIndex[ix];
+			const member_t *pMember = this->members + this->memberIndex[ix];
 
-			if (::strcmp(pCandidate->name, name) == 0)
+			if (::strcmp(pMember->name, name) == 0)
 				return ix; // "found"
 
 			// overflow, jump to next entry
 			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
 			ix += bump;
-			if (ix >= candidateIndexSize)
-				ix -= candidateIndexSize;
+			if (ix >= memberIndexSize)
+				ix -= memberIndexSize;
 		}
 
 	}
 
-	inline uint32_t addCandidate(const char *name) {
-		candidate_t *pCandidate = this->candidates + this->numCandidate++;
+	inline uint32_t addMember(const char *name) {
+		member_t *pMember = this->members + this->numMember++;
 
-		if (this->numCandidate > this->maxCandidate)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxCandidate);
+		if (this->numMember > this->maxMember)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
 
 		// clear before use
-		memset(pCandidate, 0, sizeof(*pCandidate));
+		memset(pMember, 0, sizeof(*pMember));
 
 		// only populate key fields
-		strcpy(pCandidate->name, name);
+		strcpy(pMember->name, name);
 
-		return (uint32_t) (pCandidate - this->candidates);
+		return (uint32_t) (pMember - this->members);
 	}
 
 
@@ -1307,8 +1307,8 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
-		json_object_set_new_nocheck(jResult, "numCandidate", json_integer(this->numCandidate));
-		json_object_set_new_nocheck(jResult, "candidateIndexSize", json_integer(this->candidateIndexSize));
+		json_object_set_new_nocheck(jResult, "numMember", json_integer(this->numMember));
+		json_object_set_new_nocheck(jResult, "memberIndexSize", json_integer(this->memberIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader.offEnd));
 
 		return jResult;

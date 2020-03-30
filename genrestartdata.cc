@@ -241,10 +241,10 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 			if (progress < progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numCandidate);
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
 			} else {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%d",
-				        timeAsString(), progress, perSecond, pStore->numCandidate);
+				        timeAsString(), progress, perSecond, pStore->numSignature);
 			}
 		}
 
@@ -263,14 +263,14 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 */
 
 		// lookup..
-		uint32_t ix = pStore->lookupCandidate(pName);
+		uint32_t ix = pStore->lookupSignature(pName);
 
 		// ...and add if not found
-		if (pStore->candidateIndex[ix] == 0) {
+		if (pStore->signatureIndex[ix] == 0) {
 
 			printf("%ld\t%s\t%d\t%d\n", progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
 
-			pStore->candidateIndex[ix] = pStore->addCandidate(pName);
+			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
 	}
 
@@ -286,7 +286,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	void performListCandidates(database_t *pStore, unsigned numNode) {
 
 		this->pStore = pStore;
-		pStore->numCandidate = 1; // skip mandatory zero entry
+		pStore->numSignature = 1; // skip mandatory zero entry
 
 		/*
 		 * Setup generator
@@ -320,7 +320,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
-			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, this->progress, pStore->numCandidate);
+			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, this->progress, pStore->numSignature);
 	}
 
 };
@@ -557,8 +557,8 @@ int main(int argc, char *const *argv) {
 			exit(1);
 		}
 
-		pStore->maxCandidate = pMetrics->numCandidate;
-		pStore->candidateIndexSize = app.nextPrime(pStore->maxCandidate * (METRICS_DEFAULT_RATIO / 10.0));
+		pStore->maxSignature = pMetrics->numCandidate;
+		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
 
 		pStore->create();
 	}

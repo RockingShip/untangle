@@ -163,34 +163,34 @@ struct signature_t {
 /*
  * @date 2020-03-29 22:07:22
  *
- * Candidates passed to `foundTree()`.
+ * Members of signature groups.
  *
- * Contains broken down and references to components and signatures
+ * Contains references to components and signatures
  */
-struct candidate_t {
+struct member_t {
 
-	/// @var {number} Signature id to which signature group this candidate belongs
+	/// @var {number} Signature id to which signature group this member belongs
 	uint32_t sid;
 
-	/// @var {number} Candidate id of `Q` component
+	/// @var {number} member id of `Q` component
 	uint32_t Qcid;
 
 	/// @var {number} Signature id of `Q` component
 	uint32_t Qsid;
 
-	/// @var {number} Candidate id of `T` component
+	/// @var {number} member id of `T` component
 	uint32_t Tcid;
 
-	/// @var {number} Candidate id of `T` component
+	/// @var {number} member id of `T` component
 	uint32_t Tsid;
 
-	/// @var {number} Candidate id of `F` component
+	/// @var {number} member id of `F` component
 	uint32_t Fcid;
 
-	/// @var {number} Candidate id of `F` component
+	/// @var {number} member id of `F` component
 	uint32_t Fsid;
 
-	/// @var {number} Candidate id of next candidate in signature group
+	/// @var {number} member id of next member in signature group
 	uint32_t next;
 
 	/*
