@@ -162,7 +162,6 @@ struct gensignatureContext_t : context_t {
 	 * @param {database_t} pDB - database to read from
 	 */
 	void loadSignatures(database_t *pStore, const database_t *pDB) {
-		fprintf(stderr, "loading\n");
 
 		tinyTree_t tree(*this);
 
@@ -227,7 +226,7 @@ struct gensignatureContext_t : context_t {
 			// add to imprints to index
 			pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, sid);
 
-			// populate non-ket fields
+			// populate non-key fields
 			signature_t *pStoreSignature = pStore->signatures + sid;
 			pStoreSignature->size = tree.count - tinyTree_t::TINYTREE_NSTART;
 			pStoreSignature->numEndpoint = pDbSignature->numEndpoint;
@@ -266,7 +265,8 @@ struct gensignatureContext_t : context_t {
 	 * All the trees passed to this function are natural ordered trees.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {number} numUnique - number of unique endpoints in tree
+	 * @param {string} pName - Tree name/notation
+	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
 	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
@@ -473,8 +473,6 @@ struct gensignatureContext_t : context_t {
 	 * Create generator for given dataset and add newly unique signatures to the database
 	 *
 	 * @param {database_t} pStore - memory based database
-	 * @param {footprint_t} pEvalFwd - evaluation vector with forward transform
-	 * @param {footprint_t} pEvalRev - evaluation vector with reverse transform
 	 */
 	void main(database_t *pStore) {
 		this->pStore = pStore;
@@ -954,9 +952,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling the generator with windowLo/Hi for each possible tree
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {number} numUnique - number of unique endpoints in tree
+	 * @param {string} pName - Tree name/notation
+	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowCreate(generatorTree_t &tree, const char *pName, unsigned numUnique) {
+	void foundTreeWindowCreate(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -984,9 +983,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling generator without a window and test if results match.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {number} numUnique - number of unique endpoints in tree
+	 * @param {string} pName - Tree name/notation
+	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowVerify(generatorTree_t &tree, const char *pName, unsigned numUnique) {
+	void foundTreeWindowVerify(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -1101,9 +1101,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * expand collection of unique structures.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - Tree name/notation
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeMetrics(generatorTree_t &tree, unsigned numUnique) {
+	void foundTreeMetrics(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 
@@ -1182,9 +1183,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// special case (root only)
 			generator.root = 0; // "0"
-			foundTree(generator, "0", 0);
+			foundTreeMetrics(generator, "0", 0);
 			generator.root = 1; // "a"
-			foundTree(generator, "a", 1);
+			foundTreeMetrics(generator, "a", 1);
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
@@ -1370,7 +1371,7 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
-		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
 		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --test                    Run without output\n");

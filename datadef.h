@@ -173,19 +173,19 @@ struct member_t {
 	uint32_t sid;
 
 	/// @var {number} member id of `Q` component
-	uint32_t Qcid;
+	uint32_t Qmid;
 
 	/// @var {number} Signature id of `Q` component
 	uint32_t Qsid;
 
 	/// @var {number} member id of `T` component
-	uint32_t Tcid;
+	uint32_t Tmid;
 
 	/// @var {number} member id of `T` component
 	uint32_t Tsid;
 
 	/// @var {number} member id of `F` component
-	uint32_t Fcid;
+	uint32_t Fmid;
 
 	/// @var {number} member id of `F` component
 	uint32_t Fsid;

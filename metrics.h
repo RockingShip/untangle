@@ -41,8 +41,15 @@
  * @date 2020-03-25 15:06:54
  */
 enum {
-	// default interleave (taken from `ratioMetrics_X[]`)
-	METRICS_DEFAULT_INTERLEAVE = 120, // This allows for a shared 8G imprint . on machines with 32G memory this gives about 4 workers with each 4G local and 8G shared memory
+	/*
+	 * @date 2020-03-30 16:17:28
+	 *
+	 * default interleave (taken from `ratioMetrics_X[]`)
+	 * In general 504 seems to be best choice
+	 * However, with 4-nodes, 120 is just as fast as 504 but uses half storage.
+	 * With 4n9-i120 imprint storage is 8G. On machines with 32G memory this gives about 4 workers with each 4G local and 8G shared memory
+	 */
+	METRICS_DEFAULT_INTERLEAVE = 120,
 
 	// default ratio (taken from `ratioMetrics_X[]`). NOTE: Times 10!
 	METRICS_DEFAULT_RATIO = 50, // NOTE: Its actually 5.0

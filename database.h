@@ -123,7 +123,7 @@ struct fileHeader_t {
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
 	uint64_t offMember;
-	uint64_t offMemberRoots;
+	uint64_t offMemberSidRoots;
 	uint64_t offMemberIndex;
 	uint64_t offPatternFirst;
 	uint64_t offPatternFirstIndex;
@@ -181,7 +181,7 @@ struct database_t {
 	uint32_t           numMember;                   // number of members
 	uint32_t           maxMember;                   // maximum size of collection
 	member_t           *members;                    // member collection
-	uint32_t           *memberRoots;                // First member of signature group
+	uint32_t           *memberSidRoots;             // First member of signature group
 	uint32_t           memberIndexSize;             // index size (must be prime)
 	uint32_t           *memberIndex;                // index
 	// @formatter:on
@@ -227,7 +227,7 @@ struct database_t {
 		numMember = 0;
 		maxMember = 0;
 		members = NULL;
-		memberRoots = NULL;
+		memberSidRoots = NULL;
 		memberIndexSize = 0;
 		memberIndex = NULL;
 	};
@@ -247,7 +247,7 @@ struct database_t {
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
-		ALLOCMASK_CANDIDATE          = 1 << ALLOCFLAG_MEMBER,
+		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
 		// @formatter:on
 	};
 
@@ -307,12 +307,14 @@ struct database_t {
 			if (maxMember < UINT32_MAX - maxMember / 20)
 				maxMember += maxMember / 20;
 
+			// this size is determined by number of signatures!
+			memberSidRoots = (uint32_t *) ctx.myAlloc("database_t::memberSidRoots", maxSignature, sizeof(*memberSidRoots));
+
 			assert(ctx.isPrime(memberIndexSize));
 			numMember = 1; // do not start at 1
 			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
-			memberRoots = (uint32_t *) ctx.myAlloc("database_t::memberRoots", maxMember, sizeof(*memberRoots));
 			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
-			allocFlags |= ALLOCMASK_CANDIDATE;
+			allocFlags |= ALLOCMASK_MEMBER;
 		}
 
 	};
@@ -321,7 +323,7 @@ struct database_t {
 	/**
 	 * @date 2020-03-15 22:25:41
 	 *
-	 * Inherit read-only sections from an older database.
+	 * Inherit read-only sections from an source database.
 	 *
 	 * NOTE: call after calling `create()`
 	 *
@@ -364,16 +366,16 @@ struct database_t {
 				exit(1);
 			}
 
-			interleave = pDatabase->interleave;
-			interleaveStep = pDatabase->interleaveStep;
+			this->interleave = pDatabase->interleave;
+			this->interleaveStep = pDatabase->interleaveStep;
 
 			assert(maxImprint == 0);
-			maxImprint = pDatabase->maxImprint;
-			numImprint = pDatabase->numImprint;
-			imprints = pDatabase->imprints;
+			this->maxImprint = pDatabase->maxImprint;
+			this->numImprint = pDatabase->numImprint;
+			this->imprints = pDatabase->imprints;
 
-			imprintIndexSize = pDatabase->imprintIndexSize;
-			imprintIndex = pDatabase->imprintIndex;
+			this->imprintIndexSize = pDatabase->imprintIndexSize;
+			this->imprintIndex = pDatabase->imprintIndex;
 		}
 
 		// signature store
@@ -385,16 +387,16 @@ struct database_t {
 			}
 
 			assert(maxSignature == 0);
-			maxSignature = pDatabase->maxSignature;
-			numSignature = pDatabase->numSignature;
-			signatures = pDatabase->signatures;
+			this->maxSignature = pDatabase->maxSignature;
+			this->numSignature = pDatabase->numSignature;
+			this->signatures = pDatabase->signatures;
 
-			signatureIndexSize = pDatabase->signatureIndexSize;
-			signatureIndex = pDatabase->signatureIndex;
+			this->signatureIndexSize = pDatabase->signatureIndexSize;
+			this->signatureIndex = pDatabase->signatureIndex;
 		}
 
 		// member store
-		if (sections & database_t::ALLOCMASK_CANDIDATE) {
+		if (sections & database_t::ALLOCMASK_MEMBER) {
 			if (pDatabase->numMember == 0) {
 				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
@@ -402,13 +404,13 @@ struct database_t {
 			}
 
 			assert(maxMember == 0);
-			maxMember = pDatabase->maxMember;
-			numMember = pDatabase->numMember;
-			members = pDatabase->members;
-			memberRoots = pDatabase->memberRoots;
+			this->maxMember = pDatabase->maxMember;
+			this->numMember = pDatabase->numMember;
+			this->members = pDatabase->members;
+			this->memberSidRoots = pDatabase->memberSidRoots;
 
-			memberIndexSize = pDatabase->memberIndexSize;
-			memberIndex = pDatabase->memberIndex;
+			this->memberIndexSize = pDatabase->memberIndexSize;
+			this->memberIndex = pDatabase->memberIndex;
 		}
 	}
 
@@ -518,7 +520,7 @@ struct database_t {
 		// members
 		maxMember = numMember = fileHeader.numMember;
 		members = (member_t *) (rawDatabase + fileHeader.offMember);
-		memberRoots = (uint32_t *) (rawDatabase + fileHeader.offMemberRoots);
+		memberSidRoots = (uint32_t *) (rawDatabase + fileHeader.offMemberSidRoots);
 		memberIndexSize = fileHeader.memberIndexSize;
 		memberIndex = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
 	};
@@ -549,9 +551,9 @@ struct database_t {
 			ctx.myFree("database_t::signatures", signatures);
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
 		}
-		if (allocFlags & ALLOCMASK_CANDIDATE) {
+		if (allocFlags & ALLOCMASK_MEMBER) {
 			ctx.myFree("database_t::members", members);
-			ctx.myFree("database_t::memberRoots", memberRoots);
+			ctx.myFree("database_t::memberSidRoots", memberSidRoots);
 			ctx.myFree("database_t::memberIndex", memberIndex);
 		}
 
@@ -601,7 +603,7 @@ struct database_t {
 		ctx.progressHi += sizeof(*this->signatures) * this->numSignature;
 		ctx.progressHi += sizeof(*this->signatureIndex) * this->signatureIndexSize;
 		ctx.progressHi += sizeof(*this->members) * this->numMember;
-		ctx.progressHi += sizeof(*this->memberRoots) * this->numMember;
+		ctx.progressHi += sizeof(*this->memberSidRoots) * this->numSignature; // numSignature!!
 		ctx.progressHi += sizeof(*this->memberIndex) * this->memberIndexSize;
 		ctx.progress = 0;
 		ctx.tick = 0;
@@ -673,13 +675,13 @@ struct database_t {
 			assert(::memcmp(this->imprints, &zero, sizeof(zero)) == 0);
 
 			// collection
-			fileHeader.offImprints = flen;
 			fileHeader.numImprint = this->numImprint;
+			fileHeader.offImprints = flen;
 			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprint);
 			if (this->imprintIndexSize) {
 				// Index
-				fileHeader.offImprintIndex = flen;
 				fileHeader.imprintIndexSize = this->imprintIndexSize;
+				fileHeader.offImprintIndex = flen;
 				flen += writeData(outf, this->imprintIndex, sizeof(*this->imprintIndex) * this->imprintIndexSize);
 			}
 		}
@@ -694,13 +696,13 @@ struct database_t {
 			assert(::memcmp(this->signatures, &zero, sizeof(zero)) == 0);
 
 			// collection
-			fileHeader.offSignatures = flen;
 			fileHeader.numSignature = this->numSignature;
+			fileHeader.offSignatures = flen;
 			flen += writeData(outf, this->signatures, sizeof(*this->signatures) * this->numSignature);
 			if (this->signatureIndexSize) {
 				// Index
-				fileHeader.offSignatureIndex = flen;
 				fileHeader.signatureIndexSize = this->signatureIndexSize;
+				fileHeader.offSignatureIndex = flen;
 				flen += writeData(outf, this->signatureIndex, sizeof(*this->signatureIndex) * this->signatureIndexSize);
 			}
 		}
@@ -715,14 +717,15 @@ struct database_t {
 			assert(::memcmp(this->members, &zero, sizeof(zero)) == 0);
 
 			// collection
-			fileHeader.offMember = flen;
 			fileHeader.numMember = this->numMember;
+			fileHeader.offMember = flen;
 			flen += writeData(outf, this->members, sizeof(*this->members) * this->numMember);
-			flen += writeData(outf, this->memberRoots, sizeof(*this->memberRoots) * this->numMember);
+			fileHeader.offMemberSidRoots = flen;
+			flen += writeData(outf, this->memberSidRoots, sizeof(*this->memberSidRoots) * this->numSignature); // numSignature!!
 			if (this->memberIndexSize) {
 				// Index
-				fileHeader.offMemberIndex = flen;
 				fileHeader.memberIndexSize = this->memberIndexSize;
+				fileHeader.offMemberIndex = flen;
 				flen += writeData(outf, this->memberIndex, sizeof(*this->memberIndex) * this->memberIndexSize);
 			}
 		}
