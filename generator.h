@@ -564,6 +564,270 @@ struct generatorTree_t : tinyTree_t {
 	typedef void(context_t::* generateTreeCallback_t)(tinyTree_t &, const char *, unsigned);
 
 	/**
+ * @date 2020-03-26 13:43:17
+ *
+ * Copy a given tree and re-construct in tree walking order and placeholder/skin
+ *
+ * Also output zero-terminated "placeholder/skin".
+ *
+ * @param {number} root - entry point
+ * @param {string} pName - output, notation of tree
+ * @param {string} pSkin - output, accompanying skin for placeholders
+ * @param pPlaceholders
+ */
+	void unpack(uint32_t root, char *pName, char *pSkin) {
+		// temporary stack storage for postfix notation
+		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		int stackPos = 0;
+
+		unsigned nameLen = 0; // length of notation
+		unsigned numPlaceholder = 0; // first free placeholder
+
+		// nodes already processed
+		uint32_t beenThere;
+		uint32_t beenWhat[TINYTREE_NEND];
+
+		this->clearTree();
+
+		// mark `zero` processed
+		beenThere = (1 << 0);
+		beenWhat[0] = 0;
+
+		// push start on stack
+		stack[stackPos++] = root & ~IBIT;
+
+		/*
+		 * Pass-1, reconstruct path
+		 */
+		do {
+			// pop stack
+			uint32_t curr = stack[--stackPos];
+
+			// unpack
+			uint32_t qtf = packedN[curr];
+
+			uint32_t F = qtf & PACKED_MASK;
+			qtf >>= PACKED_WIDTH;
+			uint32_t To = qtf & PACKED_MASK;
+			qtf >>= PACKED_WIDTH;
+			uint32_t Q = qtf & PACKED_MASK;
+			qtf >>= PACKED_WIDTH;
+			uint32_t Ti = qtf & 1;
+
+			// determine if node already handled
+			if (~beenThere & (1 << curr)) {
+				/// first time
+
+				// push id so it visits again a second time
+				stack[stackPos++] = curr;
+
+				// push unvisited references
+				if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
+					stack[stackPos++] = Q;
+
+				// done, flag no endpoint assignment done
+				beenThere |= (1 << curr);
+				beenWhat[curr] = 0;
+
+			} else if (beenWhat[curr] == 0) {
+
+				/*
+				 * now that operands are complete, assign them new placeholders
+                                 */
+
+				if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
+					beenThere |= (1 << Q);
+					beenWhat[Q] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
+				}
+
+				if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
+					beenThere |= (1 << To);
+					beenWhat[To] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
+				}
+
+				if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
+					beenThere |= (1 << F);
+					beenWhat[F] = TINYTREE_KSTART + numPlaceholder;
+					pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
+				}
+
+				/*
+				 * @date 2020-03-29 14:20:38
+				 *
+				 * The generator might offer weird ordering like the raw tree: `"{ {1,~0,2}, {1,~2,0}, {10,11,0}, {11,10,12} }"`
+				 * The top-level dives into `"[11]"` first, marking that as `"beenWhat[10]=11"`
+				 * This needs the `compare()` to be fed with `beenWhat[Q,T,F]`
+				 * That is why endpoints get assigned after being ordered(compare), some of the `beenWhat` can be uninitialised.
+				 * If the two operands are newly assigned endpoints, they get ordered in sequence originally found (and don't swap).
+				 *
+				 * So: if both operands are references, use `beenWhat[]` for deep compare,
+				 *     otherwise use plain `Q,T,F` safely as `compare()` falls back to a `ref/end` comparison
+				 *
+				 * The result has surprising effects like rejecting `"ab+ac+2&&"` in favour of `"ab+1ac+&&"`.
+				 */
+
+				if (To == 0 && Ti) {
+					// swap `OR` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[F]) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+					}
+				} else if (To == F) {
+					// swap `XOR` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[F]) > 0) {
+						uint32_t savQ = Q;
+						Q = F;
+						F = savQ;
+						To = savQ;
+					}
+				} else if (F == 0 && !Ti) {
+					// swap `AND` if unordered
+					if (this->compare(beenWhat[Q], *this, beenWhat[To]) > 0) {
+						uint32_t savQ = Q;
+						Q = To;
+						To = savQ;
+					}
+				}
+
+
+				/*
+				 * populate new node
+				 */
+
+				tinyNode_t *pNewNode = this->N + this->count;
+				pNewNode->Q = beenWhat[Q];
+				pNewNode->T = beenWhat[To] ^ (Ti ? IBIT : 0);
+				pNewNode->F = beenWhat[F];
+
+				// flaq endpoints assigned
+				beenWhat[curr] = this->count++;
+			}
+
+		} while (stackPos > 0);
+
+		assert(numPlaceholder <= MAXSLOTS);
+		pSkin[numPlaceholder] = 0;
+
+		// set root
+		this->root = beenWhat[root & ~IBIT] ^ (root & IBIT);
+		assert(root == this->root);
+
+		/*
+		 * Pass-2, Create notation
+		 */
+
+		// push start on stack
+		stack[stackPos++] = this->root & ~IBIT;
+
+		// reset, but consider endpoints proper placeholders
+		beenThere = (1 << 0);
+
+		uint32_t nextNode = TINYTREE_NSTART;
+
+		do {
+			// pop stack
+			uint32_t curr = stack[--stackPos];
+
+			if (curr < TINYTREE_NSTART) {
+				if (curr == 0) {
+					// `zero`
+					pName[nameLen++] = '0';
+				} else {
+					// assigned placeholder (not original endpoint)
+					pName[nameLen++] = 'a' + curr - TINYTREE_KSTART;
+				}
+
+				continue;
+			}
+
+			const tinyNode_t *pNode = this->N + curr;
+			const uint32_t Q = pNode->Q;
+			const uint32_t To = pNode->T & ~IBIT;
+			const uint32_t Ti = pNode->T & IBIT;
+			const uint32_t F = pNode->F;
+
+			// determine if node already handled
+			if (~beenThere & (1 << curr)) {
+				/// first time
+
+				// push id so it visits again a second time
+				stack[stackPos++] = curr;
+
+				// push non-zero endpoints
+				if (F >= TINYTREE_KSTART)
+					stack[stackPos++] = F;
+				if (To != F && To >= TINYTREE_KSTART)
+					stack[stackPos++] = To;
+				if (Q >= TINYTREE_KSTART)
+					stack[stackPos++] = Q;
+
+				// done, flag no endpoint assignment done
+				beenThere |= (1 << curr);
+				beenWhat[curr] = 0;
+
+			} else if (beenWhat[curr] == 0) {
+				// node complete, output operator
+
+				if (Ti) {
+					if (F == 0) {
+						// GT Q?!T:0
+						pName[nameLen++] = '>';
+					} else if (To == 0) {
+						// OR Q?!0:F
+						pName[nameLen++] = '+';
+					} else if (F == To) {
+						// XOR Q?!F:F
+						pName[nameLen++] = '^';
+					} else {
+						// QnTF Q?!T:F
+						pName[nameLen++] = '!';
+					}
+				} else {
+					if (F == 0) {
+						// AND Q?T:0
+						pName[nameLen++] = '&';
+					} else if (To == 0) {
+						// LT Q?0:F
+						pName[nameLen++] = '<';
+					} else if (F == To) {
+						// SELF Q?F:F
+						assert(!"Q?F:F");
+					} else {
+						// QTF Q?T:F
+						pName[nameLen++] = '?';
+					}
+				}
+
+				// flaq endpoints assigned
+				beenWhat[curr] = nextNode++;
+			} else {
+				// back-reference to previous node
+
+				uint32_t backref = nextNode - beenWhat[curr];
+				assert(backref <= 9);
+				pName[nameLen++] = '0' + backref;
+			}
+
+		} while (stackPos > 0);
+
+		// append inverted-root
+		if (this->root & IBIT)
+			pName[nameLen++] = '~';
+
+		assert(numPlaceholder <= MAXSLOTS);
+		pSkin[numPlaceholder] = 0;
+		assert(nameLen <= TINYTREE_NAMELEN);
+		pName[nameLen] = 0;
+	}
+
+	/**
 	 * @date 2020-03-18 22:17:26
 	 *
 	 * found level-1,2 normalised candidate.
@@ -587,17 +851,20 @@ struct generatorTree_t : tinyTree_t {
 			return;
 		}
 
-		// set root
-		this->root = this->count - 1;
+		// snapshot
+		uint32_t savCount = this->count;
 
 		// re-order endpoints
 		char name[TINYTREE_NAMELEN + 1];
 		char skin[MAXSLOTS + 1];
-		foundTree.reconstruct(*this, name, skin);
+
+		unpack(this->count - 1, name, skin);
+		assert(savCount = this->count); // `count`` may not change
 
 		// invoke the callback
 		if (cbObject != NULL) {
-			(*cbObject.*cbMember)(foundTree, name, numUnique);
+			(*cbObject.*cbMember)(*this, name, numUnique);
+			assert(savCount = this->count); // `count`` may not change
 		}
 
 		// bump counter after processing
