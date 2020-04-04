@@ -65,7 +65,7 @@
 #endif
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20200320
+#define FILE_MAGIC        0x20200402
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -123,7 +123,6 @@ struct fileHeader_t {
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
 	uint64_t offMember;
-	uint64_t offMemberSidRoots;
 	uint64_t offMemberIndex;
 	uint64_t offPatternFirst;
 	uint64_t offPatternFirstIndex;
@@ -181,7 +180,6 @@ struct database_t {
 	uint32_t           numMember;                   // number of members
 	uint32_t           maxMember;                   // maximum size of collection
 	member_t           *members;                    // member collection
-	uint32_t           *memberSidRoots;             // First member of signature group
 	uint32_t           memberIndexSize;             // index size (must be prime)
 	uint32_t           *memberIndex;                // index
 	// @formatter:on
@@ -227,7 +225,6 @@ struct database_t {
 		numMember = 0;
 		maxMember = 0;
 		members = NULL;
-		memberSidRoots = NULL;
 		memberIndexSize = 0;
 		memberIndex = NULL;
 	};
@@ -306,9 +303,6 @@ struct database_t {
 			// increase with 5%
 			if (maxMember < UINT32_MAX - maxMember / 20)
 				maxMember += maxMember / 20;
-
-			// this size is determined by number of signatures!
-			memberSidRoots = (uint32_t *) ctx.myAlloc("database_t::memberSidRoots", maxSignature, sizeof(*memberSidRoots));
 
 			assert(ctx.isPrime(memberIndexSize));
 			numMember = 1; // do not start at 1
@@ -407,7 +401,6 @@ struct database_t {
 			this->maxMember = pDatabase->maxMember;
 			this->numMember = pDatabase->numMember;
 			this->members = pDatabase->members;
-			this->memberSidRoots = pDatabase->memberSidRoots;
 
 			this->memberIndexSize = pDatabase->memberIndexSize;
 			this->memberIndex = pDatabase->memberIndex;
@@ -520,7 +513,6 @@ struct database_t {
 		// members
 		maxMember = numMember = fileHeader.numMember;
 		members = (member_t *) (rawDatabase + fileHeader.offMember);
-		memberSidRoots = (uint32_t *) (rawDatabase + fileHeader.offMemberSidRoots);
 		memberIndexSize = fileHeader.memberIndexSize;
 		memberIndex = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
 	};
@@ -553,7 +545,6 @@ struct database_t {
 		}
 		if (allocFlags & ALLOCMASK_MEMBER) {
 			ctx.myFree("database_t::members", members);
-			ctx.myFree("database_t::memberSidRoots", memberSidRoots);
 			ctx.myFree("database_t::memberIndex", memberIndex);
 		}
 
@@ -603,7 +594,6 @@ struct database_t {
 		ctx.progressHi += sizeof(*this->signatures) * this->numSignature;
 		ctx.progressHi += sizeof(*this->signatureIndex) * this->signatureIndexSize;
 		ctx.progressHi += sizeof(*this->members) * this->numMember;
-		ctx.progressHi += sizeof(*this->memberSidRoots) * this->numSignature; // numSignature!!
 		ctx.progressHi += sizeof(*this->memberIndex) * this->memberIndexSize;
 		ctx.progress = 0;
 		ctx.tick = 0;
@@ -720,8 +710,6 @@ struct database_t {
 			fileHeader.numMember = this->numMember;
 			fileHeader.offMember = flen;
 			flen += writeData(outf, this->members, sizeof(*this->members) * this->numMember);
-			fileHeader.offMemberSidRoots = flen;
-			flen += writeData(outf, this->memberSidRoots, sizeof(*this->memberSidRoots) * this->numSignature); // numSignature!!
 			if (this->memberIndexSize) {
 				// Index
 				fileHeader.memberIndexSize = this->memberIndexSize;

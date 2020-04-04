@@ -125,17 +125,19 @@ struct signature_t {
 	};
 
 	enum {
-		SIGFLAG_PROVIDES = 0, // this signature provides as an operand
-		SIGFLAG_REQUIRED = 1, // this signature is used as an operand
+		SIGFLAG_UNSAFE   = 0, // It is unsafe to use the display name to reconstruct structures
+		SIGFLAG_PROVIDES = 1, // this signature provides as an operand
+		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
 
 		// @formatter: off
+		SIGMASK_UNSAFE   = 1 << SIGFLAG_UNSAFE,
 		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
 		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
 		// @formatter: on
 	};
 
-	/// @var {number} score
-	uint32_t score;
+	/// @var {number} member id of first member in signature group
+	uint32_t firstMember;
 
 	/*
 	 * the following are 8-bit values and align better if placed last
@@ -169,6 +171,11 @@ struct signature_t {
  */
 struct member_t {
 
+	enum {
+		/// @constant {number} Maximum number of heads
+		MAXHEAD = 4,
+	};
+
 	/// @var {number} Signature id to which signature group this member belongs
 	uint32_t sid;
 
@@ -191,11 +198,26 @@ struct member_t {
 	uint32_t Fsid;
 
 	/// @var {number} member id of next member in signature group
-	uint32_t next;
+	uint32_t nextMember;
+
+	/// @var {number} member id of heads
+	uint32_t heads[MAXHEAD];
 
 	/*
 	 * the following are 8-bit values and align better if placed last
 	 */
+
+	/// @var {number} flags
+	uint8_t flags;
+
+	/// @var {number} number of endpoints
+	uint8_t numEndpoint;
+
+	/// @var {number} number of unique endpoints
+	uint8_t numPlaceholder;
+
+	/// @var {number} number of back-references
+	uint8_t numBackRef;
 
 	/// @var {string} Notation/name of signature. With space for inverted root and terminator
 	char name[signature_t::SIGNATURENAMELENGTH];
