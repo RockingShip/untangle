@@ -174,22 +174,22 @@ struct gensignatureContext_t : context_t {
 		for (uint32_t iSid = 1; iSid < pDB->numSignature; iSid++) {
 			if (opt_verbose >= VERBOSE_TICK && tick) {
 				tick = 0;
-
 				int perSecond = this->updateSpeed();
-				int eta = (int) ((progressHi - progress) / perSecond);
 
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
-
-				if (progress < progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
-					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
-				} else {
+				if (perSecond == 0 || progress > progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
 					        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
+				} else {
+					int eta = (int) ((progressHi - progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 				}
 			}
 			this->progress++;
@@ -271,22 +271,22 @@ struct gensignatureContext_t : context_t {
 	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
-
 			int perSecond = this->updateSpeed();
-			int eta = (int) ((progressHi - progress) / perSecond);
 
-			int etaH = eta / 3600;
-			eta %= 3600;
-			int etaM = eta / 60;
-			eta %= 60;
-			int etaS = eta;
-
-			if (progress < progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
-			} else {
+			if (perSecond == 0 || progress > progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
 				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
+			} else {
+				int eta = (int) ((progressHi - progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			}
 		}
 
@@ -497,7 +497,7 @@ struct gensignatureContext_t : context_t {
 		 * Generate candidates
 		 */
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Generating candidates for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			fprintf(stderr, "[%s] Generating signature members for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
 		numReject = 0;
 
@@ -1107,22 +1107,22 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	void foundTreeMetrics(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
-
 			int perSecond = this->updateSpeed();
-			int eta = (int) ((progressHi - progress) / perSecond);
 
-			int etaH = eta / 3600;
-			eta %= 3600;
-			int etaM = eta / 60;
-			eta %= 60;
-			int etaS = eta;
-
-			if (progress < progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
-			} else {
+			if (perSecond == 0 || progress > progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d",
 				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint);
+			} else {
+				int eta = (int) ((progressHi - progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
 			}
 		}
 

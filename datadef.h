@@ -125,12 +125,12 @@ struct signature_t {
 	};
 
 	enum {
-		SIGFLAG_UNSAFE   = 0, // It is unsafe to use the display name to reconstruct structures
+		SIGFLAG_UNSAFE = 0, // It is unsafe to use the display name to reconstruct structures
 		SIGFLAG_PROVIDES = 1, // this signature provides as an operand
 		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
 
 		// @formatter: off
-		SIGMASK_UNSAFE   = 1 << SIGFLAG_UNSAFE,
+		SIGMASK_UNSAFE = 1 << SIGFLAG_UNSAFE,
 		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
 		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
 		// @formatter: on

@@ -315,6 +315,12 @@ struct context_t {
 	 * @return {number} - expected increment per second
 	 */
 	uint32_t updateSpeed(void) {
+		// Test for first time
+		if (progressLast == 0) {
+			progressLast = progress;
+			return 0;
+		}
+
 		// update speed
 		if (progressSpeed == 0)
 			progressSpeed = (int) (progress - progressLast); // first time
@@ -329,14 +335,10 @@ struct context_t {
 			progressCoef = progressCoefEnd; // end of training
 
 		int perInterval = progressSpeed;
-		if (!perInterval)
-			perInterval = 1; // avoid zero
 
 		// NOTE: this is only called on a timer event, thus "opt_timer > 0"
 		// if the timer interval is more than one second, scale speed accordingly
 		int perSecond = perInterval / opt_timer;
-		if (!perSecond)
-			perSecond = 1; // avoid zero
 
 		progressLast = progress;
 

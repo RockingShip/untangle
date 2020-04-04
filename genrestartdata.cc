@@ -229,22 +229,22 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 */
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
-
 			int perSecond = this->updateSpeed();
-			int eta = (int) ((progressHi - progress) / perSecond);
 
-			int etaH = eta / 3600;
-			eta %= 3600;
-			int etaM = eta / 60;
-			eta %= 60;
-			int etaS = eta;
-
-			if (progress < progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
-			} else {
+			if (perSecond == 0 || progress > progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%d",
 				        timeAsString(), progress, perSecond, pStore->numSignature);
+			} else {
+				int eta = (int) ((progressHi - progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
+				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
 			}
 		}
 
