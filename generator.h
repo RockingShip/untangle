@@ -561,7 +561,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @typedef {callback} generateTreeCallback_t
 	 */
-	typedef void(context_t::* generateTreeCallback_t)(tinyTree_t &, const char *, unsigned);
+	typedef void(context_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned);
 
 	/**
  * @date 2020-03-26 13:43:17

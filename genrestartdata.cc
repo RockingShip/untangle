@@ -223,7 +223,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeCandidate(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		/*
 		 * Ticker
 		 */

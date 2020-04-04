@@ -193,7 +193,7 @@ struct tinyTree_t {
 	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
 	 * @return {number} `<0` if `lhs<rhs`, `0` if `lhs==rhs` and `>0` if `lhs>rhs`
 	 */
-	int compare(uint32_t lhs, const tinyTree_t &treeR, uint32_t rhs, bool layoutOnly = false) {
+	int compare(uint32_t lhs, const tinyTree_t &treeR, uint32_t rhs, bool layoutOnly = false) const {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -1180,7 +1180,7 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 */
-	void encode(uint32_t id, char *pName, char *pSkin) {
+	void encode(uint32_t id, char *pName, char *pSkin) const {
 
 		unsigned nameLen = 0;
 
@@ -1415,7 +1415,7 @@ struct tinyTree_t {
 	 * @param {string} pSkin - optional Skin
 	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 */
-	const char *encode(uint32_t id, char *pSkin = NULL) {
+	const char *encode(uint32_t id, char *pSkin = NULL) const {
 
 		static char staticName[TINYTREE_NAMELEN + 1];
 

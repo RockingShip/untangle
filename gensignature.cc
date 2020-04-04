@@ -268,7 +268,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTree(generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
+	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
@@ -497,17 +497,17 @@ struct gensignatureContext_t : context_t {
 		 * Generate candidates
 		 */
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Generating signature members for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			fprintf(stderr, "[%s] Generating candidates for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
 		numReject = 0;
 
 		if (arg_numNodes == 0) {
 			generator.root = 0; // "0"
-			foundTree(generator, "0", 0);
+			foundTreeMember(generator, "0", 0);
 			generator.root = 1; // "a"
-			foundTree(generator, "a", 1);
+			foundTreeMember(generator, "a", 1);
 		} else {
-			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTree);
+			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeMember);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -955,7 +955,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowCreate(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -986,7 +986,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowVerify(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -1104,7 +1104,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeMetrics(generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
