@@ -74,9 +74,7 @@
 #include "config.h"
 
 #if defined(ENABLE_JANSSON)
-
 #include "jansson.h"
-
 #endif
 
 /**
@@ -214,34 +212,25 @@ struct gensignatureContext_t : context_t {
 				exit(1);
 			}
 
+			// add imprints
+			pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+
 			/*
 			 * Add signature to database
 			 */
 
-			// add signature to database
-			sid = pStore->addSignature(pDbSignature->name);
-			// add to index
-			uint32_t ix = pStore->lookupSignature(pDbSignature->name);
-			pStore->signatureIndex[ix] = sid;
-			// add to imprints to index
-			pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, sid);
+			assert(pStore->numSignature == iSid);
+			::memcpy(pStore->signatures + iSid, pDbSignature, sizeof(*pStore->signatures));
+			pStore->numSignature++;
 
-			// populate non-key fields
-			signature_t *pStoreSignature = pStore->signatures + sid;
-			pStoreSignature->size = tree.count - tinyTree_t::TINYTREE_NSTART;
-			pStoreSignature->numEndpoint = pDbSignature->numEndpoint;
-			pStoreSignature->numPlaceholder = pDbSignature->numPlaceholder;
-			pStoreSignature->numBackRef = pDbSignature->numBackRef;
 		}
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "\r\e[K[%s] Loaded numSignature=%d numImprint=%d\n", timeAsString(), pStore->numSignature, pStore->numImprint);
+			fprintf(stderr, "\r\e[K[%s] Loaded signatures. numSignature=%d numImprint=%d\n", timeAsString(), pStore->numSignature, pStore->numImprint);
 
 	}
-
-	int numReject;
 
 	/**
 	 * @date 2020-03-22 00:57:15
@@ -268,7 +257,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
+	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
@@ -291,48 +280,7 @@ struct gensignatureContext_t : context_t {
 		}
 
 		/*
-		 * @date 2020-03-28 16:21:44
-		 *
-		 * Reject all names that do not have certified top-level components.
-		 * Components are always smaller that the current tree,
-		 * implying that components were already present before program invocation and therefor certified.
-		 */
-		{
-			char skin[MAXSLOTS + 1];
-
-			uint32_t Q = treeR.N[treeR.root].Q;
-			if (Q) {
-				const char *pComponentName = treeR.encode(Q, skin);
-				uint32_t ix = pStore->lookupSignature(pComponentName);
-				if (pStore->signatureIndex[ix] == 0) {
-					numReject++;
-					return;
-				}
-			}
-
-			uint32_t To = treeR.N[treeR.root].T & ~IBIT;
-			if (To) {
-				const char *pComponentName = treeR.encode(To, skin);
-				uint32_t ix = pStore->lookupSignature(pComponentName);
-				if (pStore->signatureIndex[ix] == 0) {
-					numReject++;
-					return;
-				}
-			}
-
-			uint32_t F = treeR.N[treeR.root].F;
-			if (F) {
-				const char *pComponentName = treeR.encode(F, skin);
-				uint32_t ix = pStore->lookupSignature(pComponentName);
-				if (pStore->signatureIndex[ix] == 0) {
-					numReject++;
-					return;
-				}
-			}
-		}
-
-		/*
-		 * Calculate `signature_t` non-key values
+		 * name/notation analysis
 		 */
 		unsigned numEndpoint = 0;
 		unsigned numBackRef = 0;
@@ -345,7 +293,11 @@ struct gensignatureContext_t : context_t {
 			}
 		}
 
-		// lookup
+		/*
+		 * Lookup/add to data store.
+		 * Consider signature groups `unsafe` (no members yet)
+		 */
+
 		uint32_t sid = 0;
 		uint32_t tid = 0;
 
@@ -359,7 +311,9 @@ struct gensignatureContext_t : context_t {
 			pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, sid);
 
 			signature_t *pSignature = pStore->signatures + sid;
+			pSignature->flags = signature_t::SIGMASK_UNSAFE;
 			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+
 			pSignature->numEndpoint = numEndpoint;
 			pSignature->numPlaceholder = numPlaceholder;
 			pSignature->numBackRef = numBackRef;
@@ -396,7 +350,7 @@ struct gensignatureContext_t : context_t {
 		if (cmp == 0)
 			cmp = pSignature->numBackRef - numBackRef;
 
-		// distinguish between shallow compare or deep compare
+		// distinguish between shallow compare (`"-+"`) or deep compare (`"<>"`)
 		if (cmp < 0)
 			cmp = '-';
 		else if (cmp > 0)
@@ -482,47 +436,39 @@ struct gensignatureContext_t : context_t {
 		 */
 		generatorTree_t generator(*this);
 
-		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
-		unsigned endpointsLeft = arg_numNodes * 2 + 1;
+		for (unsigned numNode = 0; numNode <= arg_numNodes; numNode++) {
+			// reset progress
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
+			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+			this->tick = 0;
 
-		// clear tree
-		generator.clearGenerator();
+			// clear tree
+			generator.clearGenerator();
 
-		// reset progress
-		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-		this->tick = 0;
+			/*
+			 * Generate candidates
+			 */
+			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), numNode, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
-		/*
-		 * Generate candidates
-		 */
-		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Generating candidates for %dn%d%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			if (numNode == 0) {
+				generator.root = 0; // "0"
+				foundTreeCandidate(generator, "0", 0);
+				generator.root = 1; // "a"
+				foundTreeCandidate(generator, "a", 1);
+			} else {
+				unsigned endpointsLeft = numNode * 2 + 1;
+				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeCandidate);
+			}
 
-		numReject = 0;
+			if (this->opt_verbose >= this->VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
 
-		if (arg_numNodes == 0) {
-			generator.root = 0; // "0"
-			foundTreeMember(generator, "0", 0);
-			generator.root = 1; // "a"
-			foundTreeMember(generator, "a", 1);
-		} else {
-			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeMember);
+			if (this->progress != this->progressHi) {
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, numNode);
+			}
 		}
-
-		if (this->opt_verbose >= this->VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		if (this->progress != this->progressHi) {
-			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-			       __FUNCTION__, this->progress, this->progressHi, arg_numNodes);
-		}
-
-		// @date 2020-03-28 16:49:30
-		// bumping into the same issue as the previous version that it might not be possible to have all signatures with certified components
-		// going to git-push in the state it currently is and try some drastic alternative
-		fprintf(stderr, "numReject=%d\n", numReject);
-
 
 		/*
 		 * Sort signatures. skip first reserved entry

@@ -48,8 +48,12 @@ enum {
 	 * In general 504 seems to be best choice
 	 * However, with 4-nodes, 120 is just as fast as 504 but uses half storage.
 	 * With 4n9-i120 imprint storage is 8G. On machines with 32G memory this gives about 4 workers with each 4G local and 8G shared memory
+	 *
+	 * @date 2020-04-04 20:56:35
+	 *
+	 * After experience, 504 is definitely faster
 	 */
-	METRICS_DEFAULT_INTERLEAVE = 120,
+	METRICS_DEFAULT_INTERLEAVE = 504,
 
 	// default ratio (taken from `ratioMetrics_X[]`). NOTE: Times 10!
 	METRICS_DEFAULT_RATIO = 50, // NOTE: Its actually 5.0
@@ -311,26 +315,29 @@ struct metricsGenerator_t {
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
+	/// @var {number} - Total members (before compacting). Provided by `genmember`
+	uint64_t numMember; // (including mandatory zero entry)
+
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
 };
 
 // @date 2020-03-29 21:20:03 - last updated
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 1, 0, 0,             3,         3,        0},
-	{9, 0, 0, 0,             3,         3,        0},
-	{9, 1, 1, 4,             5,         7,        0},
-	{9, 0, 1, 6,             7,         9,        0},
-	{9, 1, 2, 154,           155,       49,       0},
-	{9, 0, 2, 424,           425,       110,      0},
-	{9, 1, 3, 17535,         15229,     1311,     0},
-	{9, 0, 3, 92258,         80090,     5666,     0},
-	{9, 1, 4, 3766074,       2799167,   96363,    0},
-	{9, 0, 4, 38399264,      28521537,  791647,   0},
-	{9, 1, 5, 1286037101,    817901390, 10233318, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
-	{9, 0, 5, 25583691074,   0,         0,        0},
-	{9, 1, 6, 633200151789,  0,         0,        0}, // numProgress takes about 80 minutes
-	{9, 0, 6, 1556055783374, 0,         0,        1}, // from historic metrics
+	{9, 1, 0, 0,             3,         3,        3,       0},
+	{9, 0, 0, 0,             3,         3,        3,       0},
+	{9, 1, 1, 4,             5,         7,        7,       0},
+	{9, 0, 1, 6,             7,         9,        9,       0},
+	{9, 1, 2, 154,           155,       49,       108,     0},
+	{9, 0, 2, 424,           425,       110,      275,     0},
+	{9, 1, 3, 17535,         15229,     1311,     6862,    0},
+	{9, 0, 3, 92258,         80090,     5666,     29900,   0},
+	{9, 1, 4, 3766074,       2799167,   96363,    801917,  0},
+	{9, 0, 4, 38399264,      28521537,  791647,   5959653, 0},
+	{9, 1, 5, 1286037101,    817901390, 10233318, 0,       0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
+	{9, 0, 5, 25583691074,   0,         0,        6608427, 0},
+	{9, 1, 6, 633200151789,  0,         0,        0,       0}, // numProgress takes about 80 minutes
+	{9, 0, 6, 1556055783374, 0,         0,        0,       1}, // from historic metrics
 	//
 	{0}
 };
