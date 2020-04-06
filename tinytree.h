@@ -961,6 +961,8 @@ struct tinyTree_t {
 	 */
 	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
 
+		assert(pName[0]); // disallow empty name
+
 		// initialise tree
 		this->clearTree();
 

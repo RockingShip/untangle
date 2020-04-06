@@ -141,9 +141,9 @@ struct genmemberContext_t : context_t {
 	uint32_t skipDuplicate;
 	uint32_t skipSize;
 	uint32_t skipUnsafe;
-	uint32_t skipIdentical;
 	uint32_t numUnsafe;
 	uint32_t numEmpty;
+	uint32_t freeMemberRoot;
 
 	/**
 	 * Constructor
@@ -176,8 +176,8 @@ struct genmemberContext_t : context_t {
 		skipDuplicate = 0;
 		skipSize = 0;
 		skipUnsafe = 0;
-		skipIdentical = 0;
 		numUnsafe = 0;
+		freeMemberRoot = 0;
 	}
 
 	/**
@@ -211,16 +211,16 @@ struct genmemberContext_t : context_t {
 			assert(::strcmp(pMember->name, "0") == 0); // must be reserved name
 			assert(pMember - pStore->members == 1); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = treeR.root;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = treeR.root;
+			pMember->Qmid = pMember->Tmid = pMember->Fmid = 1;
+			pMember->Qsid = pMember->Tsid = pMember->Fsid = 1;
 			return;
 		}
 		if (treeR.root == 1) {
 			assert(::strcmp(pMember->name, "a") == 0); // must be reserved name
 			assert(pMember - pStore->members == 2); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = treeR.root;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = treeR.root;
+			pMember->Qmid = pMember->Tmid = pMember->Fmid = 2;
+			pMember->Qsid = pMember->Tsid = pMember->Fsid = 2;
 			return;
 		}
 
@@ -264,7 +264,7 @@ struct genmemberContext_t : context_t {
 				pMember->Qsid = pStore->members[pMember->Qmid].sid;
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Qmid == 0 || pStore->members[pMember->Qmid].sid == 0 || (pStore->members[pMember->Qmid].flags & signature_t::SIGMASK_UNSAFE))
+				if (pMember->Qmid == 0 || pMember->Qsid == 0 || (pStore->members[pMember->Qmid].flags & signature_t::SIGMASK_UNSAFE))
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
 			}
 
@@ -277,7 +277,7 @@ struct genmemberContext_t : context_t {
 				pMember->Tsid = pStore->members[pMember->Tmid].sid ^ (treeR.N[treeR.root].T & IBIT);
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Tmid == 0 || pStore->members[pMember->Tmid].sid == 0 || (pStore->members[pMember->Tmid].flags & signature_t::SIGMASK_UNSAFE))
+				if (pMember->Tmid == 0 || (pMember->Tsid & ~IBIT) == 0 || (pStore->members[pMember->Tmid].flags & signature_t::SIGMASK_UNSAFE))
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
 			}
 
@@ -290,7 +290,7 @@ struct genmemberContext_t : context_t {
 				pMember->Fsid = pStore->members[pMember->Fmid].sid;
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Fmid == 0 || pStore->members[pMember->Fmid].sid == 0 || (pStore->members[pMember->Fmid].flags & signature_t::SIGMASK_UNSAFE))
+				if (pMember->Fmid == 0 || pMember->Fsid == 0 || (pStore->members[pMember->Fmid].flags & signature_t::SIGMASK_UNSAFE))
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
 			}
 		}
@@ -458,11 +458,15 @@ struct genmemberContext_t : context_t {
 			int perSecond = this->updateSpeed();
 
 			if (perSecond == 0 || progress > progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u numSignature=%u numMember=%u numUnsafe=%u numEmpty=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipIdentical=%u",
-				        timeAsString(), progress, perSecond, pStore->numImprint, pStore->numSignature, pStore->numMember, numUnsafe, numEmpty,
-				        skipDuplicate, skipSize, skipUnsafe, skipIdentical);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				        timeAsString(), progress, perSecond,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				        numEmpty, numUnsafe,
+				        skipDuplicate, skipSize, skipUnsafe);
 			} else {
-				int eta = (int) ((progressHi - progress) / perSecond);
+				int eta = (int) ((treeR.windowHi - progress) / perSecond);
 
 				int etaH = eta / 3600;
 				eta %= 3600;
@@ -470,9 +474,13 @@ struct genmemberContext_t : context_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u numSignature=%u numMember=%u numUnsafe=%u numEmpty=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipIdentical=%u",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numImprint, pStore->numSignature, pStore->numMember, numUnsafe, numEmpty,
-				        skipDuplicate, skipSize, skipUnsafe, skipIdentical);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				        timeAsString(), progress, perSecond, (progress - treeR.windowLo) * 100.0 / (treeR.windowHi - treeR.windowLo), etaH, etaM, etaS,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				        numEmpty, numUnsafe,
+				        skipDuplicate, skipSize, skipUnsafe);
 			}
 
 			if (treeR.restartTick) {
@@ -512,11 +520,22 @@ struct genmemberContext_t : context_t {
 			return;
 		}
 
-		// allocate member
-		uint32_t mid = pStore->addMember(pNameR);
-		pStore->memberIndex[ix] = mid;
+		/*
+		 * Allocate member
+		 */
 
-		member_t *pMember = pStore->members + mid;
+		member_t *pMember;
+
+		uint32_t mid = freeMemberRoot;
+		if (mid) {
+			pMember = pStore->members + mid;
+			freeMemberRoot = pMember->nextMember; // pop from free list
+			::strcpy(pMember->name, pNameR); // populate with name
+		} else {
+			mid = pStore->addMember(pNameR); // allocate new member
+			pMember = pStore->members + mid;
+		}
+		pStore->memberIndex[ix] = mid;
 
 		/*
 		 * Name/notation analysis
@@ -559,7 +578,6 @@ struct genmemberContext_t : context_t {
 			findHeadTail(pMember, treeR);
 		}
 
-
 		/*
 		 * To reject, or not to reject...
 		 */
@@ -572,7 +590,12 @@ struct genmemberContext_t : context_t {
 				 */
 				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
 					skipUnsafe++;
-					pStore->numMember--; // undo candidate member
+
+					// zero orphan so it won't be found by `lookupMember()`
+					::memset(pMember, 0, sizeof(*pMember));
+					// push member on the freelist
+					pMember->nextMember = freeMemberRoot;
+					freeMemberRoot = pMember - pStore->members;
 					return;
 				}
 				assert(treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
@@ -584,14 +607,46 @@ struct genmemberContext_t : context_t {
 				 */
 
 				if (pSignature->firstMember && treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size) {
-					// empty group
+					/*
+					 * empty group
+					 *
+					 * @date 2020-04-05 02:21:42
+					 *
+					 * For `5n9-QnTF` it turns out that the chance of finding safe replacements is rare.
+					 * And you need to collect all non-safe members if the group is unsafe.
+					 * Orphaning them depletes resources too fast.
+					 *
+					 * Reuse `members[]`.
+					 * Field `nextMember` is perfect for that.
+					 */
 					while (pSignature->firstMember) {
+						// remove all references to
+						for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+							member_t *p = pStore->members + iMid;
+
+							if (p->Qmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Qmid = 0;
+							}
+							if (p->Tmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Tmid = 0;
+							}
+							if (p->Fmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Fmid = 0;
+							}
+						}
+
 						// get member
 						member_t *p = pStore->members + pSignature->firstMember;
 						// remove from list
 						pSignature->firstMember = p->nextMember;
-						// this creates orphan candidates, zero them
+						// zero orphan so it won't be found by `lookupMember()`
 						::memset(p, 0, sizeof(*p));
+						// add to free list
+						p->nextMember = freeMemberRoot;
+						freeMemberRoot = p - pStore->members;
 					}
 
 					numEmpty++; // group has become empty
@@ -601,8 +656,12 @@ struct genmemberContext_t : context_t {
 				pSignature->flags &= ~signature_t::SIGMASK_UNSAFE;
 				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
-				if (opt_text == 6)
-					printf("%s\t%u\n", pMember->name, pMember->numPlaceholder);
+				/*
+				 * Output first safe member of a signature group
+				 */
+
+				if (opt_text == 4)
+					printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, treeR.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 				// one unsafe group less
 				numUnsafe--;
@@ -611,7 +670,12 @@ struct genmemberContext_t : context_t {
 			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
 				// group is safe, candidate not. Drop candidate
 				skipUnsafe++;
-				pStore->numMember--; // undo candidate member
+
+				// zero orphan so it won't be found by `lookupMember()`
+				::memset(pMember, 0, sizeof(*pMember));
+				// push member on the freelist
+				pMember->nextMember = freeMemberRoot;
+				freeMemberRoot = pMember - pStore->members;
 				return;
 			} else {
 				// group/candidate both safe
@@ -619,11 +683,13 @@ struct genmemberContext_t : context_t {
 			}
 		}
 
+		assert(pMember->name[0]);
+
 		/*
-		 * Add member to signature group
+		 * Output candidate members on-the-fly
 		 */
-		if (opt_text == 5)
-			printf("%s\t%u\n", pMember->name, pMember->numPlaceholder);
+		if (opt_text == 3)
+			printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, treeR.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 		if (pSignature->firstMember == 0)
 			numEmpty--; // group now has first member
@@ -633,35 +699,16 @@ struct genmemberContext_t : context_t {
 	}
 
 	/**
-	 * @date 2020-03-27 17:05:07
+	 * @date 2020-04-05 21:07:14
 	 *
 	 * Compare function for `qsort_r`
 	 *
-	 * @param {signature_t} lhs - left hand side signature
-	 * @param {signature_t} rhs - right hand side signature
+	 * @param {member_t} lhs - left hand side member
+	 * @param {member_t} rhs - right hand side member
 	 * @param {context_t} state - I/O contect needed to create trees
-	 * @return
+	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
 	 */
-	static int compar(const void *lhs, const void *rhs, void *state) {
-		if (lhs == rhs)
-			return 0;
-
-		const signature_t *pSignatureL = (const signature_t *) lhs;
-		const signature_t *pSignatureR = (const signature_t *) rhs;
-		context_t *pApp = (context_t *) state;
-
-		// load trees
-		tinyTree_t treeL(*pApp);
-		tinyTree_t treeR(*pApp);
-
-		treeL.decodeFast(pSignatureL->name);
-		treeR.decodeFast(pSignatureR->name);
-
-		// compare
-		return treeL.compare(treeL.root, treeR, treeR.root);
-	}
-
-	static int comparMember(const void *lhs, const void *rhs, void *state) {
+	static int /*__attribute__((optimize("O0")))*/ comparMember(const void *lhs, const void *rhs, void *state) {
 		if (lhs == rhs)
 			return 0;
 
@@ -669,8 +716,13 @@ struct genmemberContext_t : context_t {
 		const member_t *pMemberR = (const member_t *) rhs;
 		context_t *pApp = (context_t *) state;
 
-		if (pMemberL->sid != pMemberR->sid)
-			return pMemberL->sid - pMemberR->sid;
+		// test for empties (they should gather towards the end of `members[]`)
+		if (pMemberL->sid == 0 && pMemberR->sid == 0)
+			return 0;
+		if (pMemberL->sid == 0)
+			return +1;
+		if (pMemberR->sid == 0)
+			return -1;
 
 		// load trees
 		tinyTree_t treeL(*pApp);
@@ -679,15 +731,41 @@ struct genmemberContext_t : context_t {
 		treeL.decodeFast(pMemberL->name);
 		treeR.decodeFast(pMemberR->name);
 
-		// compare
-		return treeL.compare(treeL.root, treeR, treeR.root);
+		/*
+		 * Compare
+		 */
 
+		int cmp = 0;
+
+		// Test for prime goal: reducing number of nodes
+		cmp = treeL.count - treeR.count;
+		if (cmp)
+			return cmp;
+
+		// Test for secondary goal: reduce number of unique endpoints, thus connections
+		cmp = pMemberL->numPlaceholder - pMemberR->numPlaceholder;
+		if (cmp)
+			return cmp;
+
+		// Test for preferred display selection: least number of endpoints
+		cmp = pMemberL->numEndpoint - pMemberR->numEndpoint;
+		if (cmp)
+			return cmp;
+
+		// Test for preferred display selection: least number of back-references
+		cmp = pMemberL->numBackRef - pMemberR->numBackRef;
+		if (cmp)
+			return cmp;
+
+		// Compare layouts, expensive
+		cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+		return cmp;
 	}
 
 	/**
 	 * @date 2020-04-02 21:52:34
 	 */
-	void loadData(database_t &store, const database_t &db, bool unsafeOnly) {
+	void loadData(database_t &store, const database_t &db) {
 		if (opt_verbose >= VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
 
@@ -729,14 +807,19 @@ struct genmemberContext_t : context_t {
 		numUnsafe = 0;
 
 		// create imprints for unsafe signature groups
+		progress++; // skip reserved
 		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
 			if (opt_verbose >= VERBOSE_TICK && tick) {
 				tick = 0;
 				int perSecond = this->updateSpeed();
 
 				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u numSignature=%u numMember=%u numUnsafe=%u numEmpty=%u",
-					        timeAsString(), progress, perSecond, store.numImprint, store.numSignature, store.numMember, numUnsafe, numEmpty);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					        timeAsString(), progress, perSecond,
+					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
+					        store.numMember, store.numMember * 100.0 / store.maxMember,
+					        numEmpty, numUnsafe);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
 
@@ -746,8 +829,12 @@ struct genmemberContext_t : context_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u numSignature=%u numMember=%u numUnsafe=%u numEmpty=%u",
-					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, store.numImprint, store.numSignature, store.numMember, numUnsafe, numEmpty);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
+					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
+					        store.numMember, store.numMember * 100.0 / store.maxMember,
+					        numEmpty, numUnsafe);
 				}
 			}
 
@@ -758,6 +845,10 @@ struct genmemberContext_t : context_t {
 				uint32_t sid = 0;
 				uint32_t tid = 0;
 
+				// avoid `"storage full"`. Give warning later
+				if (store.maxImprint - store.numImprint <= store.interleave)
+					break;
+
 				tree.decodeFast(pSignature->name);
 
 				if (!store.lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
@@ -765,10 +856,10 @@ struct genmemberContext_t : context_t {
 			}
 
 			// stats
-			if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
-				numUnsafe++;
 			if (pSignature->firstMember == 0)
 				numEmpty++;
+			else if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
+				numUnsafe++;
 
 			this->progress++;
 		}
@@ -776,9 +867,29 @@ struct genmemberContext_t : context_t {
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
+		if (progress != progressHi) {
+			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n", timeAsString(), (unsigned) (this->progress + 1), store.signatures[this->progress + 1].name);
+		}
+
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Created imprints. numImprint=%u numSignature=%u numMember=%u  numUnsafe=%u numEmpty=%u\n",
-			        timeAsString(), store.numImprint, store.numSignature, store.numMember, numUnsafe, numEmpty);
+			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+			        timeAsString(),
+			        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+			        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
+			        store.numMember, store.numMember * 100.0 / store.maxMember,
+			        numEmpty, numUnsafe);
+
+		/*
+		 * Check that all unsafe groups have no safe members (of the group would have been safe)
+		 */
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+			if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
+				for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+					assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
+				}
+			}
+		}
+
 	}
 
 	/**
@@ -790,7 +901,7 @@ struct genmemberContext_t : context_t {
 	 *
 	 * @param {database_t} pStore - memory based database
 	 */
-	void main(database_t *pStore) {
+	void /*__attribute__((optimize("O0")))*/ main(database_t *pStore) {
 		this->pStore = pStore;
 
 		generatorTree_t generator(*this);
@@ -827,17 +938,22 @@ struct genmemberContext_t : context_t {
 			if (this->opt_windowHi > pMetrics->numProgress)
 				generator.windowHi = pMetrics->numProgress;
 
-			// apply restart data
+			// apply restart data for > `4n9`
 			unsigned ofs = 0;
 			if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
 				ofs = restartIndex[this->arg_numNodes][(this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
 			if (ofs)
 				generator.pRestartData = restartData + ofs;
-		}
 
-		if (generator.windowLo || generator.windowHi) {
-			if (opt_verbose >= VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] Job window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
+			// show window
+			if (generator.windowLo || generator.windowHi) {
+				if (opt_verbose >= VERBOSE_SUMMARY)
+					fprintf(stderr, "[%s] Job window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
+			}
+
+			// ticker needs `windowHi`
+			if (generator.windowHi == 0)
+				generator.windowHi = pMetrics->numProgress;
 		}
 
 		if (this->opt_append) {
@@ -859,21 +975,10 @@ struct genmemberContext_t : context_t {
 			generator.restartTick = 0;
 
 			char name[64];
-			uint32_t numPlaceholder;
+			unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef ;
 
-			// <candidateName> <numPlaceholder>
-			while (fscanf(f, "%s %u\n", name, &numPlaceholder) == 2) {
-				generator.decodeFast(name);
-
-				numPlaceholder = 0;
-				unsigned seen = 0;
-				for (char *p = name; *p; p++) {
-					if (islower(*p))
-						if (~seen & (1 << (*p - 'a'))) {
-							seen |= 1 << (*p - 'a');
-							numPlaceholder++;
-						}
-				}
+			// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
+			while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
 				foundTreeMember(generator, name, numPlaceholder);
 				progress++;
 			}
@@ -889,7 +994,7 @@ struct genmemberContext_t : context_t {
 			 * create generator and candidate members
 			 */
 
-			for (unsigned numNode = (this->opt_unsafe ? arg_numNodes : 0); numNode <= arg_numNodes; numNode++) {
+			for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 				// find metrics for setting
 				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
 				unsigned endpointsLeft = numNode * 2 + 1;
@@ -928,9 +1033,13 @@ struct genmemberContext_t : context_t {
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numImprint=%u numSignature=%u numMember=%u  numUnsafe=%u numEmpty=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipIdentical=%u\n",
-			        timeAsString(), pStore->numImprint, pStore->numSignature, pStore->numMember, numUnsafe, numEmpty,
-			        skipDuplicate, skipSize, skipUnsafe, skipIdentical);
+			fprintf(stderr, "[%s] numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			        timeAsString(),
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+			        numEmpty, numUnsafe,
+			        skipDuplicate, skipSize, skipUnsafe);
 
 		/*
 		 * Compacting
@@ -939,7 +1048,14 @@ struct genmemberContext_t : context_t {
 		 */
 		{
 			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Compacting\n", timeAsString());
+				fprintf(stderr, "[%s] Sorting\n", timeAsString());
+
+			// sort entries. Leave "0" and "a" untouched
+			assert(pStore->numMember >= 3);
+			qsort_r(pStore->members + 3, pStore->numMember - 3, sizeof(*pStore->members), comparMember, this);
+
+			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] Re-indexing\n", timeAsString());
 
 			uint32_t lastMember = pStore->numMember;
 
@@ -947,13 +1063,14 @@ struct genmemberContext_t : context_t {
 			::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
 			for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++)
 				pStore->signatures[iSid].firstMember = 0;
-			pStore->numMember = 1; // keep "0" and "a"
-			skipDuplicate = skipSize = skipUnsafe = skipIdentical = 0;
+			pStore->numMember = 1;
+			skipDuplicate = skipSize = skipUnsafe = 0;
 
 			// reload everything
 			this->setupSpeed(lastMember);
 			this->tick = 0;
 
+			progress++; // skip reserved
 			for (uint32_t iMid = 1; iMid < lastMember; iMid++) {
 				if (opt_verbose >= VERBOSE_TICK && tick) {
 					tick = 0;
@@ -1037,7 +1154,7 @@ struct genmemberContext_t : context_t {
 				fprintf(stderr, "\r\e[K");
 
 			if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] Compacted. numMember=%u skipUnsafe=%u\n",
+				fprintf(stderr, "[%s] Re-indexing. numMember=%u skipUnsafe=%u\n",
 				        timeAsString(), pStore->numMember, skipUnsafe);
 		}
 
@@ -1060,7 +1177,24 @@ struct genmemberContext_t : context_t {
 				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", timeAsString(), numEmpty, numUnsafe);
 		}
 
-		if (opt_text == 3) {
+		if (opt_text == 1) {
+			/*
+			 * Display members of complete dataset
+			 *
+			 * <memberName> <numPlaceholder>
+			 */
+			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+				member_t *pMember = pStore->members + iMid;
+
+				generator.decodeFast(pMember->name);
+				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, generator.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+			}
+		}
+
+		if (opt_text == 2) {
+			/*
+			 * Display full members, grouped by signature
+			 */
 			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 				for (uint32_t iMid = pStore->signatures[iSid].firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 					member_t *pMember = pStore->members + iMid;
@@ -1070,7 +1204,7 @@ struct genmemberContext_t : context_t {
 
 					printf("%u:%s\t%u\t", pMember->Qmid, pStore->members[pMember->Qmid].name, pMember->Qsid);
 					if (pMember->Tsid & IBIT)
-						printf("%u:%s\t%u\t", pMember->Tmid, pStore->members[pMember->Tmid].name, pMember->Tsid & ~IBIT);
+						printf("%u:%s\t-%u\t", pMember->Tmid, pStore->members[pMember->Tmid].name, pMember->Tsid & ~IBIT);
 					else
 						printf("%u:%s\t%u\t", pMember->Tmid, pStore->members[pMember->Tmid].name, pMember->Tsid);
 					printf("%u:%s\t%u\t", pMember->Fmid, pStore->members[pMember->Fmid].name, pMember->Fsid);
@@ -1084,39 +1218,13 @@ struct genmemberContext_t : context_t {
 				}
 			}
 		}
-		if (opt_text == 4) {
-			/*
-			 * Display non-zero members
-			 *
-			 * <name> <numPlaceholder>
-			 *
-			 * During debugging the output can be fastloaded :
-			 *      `./genmember output.db transform.db 0  --maxsignature=999999 --maximprint=200000000 --append=append.txt`
-			 */
-			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
-				member_t *pMember = pStore->members + iMid;
-
-				if (pMember->sid)
-					printf("%s\t%u\n", pMember->name, pMember->numPlaceholder);
-			}
-		}
-
-		/*
-		 * List result
-		 */
-		if (opt_text == 1) {
-			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
-				const signature_t *pSignature = pStore->signatures + iSid;
-				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
-			}
-		}
 
 		/*
 		 * Done
 		 */
 		if (opt_verbose >= VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numUnsafe\":%u,\"numEmpty\":%u}\n",
-			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numUnsafe, numEmpty);
+			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
+			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
 
 	}
 
@@ -1533,11 +1641,11 @@ int main(int argc, char *const *argv) {
 			if (app.opt_interleave == 0)
 				app.opt_interleave = 3024;
 			if (app.opt_maxImprint == 0)
-				app.opt_maxImprint = 470038081; // for `--qntf --interleave=720`
+				app.opt_maxImprint = 220000000; // for `--qntf --interleave=720`. For 64G memory, set to 600000000
 			if (app.opt_maxSignature == 0)
 				app.opt_maxSignature = 800000;
 			if (app.opt_maxMember == 0)
-				app.opt_maxMember = 6500000;
+				app.opt_maxMember = 16500000;
 
 			if (app.opt_verbose >= app.VERBOSE_ACTIONS)
 				fprintf(stderr, "[%s] Set limits to interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", app.timeAsString(), app.opt_interleave, app.opt_maxImprint, app.opt_maxSignature, app.opt_maxMember);
@@ -1640,7 +1748,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Load original members
 	 */
-	app.loadData(store, db, app.opt_unsafe);
+	app.loadData(store, db);
 
 	/*
 	 * Invoke

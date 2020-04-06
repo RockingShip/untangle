@@ -315,7 +315,7 @@ struct metricsGenerator_t {
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
-	/// @var {number} - Total members (before compacting). Provided by `genmember`
+	/// @var {number} - Total members (before compacting). Provided by `genmember`. Intended for `4n9` signature space
 	uint64_t numMember; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics

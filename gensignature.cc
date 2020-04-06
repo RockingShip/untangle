@@ -400,7 +400,17 @@ struct gensignatureContext_t : context_t {
 	 * @param {context_t} state - I/O contect needed to create trees
 	 * @return
 	 */
-	static int compar(const void *lhs, const void *rhs, void *state) {
+	/**
+	 * @date 2020-04-05 21:07:14
+	 *
+	 * Compare function for `qsort_r`
+	 *
+	 * @param {member_t} lhs - left hand side member
+	 * @param {member_t} rhs - right hand side member
+	 * @param {context_t} state - I/O contect needed to create trees
+	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
+	 */
+	static int comparSignature(const void *lhs, const void *rhs, void *state) {
 		if (lhs == rhs)
 			return 0;
 
@@ -415,8 +425,35 @@ struct gensignatureContext_t : context_t {
 		treeL.decodeFast(pSignatureL->name);
 		treeR.decodeFast(pSignatureR->name);
 
-		// compare
-		return treeL.compare(treeL.root, treeR, treeR.root);
+		/*
+		 * Compare
+		 */
+
+		int cmp = 0;
+
+		// Test for prime goal: reducing number of nodes
+		cmp = treeL.count - treeR.count;
+		if (cmp)
+			return cmp;
+
+		// Test for secondary goal: reduce number of unique endpoints, thus connections
+		cmp = pSignatureL->numPlaceholder - pSignatureR->numPlaceholder;
+		if (cmp)
+			return cmp;
+
+		// Test for preferred display selection: least number of endpoints
+		cmp = pSignatureL->numEndpoint - pSignatureR->numEndpoint;
+		if (cmp)
+			return cmp;
+
+		// Test for preferred display selection: least number of back-references
+		cmp = pSignatureL->numBackRef - pSignatureR->numBackRef;
+		if (cmp)
+			return cmp;
+
+		// Compare layouts, expensive
+		cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+		return cmp;
 	}
 
 	/**
@@ -436,7 +473,7 @@ struct gensignatureContext_t : context_t {
 		 */
 		generatorTree_t generator(*this);
 
-		for (unsigned numNode = 0; numNode <= arg_numNodes; numNode++) {
+		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// reset progress
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
 			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -475,9 +512,10 @@ struct gensignatureContext_t : context_t {
 		 */
 
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Sorting signature names\n", timeAsString());
+			fprintf(stderr, "[%s] Sorting signatures\n", timeAsString());
 
-		qsort_r(pStore->signatures + 1, pStore->numSignature - 1, sizeof(*pStore->signatures), compar, this);
+		assert(pStore->numSignature >= 3);
+		qsort_r(pStore->signatures + 3, pStore->numSignature - 3, sizeof(*pStore->signatures), comparSignature, this);
 
 		/*
 		 * List result
@@ -485,7 +523,7 @@ struct gensignatureContext_t : context_t {
 		if (opt_text == 1) {
 			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 				const signature_t *pSignature = pStore->signatures + iSid;
-				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
+				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
 		}
 
