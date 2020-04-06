@@ -173,7 +173,7 @@ struct member_t {
 
 	enum {
 		/// @constant {number} Maximum number of heads
-		MAXHEAD = 4,
+		MAXHEAD = 6,
 	};
 
 	/// @var {number} Signature id to which signature group this member belongs

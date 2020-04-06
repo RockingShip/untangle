@@ -33,6 +33,47 @@
  * @date 2020-04-02 23:43:18
  *
  * Unsafe members start to occur in 4n9 space, just like back-references.
+ *
+ * @date 2020-04-06 22:55:07
+ *
+ * `genmember` collects raw members.
+ * Invocations are made with increasing nodeSize to find new members or safe replacements.
+ * Once a group is safe (after invocation) new members will be rejected, this makes that only unsafe groups need detection.
+ * Multi-pass is possible by focusing on a a smaller number of signature groups. This allows for extreme high speeds (interleave) at a cost of storage.
+ * `genmember` actually needs two modes: preperation of an imprint index (done by master) and collecting (done by workers).
+ * Workers can take advantage of the read-only imprint index in shared memory (`mmap`)
+ *
+ * Basically, `genmember` collects constructing components.
+ * Only after all groups are safe can selecting occur.
+ *
+ * - All single member groups lock components (tails) and providers (heads)
+ * - Groups with locked heads and tails become locked themselves.
+ * Speculating:
+ * - unsafe members can be grouped by component sid (resulting in a single "best `compare()`" member
+ * - safe members can be grouped by component mid (resulting in a single "best `compare()`" member
+ * - unsafe groups with locked members but unsafe providers can promote the providers (what to do when multiple)
+ * - safe groups with unsafe members can release heads/tails allowing their refcount to drop to zero and be removed.
+ *
+ * Intended usage:
+ *
+ * - prepare new database by creating imprints for safe members.
+ *   It is safe to use extreme high interleave (5040, 15120, 40320 and 60480)
+ *   The higher the faster but less groups to detect.
+ *
+ * - After prepare let workers collect members using `--text=3` which collects on the fly.
+ *
+ * - After all workers complete, join all worker results and create dataset, use `--text=1`
+ *
+ * - repeat preparing and collecting until collecting has depleted
+ *
+ * - increase nodeSize by one and repeat.
+ *
+ * NOTE: don't be smart in rejecting members until final data-analysis is complete.
+ *       This is a new feature for v2 and uncharted territory
+ *
+ * At this moment calculating and collecting:
+ * `restartData[]` for `7n9-QnTF`. This is a premier!
+ * signature group members for 6n9-QnTF. This is also premier.
  */
 
 /*
@@ -589,13 +630,13 @@ struct genmemberContext_t : context_t {
 				 * Add to group if same node size
 				 */
 				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
-					skipUnsafe++;
-
 					// zero orphan so it won't be found by `lookupMember()`
 					::memset(pMember, 0, sizeof(*pMember));
 					// push member on the freelist
 					pMember->nextMember = freeMemberRoot;
 					freeMemberRoot = pMember - pStore->members;
+
+					skipUnsafe++;
 					return;
 				}
 				assert(treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
@@ -669,13 +710,14 @@ struct genmemberContext_t : context_t {
 		} else {
 			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
 				// group is safe, candidate not. Drop candidate
-				skipUnsafe++;
 
 				// zero orphan so it won't be found by `lookupMember()`
 				::memset(pMember, 0, sizeof(*pMember));
 				// push member on the freelist
 				pMember->nextMember = freeMemberRoot;
 				freeMemberRoot = pMember - pStore->members;
+
+				skipUnsafe++;
 				return;
 			} else {
 				// group/candidate both safe
@@ -979,6 +1021,7 @@ struct genmemberContext_t : context_t {
 
 			// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
 			while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
+				generator.decodeFast(name);
 				foundTreeMember(generator, name, numPlaceholder);
 				progress++;
 			}
