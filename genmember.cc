@@ -71,9 +71,54 @@
  * NOTE: don't be smart in rejecting members until final data-analysis is complete.
  *       This is a new feature for v2 and uncharted territory
  *
+ * @date 2020-04-07 01:07:34
+ *
  * At this moment calculating and collecting:
  * `restartData[]` for `7n9-QnTF`. This is a premier!
  * signature group members for 6n9-QnTF. This is also premier.
+ *
+ * `QnTF` dataset looks promising:
+ * share the same `4n9` address space, which holds 791646 signature groups.
+ * `3n9-QnTF` has 790336 empty and 0 unsafe groups
+ * `4n9-QnTF` has 695291 ampty and 499 unsafe groups
+ * `5n9-QnTF` has .. ampty and .. unsafe groups
+ * now scanning `6n9-QnTF` for the last 46844.
+ * thats needs to get as low as possible, searching `7n9` is far above my resources.
+ * Speed is about 1590999 candidates/s
+ *
+ * The `QnTF` dataset achieves the same using only `"Q?!T:F"` / `"abc!"` nodes/operators.
+ * This releases the requirement to store information about the inverted state of `T`.
+ * `T` is always inverted.
+ * To compensate for loss of variety more nodes are needed.
+ *
+ * safe members avoid being normalised when their notation is being constructed.
+ * From the constructor point of view:
+ *   unsafe members have smaller nodeSize but their notation is written un a language not understood
+ *   it can be translated with a penality (extra nodes)
+ *
+ * @date 2020-04-07 20:57:08
+ *
+ * `genmember` runs in 3 modes:
+ * - Merge (default)
+ *   = Signatures are copied
+ *   = Imprints are inherited or re-built on demand
+ *   = Members are copied
+ *   = Additional members are loaded/generated
+ *   = Member sorting
+ *
+ * - Prepare
+ *   = Signatures are copied
+ *   = Imprints are set to select empty=unsafe signature groups
+ *   = Members are inherited
+ *   = No member-sorting
+ *   = Output is intended for `--mode=merge`
+ *
+ * - Collect (worker)
+ *   = Signatures are copied
+ *   = Imprints are inherited
+ *   = Members are inherited
+ *   = Each candidate member that matches is logged, signature updated and not recorded
+ *   = No member-sorting
  */
 
 /*
@@ -125,6 +170,18 @@
  */
 struct genmemberContext_t : context_t {
 
+	enum {
+		/// @constant {number} - Merge members. Default mode of operation
+		MODE_MERGE = 0,
+
+		/// @constant {number} - Use imprints to index empty/unsage signature groups. Intended with high interleave.
+		MODE_PREPARE = 1,
+
+		/// @constant {number} - High speed worker with low resource footprin
+		MODE_COLLECT = 2,
+
+	};
+
 	/*
 	 * User specified program arguments and options
 	 */
@@ -157,6 +214,8 @@ struct genmemberContext_t : context_t {
 	uint32_t opt_maxSignature;
 	/// @var {number} size of member index WARNING: must be prime
 	uint32_t opt_memberIndexSize;
+	/// @var {number} Mode of operation
+	uint32_t opt_mode;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} size of signature index WARNING: must be prime
@@ -206,6 +265,7 @@ struct genmemberContext_t : context_t {
 		opt_maxMember = 0;
 		opt_maxSignature = 0;
 		opt_memberIndexSize = 0;
+		opt_mode = MODE_MERGE;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
 		opt_test = 0;
@@ -1356,8 +1416,13 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
-	fprintf(stderr, "usage: %s <output.db> <input.db> <numnode> -- Add signatures of given node size\n", argv[0]);
+	fprintf(stderr, "usage: %s --mode=merge   <output.db> <input.db> <numnode>                -- Add candidate members of given node size\n", argv[0]);
+	fprintf(stderr, "       %s --mode=prepare <prepare.db> <input.db> <numnode>               -- Prepare for high-speed collecting\n", argv[0]);
+	fprintf(stderr, "       %s --mode=collect <prepare.db> <numnode>                          -- Collect members\n", argv[0]);
+	fprintf(stderr, "       %s --mode=merge   <output.db> <input.db> <numnode> --load=<file>  -- Merge collected members\n", argv[0]);
 //	fprintf(stderr, "       %s --selftest <input.db>            -- Test prerequisites\n", argv[0]);
+
+	static const char *modeNames[] = { "merge", "prepare", "collect" };
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -1372,7 +1437,7 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 		fprintf(stderr, "\t   --maxmember=<number>      Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --mode=<mode>             Mode (merge/perpare/collect) [default=%s]\n", modeNames[app.opt_mode]);
 		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
@@ -1420,6 +1485,7 @@ int main(int argc, char *const *argv) {
 			LO_MAXMEMBER,
 			LO_MAXSIGNATURE,
 			LO_MEMBERINDEX,
+			LO_MODE,
 			LO_NOPARANOID,
 			LO_NOQNTF,
 			LO_PARANOID,
@@ -1454,6 +1520,7 @@ int main(int argc, char *const *argv) {
 			{"maxmember",      1, 0, LO_MAXMEMBER},
 			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
 			{"memberindex",    0, 0, LO_MEMBERINDEX},
+			{"mode",         1, 0, LO_MODE},
 			{"no-paranoid",    0, 0, LO_NOPARANOID},
 			{"no-qntf",        0, 0, LO_NOQNTF},
 			{"paranoid",       0, 0, LO_PARANOID},
@@ -1545,6 +1612,21 @@ int main(int argc, char *const *argv) {
 			case LO_MEMBERINDEX:
 				app.opt_memberIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
+			case LO_MODE: {
+				if (strcmp(optarg, "merge") == 0) {
+					app.opt_mode = app.MODE_MERGE;
+				} else if (strcmp(optarg, "prepare") == 0) {
+					app.opt_mode = app.MODE_PREPARE;
+				} else if (strcmp(optarg, "collect") == 0) {
+					app.opt_mode = app.MODE_COLLECT;
+					app.opt_text = 3; // also track new members
+					app.opt_test++; // don't save database
+				} else {
+					fprintf(stderr, "=--mode must be one of [merge,prepare,collect]\n");
+					exit(1);
+				}
+				break;
+			}
 			case LO_NOPARANOID:
 				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
@@ -1609,6 +1691,15 @@ int main(int argc, char *const *argv) {
 		// selftest or metrics mode
 		if (argc - optind >= 1) {
 			app.arg_inputDatabase = argv[optind++];
+		} else {
+			usage(argv, false, &app);
+			exit(1);
+		}
+	} else if (app.opt_mode == app.MODE_COLLECT) {
+		// collect mode
+		if (argc - optind >= 2) {
+			app.arg_inputDatabase = argv[optind++];
+			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
 		} else {
 			usage(argv, false, &app);
 			exit(1);
