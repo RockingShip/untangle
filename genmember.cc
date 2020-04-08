@@ -192,40 +192,36 @@ struct genmemberContext_t : context_t {
 	const char *arg_inputDatabase;
 	/// @var {number} size of signatures to be generated in this invocation
 	unsigned arg_numNodes;
-	/// @var {string} name of file containing extra input
-	const char *opt_append;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} size of imprint index WARNING: must be prime
 	uint32_t opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
 	unsigned opt_interleave;
-	/// @var {number} job Id. First job=1
-	unsigned opt_jobId;
-	/// @var {number} Number of jobs
-	unsigned opt_jobLast;
 	/// @var {number} --keep, do not delete output database in case of errors
 	unsigned opt_keep;
+	/// @var {string} name of file containing members
+	const char *opt_load;
 	/// @var {number} Maximum number of imprints to be stored database
 	uint32_t opt_maxImprint;
 	/// @var {number} Maximum number of members to be stored database
 	uint32_t opt_maxMember;
-	/// @var {number} Maximum number of signatures to be stored database
-	uint32_t opt_maxSignature;
 	/// @var {number} size of member index WARNING: must be prime
 	uint32_t opt_memberIndexSize;
 	/// @var {number} Mode of operation
 	uint32_t opt_mode;
 	/// @var {number} index/data ratio
 	double opt_ratio;
-	/// @var {number} size of signature index WARNING: must be prime
-	uint32_t opt_signatureIndexSize;
+	/// @var {number} get task settings from SGE environment
+	uint32_t opt_sge;
+	/// @var {number} task Id. First task=1
+	unsigned opt_taskId;
+	/// @var {number} Number of tasks / last task
+	unsigned opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
 	/// @var {number} --test, run without output
 	unsigned opt_test;
-	/// @var {number} Collect unsafe replacements
-	unsigned opt_unsafe;
 	/// @var {number} generator upper bound
 	uint64_t opt_windowHi;
 	/// @var {number} generator lower bound
@@ -254,23 +250,21 @@ struct genmemberContext_t : context_t {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
-		opt_append = NULL;
 		opt_force = 0;
 		opt_imprintIndexSize = 0;
 		opt_interleave = 0;
-		opt_jobId = 0;
-		opt_jobLast = 0;
+		opt_taskId = 0;
+		opt_taskLast = 0;
 		opt_keep = 0;
+		opt_load = NULL;
 		opt_maxImprint = 0;
 		opt_maxMember = 0;
-		opt_maxSignature = 0;
 		opt_memberIndexSize = 0;
 		opt_mode = MODE_MERGE;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
-		opt_signatureIndexSize = 0;
+		opt_sge = 0;
 		opt_test = 0;
 		opt_text = 0;
-		opt_unsafe = 0;
 
 		pStore = NULL;
 		pInputDb = NULL;
@@ -989,17 +983,6 @@ struct genmemberContext_t : context_t {
 			        store.numMember, store.numMember * 100.0 / store.maxMember,
 			        numEmpty, numUnsafe);
 
-		/*
-		 * Check that all unsafe groups have no safe members (of the group would have been safe)
-		 */
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
-				for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
-				}
-			}
-		}
-
 	}
 
 	/**
@@ -1022,17 +1005,17 @@ struct genmemberContext_t : context_t {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 			assert(pMetrics);
 
-			// apply settings for `--job`
-			if (this->opt_jobLast) {
+		// apply settings for `--task`
+		if (this->opt_taskLast) {
 				// split progress into chunks
-				uint64_t jobSize = pMetrics->numProgress / this->opt_jobLast;
-				if (jobSize == 0)
-					jobSize = 1;
-				generator.windowLo = jobSize * (this->opt_jobId - 1);
-				generator.windowHi = jobSize * this->opt_jobId;
+			uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
+			if (taskSize == 0)
+				taskSize = 1;
+			generator.windowLo = taskSize * (this->opt_taskId - 1);
+			generator.windowHi = taskSize * this->opt_taskId;
 
 				// limits
-				if (opt_jobId == opt_jobLast || generator.windowHi > pMetrics->numProgress)
+			if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
 					generator.windowHi = pMetrics->numProgress;
 			}
 
@@ -1066,7 +1049,7 @@ struct genmemberContext_t : context_t {
 				generator.windowHi = pMetrics->numProgress;
 		}
 
-		if (this->opt_append) {
+		if (this->opt_load) {
 			/*
 			 * Load candidates from file.
 			 */
@@ -1074,10 +1057,10 @@ struct genmemberContext_t : context_t {
 			if (opt_verbose >= VERBOSE_ACTIONS)
 				fprintf(stderr, "[%s] Appending additional candidates\n", timeAsString());
 
-			FILE *f = fopen(this->opt_append, "r");
+			FILE *f = fopen(this->opt_load, "r");
 			if (f == NULL)
 				fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-				      __FUNCTION__, this->opt_append);
+				      __FUNCTION__, this->opt_load);
 
 			// reset progress
 			this->setupSpeed(0);
@@ -1426,27 +1409,27 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "\t   --append=<file>           Append extra members from file [default=%s]\n", app.opt_append ? app.opt_append : "");
 		fprintf(stderr, "\t   --force                   Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help                    This list\n");
 		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%u]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --job=<id>,<last>         Job id of batch [default=%u,%u]\n", app.opt_jobId, app.opt_jobLast);
 		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t   --load=<file>             Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>      Maximum number of members [default=%u]\n", app.opt_maxMember);
-		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
 		fprintf(stderr, "\t   --mode=<mode>             Mode (merge/perpare/collect) [default=%s]\n", modeNames[app.opt_mode]);
 		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --prepare                 Prepare dataset for empty/unsafe groups\n");
+		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
-		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --sge                     Get SGE task settings from environment\n");
+		fprintf(stderr, "\t   --task=<id>,<last>        Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --test                    Run without output\n");
 		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%u]\n", args->opt_timer);
-		fprintf(stderr, "\t   --unsafe                  Collect unsafe replacements.\n");
 		fprintf(stderr, "\t-v --verbose                 Say less\n");
 		fprintf(stderr, "\t   --windowhi=<number>       Upper end restart window [default=%lu]\n", args->opt_windowHi);
 		fprintf(stderr, "\t   --windowlo=<number>       Lower end restart window [default=%lu]\n", args->opt_windowLo);
@@ -1474,16 +1457,14 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_APPEND = 1,
-			LO_DEBUG,
+			LO_DEBUG = 1,
 			LO_FORCE,
 			LO_IMPRINTINDEX,
 			LO_INTERLEAVE,
-			LO_JOB,
 			LO_KEEP,
+			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
-			LO_MAXSIGNATURE,
 			LO_MEMBERINDEX,
 			LO_MODE,
 			LO_NOPARANOID,
@@ -1492,11 +1473,11 @@ int main(int argc, char *const *argv) {
 			LO_QNTF,
 			LO_RATIO,
 			LO_SELFTEST,
-			LO_SIGNATUREINDEX,
+			LO_SGE,
+			LO_TASK,
 			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
-			LO_UNSAFE,
 			LO_WINDOWHI,
 			LO_WINDOWLO,
 			// short opts
@@ -1508,17 +1489,15 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"append",         1, 0, LO_APPEND},
 			{"debug",          1, 0, LO_DEBUG},
 			{"force",          0, 0, LO_FORCE},
 			{"help",           0, 0, LO_HELP},
 			{"imprintindex",   1, 0, LO_IMPRINTINDEX},
 			{"interleave",     1, 0, LO_INTERLEAVE},
-			{"job",            1, 0, LO_JOB},
 			{"keep",           0, 0, LO_KEEP},
+			{"load",         1, 0, LO_LOAD},
 			{"maximprint",     1, 0, LO_MAXIMPRINT},
 			{"maxmember",      1, 0, LO_MAXMEMBER},
-			{"maxsignature",   1, 0, LO_MAXSIGNATURE},
 			{"memberindex",    0, 0, LO_MEMBERINDEX},
 			{"mode",         1, 0, LO_MODE},
 			{"no-paranoid",    0, 0, LO_NOPARANOID},
@@ -1528,11 +1507,11 @@ int main(int argc, char *const *argv) {
 			{"quiet",          2, 0, LO_QUIET},
 			{"ratio",          1, 0, LO_RATIO},
 			{"selftest",       0, 0, LO_SELFTEST},
-			{"signatureindex", 1, 0, LO_SIGNATUREINDEX},
+			{"sge",          0, 0, LO_SGE},
+			{"task",         1, 0, LO_TASK},
 			{"test",           0, 0, LO_TEST},
 			{"text",           2, 0, LO_TEXT},
 			{"timer",          1, 0, LO_TIMER},
-			{"unsafe",         0, 0, LO_UNSAFE},
 			{"verbose",        2, 0, LO_VERBOSE},
 			{"windowhi",       1, 0, LO_WINDOWHI},
 			{"windowlo",       1, 0, LO_WINDOWLO},
@@ -1563,9 +1542,6 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
-			case LO_APPEND:
-				app.opt_append = optarg;
-				break;
 			case LO_DEBUG:
 				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
@@ -1583,31 +1559,17 @@ int main(int argc, char *const *argv) {
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 					app.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
-			case LO_JOB:
-				if (sscanf(optarg, "%u,%u", &app.opt_jobId, &app.opt_jobLast) != 2) {
-					usage(argv, true, &app);
-					exit(1);
-				}
-				if (app.opt_jobId == 0 || app.opt_jobLast == 0) {
-					fprintf(stderr, "Job id/last must be non-zero\n");
-					exit(1);
-				}
-				if (app.opt_jobId > app.opt_jobLast) {
-					fprintf(stderr, "Job id exceeds last\n");
-					exit(1);
-				}
-				break;
 			case LO_KEEP:
 				app.opt_keep++;
+				break;
+			case LO_LOAD:
+				app.opt_load = optarg;
 				break;
 			case LO_MAXIMPRINT:
 				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_MAXMEMBER:
 				app.opt_maxMember = (uint32_t) strtoul(optarg, NULL, 0);
-				break;
-			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
 			case LO_MEMBERINDEX:
 				app.opt_memberIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
@@ -1649,8 +1611,43 @@ int main(int argc, char *const *argv) {
 				app.opt_selftest++;
 				app.opt_test++;
 				break;
-			case LO_SIGNATUREINDEX:
-				app.opt_signatureIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+			case LO_SGE: {
+				const char *p;
+
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
+				}
+
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "task id exceeds last\n");
+					exit(1);
+				}
+
+				break;
+			}
+			case LO_TASK:
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+					usage(argv, true, &app);
+					exit(1);
+				}
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
+					exit(1);
+				}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
+				}
 				break;
 			case LO_TEST:
 				app.opt_test++;
@@ -1660,9 +1657,6 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_TIMER:
 				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
-				break;
-			case LO_UNSAFE:
-				app.opt_unsafe++;
 				break;
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
@@ -1729,11 +1723,11 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
-	if (app.opt_append) {
+	if (app.opt_load) {
 		struct stat sbuf;
 
-		if (stat(app.opt_append, &sbuf)) {
-			fprintf(stderr, "%s does not exist\n", app.opt_append);
+		if (stat(app.opt_load, &sbuf)) {
+			fprintf(stderr, "%s does not exist\n", app.opt_load);
 			exit(1);
 		}
 	}
@@ -1774,24 +1768,13 @@ int main(int argc, char *const *argv) {
 	if (app.opt_selftest) {
 
 	} else {
+		/*
+		 * Set defaults
+		 */
 
-		if (app.opt_unsafe) {
-			if (app.arg_numNodes != 5)
-				fprintf(stderr, "WARNING: --unsafe is intended for 5n9\n");
-
-			// 5n9 has incomplete metrics. Hardcoded settings.
-			if (app.opt_interleave == 0)
-				app.opt_interleave = 3024;
-			if (app.opt_maxImprint == 0)
-				app.opt_maxImprint = 220000000; // for `--qntf --interleave=720`. For 64G memory, set to 600000000
-			if (app.opt_maxSignature == 0)
-				app.opt_maxSignature = 800000;
-			if (app.opt_maxMember == 0)
-				app.opt_maxMember = 16500000;
-
-			if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Set limits to interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", app.timeAsString(), app.opt_interleave, app.opt_maxImprint, app.opt_maxSignature, app.opt_maxMember);
-		}
+		// Signatures are always copied as they need modifiable `firstMember`
+		store.maxSignature = db.maxSignature;
+		store.signatureIndexSize = db.signatureIndexSize;
 
 		if (app.opt_interleave == 0) {
 			store.interleave = db.interleave;
@@ -1822,17 +1805,6 @@ int main(int argc, char *const *argv) {
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
-		if (app.opt_maxSignature == 0) {
-			store.maxSignature = db.maxSignature;
-		} else {
-			store.maxSignature = app.opt_maxSignature;
-		}
-
-		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = app.nextPrime(store.maxSignature * app.opt_ratio);
-		else
-			store.signatureIndexSize = app.opt_signatureIndexSize;
-
 		if (app.opt_maxMember == 0) {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxMember = pMetrics ? pMetrics->numMember : 0;
@@ -1849,19 +1821,15 @@ int main(int argc, char *const *argv) {
 			app.fatal("no preset for --interleave\n");
 		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
 			app.fatal("no preset for --maximprint\n");
-		if (store.maxSignature == 0 || store.signatureIndexSize == 0)
-			app.fatal("no preset for --maxsignature\n");
 		if (store.maxMember == 0 || store.memberIndexSize == 0)
 			app.fatal("no preset for --maxmember\n");
 
-		if (store.maxSignature < db.numSignature)
-			app.fatal("--maxsignature too low. Expected at least %u\n", db.numSignature);
 		if (store.maxMember < db.numMember)
 			app.fatal("--maxmember too low. Expected at least %u\n", db.numMember);
 	}
 
 	// create new sections
-	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
+	if (app.opt_verbose >= app.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] Store create: maxImprint=%u maxSignature=%u maxMember=%u\n", app.timeAsString(), store.maxImprint, store.maxSignature, store.maxMember);
 
 	store.create();
@@ -1912,6 +1880,17 @@ int main(int argc, char *const *argv) {
 	app.pInputDb = &db;
 
 	app.main(&store);
+
+	/*
+	 * Check that all unsafe groups have no safe members (or the group would have been safe)
+	 */
+	for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+		if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
+			for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+				assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
+			}
+		}
+	}
 
 	/*
 	 * Save the database
