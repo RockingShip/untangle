@@ -41,6 +41,7 @@ eval
 genrestartdata
 gensignature
 gentransform
+slookup
 tlookup
 
 *.bak
