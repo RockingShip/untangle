@@ -157,7 +157,9 @@
 #include "config.h"
 
 #if defined(ENABLE_JANSSON)
+
 #include "jansson.h"
+
 #endif
 
 /**
@@ -985,8 +987,59 @@ struct genmemberContext_t : context_t {
 	 *
 	 * @param {database_t} pStore - memory based database
 	 */
-	void /*__attribute__((optimize("O0")))*/ main(database_t *pStore) {
-		this->pStore = pStore;
+	void /*__attribute__((optimize("O0")))*/ modeLoadFile(void) {
+
+		generatorTree_t tree(*this);
+
+		/*
+		 * Load candidates from file.
+		 */
+
+		if (opt_verbose >= VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Reading candidates from file\n", timeAsString());
+
+		FILE *f = fopen(this->opt_load, "r");
+		if (f == NULL)
+			fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
+			      __FUNCTION__, this->opt_load);
+
+		// reset progress
+		this->setupSpeed(0);
+		this->tick = 0;
+
+		char name[64];
+		unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef;
+
+		// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
+		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
+			tree.decodeFast(name);
+			foundTreeMember(tree, name, numPlaceholder);
+			progress++;
+		}
+
+		fclose(f);
+
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			        timeAsString(),
+			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+			        numEmpty, numUnsafe,
+			        skipDuplicate, skipSize, skipUnsafe);
+	}
+
+	/**
+	 * @date 2020-03-22 01:00:05
+	 *
+	 * Main entrypoint
+	 *
+	 * Create generator for given dataset and add newly unique signatures to the database
+	 *
+	 * @param {database_t} pStore - memory based database
+	 */
+	void /*__attribute__((optimize("O0")))*/ modeLoadGenerator(void) {
 
 		generatorTree_t generator(*this);
 
@@ -1040,206 +1093,170 @@ struct genmemberContext_t : context_t {
 				generator.windowHi = pMetrics->numProgress;
 		}
 
-		if (this->opt_load) {
-			/*
-			 * Load candidates from file.
-			 */
+		/*
+		 * create generator and candidate members
+		 */
 
-			if (opt_verbose >= VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Appending additional candidates\n", timeAsString());
+		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
+			// find metrics for setting
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
+			unsigned endpointsLeft = numNode * 2 + 1;
 
-			FILE *f = fopen(this->opt_load, "r");
-			if (f == NULL)
-				fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-				      __FUNCTION__, this->opt_load);
+			// clear tree
+			generator.clearGenerator();
 
 			// reset progress
-			this->setupSpeed(0);
+			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			this->tick = 0;
 			generator.restartTick = 0;
 
-			char name[64];
-			unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef;
+			/*
+			 * Generate candidates
+			 */
+			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), numNode, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
-			// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
-			while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
-				generator.decodeFast(name);
-				foundTreeMember(generator, name, numPlaceholder);
-				progress++;
+			if (numNode == 0) {
+				generator.root = 0; // "0"
+				foundTreeMember(generator, "0", 0);
+				generator.root = 1; // "a"
+				foundTreeMember(generator, "a", 1);
+			} else {
+				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
 			}
-
-			fclose(f);
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
-		} else {
-
-			/*
-			 * create generator and candidate members
-			 */
-
-			for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
-				// find metrics for setting
-				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
-				unsigned endpointsLeft = numNode * 2 + 1;
-
-				// clear tree
-				generator.clearGenerator();
-
-				// reset progress
-				this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-				this->tick = 0;
-				generator.restartTick = 0;
-
-				/*
-				 * Generate candidates
-				 */
-				if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-					fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), numNode, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
-
-				if (numNode == 0) {
-					generator.root = 0; // "0"
-					foundTreeMember(generator, "0", 0);
-					generator.root = 1; // "a"
-					foundTreeMember(generator, "a", 1);
-				} else {
-					generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
-				}
-
-				if (this->opt_verbose >= this->VERBOSE_TICK)
-					fprintf(stderr, "\r\e[K");
-
-				if (generator.windowLo == 0 && generator.windowHi == 0 && this->progress != this->progressHi) {
-					printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
-					       __FUNCTION__, this->progress, this->progressHi, numNode);
-				}
+			if (generator.windowLo == 0 && generator.windowHi == 0 && this->progress != this->progressHi) {
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
+				       __FUNCTION__, this->progress, this->progressHi, numNode);
 			}
 		}
+
+	}
+
+	/**
+	 * @date 2020-04-07 22:53:08
+	 *
+	 * Compact members.
+	 * Remove orphans and sort on display name
+	 * This should have no effect pre-existing members (they were already sorted)
+	 *
+	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
+	 */
+	void compact(void) {
+		tinyTree_t tree(*this);
+
+		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Sorting\n", timeAsString());
+
+		// sort entries. Leave "0" and "a" untouched
+		assert(pStore->numMember >= 3);
+		qsort_r(pStore->members + 3, pStore->numMember - 3, sizeof(*pStore->members), comparMember, this);
+
+		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Re-indexing\n", timeAsString());
+
+		uint32_t lastMember = pStore->numMember;
+
+		// reset member index and friends
+		::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
+		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++)
+			pStore->signatures[iSid].firstMember = 0;
+		pStore->numMember = 1;
+		skipDuplicate = skipSize = skipUnsafe = 0;
+
+		// reload everything
+		this->setupSpeed(lastMember);
+		this->tick = 0;
+
+		progress++; // skip reserved
+		for (uint32_t iMid = 1; iMid < lastMember; iMid++) {
+			if (opt_verbose >= VERBOSE_TICK && tick) {
+				tick = 0;
+				int perSecond = this->updateSpeed();
+
+				if (perSecond == 0 || progress > progressHi) {
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u",
+					        timeAsString(), progress, perSecond, pStore->numMember, skipUnsafe);
+				} else {
+					int eta = (int) ((progressHi - progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe);
+				}
+			}
+
+			member_t *pMember = pStore->members + iMid;
+			if (pMember->sid) {
+				signature_t *pSignature = pStore->signatures + pMember->sid;
+
+				// calculate head/tail
+				tree.decodeFast(pMember->name);
+				findHeadTail(pMember, tree);
+
+				if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
+					/*
+					 * Adding (unsafe) member to unsafe group
+					 */
+
+					// member should be unsafe
+					assert(pMember->flags & signature_t::SIGMASK_UNSAFE);
+					// nodeSize should match
+					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
+
+				} else if (~pMember->flags & signature_t::SIGMASK_UNSAFE) {
+					/*
+					 * Adding safe member to safe group
+					 */
+
+					// nodeSize should match
+					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
+
+					// add safe members to index
+					uint32_t ix = pStore->lookupMember(pMember->name);
+					assert(pStore->memberIndex[ix] == 0);
+					pStore->memberIndex[ix] = pStore->numMember;
+
+				} else if (tree.count - tinyTree_t::TINYTREE_NSTART < pSignature->size) {
+					/*
+					 * Adding unsafe member to safe group
+					 */
+
+				} else {
+					/*
+					 * Member got orphaned when group became safe
+					 */
+					skipUnsafe++;
+					this->progress++;
+					continue;
+				}
+
+				// add to group
+				pMember->nextMember = pSignature->firstMember;
+				pSignature->firstMember = pStore->numMember;
+
+				// copy
+				::memcpy(pStore->members + pStore->numMember, pMember, sizeof(*pMember));
+				pStore->numMember++;
+			}
+
+			this->progress++;
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
-			        timeAsString(),
-			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-			        numEmpty, numUnsafe,
-			        skipDuplicate, skipSize, skipUnsafe);
-
-		/*
-		 * Compacting
-		 *
-		 * Members may contain (unsafe) members that got orphaned when their group accepted a safe member.
-		 */
-		{
-			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Sorting\n", timeAsString());
-
-			// sort entries. Leave "0" and "a" untouched
-			assert(pStore->numMember >= 3);
-			qsort_r(pStore->members + 3, pStore->numMember - 3, sizeof(*pStore->members), comparMember, this);
-
-			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Re-indexing\n", timeAsString());
-
-			uint32_t lastMember = pStore->numMember;
-
-			// reset member index and friends
-			::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
-			for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++)
-				pStore->signatures[iSid].firstMember = 0;
-			pStore->numMember = 1;
-			skipDuplicate = skipSize = skipUnsafe = 0;
-
-			// reload everything
-			this->setupSpeed(lastMember);
-			this->tick = 0;
-
-			progress++; // skip reserved
-			for (uint32_t iMid = 1; iMid < lastMember; iMid++) {
-				if (opt_verbose >= VERBOSE_TICK && tick) {
-					tick = 0;
-					int perSecond = this->updateSpeed();
-
-					if (perSecond == 0 || progress > progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u",
-						        timeAsString(), progress, perSecond, pStore->numMember, skipUnsafe);
-					} else {
-						int eta = (int) ((progressHi - progress) / perSecond);
-
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u",
-						        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe);
-					}
-				}
-
-				member_t *pMember = pStore->members + iMid;
-				if (pMember->sid) {
-					signature_t *pSignature = pStore->signatures + pMember->sid;
-
-					// calculate head/tail
-					generator.decodeFast(pMember->name);
-					findHeadTail(pMember, generator);
-
-					if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
-						/*
-						 * Adding (unsafe) member to unsafe group
-						 */
-
-						// member should be unsafe
-						assert(pMember->flags & signature_t::SIGMASK_UNSAFE);
-						// nodeSize should match
-						assert(generator.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-
-					} else if (~pMember->flags & signature_t::SIGMASK_UNSAFE) {
-						/*
-						 * Adding safe member to safe group
-						 */
-
-						// nodeSize should match
-						assert(generator.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-
-						// add safe members to index
-						uint32_t ix = pStore->lookupMember(pMember->name);
-						assert(pStore->memberIndex[ix] == 0);
-						pStore->memberIndex[ix] = pStore->numMember;
-
-					} else if (generator.count - tinyTree_t::TINYTREE_NSTART < pSignature->size) {
-						/*
-						 * Adding unsafe member to safe group
-						 */
-
-					} else {
-						/*
-						 * Member got orphaned when group became safe
-						 */
-						skipUnsafe++;
-						this->progress++;
-						continue;
-					}
-
-					// add to group
-					pMember->nextMember = pSignature->firstMember;
-					pSignature->firstMember = pStore->numMember;
-
-					// copy
-					::memcpy(pStore->members + pStore->numMember, pMember, sizeof(*pMember));
-					pStore->numMember++;
-				}
-
-				this->progress++;
-			}
-
-			if (this->opt_verbose >= this->VERBOSE_TICK)
-				fprintf(stderr, "\r\e[K");
-
-			if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] Re-indexing. numMember=%u skipUnsafe=%u\n",
-				        timeAsString(), pStore->numMember, skipUnsafe);
-		}
+			fprintf(stderr, "[%s] Re-indexing. numMember=%u skipUnsafe=%u\n",
+			        timeAsString(), pStore->numMember, skipUnsafe);
 
 		/*
 		 * Recalculate unsafe/empty groups
@@ -1269,8 +1286,8 @@ struct genmemberContext_t : context_t {
 			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 				member_t *pMember = pStore->members + iMid;
 
-				generator.decodeFast(pMember->name);
-				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, generator.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+				tree.decodeFast(pMember->name);
+				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 			}
 		}
 
@@ -1868,7 +1885,12 @@ int main(int argc, char *const *argv) {
 	app.pStore = &store;
 	app.pInputDb = &db;
 
-	app.main(&store);
+	if (app.opt_load)
+		app.modeLoadFile();
+	else
+		app.modeLoadGenerator();
+
+	app.compact();
 
 	/*
 	 * Check that all unsafe groups have no safe members (or the group would have been safe)
