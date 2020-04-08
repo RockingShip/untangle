@@ -556,10 +556,8 @@ struct genmemberContext_t : context_t {
 			int perSecond = this->updateSpeed();
 
 			if (perSecond == 0 || progress > progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
 				        timeAsString(), progress, perSecond,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe,
 				        skipDuplicate, skipSize, skipUnsafe);
@@ -572,10 +570,8 @@ struct genmemberContext_t : context_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
 				        timeAsString(), progress, perSecond, (progress - treeR.windowLo) * 100.0 / (treeR.windowHi - treeR.windowLo), etaH, etaM, etaS,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe,
 				        skipDuplicate, skipSize, skipUnsafe);
@@ -918,11 +914,10 @@ struct genmemberContext_t : context_t {
 				int perSecond = this->updateSpeed();
 
 				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
 					        timeAsString(), progress, perSecond,
 					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
-					        store.numMember, store.numMember * 100.0 / store.maxMember,
 					        numEmpty, numUnsafe);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
@@ -933,11 +928,9 @@ struct genmemberContext_t : context_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
 					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
 					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
-					        store.numMember, store.numMember * 100.0 / store.maxMember,
 					        numEmpty, numUnsafe);
 				}
 			}
@@ -976,11 +969,9 @@ struct genmemberContext_t : context_t {
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
 			        timeAsString(),
 			        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-			        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
-			        store.numMember, store.numMember * 100.0 / store.maxMember,
 			        numEmpty, numUnsafe);
 
 	}
@@ -1005,17 +996,17 @@ struct genmemberContext_t : context_t {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 			assert(pMetrics);
 
-		// apply settings for `--task`
-		if (this->opt_taskLast) {
+			// apply settings for `--task`
+			if (this->opt_taskLast) {
 				// split progress into chunks
-			uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
-			if (taskSize == 0)
-				taskSize = 1;
-			generator.windowLo = taskSize * (this->opt_taskId - 1);
-			generator.windowHi = taskSize * this->opt_taskId;
+				uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
+				if (taskSize == 0)
+					taskSize = 1;
+				generator.windowLo = taskSize * (this->opt_taskId - 1);
+				generator.windowHi = taskSize * this->opt_taskId;
 
 				// limits
-			if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
+				if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
 					generator.windowHi = pMetrics->numProgress;
 			}
 
@@ -1041,7 +1032,7 @@ struct genmemberContext_t : context_t {
 			// show window
 			if (generator.windowLo || generator.windowHi) {
 				if (opt_verbose >= VERBOSE_SUMMARY)
-					fprintf(stderr, "[%s] Job window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
+					fprintf(stderr, "[%s] Task window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
 			}
 
 			// ticker needs `windowHi`
@@ -1068,7 +1059,7 @@ struct genmemberContext_t : context_t {
 			generator.restartTick = 0;
 
 			char name[64];
-			unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef ;
+			unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef;
 
 			// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
 			while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
@@ -1127,10 +1118,8 @@ struct genmemberContext_t : context_t {
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 			        timeAsString(),
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 			        numEmpty, numUnsafe,
 			        skipDuplicate, skipSize, skipUnsafe);
@@ -1405,7 +1394,7 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 	fprintf(stderr, "       %s --mode=merge   <output.db> <input.db> <numnode> --load=<file>  -- Merge collected members\n", argv[0]);
 //	fprintf(stderr, "       %s --selftest <input.db>            -- Test prerequisites\n", argv[0]);
 
-	static const char *modeNames[] = { "merge", "prepare", "collect" };
+	static const char *modeNames[] = {"merge", "prepare", "collect"};
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -1489,34 +1478,34 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",          1, 0, LO_DEBUG},
-			{"force",          0, 0, LO_FORCE},
-			{"help",           0, 0, LO_HELP},
-			{"imprintindex",   1, 0, LO_IMPRINTINDEX},
-			{"interleave",     1, 0, LO_INTERLEAVE},
-			{"keep",           0, 0, LO_KEEP},
+			{"debug",        1, 0, LO_DEBUG},
+			{"force",        0, 0, LO_FORCE},
+			{"help",         0, 0, LO_HELP},
+			{"imprintindex", 1, 0, LO_IMPRINTINDEX},
+			{"interleave",   1, 0, LO_INTERLEAVE},
+			{"keep",         0, 0, LO_KEEP},
 			{"load",         1, 0, LO_LOAD},
-			{"maximprint",     1, 0, LO_MAXIMPRINT},
-			{"maxmember",      1, 0, LO_MAXMEMBER},
-			{"memberindex",    0, 0, LO_MEMBERINDEX},
+			{"maximprint",   1, 0, LO_MAXIMPRINT},
+			{"maxmember",    1, 0, LO_MAXMEMBER},
+			{"memberindex",  0, 0, LO_MEMBERINDEX},
 			{"mode",         1, 0, LO_MODE},
-			{"no-paranoid",    0, 0, LO_NOPARANOID},
-			{"no-qntf",        0, 0, LO_NOQNTF},
-			{"paranoid",       0, 0, LO_PARANOID},
-			{"qntf",           0, 0, LO_QNTF},
-			{"quiet",          2, 0, LO_QUIET},
-			{"ratio",          1, 0, LO_RATIO},
-			{"selftest",       0, 0, LO_SELFTEST},
+			{"no-paranoid",  0, 0, LO_NOPARANOID},
+			{"no-qntf",      0, 0, LO_NOQNTF},
+			{"paranoid",     0, 0, LO_PARANOID},
+			{"qntf",         0, 0, LO_QNTF},
+			{"quiet",        2, 0, LO_QUIET},
+			{"ratio",        1, 0, LO_RATIO},
+			{"selftest",     0, 0, LO_SELFTEST},
 			{"sge",          0, 0, LO_SGE},
 			{"task",         1, 0, LO_TASK},
-			{"test",           0, 0, LO_TEST},
-			{"text",           2, 0, LO_TEXT},
-			{"timer",          1, 0, LO_TIMER},
-			{"verbose",        2, 0, LO_VERBOSE},
-			{"windowhi",       1, 0, LO_WINDOWHI},
-			{"windowlo",       1, 0, LO_WINDOWLO},
+			{"test",         0, 0, LO_TEST},
+			{"text",         2, 0, LO_TEXT},
+			{"timer",        1, 0, LO_TIMER},
+			{"verbose",      2, 0, LO_VERBOSE},
+			{"windowhi",     1, 0, LO_WINDOWHI},
+			{"windowlo",     1, 0, LO_WINDOWLO},
 			//
-			{NULL,             0, 0, 0}
+			{NULL,           0, 0, 0}
 		};
 
 		char optstring[128], *cp;
