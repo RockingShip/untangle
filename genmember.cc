@@ -174,6 +174,8 @@ struct genmemberContext_t : context_t {
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
+	/// @var {database_t} - Input database
+	database_t *pInputDb;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
@@ -211,6 +213,7 @@ struct genmemberContext_t : context_t {
 		opt_unsafe = 0;
 
 		pStore = NULL;
+		pInputDb = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
@@ -539,7 +542,12 @@ struct genmemberContext_t : context_t {
 		uint32_t sid = 0;
 		uint32_t tid = 0;
 
-		if (!pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
+		/*
+		 * @date 2020-04-07 23:43:19
+		 *
+		 * Lookup against input imprints as `pStore` may be undefined
+		 */
+		if (!pInputDb->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
 			return;
 
 		signature_t *pSignature = pStore->signatures + sid;
@@ -1808,6 +1816,10 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Invoke main entrypoint of application context
 	 */
+
+	app.pStore = &store;
+	app.pInputDb = &db;
+
 	app.main(&store);
 
 	/*
