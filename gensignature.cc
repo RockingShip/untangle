@@ -332,7 +332,7 @@ struct gensignatureContext_t : context_t {
 
 		signature_t *pSignature = pStore->signatures + sid;
 
-		int cmp = 0; // "<0" if "best < caldidate", ">0" if "best > candidate"
+		int cmp = 0; // "<0" if "best < candidate", ">0" if "best > candidate"
 
 		// Test for prime goal: reducing number of nodes
 		if (cmp == 0)
@@ -351,21 +351,18 @@ struct gensignatureContext_t : context_t {
 			cmp = pSignature->numBackRef - numBackRef;
 
 		// distinguish between shallow compare (`"-+"`) or deep compare (`"<>"`)
-		if (cmp < 0)
+		if (cmp < 0) {
 			cmp = '-';
-		else if (cmp > 0)
+		} else if (cmp > 0) {
 			cmp = '+';
-		else
-			cmp = '=';
-
+		} else {
 		/*
 		 * Compare layouts, expensive
 		 */
-		if (cmp == '=') {
 			tinyTree_t treeL(*this);
 			treeL.decodeFast(pSignature->name);
 
-			cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+			cmp = treeL.compare(treeL.root, treeR, treeR.root);
 
 			if (cmp < 0)
 				cmp = '<';
@@ -397,16 +394,6 @@ struct gensignatureContext_t : context_t {
 	 *
 	 * @param {signature_t} lhs - left hand side signature
 	 * @param {signature_t} rhs - right hand side signature
-	 * @param {context_t} state - I/O contect needed to create trees
-	 * @return
-	 */
-	/**
-	 * @date 2020-04-05 21:07:14
-	 *
-	 * Compare function for `qsort_r`
-	 *
-	 * @param {member_t} lhs - left hand side member
-	 * @param {member_t} rhs - right hand side member
 	 * @param {context_t} state - I/O contect needed to create trees
 	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
 	 */
@@ -452,7 +439,7 @@ struct gensignatureContext_t : context_t {
 			return cmp;
 
 		// Compare layouts, expensive
-		cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+		cmp = treeL.compare(treeL.root, treeR, treeR.root);
 		return cmp;
 	}
 
