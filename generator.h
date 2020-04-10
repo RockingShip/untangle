@@ -851,6 +851,76 @@ struct generatorTree_t : tinyTree_t {
 			return;
 		}
 
+		/*
+		 * @date 2020-04-10 13:26:27
+		 *
+		 * Test that endpoints are naturally ordered.
+		 * Templates might make things possible like "de+ab+c>+"
+		 * It's safe to ignore because the templates will offer a correct version
+		 */
+		if (this->count > TINYTREE_NSTART) {
+
+			uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+			int stackPos = 0;
+
+			// next free placeholder
+			unsigned nextPlaceholder = TINYTREE_KSTART;
+
+			// nodes already processed
+			uint32_t beenThere = (1 << 0);
+
+			// push root to start
+			stack[stackPos++] = this->count - 1;
+
+			do {
+				// pop stack
+				uint32_t curr = stack[--stackPos];
+
+				/*
+				 * Been here before
+				 */
+				if (beenThere & (1 << curr))
+					continue; // yes
+				beenThere |= 1 << curr;
+
+				if (curr < TINYTREE_NSTART) {
+					/*
+					 * Endpoint
+					 */
+					if (curr != nextPlaceholder)
+						return; // endpoints not properly ordered
+					nextPlaceholder++;
+				} else {
+					/*
+					 * Reference
+					 */
+
+					// unpack
+					uint32_t qtf = packedN[curr];
+
+					uint32_t F = qtf & PACKED_MASK;
+					qtf >>= PACKED_WIDTH;
+					uint32_t To = qtf & PACKED_MASK;
+					qtf >>= PACKED_WIDTH;
+					uint32_t Q = qtf & PACKED_MASK;
+
+					if (F && F < TINYTREE_NSTART)
+						stack[stackPos++] = F;
+					if (To && To < TINYTREE_NSTART && To != F)
+						stack[stackPos++] = To;
+					if (Q && Q < TINYTREE_NSTART)
+						stack[stackPos++] = Q;
+					if (F >= TINYTREE_NSTART)
+						stack[stackPos++] = F;
+					if (To >= TINYTREE_NSTART && To != F)
+						stack[stackPos++] = To;
+					if (Q >= TINYTREE_NSTART)
+						stack[stackPos++] = Q;
+				}
+
+			} while (stackPos > 0);
+		}
+
 		// snapshot
 		uint32_t savCount = this->count;
 
@@ -859,12 +929,12 @@ struct generatorTree_t : tinyTree_t {
 		char skin[MAXSLOTS + 1];
 
 		unpack(this->count - 1, name, skin);
-		assert(savCount = this->count); // `count`` may not change
+		assert(savCount == this->count); // `count`` may not change
 
 		// invoke the callback
 		if (cbObject != NULL) {
 			(*cbObject.*cbMember)(*this, name, numUnique);
-			assert(savCount = this->count); // `count`` may not change
+			assert(savCount == this->count); // `count`` may not change
 		}
 
 		// bump counter after processing
