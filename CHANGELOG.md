@@ -6,4 +6,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-* 2020-01-19 Initial commit.
+## 2.0.0 2019-01-26
+
+This release is to archive the current generator.
+
+For the `QnTF-only` dataset the generator needs to scan `6n9-QnTF` and possibly partially `7n9-QnTF` space.
+This requires a next-generation generator wit significantly less duplicates (curently 28%) and higher speed (`6n9-QnTF` 80 minutes). 
+
+ 
+Normalisations:
+
+ 1) Algebraic (function grouping)
+ 2) Dyadic ordering (layout ordering)
+ 3) Imprints (layout orientation "skins")
+ 4) Signature groups (restructuring)
+ 
+Features: 
+- Level 1+2 query `eval`
+- Level 3+4 query `slookup`
+- Skin/transform query `tlookup`
+- Database creation `gentransform` `gensignature` `genmember`
+- Build tool `genrestartdata`
+
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...HEAD

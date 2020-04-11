@@ -149,11 +149,11 @@ struct signature_t {
 	/// @var {number} size of tree in nodes
 	uint8_t size;
 
-	/// @var {number} number of endpoints
-	uint8_t numEndpoint;
-
 	/// @var {number} number of unique endpoints
 	uint8_t numPlaceholder;
+
+	/// @var {number} number of endpoints
+	uint8_t numEndpoint;
 
 	/// @var {number} number of back-references
 	uint8_t numBackRef;
@@ -210,11 +210,14 @@ struct member_t {
 	/// @var {number} flags
 	uint8_t flags;
 
-	/// @var {number} number of endpoints
-	uint8_t numEndpoint;
+	/// @var {number} size of tree in nodes
+	uint8_t size;
 
 	/// @var {number} number of unique endpoints
 	uint8_t numPlaceholder;
+
+	/// @var {number} number of endpoints
+	uint8_t numEndpoint;
 
 	/// @var {number} number of back-references
 	uint8_t numBackRef;

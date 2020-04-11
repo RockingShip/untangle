@@ -14,7 +14,7 @@
  *
  * For each signature group additional properties are determined.
  * - Scoring to filter which structures should be part of the group.
- * - Scoring to select the representitive.
+ * - Scoring to select the representative.
  * - Endpoint swapping for associative properties.
  *
  * `gensignature` self-test demonstrates:
@@ -257,7 +257,7 @@ struct gensignatureContext_t : context_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
+	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
@@ -276,20 +276,6 @@ struct gensignatureContext_t : context_t {
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d",
 				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint);
-			}
-		}
-
-		/*
-		 * name/notation analysis
-		 */
-		unsigned numEndpoint = 0;
-		unsigned numBackRef = 0;
-
-		for (const char *p = pNameR; *p; p++) {
-			if (islower(*p)) {
-				numEndpoint++;
-			} else if (isdigit(*p)) {
-				numBackRef++;
 			}
 		}
 
@@ -319,7 +305,7 @@ struct gensignatureContext_t : context_t {
 			pSignature->numBackRef = numBackRef;
 
 			if (opt_text == 2) {
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
 
 			return;
@@ -384,7 +370,7 @@ struct gensignatureContext_t : context_t {
 		}
 
 		if (opt_text == 2)
-			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numEndpoint, pSignature->numPlaceholder, pSignature->numBackRef);
+			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 	}
 
 	/**
@@ -477,9 +463,9 @@ struct gensignatureContext_t : context_t {
 
 			if (numNode == 0) {
 				generator.root = 0; // "0"
-				foundTreeCandidate(generator, "0", 0);
+				foundTreeCandidate(generator, "0", 0, 0, 0);
 				generator.root = 1; // "a"
-				foundTreeCandidate(generator, "a", 1);
+				foundTreeCandidate(generator, "a", 1, 1, 0);
 			} else {
 				unsigned endpointsLeft = numNode * 2 + 1;
 				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeCandidate);
@@ -926,7 +912,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -957,7 +943,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			if (progressHi)
@@ -1075,7 +1061,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {string} pName - Tree name/notation
 	 * @param {number} numUnique - number of unique endpoints in tree
 	 */
-	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
@@ -1154,9 +1140,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// special case (root only)
 			generator.root = 0; // "0"
-			foundTreeMetrics(generator, "0", 0);
+			foundTreeMetrics(generator, "0", 0, 0, 0);
 			generator.root = 1; // "a"
-			foundTreeMetrics(generator, "a", 1);
+			foundTreeMetrics(generator, "a", 1, 1, 0);
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;

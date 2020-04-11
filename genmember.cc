@@ -552,7 +552,7 @@ struct genmemberContext_t : context_t {
 	 * @param {string} pNameR - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder) {
+	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
 			tick = 0;
 			int perSecond = this->updateSpeed();
@@ -644,15 +644,8 @@ struct genmemberContext_t : context_t {
 
 		pMember->sid = sid;
 		pMember->numPlaceholder = numPlaceholder;
-
-		// name/notation analysis
-		for (const char *p = pNameR; *p; p++) {
-			if (islower(*p)) {
-				pMember->numEndpoint++;
-			} else if (isdigit(*p)) {
-				pMember->numBackRef++;
-			}
-		}
+		pMember->numEndpoint = numEndpoint;
+		pMember->numBackRef = numBackRef;
 
 		/*
 		 * handle heads/tails
@@ -860,7 +853,7 @@ struct genmemberContext_t : context_t {
 			return cmp;
 
 		// Compare layouts, expensive
-		cmp = treeL.compare(treeL.root, treeR, treeR.root, true);
+		cmp = treeL.compare(treeL.root, treeR, treeR.root);
 		return cmp;
 	}
 
@@ -1013,7 +1006,7 @@ struct genmemberContext_t : context_t {
 		// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
 		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
 			tree.decodeFast(name);
-			foundTreeMember(tree, name, numPlaceholder);
+			foundTreeMember(tree, name, numPlaceholder, numEndpoint, numBackRef);
 			progress++;
 		}
 
@@ -1118,9 +1111,9 @@ struct genmemberContext_t : context_t {
 
 			if (numNode == 0) {
 				generator.root = 0; // "0"
-				foundTreeMember(generator, "0", 0);
+				foundTreeMember(generator, "0", 0, 0, 0);
 				generator.root = 1; // "a"
-				foundTreeMember(generator, "a", 1);
+				foundTreeMember(generator, "a", 1, 1, 0);
 			} else {
 				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
 			}
@@ -1146,7 +1139,7 @@ struct genmemberContext_t : context_t {
 	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
 	 */
 	void compact(void) {
-		tinyTree_t tree(*this);
+		generatorTree_t tree(*this);
 
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting\n", timeAsString());

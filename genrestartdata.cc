@@ -223,7 +223,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {number} numPlaceholder - number of unique endpoints in tree
 	 */
-	void foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder) {
+	void foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*
 		 * Ticker
 		 */
@@ -307,9 +307,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		if (numNode == 0) {
 			generator.root = 0;
-			foundTreeCandidate(generator, "0", 0);
+			foundTreeCandidate(generator, "0", 0, 0, 0);
 			generator.root = 1;
-			foundTreeCandidate(generator, "a", 1);
+			foundTreeCandidate(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = numNode * 2 + 1;
 			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);

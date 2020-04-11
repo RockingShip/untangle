@@ -567,7 +567,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @typedef {callback} generateTreeCallback_t
 	 */
-	typedef void(context_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned);
+	typedef void(context_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned, unsigned, unsigned);
 
 	/**
 	 * @date 2020-03-18 22:17:26
@@ -582,7 +582,7 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {object} cbObject - callback object
 	 * @param {object} cbMember - callback member in object
 	 */
-	inline void callFoundTree(context_t *cbObject, generateTreeCallback_t cbMember) {
+	void callFoundTree(context_t *cbObject, generateTreeCallback_t cbMember) {
 		// test that tree is within limits
 		assert(this->count >= TINYTREE_NSTART && this->count <= TINYTREE_NEND);
 
@@ -743,7 +743,7 @@ struct generatorTree_t : tinyTree_t {
 		 */
 		if (cbObject != NULL) {
 			uint32_t savCount = this->count;
-			(*cbObject.*cbMember)(*this, name, numPlaceholder);
+			(*cbObject.*cbMember)(*this, name, numPlaceholder, numEndpoint, numBackRef);
 			assert(savCount == this->count); // `count`` may not change
 		}
 
