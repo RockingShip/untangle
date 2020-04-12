@@ -6,12 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## 2.0.0 2019-01-26
+2020-04-12 23:10:40 Next-generation generator.
+
+## 2.0.0 2020-04-11 16:27:00
 
 This release is to archive the current generator.
 
 For the `QnTF-only` dataset the generator needs to scan `6n9-QnTF` and possibly partially `7n9-QnTF` space.
-This requires a next-generation generator wit significantly less duplicates (curently 28%) and higher speed (`6n9-QnTF` 80 minutes). 
+This requires a next-generation generator wit significantly less duplicates (currently 28%) and higher speed (`6n9-QnTF` 80 minutes). 
 
  
 Normalisations:

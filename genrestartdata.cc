@@ -107,8 +107,6 @@ struct genrestartdataContext_t : context_t {
 			// mark section not in use
 			buildProgressIndex[numArgs][iQnTF] = 0;
 
-			unsigned endpointsLeft = numArgs * 2 + 1;
-
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iQnTF, numArgs);
 			if (pMetrics) {
 				if (pMetrics->noauto)
@@ -130,7 +128,8 @@ struct genrestartdataContext_t : context_t {
 				this->tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
-				generator.generateTrees(endpointsLeft, 0, 0, NULL, NULL);
+				unsigned endpointsLeft = numArgs * 2 + 1;
+				generator.generateTrees(numArgs, endpointsLeft, 0, 0, NULL, NULL);
 
 				// was there any output
 				if (buildProgressIndex[numArgs][iQnTF] != generator.numFoundRestart) {
@@ -312,7 +311,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			foundTreeCandidate(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = numNode * 2 + 1;
-			generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
+			generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_TICK)

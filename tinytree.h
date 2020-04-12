@@ -69,7 +69,7 @@ struct tinyTree_t {
 
 	enum {
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = 5 * 2, // for 5n9
+		TINYTREE_MAXNODES = 7,
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,

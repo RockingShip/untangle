@@ -157,9 +157,7 @@
 #include "config.h"
 
 #if defined(ENABLE_JANSSON)
-
 #include "jansson.h"
-
 #endif
 
 /**
@@ -558,11 +556,11 @@ struct genmemberContext_t : context_t {
 			int perSecond = this->updateSpeed();
 
 			if (perSecond == 0 || progress > progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
 				        timeAsString(), progress, perSecond,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe,
-				        skipDuplicate, skipSize, skipUnsafe);
+				        skipDuplicate, skipSize, skipUnsafe, (double) cntCompare / cntHash);
 			} else {
 				int eta = (int) ((treeR.windowHi - progress) / perSecond);
 
@@ -572,11 +570,11 @@ struct genmemberContext_t : context_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
 				        timeAsString(), progress, perSecond, (progress - treeR.windowLo) * 100.0 / (treeR.windowHi - treeR.windowLo), etaH, etaM, etaS,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe,
-				        skipDuplicate, skipSize, skipUnsafe);
+				        skipDuplicate, skipSize, skipUnsafe, (double) cntCompare / cntHash);
 			}
 
 			if (treeR.restartTick) {
@@ -909,11 +907,11 @@ struct genmemberContext_t : context_t {
 				int perSecond = this->updateSpeed();
 
 				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond,
 					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
-					        numEmpty, numUnsafe);
+					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
 
@@ -923,10 +921,10 @@ struct genmemberContext_t : context_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
 					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-					        numEmpty, numUnsafe);
+					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
 				}
 			}
 
@@ -1093,7 +1091,6 @@ struct genmemberContext_t : context_t {
 		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// find metrics for setting
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
-			unsigned endpointsLeft = numNode * 2 + 1;
 
 			// clear tree
 			generator.clearGenerator();
@@ -1115,7 +1112,8 @@ struct genmemberContext_t : context_t {
 				generator.root = 1; // "a"
 				foundTreeMember(generator, "a", 1, 1, 0);
 			} else {
-				generator.generateTrees(endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
+				unsigned endpointsLeft = numNode * 2 + 1;
+				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
 			}
 
 			if (this->opt_verbose >= this->VERBOSE_TICK)
@@ -1171,8 +1169,8 @@ struct genmemberContext_t : context_t {
 				int perSecond = this->updateSpeed();
 
 				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u",
-					        timeAsString(), progress, perSecond, pStore->numMember, skipUnsafe);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u | hash=%.3f",
+					        timeAsString(), progress, perSecond, pStore->numMember, skipUnsafe, (double) cntCompare / cntHash);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
 
@@ -1182,8 +1180,8 @@ struct genmemberContext_t : context_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u",
-					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u | hash=%.3f",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe, (double) cntCompare / cntHash);
 				}
 			}
 
@@ -1458,13 +1456,13 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_FORCE,
-			LO_IMPRINTINDEX,
+			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
 			LO_KEEP,
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
-			LO_MEMBERINDEX,
+			LO_MEMBERINDEXSIZE,
 			LO_MODE,
 			LO_NOPARANOID,
 			LO_NOQNTF,
@@ -1488,34 +1486,34 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",        1, 0, LO_DEBUG},
-			{"force",        0, 0, LO_FORCE},
-			{"help",         0, 0, LO_HELP},
-			{"imprintindex", 1, 0, LO_IMPRINTINDEX},
-			{"interleave",   1, 0, LO_INTERLEAVE},
-			{"keep",         0, 0, LO_KEEP},
-			{"load",         1, 0, LO_LOAD},
-			{"maximprint",   1, 0, LO_MAXIMPRINT},
-			{"maxmember",    1, 0, LO_MAXMEMBER},
-			{"memberindex",  0, 0, LO_MEMBERINDEX},
-			{"mode",         1, 0, LO_MODE},
-			{"no-paranoid",  0, 0, LO_NOPARANOID},
-			{"no-qntf",      0, 0, LO_NOQNTF},
-			{"paranoid",     0, 0, LO_PARANOID},
-			{"qntf",         0, 0, LO_QNTF},
-			{"quiet",        2, 0, LO_QUIET},
-			{"ratio",        1, 0, LO_RATIO},
-			{"selftest",     0, 0, LO_SELFTEST},
-			{"sge",          0, 0, LO_SGE},
-			{"task",         1, 0, LO_TASK},
-			{"test",         0, 0, LO_TEST},
-			{"text",         2, 0, LO_TEXT},
-			{"timer",        1, 0, LO_TIMER},
-			{"verbose",      2, 0, LO_VERBOSE},
-			{"windowhi",     1, 0, LO_WINDOWHI},
-			{"windowlo",     1, 0, LO_WINDOWLO},
+			{"debug",            1, 0, LO_DEBUG},
+			{"force",            0, 0, LO_FORCE},
+			{"help",             0, 0, LO_HELP},
+			{"imprintindexsize", 1, 0, LO_IMPRINTINDEXSIZE},
+			{"interleave",       1, 0, LO_INTERLEAVE},
+			{"keep",             0, 0, LO_KEEP},
+			{"load",             1, 0, LO_LOAD},
+			{"maximprint",       1, 0, LO_MAXIMPRINT},
+			{"maxmember",        1, 0, LO_MAXMEMBER},
+			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
+			{"mode",             1, 0, LO_MODE},
+			{"no-paranoid",      0, 0, LO_NOPARANOID},
+			{"no-qntf",          0, 0, LO_NOQNTF},
+			{"paranoid",         0, 0, LO_PARANOID},
+			{"qntf",             0, 0, LO_QNTF},
+			{"quiet",            2, 0, LO_QUIET},
+			{"ratio",            1, 0, LO_RATIO},
+			{"selftest",         0, 0, LO_SELFTEST},
+			{"sge",              0, 0, LO_SGE},
+			{"task",             1, 0, LO_TASK},
+			{"test",             0, 0, LO_TEST},
+			{"text",             2, 0, LO_TEXT},
+			{"timer",            1, 0, LO_TIMER},
+			{"verbose",          2, 0, LO_VERBOSE},
+			{"windowhi",         1, 0, LO_WINDOWHI},
+			{"windowlo",         1, 0, LO_WINDOWLO},
 			//
-			{NULL,           0, 0, 0}
+			{NULL,               0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -1550,7 +1548,7 @@ int main(int argc, char *const *argv) {
 			case LO_HELP:
 				usage(argv, true, &app);
 				exit(0);
-			case LO_IMPRINTINDEX:
+			case LO_IMPRINTINDEXSIZE:
 				app.opt_imprintIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
@@ -1570,7 +1568,7 @@ int main(int argc, char *const *argv) {
 			case LO_MAXMEMBER:
 				app.opt_maxMember = (uint32_t) strtoul(optarg, NULL, 0);
 				break;
-			case LO_MEMBERINDEX:
+			case LO_MEMBERINDEXSIZE:
 				app.opt_memberIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_MODE: {
@@ -1787,13 +1785,14 @@ int main(int argc, char *const *argv) {
 		}
 
 		if (app.opt_maxImprint == 0) {
-			// get worse-case `numNode` because settings is most likely to be different from `db` and arg_numNodes can be >= 0
-			/*
-			 * @date 2020-04-05 00:15:27
-			 *
-			 * When generating based on `4n9-QTF` dataset with 791646 signatures, use metrics `gensignature` used
-			 */
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, 0 /*!!!*/, store.interleave, 4 /*!!!*/);
+			const metricsImprint_t *pMetrics;
+
+			// don't go below 4 nodes because input database has 4n9 signatures
+			if (app.arg_numNodes < 4)
+				pMetrics = getMetricsImprint(MAXSLOTS, 0, store.interleave, 4);
+			else
+				pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, store.interleave, app.arg_numNodes);
+
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
@@ -1815,6 +1814,12 @@ int main(int argc, char *const *argv) {
 			store.memberIndexSize = app.nextPrime(store.maxMember * app.opt_ratio);
 		else
 			store.memberIndexSize = app.opt_memberIndexSize;
+
+		// section needs minimal size or input data might not fit
+		if (store.maxMember < db.numMember)
+			store.maxMember = db.numMember;
+		if (store.memberIndexSize < db.memberIndexSize)
+			store.memberIndexSize = db.memberIndexSize;
 
 		if (store.interleave == 0 || store.interleaveStep == 0)
 			app.fatal("no preset for --interleave\n");

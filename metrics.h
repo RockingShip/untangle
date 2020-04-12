@@ -82,6 +82,13 @@ struct metricsInterleave_t {
 
 	/*
 	 * non-Key
+	 *
+	 * @date 2020-04-12 15:11:00
+	 *
+	 * `numStored` and `numRuntime` is the division between storage and computation tradeoff.
+	 * Their product should always be `numSlot`!
+	 * `interleaveStep` determines if "rows" or "columns" are stored. This impacts CPU caching.
+	 * if `interleaveStep` == `numStored` then "store key columns" else "store key rows"
 	 */
 
 	/// @var {number} - How many row/columns need to be permuted at runtime.
@@ -89,8 +96,6 @@ struct metricsInterleave_t {
 
 	/// @var {number} - Row interleave (distance between two adjacent row keys)
 	unsigned interleaveStep;
-
-	// NOTE: if (interleaveStep == numStored) then "store key columns" else "store key rows"
 
 	/// @var {number} - Some indication of number of associative lookups per second
 	unsigned speed;
@@ -101,16 +106,20 @@ struct metricsInterleave_t {
 	int zero; // to screen align data
 };
 
+/*
+ * NOTE: run `gensignature --selftest` after changing this table.
+ */
 static const metricsInterleave_t metricsInterleave[] = {
-	{9, 120,   3024, 120,   8850,   6.896,    0}, // runtime slowest
-	{9, 504,   720,  720,   51840,  28.78,    0},
-	{9, 720,   504,  720,   90720,  41.095,   0},
-	{9, 3024,  120,  120,   362880, 172.420,  0}, // runtime fastest
+	{9, 120 /*5!*/,    3024,       120,    8850,   6.896,    0}, // runtime slowest
+	{9, 504,           720/*6!*/,  720,    51840,  28.78,    0},
+	{9, 720 /*6!*/,    504,        720,    90720,  41.095,   0},
+	{9, 3024,          120 /*5!*/, 120,    362880, 172.420,  0}, // runtime fastest
 	// some high-speed pairs for limited index size (for `genmember`)
-	{9, 5040,  72,   5040,  362880, 287.330,  0},
-	{9, 15120, 24,   24,    362880, 861.876,  0},
-	{9, 40320, 9,    40320, 362880, 2298.240, 0},
-	{9, 60480, 6,    6,     362880, 3447.331, 0},
+	{9, 5040/*7!*/,    72,         5040,   362880, 287.330,  0},
+	{9, 15120,         24 /*4!*/,  24,     362880, 861.876,  0},
+	{9, 40320 /*8!*/,  9,          40320,  362880, 2298.240, 0},
+	{9, 60480,         6 /*3!*/,   6,      362880, 3447.331, 0},
+	{9, 362880 /*9!*/, 1,          362880, 362880, 3447.331, 0},
 	//
 	{0}
 };
@@ -194,6 +203,16 @@ struct metricsImprint_t {
 
 	/*
 	 * non-Key
+	 *
+	 * @date 2020-04-12 15:25:33
+	 *
+	 * `speed`/`storage` are only used for visual hints.
+	 * `speed` is based on random collection which changes per run.
+	 * `speed` is tuned to an "AMD Ryzen 1950X"
+	 *
+	 * On the long run, the higher the interleave the faster.
+	 * Values above 5040 can be dramatically faster which is exploited by `genmember`
+	 *
 	 */
 
 	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
@@ -213,51 +232,56 @@ struct metricsImprint_t {
  * @date 2020-03-23 14:06:19
  *   recalculating these metrics cost about 30 minutes
  */
-// @date 2020-04-11 13:05:46 - last updated
+// @date 2020-04-12 15:29:55 - last updated
 static const metricsImprint_t metricsImprint[] = {
-	{9, 1, 504,  0, 6,          103.774, 0.000,  0},
-	{9, 1, 120,  0, 7,          62.566,  0.000,  0},
-	{9, 1, 3024, 0, 7,          65.534,  0.000,  0},
-	{9, 1, 720,  0, 8,          51.256,  0.000,  0},
-	{9, 1, 504,  1, 67,         57.586,  0.000,  0},
-	{9, 1, 120,  1, 107,        45.747,  0.000,  0},
-	{9, 1, 3024, 1, 123,        51.530,  0.000,  0},
-	{9, 1, 720,  1, 188,        45.316,  0.000,  0},
-	{9, 1, 504,  2, 2176,       34.543,  0.000,  0},
-	{9, 1, 120,  2, 3177,       30.567,  0.000,  0},
-	{9, 1, 3024, 2, 6137,       34.707,  0.001,  0},
-	{9, 1, 720,  2, 9863,       30.290,  0.001,  0},
-	{9, 1, 120,  3, 126802,     15.363,  0.012,  0},
-	{9, 1, 504,  3, 149493,     23.876,  0.014,  0},
-	{9, 1, 3024, 3, 561056,     13.512,  0.052,  0},
-	{9, 1, 720,  3, 647618,     11.317,  0.060,  0},
-	{9, 1, 120,  4, 10425340,   8.257,   0.959,  0}, // <-- default
-	{9, 1, 504,  4, 19345546,   9.890,   1.780,  0},
-	{9, 1, 720,  4, 61887091,   7.309,   5.694,  0},
-	{9, 1, 3024, 4, 61887091,   8.219,   8.083,  0},
-	{9, 1, 504,  5, 1035381442, 0,       0,      1}, // from historic metrics
+	{9, 1, 504,    0, 6,          102.166, 0.000,  0},
+	{9, 1, 120,    0, 7,          78.162,  0.000,  0},
+	{9, 1, 3024,   0, 7,          72.493,  0.000,  0},
+	{9, 1, 720,    0, 8,          53.880,  0.000,  0},
+	{9, 1, 504,    1, 67,         62.045,  0.000,  0},
+	{9, 1, 120,    1, 107,        49.895,  0.000,  0},
+	{9, 1, 3024,   1, 123,        55.162,  0.000,  0},
+	{9, 1, 720,    1, 188,        47.703,  0.000,  0},
+	{9, 1, 504,    2, 2176,       37.082,  0.000,  0},
+	{9, 1, 120,    2, 3177,       32.906,  0.000,  0},
+	{9, 1, 3024,   2, 6137,       36.216,  0.001,  0},
+	{9, 1, 720,    2, 9863,       33.732,  0.001,  0},
+	{9, 1, 120,    3, 126802,     17.617,  0.012,  0},
+	{9, 1, 504,    3, 149379,     25.423,  0.014,  0},
+	{9, 1, 3024,   3, 560824,     13.882,  0.052,  0},
+	{9, 1, 720,    3, 647618,     12.226,  0.060,  0},
+	{9, 1, 120,    4, 10424640,   8.558,   0.959,  0}, // <-- default
+	{9, 1, 504,    4, 19338792,   10.006,  1.780,  0},
+	{9, 1, 720,    4, 61887211,   7.396,   5.694,  0},
+	{9, 1, 3024,   4, 87834669,   7.217,   8.083,  0},
+	{9, 1, 504,    5, 1035381442, 0,       0,      1}, // from historic metrics
 	//
-	{9, 0, 504,  0, 6,          98.814,  0.000,  0},
-	{9, 0, 120,  0, 7,          60.968,  0.000,  0},
-	{9, 0, 3024, 0, 7,          71.219,  0.000,  0},
-	{9, 0, 720,  0, 8,          53.418,  0.000,  0},
-	{9, 0, 504,  1, 108,        57.83,   0.000,  0},
-	{9, 0, 120,  1, 177,        42.62,   0.000,  0},
-	{9, 0, 3024, 1, 207,        51.21,   0.000,  0},
-	{9, 0, 720,  1, 323,        45.26,   0.000,  0},
-	{9, 0, 504,  2, 6327,       36.729,  0.001,  0},
-	{9, 0, 120,  2, 8827,       30.542,  0.001,  0},
-	{9, 0, 3024, 2, 18706,      34.517,  0.002,  0},
-	{9, 0, 720,  2, 29743,      31.412,  0.003,  0},
-	{9, 0, 120,  3, 591412,     11.830,  0.054,  0},
-	{9, 0, 504,  3, 775391,     14.745,  0.071,  0},
-	{9, 0, 3024, 3, 3053155,    10.399,  0.281,  0},
-	{9, 0, 720,  3, 3283078,    9.194,   0.302,  0},
-	{9, 0, 120,  4, 89012170,   7.968,   8.189,  0}, // <-- default
-	{9, 0, 504,  4, 181878282,  8.737,   16.733, 0},
-	{9, 0, 720,  4, 531747316,  5.872,   48.920, 0},
-	{9, 0, 3024, 4, 0,          0,       0,      1}, // too large
+	{9, 0, 504,    0, 6,          93.006,  0.000,  0},
+	{9, 0, 120,    0, 7,          72.315,  0.000,  0},
+	{9, 0, 3024,   0, 7,          72.796,  0.000,  0},
+	{9, 0, 720,    0, 8,          53.743,  0.000,  0},
+	{9, 0, 504,    1, 108,        56.315,  0.000,  0},
+	{9, 0, 120,    1, 177,        43.700,  0.000,  0},
+	{9, 0, 3024,   1, 207,        50.036,  0.000,  0},
+	{9, 0, 720,    1, 323,        44.937,  0.000,  0},
+	{9, 0, 504,    2, 6327,       36.780,  0.001,  0},
+	{9, 0, 120,    2, 8827,       29.721,  0.001,  0},
+	{9, 0, 3024,   2, 18706,      33.313,  0.002,  0},
+	{9, 0, 720,    2, 29743,      32.139,  0.003,  0},
+	{9, 0, 120,    3, 591412,     11.892,  0.054,  0},
+	{9, 0, 504,    3, 775199,     15.586,  0.071,  0},
+	{9, 0, 3024,   3, 3052779,    10.341,  0.281,  0},
+	{9, 0, 720,    3, 3283078,    9.359,   0.302,  0},
+	{9, 0, 120,    4, 89019740,   7.756,   8.189,  0}, // <-- default
+	{9, 0, 504,    4, 181859539,  7.046,   16.733, 0},
+	{9, 0, 720,    4, 531756796,  3.989,   48.920, 0},
+	{9, 0, 3024,   4, 0,          0,       0,      1}, // too large
 	//
+	// special presets for `genmember` assuming 4n9 signatures
+	{9, 0, 15120,  5, 8493341,    0,       0,      1},
+	{9, 0, 40320,  5, 40481281,   0,       0,      1}, // The high number of imprints is because row/col has a different spread which has less re-usability
+	{9, 0, 60480,  5, 26043121,   0,       0,      1},
+	{9, 0, 362880, 5, 118903681,  0,       0,      1},
 	{0}
 };
 
@@ -309,6 +333,12 @@ struct metricsGenerator_t {
 
 	/*
 	 * non-Key
+	 *
+	 * @date 2020-04-12 15:04:32
+	 *
+	 * `numCandidate`/`numProgress` indicates how many duplicates the generator creates.
+	 * `numSignature`/`numCandidate` indicates how much redundancy a structure space has.
+	 * `numMember`/`numSignature` indicates the average size of signature groups.
 	 */
 
 	/// @var {number} - Total number of `foundTrees()` called. Provided by `genrestartdata`
@@ -320,14 +350,14 @@ struct metricsGenerator_t {
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
-	/// @var {number} - Total members (before compacting). Provided by `genmember`. Intended for `4n9` signature space
+	/// @var {number} - Total members (before compacting). Provided by `genmember`. Working from `4n9` signature space
 	uint64_t numMember; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
 	int noauto;
 };
 
-// @date 2020-04-11 12:42:47 - last updated
+// @date 2020-04-12 14:42:20 - last updated
 static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 0, 0,             3,         3,        3,       0},
 	{9, 0, 0, 0,             3,         3,        3,       0},
@@ -335,12 +365,12 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 1, 6,             7,         9,        9,       0},
 	{9, 1, 2, 154,           155,       49,       108,     0},
 	{9, 0, 2, 424,           425,       110,      275,     0},
-	{9, 1, 3, 17521,         15229,     1311,     6862,    0},
-	{9, 0, 3, 91709,         80090,     5666,     29900,   0},
-	{9, 1, 4, 3676026,       2799167,   96363,    801917,  0},
-	{9, 0, 4, 37344253,      28521537,  791647,   5959653, 0},
-	{9, 1, 5, 1221623827,    817901390, 10233318, 0,       0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
-	{9, 0, 5, 25583691074,   0,         0,        6608427, 1},
+	{9, 1, 3, 15540,         15221,     1311,     6862,    0},
+	{9, 0, 3, 81151,         79835,     5666,     29721,   0},
+	{9, 1, 4, 2887974,       2777493,   96363,    801917,  0},
+	{9, 0, 4, 29185094,      28304991,  791647,   5959653, 0},
+	{9, 1, 5, 858805139,     809357847, 10233318, 0,       0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
+	{9, 0, 5, 25583691074,   0,         0,        6608427, 0},
 	{9, 1, 6, 633200151789,  0,         0,        0,       1}, // numProgress takes about 80 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        0,       1}, // from historic metrics
 	//
