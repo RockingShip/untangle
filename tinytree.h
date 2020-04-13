@@ -39,6 +39,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <string.h>
+#include <immintrin.h>
 #include "context.h"
 #include "datadef.h"
 
@@ -1318,29 +1319,158 @@ struct tinyTree_t {
 	 * @date 2020-03-09 19:36:17
 	 */
 	inline void eval(footprint_t *v) const {
+#if defined(__AVX2__)
+		#warning AVX2 instructions not tested
+		/*
+		 * 0x263 bytes of code when compiled with -O3 -mavx2
+		 */
+
 		// for all operators eligible for evaluation...
-		for (uint32_t i = TINYTREE_NSTART; i < this->count; i++) {
+		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
 			// point to the first chunk of the `"question"`
-			const uint64_t *Q = v[this->N[i].Q].bits;
+			const __m256i *Q = (const __m256i *) v[N[i].Q].bits;
 			// point to the first chunk of the `"when-true"`
 			// NOTE: this can be marked as "value needs be runtime inverted"
-			const uint64_t *T = v[this->N[i].T & ~IBIT].bits;
+			const __m256i *T = (const __m256i *) v[N[i].T & ~IBIT].bits;
 			// point to the first chunk of the `"when-false"`
-			const uint64_t *F = v[this->N[i].F].bits;
+			const __m256i *F = (const __m256i *) v[N[i].F].bits;
+			// point to the first chunk of the `"result"`
+			__m256i *R = (__m256i *) v[i].bits;
+
+			// determine if the operator is `QTF` or `QnTF`
+			if (N[i].T & IBIT) {
+				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
+				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
+				__m256i nTQ[4], nQF[4];
+				nTQ[0] = _mm256_andnot_si256(T[0], Q[0]);
+				nTQ[1] = _mm256_andnot_si256(T[1], Q[1]);
+				nQF[0] = _mm256_andnot_si256(Q[0], F[0]);
+				nQF[1] = _mm256_andnot_si256(Q[1], F[1]);
+				R[0] = _mm256_xor_si256(nTQ[0], nQF[0]);
+				R[1] = _mm256_xor_si256(nTQ[1], nQF[1]);
+			} else {
+				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
+				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
+				__m256i TQ[4], nQF[4];
+				TQ[0] = _mm256_and_si256(T[0], Q[0]);
+				TQ[1] = _mm256_and_si256(T[1], Q[1]);
+				nQF[0] = _mm256_andnot_si256(Q[0], F[0]);
+				nQF[1] = _mm256_andnot_si256(Q[1], F[1]);
+				R[0] = _mm256_xor_si256(TQ[0], nQF[0]);
+				R[1] = _mm256_xor_si256(TQ[1], nQF[1]);
+			}
+		}
+#elif defined(__SSE2__)
+		/*
+		 * 0x118 bytes of code when compiled with -O3 -msse2. This is default on x86-64
+		 */
+
+		// for all operators eligible for evaluation...
+		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+			// point to the first chunk of the `"question"`
+			const __m128i *Q = (const __m128i *) v[N[i].Q].bits;
+			// point to the first chunk of the `"when-true"`
+			// NOTE: this can be marked as "value needs be runtime inverted"
+			const __m128i *T = (const __m128i *) v[N[i].T & ~IBIT].bits;
+			// point to the first chunk of the `"when-false"`
+			const __m128i *F = (const __m128i *) v[N[i].F].bits;
+			// point to the first chunk of the `"result"`
+			__m128i *R = (__m128i *) v[i].bits;
+
+			// determine if the operator is `QTF` or `QnTF`
+			if (N[i].T & IBIT) {
+				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
+				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
+				__m128i nTQ[4], nQF[4];
+				nTQ[0] = _mm_andnot_si128(T[0], Q[0]);
+				nTQ[1] = _mm_andnot_si128(T[1], Q[1]);
+				nTQ[2] = _mm_andnot_si128(T[2], Q[2]);
+				nTQ[3] = _mm_andnot_si128(T[3], Q[3]);
+				nQF[0] = _mm_andnot_si128(Q[0], F[0]);
+				nQF[1] = _mm_andnot_si128(Q[1], F[1]);
+				nQF[2] = _mm_andnot_si128(Q[2], F[2]);
+				nQF[3] = _mm_andnot_si128(Q[3], F[3]);
+				R[0] = _mm_xor_si128(nTQ[0], nQF[0]);
+				R[1] = _mm_xor_si128(nTQ[1], nQF[1]);
+				R[2] = _mm_xor_si128(nTQ[2], nQF[2]);
+				R[3] = _mm_xor_si128(nTQ[3], nQF[3]);
+			} else {
+				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
+				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
+				__m128i TQ[4], nQF[4];
+				TQ[0] = _mm_and_si128(T[0], Q[0]);
+				TQ[1] = _mm_and_si128(T[1], Q[1]);
+				TQ[2] = _mm_and_si128(T[2], Q[2]);
+				TQ[3] = _mm_and_si128(T[3], Q[3]);
+				nQF[0] = _mm_andnot_si128(Q[0], F[0]);
+				nQF[1] = _mm_andnot_si128(Q[1], F[1]);
+				nQF[2] = _mm_andnot_si128(Q[2], F[2]);
+				nQF[3] = _mm_andnot_si128(Q[3], F[3]);
+				R[0] = _mm_xor_si128(TQ[0], nQF[0]);
+				R[1] = _mm_xor_si128(TQ[1], nQF[1]);
+				R[2] = _mm_xor_si128(TQ[2], nQF[2]);
+				R[3] = _mm_xor_si128(TQ[3], nQF[3]);
+			}
+		}
+#elif 0
+		#warning gcc vectors are inefficient
+		/*
+		 * 0xa94 bytes of code when compiled with -O3
+		 */
+		typedef int v512_t __attribute__ ((vector_size (64)));
+
+		// for all operators eligible for evaluation...
+		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+			// point to the first chunk of the `"question"`
+			const v512_t *Q = (const v512_t *) v[N[i].Q].bits;
+			// point to the first chunk of the `"when-true"`
+			// NOTE: this can be marked as "value needs be runtime inverted"
+			const v512_t *T = (const v512_t *) v[N[i].T & ~IBIT].bits;
+			// point to the first chunk of the `"when-false"`
+			const v512_t *F = (const v512_t *) v[N[i].F].bits;
+			// point to the first chunk of the `"result"`
+			v512_t *R = (v512_t *) v[i].bits;
+
+			// determine if the operator is `QTF` or `QnTF`
+			if (N[i].T & IBIT) {
+				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
+				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
+				*R = (*Q & ~*T) ^ (~*Q & *F);
+			} else {
+				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
+				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
+				*R = (*Q & *T) ^ (~*Q & *F);
+			}
+		}
+#else
+		/*
+		 * 0x208 bytes of code when compiled with -O3
+		 */
+
+		// for all operators eligible for evaluation...
+		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+			// point to the first chunk of the `"question"`
+			const uint64_t *Q = v[N[i].Q].bits;
+			// point to the first chunk of the `"when-true"`
+			// NOTE: this can be marked as "value needs be runtime inverted"
+			const uint64_t *T = v[N[i].T & ~IBIT].bits;
+			// point to the first chunk of the `"when-false"`
+			const uint64_t *F = v[N[i].F].bits;
 			// point to the first chunk of the `"result"`
 			uint64_t *R = v[i].bits;
 
 			// determine if the operator is `QTF` or `QnTF`
-			if (this->N[i].T & IBIT) {
+			if (N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				for (unsigned j = 0; j < footprint_t::QUADPERFOOTPRINT; j++)
 					R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j]);
 			} else {
-				// `QnTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
+				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				for (unsigned j = 0; j < footprint_t::QUADPERFOOTPRINT; j++)
 					R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
 			}
 		}
+#endif
 	}
 
 	/**
