@@ -114,16 +114,16 @@ If building hits some limit, set `--maxmember` to some higher value and update m
 If you are in need for textual lists of candidates (about 1Gbyte):
 
 ```sh
-    ./gensignature 0n9.db transform.db 0 --text=1 >0n9-1.txt
-    ./gensignature 0n9.db transform.db 0 --text=2 >0n9-2.txt --test
-    ./gensignature 1n9.db 0n9.db 1 --text=1 >1n9-1.txt
-    ./gensignature 1n9.db 0n9.db 1 --text=2 >1n9-2.txt --test 
-    ./gensignature 2n9.db 1n9.db 2 --text=1 >2n9-1.txt
-    ./gensignature 2n9.db 1n9.db 2 --text=2 >2n9-2.txt --test
-    ./gensignature 3n9.db 2n9.db 3 --text=1 >3n9-1.txt
-    ./gensignature 3n9.db 2n9.db 3 --text=2 >3n9-2.txt --test
-    ./gensignature 4n9.db 3n9.db 4 --text=1 >4n9-1.txt
-    ./gensignature 4n9.db 3n9.db 4 --text=2 >4n9-2.txt --test
+    ./gensignature transform.db 0 0n9.db --text=1 >0n9-1.txt
+    ./gensignature transform.db 0        --text=2 >0n9-2.txt
+    ./gensignature 0n9.db       1 1n9.db --text=1 >1n9-1.txt
+    ./gensignature 0n9.db       1        --text=2 >1n9-2.txt
+    ./gensignature 1n9.db       2 2n9.db --text=1 >2n9-1.txt
+    ./gensignature 1n9.db       2        --text=2 >2n9-2.txt
+    ./gensignature 2n9.db       3 3n9.db --text=1 >3n9-1.txt
+    ./gensignature 2n9.db       3        --text=2 >3n9-2.txt 
+    ./gensignature 3n9.db       4 4n9.db --text=1 >4n9-1.txt
+    ./gensignature 3n9.db       4        --text=2 >4n9-2.txt
 ```
 
 ## members
@@ -131,17 +131,17 @@ If you are in need for textual lists of candidates (about 1Gbyte):
 If you are in need for textual lists of members:
 
 ```sh
-    ./genmember member-0n9.db 4n9.db 0 --text=1 >member-0n9-1.txt
-    ./genmember member-1n9.db member-0n9.db 1 --text=1 >member-1n9-1.txt
-    ./genmember member-2n9.db member-1n9.db 2 --text=1 >member-2n9-1.txt
-    ./genmember member-3n9.db member-2n9.db 3 --text=1 >member-3n9-1.txt
-    ./genmember member-4n9.db member-3n9.db 4 --text=1 >member-4n9-1.txt
+    ./genmember 4n9.db        0 member-0n9.db --text=1 >member-0n9-1.txt
+    ./genmember member-0n9.db 1 member-1n9.db --text=1 >member-1n9-1.txt
+    ./genmember member-1n9.db 2 member-2n9.db --text=1 >member-2n9-1.txt
+    ./genmember member-2n9.db 3 member-3n9.db --text=1 >member-3n9-1.txt
+    ./genmember member-3n9.db 4 member-4n9.db --text=1 >member-4n9-1.txt
 ```
 
 ```sh
-    ./genmember member-0n9-qntf.db 4n9.db 0 --qntf --text=1 >member-0n9-1.txt
-    ./genmember member-1n9-qntf.db member-0n9-qntf.db 1 --qntf --text=1 >member-1n9-qntf-1.txt
-    ./genmember member-2n9-qntf.db member-1n9-qntf.db 2 --qntf --text=1 >member-2n9-qntf-1.txt
-    ./genmember member-3n9-qntf.db member-2n9-qntf.db 3 --qntf --text=1 >member-3n9-qntf-1.txt
-    ./genmember member-4n9-qntf.db member-3n9-qntf.db 4 --qntf --text=1 >member-4n9-qntf-1.txt
+    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --text=1 >member-0n9-1.txt
+    ./genmember member-0n9-qntf.db 1 member-1n9-qntf.db --qntf --text=1 >member-1n9-qntf-1.txt
+    ./genmember member-1n9-qntf.db 2 member-2n9-qntf.db --qntf --text=1 >member-2n9-qntf-1.txt
+    ./genmember member-2n9-qntf.db 3 member-3n9-qntf.db --qntf --text=1 >member-3n9-qntf-1.txt
+    ./genmember member-3n9-qntf.db 4 member-4n9-qntf.db --qntf --text=1 >member-4n9-qntf-1.txt
 ```

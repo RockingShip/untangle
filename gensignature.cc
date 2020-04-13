@@ -65,6 +65,7 @@
 #include <getopt.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "tinytree.h"
 #include "database.h"
 #include "generator.h"
@@ -117,8 +118,6 @@ struct gensignatureContext_t : context_t {
 	uint32_t opt_signatureIndexSize;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
-	/// @var {number} --test, run without output
-	unsigned opt_test;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -143,7 +142,6 @@ struct gensignatureContext_t : context_t {
 		opt_metrics = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
-		opt_test = 0;
 		opt_text = 0;
 
 		pStore = NULL;
@@ -1279,7 +1277,7 @@ gensignatureSelftest_t app;
  * @param {number} sig - signal (ignored)
  */
 void sigintHandler(int sig) {
-	if (!app.opt_keep) {
+	if (!app.opt_keep && app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
 	exit(1);
@@ -1311,9 +1309,9 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
-	fprintf(stderr, "usage: %s <output.db> <input.db> <numnode> -- Add signatures of given node size\n", argv[0]);
-	fprintf(stderr, "       %s --metrics <input.db>             -- Collect metrics\n", argv[0]);
-	fprintf(stderr, "       %s --selftest <input.db>            -- Test prerequisites\n", argv[0]);
+	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]  -- Add signatures of given node size\n", argv[0]);
+	fprintf(stderr, "       %s --metrics <input.db>                -- Collect metrics\n", argv[0]);
+	fprintf(stderr, "       %s --selftest <input.db>               -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -1331,7 +1329,6 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
 		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
-		fprintf(stderr, "\t   --test                    Run without output\n");
 		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%d]\n", args->opt_timer);
 		fprintf(stderr, "\t-v --verbose                 Say less\n");
@@ -1374,7 +1371,6 @@ int main(int argc, char *const *argv) {
 			LO_RATIO,
 			LO_SELFTEST,
 			LO_SIGNATUREINDEXSIZE,
-			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -1403,7 +1399,6 @@ int main(int argc, char *const *argv) {
 			{"ratio",              1, 0, LO_RATIO},
 			{"selftest",           0, 0, LO_SELFTEST},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
-			{"test",               0, 0, LO_TEST},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
 			{"verbose",            2, 0, LO_VERBOSE},
@@ -1483,13 +1478,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
-				app.opt_test++;
 				break;
 			case LO_SIGNATUREINDEXSIZE:
 				app.opt_signatureIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
-				break;
-			case LO_TEST:
-				app.opt_test++;
 				break;
 			case LO_TEXT:
 				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
@@ -1513,30 +1504,36 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Program arguments
 	 */
-	if (app.opt_selftest || app.opt_metrics) {
-		// selftest or metrics mode
-		if (argc - optind >= 1) {
-			app.arg_inputDatabase = argv[optind++];
-		} else {
-			usage(argv, false, &app);
-			exit(1);
-		}
-	} else {
-		// regular mode
-		if (argc - optind >= 3) {
-			app.arg_outputDatabase = argv[optind++];
-			app.arg_inputDatabase = argv[optind++];
-			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
-		} else {
-			usage(argv, false, &app);
-			exit(1);
-		}
+	if (argc - optind >= 1)
+		app.arg_inputDatabase = argv[optind++];
+
+	if (argc - optind >= 1) {
+		char *endptr;
+
+		errno = 0; // To distinguish success/failure after call
+		app.arg_numNodes = (uint32_t) strtoul(argv[optind++], &endptr, 0);
+
+		// strip trailing spaces
+		while (*endptr && isspace(*endptr))
+			endptr++;
+
+		// test for error
+		if (errno != 0 || *endptr != '\0')
+			app.arg_inputDatabase = NULL;
+	}
+
+	if (argc - optind >= 1)
+		app.arg_outputDatabase = argv[optind++];
+
+	if (app.arg_inputDatabase == NULL) {
+		usage(argv, false, &app);
+		exit(1);
 	}
 
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!app.opt_test && !app.opt_force) {
+	if (app.arg_outputDatabase && !app.opt_force) {
 		struct stat sbuf;
 
 		if (!stat(app.arg_outputDatabase, &sbuf)) {
@@ -1750,7 +1747,7 @@ int main(int argc, char *const *argv) {
 	 * Save the database
 	 */
 
-	if (!app.opt_test) {
+	if (app.arg_outputDatabase) {
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
@@ -1761,7 +1758,8 @@ int main(int argc, char *const *argv) {
 #if defined(ENABLE_JANSSON)
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
-		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
+		if (app.arg_outputDatabase)
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		if (!isatty(1))

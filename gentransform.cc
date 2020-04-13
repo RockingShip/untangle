@@ -89,8 +89,6 @@ struct gentransformContext_t : context_t {
 	unsigned opt_keep;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
-	/// @var {number} --test, run without output
-	unsigned opt_test;
 	/// @var {number} --selftest, perform a selftest
 	unsigned opt_selftest;
 
@@ -104,7 +102,6 @@ struct gentransformContext_t : context_t {
 		opt_force = 0;
 		opt_keep = 0;
 		opt_selftest = 0;
-		opt_test = 0;
 		opt_text = 0;
 	}
 
@@ -764,7 +761,7 @@ gentransformContext_t app;
  * @date 2020-03-11 23:06:35
  */
 void sigintHandler(int sig) {
-	if (!app.opt_keep) {
+	if (!app.opt_keep && app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
 	exit(1);
@@ -794,7 +791,7 @@ void sigalrmHandler(int sig) {
  * @date  2020-03-11 22:30:36
  */
 void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
-	fprintf(stderr, "usage: %s <output.db>  -- Create initial database containing transforms\n", argv[0]);
+	fprintf(stderr, "usage: %s [<output.db>]  -- Create initial database containing transforms\n", argv[0]);
 	fprintf(stderr, "       %s --selftest   -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
@@ -836,7 +833,6 @@ int main(int argc, char *const *argv) {
 			LO_FORCE,
 			LO_KEEP,
 			LO_SELFTEST,
-			LO_TEST,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -853,7 +849,6 @@ int main(int argc, char *const *argv) {
 			{"help",     0, 0, LO_HELP},
 			{"keep",     0, 0, LO_KEEP},
 			{"quiet",    2, 0, LO_QUIET},
-			{"test",     0, 0, LO_TEST},
 			{"selftest", 0, 0, LO_SELFTEST},
 			{"text",     0, 0, LO_TEXT},
 			{"timer",    1, 0, LO_TIMER},
@@ -902,10 +897,6 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
-				app.opt_test++;
-				break;
-			case LO_TEST:
-				app.opt_test++;
 				break;
 			case LO_TEXT:
 				app.opt_text++;
@@ -931,7 +922,9 @@ int main(int argc, char *const *argv) {
 	 */
 	if (argc - optind >= 1) {
 		app.arg_outputDatabase = argv[optind++];
-	} else {
+	}
+
+	if (0) {
 		usage(argv, false, &app);
 		exit(1);
 	}
@@ -939,7 +932,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!app.opt_test && !app.opt_force) {
+	if (app.arg_outputDatabase && !app.opt_force) {
 		struct stat sbuf;
 
 		if (!stat(app.arg_outputDatabase, &sbuf)) {
@@ -997,7 +990,7 @@ int main(int argc, char *const *argv) {
 	 * Save the database
 	 */
 
-	if (!app.opt_test) {
+	if (app.arg_outputDatabase) {
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
@@ -1008,7 +1001,8 @@ int main(int argc, char *const *argv) {
 #if defined(ENABLE_JANSSON)
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
-		json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
+		if (app.arg_outputDatabase)
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		if (!isatty(1))
