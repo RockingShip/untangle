@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
-2020-04-13 23:02:04 `tinyTree_t::eval()` now using `SSE2` assembler instructions
+2020-04-14 00:54:23 Upgraded `genmember` and made usage simpeler.
+2020-04-13 23:02:04 `tinyTree_t::eval()` now using `SSE2` assembler instructions.
 2020-04-13 12:18:45 Changed order program arguments.
 2020-04-12 23:10:40 Next-generation generator.
 ```

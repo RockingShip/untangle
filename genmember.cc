@@ -536,6 +536,138 @@ struct genmemberContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-04-08 15:21:08
+	 *
+	 * Propose a member be added to a signature group.
+	 * Either link member into group or push onto free list
+	 *
+	 * @param {member_t} pMember - proposed member
+	 * @return {boolean} - `true` if candidate got accepted, `false` otherwise
+	 */
+	bool memberPropose(member_t *pMember) {
+		signature_t *pSignature = pStore->signatures + pMember->sid;
+
+		if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
+			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
+				/*
+				 * group/candidate both unsafe
+				 * Add to group if same node size
+				 */
+				if (pMember->size > pSignature->size) {
+					// zero orphan so it won't be found by `lookupMember()`
+					::memset(pMember, 0, sizeof(*pMember));
+					// push member on the freelist
+					pMember->nextMember = freeMemberRoot;
+					freeMemberRoot = pMember - pStore->members;
+
+					skipUnsafe++;
+					return false;
+				}
+				assert(pMember->size == pSignature->size);
+			} else {
+				/*
+				 * group is unsafe, candidate is safe.
+				 * If candidate is same size then drop all existing unsafe group members
+				 * If candidate is larger then keep all smaller unsafe members for later optimisations
+				 */
+
+				if (pSignature->firstMember && pMember->size == pSignature->size) {
+					/*
+					 * empty group
+					 *
+					 * @date 2020-04-05 02:21:42
+					 *
+					 * For `5n9-QnTF` it turns out that the chance of finding safe replacements is rare.
+					 * And you need to collect all non-safe members if the group is unsafe.
+					 * Orphaning them depletes resources too fast.
+					 *
+					 * Reuse `members[]`.
+					 * Field `nextMember` is perfect for that.
+					 */
+					while (pSignature->firstMember) {
+						// remove all references to
+						for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+							member_t *p = pStore->members + iMid;
+
+							if (p->Qmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Qmid = 0;
+							}
+							if (p->Tmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Tmid = 0;
+							}
+							if (p->Fmid == pSignature->firstMember) {
+								assert(p->flags & signature_t::SIGMASK_UNSAFE);
+								p->Fmid = 0;
+							}
+						}
+
+						// get member
+						member_t *p = pStore->members + pSignature->firstMember;
+						// remove from list
+						pSignature->firstMember = p->nextMember;
+						// zero orphan so it won't be found by `lookupMember()`
+						::memset(p, 0, sizeof(*p));
+						// add to free list
+						p->nextMember = freeMemberRoot;
+						freeMemberRoot = p - pStore->members;
+					}
+
+					numEmpty++; // group has become empty
+				}
+
+				// mark group as safe
+				pSignature->flags &= ~signature_t::SIGMASK_UNSAFE;
+				pSignature->size = pMember->size;
+
+				/*
+				 * Output first safe member of a signature group
+				 */
+
+				if (opt_text == 4)
+					printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+
+				// one unsafe group less
+				numUnsafe--;
+			}
+		} else {
+			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
+				// group is safe, candidate not. Drop candidate
+
+				// zero orphan so it won't be found by `lookupMember()`
+				::memset(pMember, 0, sizeof(*pMember));
+				// push member on the freelist
+				pMember->nextMember = freeMemberRoot;
+				freeMemberRoot = pMember - pStore->members;
+
+				skipUnsafe++;
+				return false;
+			} else {
+				// group/candidate both safe
+				assert(pMember->size == pSignature->size);
+			}
+		}
+
+		assert(pMember->name[0]);
+
+		/*
+		 * Output candidate members on-the-fly
+		 */
+		if (opt_text == 3)
+			printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+
+		if (pSignature->firstMember == 0)
+			numEmpty--; // group now has first member
+
+		pMember->nextMember = pSignature->firstMember;
+		pSignature->firstMember = pMember - pStore->members;
+
+		// proposal accepted
+		return true;
+	}
+
+	/**
 	 * @date 2020-03-28 18:29:25
 	 *
 	 * Test if candidate can be a signature group member and add when possible
@@ -546,7 +678,9 @@ struct genmemberContext_t : context_t {
 	 *
 	 * @param {generatorTree_t} treeR - candidate tree
 	 * @param {string} pNameR - Tree name/notation
-	 * @param {number} numPlaceholder - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
@@ -632,7 +766,6 @@ struct genmemberContext_t : context_t {
 			mid = pStore->addMember(pNameR); // allocate new member
 			pMember = pStore->members + mid;
 		}
-		pStore->memberIndex[ix] = mid;
 
 		/*
 		 * Name/notation analysis
@@ -669,124 +802,13 @@ struct genmemberContext_t : context_t {
 		}
 
 		/*
-		 * To reject, or not to reject...
+		 * Propose
 		 */
-
-		if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
-			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
-				/*
-				 * group/candidate both unsafe
-				 * Add to group if same node size
-				 */
-				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
-					// zero orphan so it won't be found by `lookupMember()`
-					::memset(pMember, 0, sizeof(*pMember));
-					// push member on the freelist
-					pMember->nextMember = freeMemberRoot;
-					freeMemberRoot = pMember - pStore->members;
-
-					skipUnsafe++;
-					return;
-				}
-				assert(treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-			} else {
-				/*
-				 * group is unsafe, candidate is safe.
-				 * If candidate is same size then drop all existing unsafe group members
-				 * If candidate is larger then keep all smaller unsafe members for later optimisations
-				 */
-
-				if (pSignature->firstMember && treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size) {
-					/*
-					 * empty group
-					 *
-					 * @date 2020-04-05 02:21:42
-					 *
-					 * For `5n9-QnTF` it turns out that the chance of finding safe replacements is rare.
-					 * And you need to collect all non-safe members if the group is unsafe.
-					 * Orphaning them depletes resources too fast.
-					 *
-					 * Reuse `members[]`.
-					 * Field `nextMember` is perfect for that.
-					 */
-					while (pSignature->firstMember) {
-						// remove all references to
-						for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
-							member_t *p = pStore->members + iMid;
-
-							if (p->Qmid == pSignature->firstMember) {
-								assert(p->flags & signature_t::SIGMASK_UNSAFE);
-								p->Qmid = 0;
-							}
-							if (p->Tmid == pSignature->firstMember) {
-								assert(p->flags & signature_t::SIGMASK_UNSAFE);
-								p->Tmid = 0;
-							}
-							if (p->Fmid == pSignature->firstMember) {
-								assert(p->flags & signature_t::SIGMASK_UNSAFE);
-								p->Fmid = 0;
-							}
-						}
-
-						// get member
-						member_t *p = pStore->members + pSignature->firstMember;
-						// remove from list
-						pSignature->firstMember = p->nextMember;
-						// zero orphan so it won't be found by `lookupMember()`
-						::memset(p, 0, sizeof(*p));
-						// add to free list
-						p->nextMember = freeMemberRoot;
-						freeMemberRoot = p - pStore->members;
-					}
-
-					numEmpty++; // group has become empty
-				}
-
-				// mark group as safe
-				pSignature->flags &= ~signature_t::SIGMASK_UNSAFE;
-				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
-
-				/*
-				 * Output first safe member of a signature group
-				 */
-
-				if (opt_text == 4)
-					printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, treeR.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
-
-				// one unsafe group less
-				numUnsafe--;
-			}
-		} else {
-			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
-				// group is safe, candidate not. Drop candidate
-
-				// zero orphan so it won't be found by `lookupMember()`
-				::memset(pMember, 0, sizeof(*pMember));
-				// push member on the freelist
-				pMember->nextMember = freeMemberRoot;
-				freeMemberRoot = pMember - pStore->members;
-
-				skipUnsafe++;
-				return;
-			} else {
-				// group/candidate both safe
-				assert(treeR.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-			}
+		if (memberPropose(pMember)) {
+			// if member got accepted, fixate in index
+			pStore->memberIndex[ix] = pMember - pStore->members;
 		}
 
-		assert(pMember->name[0]);
-
-		/*
-		 * Output candidate members on-the-fly
-		 */
-		if (opt_text == 3)
-			printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, treeR.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
-
-		if (pSignature->firstMember == 0)
-			numEmpty--; // group now has first member
-
-		pMember->nextMember = pSignature->firstMember;
-		pSignature->firstMember = mid;
 	}
 
 	/**
@@ -856,33 +878,9 @@ struct genmemberContext_t : context_t {
 	/**
 	 * @date 2020-04-02 21:52:34
 	 */
-	void loadData(database_t &store, const database_t &db) {
+	void reindexImprints(bool unsafeOnly) {
 		if (opt_verbose >= VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
-
-		assert (store.maxSignature >= db.numSignature);
-		assert (store.maxMember >= db.numMember);
-
-		/*
-		 * Copy signatures+members to writable memory
-		 */
-
-		store.numSignature = db.numSignature;
-		::memcpy(store.signatures, db.signatures, sizeof(*store.signatures) * db.numSignature);
-
-		store.numMember = db.numMember;
-		::memcpy(store.members, db.members, sizeof(*store.members) * db.numMember);
-
-		// `numMember` may not be zero
-		if (store.numMember == 0)
-			store.numMember = 1;
-
-		// re-create member index
-		for (uint32_t iMid = 1; iMid < store.numMember; iMid++) {
-			uint32_t ix = store.lookupMember(db.members[iMid].name);
-			assert(store.memberIndex[ix] == 0);
-			store.memberIndex[ix] = iMid;
-		}
 
 		/*
 		 * Create imprints for unsafe signature groups
@@ -891,7 +889,7 @@ struct genmemberContext_t : context_t {
 		generatorTree_t tree(*this);
 
 		// reset progress
-		this->setupSpeed(db.numSignature);
+		this->setupSpeed(pStore->numSignature);
 		this->tick = 0;
 
 		numEmpty = 0;
@@ -899,16 +897,15 @@ struct genmemberContext_t : context_t {
 
 		// create imprints for unsafe signature groups
 		progress++; // skip reserved
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (opt_verbose >= VERBOSE_TICK && tick) {
 				tick = 0;
 				int perSecond = this->updateSpeed();
 
 				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond,
-					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
@@ -921,26 +918,26 @@ struct genmemberContext_t : context_t {
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
-					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
 				}
 			}
 
-			const signature_t *pSignature = db.signatures + iSid;
+			const signature_t *pSignature = pStore->signatures + iSid;
 
 			// add imprint for unsafe signatures
-			if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
+			if (!unsafeOnly || (pSignature->flags & signature_t::SIGMASK_UNSAFE)) {
 				uint32_t sid = 0;
 				uint32_t tid = 0;
 
 				// avoid `"storage full"`. Give warning later
-				if (store.maxImprint - store.numImprint <= store.interleave)
+				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave)
 					break;
 
 				tree.decodeFast(pSignature->name);
 
-				if (!store.lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
-					store.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
+					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
 			}
 
 			// stats
@@ -956,14 +953,15 @@ struct genmemberContext_t : context_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (progress != progressHi) {
-			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n", timeAsString(), (unsigned) (this->progress + 1), store.signatures[this->progress + 1].name);
+			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n",
+			        timeAsString(), (unsigned) (this->progress + 1), pStore->signatures[this->progress + 1].name);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u(of loaded %u) numUnsafe=%u\n",
 			        timeAsString(),
-			        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-			        numEmpty, numUnsafe);
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        numEmpty, (unsigned) (this->progress + 1), numUnsafe);
 
 	}
 
@@ -973,10 +971,8 @@ struct genmemberContext_t : context_t {
 	 * Main entrypoint
 	 *
 	 * Create generator for given dataset and add newly unique signatures to the database
-	 *
-	 * @param {database_t} pStore - memory based database
 	 */
-	void /*__attribute__((optimize("O0")))*/ modeLoadFile(void) {
+	void /*__attribute__((optimize("O0")))*/ membersFromFile(void) {
 
 		generatorTree_t tree(*this);
 
@@ -1028,59 +1024,60 @@ struct genmemberContext_t : context_t {
 	 *
 	 * @param {database_t} pStore - memory based database
 	 */
-	void /*__attribute__((optimize("O0")))*/ modeLoadGenerator(void) {
+	void /*__attribute__((optimize("O0")))*/ membersFromGenerator(void) {
 
 		generatorTree_t generator(*this);
 
-		// apply settings
-		{
-			// get metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
-			assert(pMetrics);
+		/*
+		 * Apply window/task setting on generator
+		 */
 
-			// apply settings for `--task`
-			if (this->opt_taskLast) {
-				// split progress into chunks
-				uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
-				if (taskSize == 0)
-					taskSize = 1;
-				generator.windowLo = taskSize * (this->opt_taskId - 1);
-				generator.windowHi = taskSize * this->opt_taskId;
+		// get metrics
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		assert(pMetrics);
 
-				// limits
-				if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
-					generator.windowHi = pMetrics->numProgress;
-			}
+		// apply settings for `--task`
+		if (this->opt_taskLast) {
+			// split progress into chunks
+			uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
+			if (taskSize == 0)
+				taskSize = 1;
+			generator.windowLo = taskSize * (this->opt_taskId - 1);
+			generator.windowHi = taskSize * this->opt_taskId;
 
-			// apply settings for `--window`
-			if (this->opt_windowLo)
-				generator.windowLo = this->opt_windowLo;
-			if (this->opt_windowHi)
-				generator.windowHi = this->opt_windowHi;
-
-			// limit window
-			if (this->opt_windowLo != 0 && this->opt_windowHi == 0)
-				generator.windowHi = pMetrics->numProgress;
-			if (this->opt_windowHi > pMetrics->numProgress)
-				generator.windowHi = pMetrics->numProgress;
-
-			// apply restart data for > `4n9`
-			unsigned ofs = 0;
-			if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
-				ofs = restartIndex[this->arg_numNodes][(this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
-			if (ofs)
-				generator.pRestartData = restartData + ofs;
-
-			// show window
-			if (generator.windowLo || generator.windowHi) {
-				if (opt_verbose >= VERBOSE_SUMMARY)
-					fprintf(stderr, "[%s] Task window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
-			}
-
-			// ticker needs `windowHi`
-			if (generator.windowHi == 0)
+			// limits
+			if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
 				generator.windowHi = pMetrics->numProgress;
 		}
+
+		// apply settings for `--window`
+		if (this->opt_windowLo)
+			generator.windowLo = this->opt_windowLo;
+		if (this->opt_windowHi)
+			generator.windowHi = this->opt_windowHi;
+
+		// limit window
+		if (this->opt_windowLo != 0 && this->opt_windowHi == 0)
+			generator.windowHi = pMetrics->numProgress;
+		if (this->opt_windowHi > pMetrics->numProgress)
+			generator.windowHi = pMetrics->numProgress;
+
+		// apply restart data for > `4n9`
+		unsigned ofs = 0;
+		if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
+			ofs = restartIndex[this->arg_numNodes][(this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
+		if (ofs)
+			generator.pRestartData = restartData + ofs;
+
+		// show window
+		if (generator.windowLo || generator.windowHi) {
+			if (opt_verbose >= VERBOSE_SUMMARY)
+				fprintf(stderr, "[%s] Task window: %lu-%lu\n", context_t::timeAsString(), generator.windowLo, generator.windowHi);
+		}
+
+		// ticker needs `windowHi`
+		if (generator.windowHi == 0)
+			generator.windowHi = pMetrics->numProgress;
 
 		/*
 		 * create generator and candidate members
@@ -1134,7 +1131,7 @@ struct genmemberContext_t : context_t {
 	 *
 	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
 	 */
-	void compact(void) {
+	void reindexMembers(void) {
 		generatorTree_t tree(*this);
 
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
@@ -1314,6 +1311,120 @@ struct genmemberContext_t : context_t {
 		if (opt_verbose >= VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
 			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
+
+	}
+
+	/**
+	 * @date 2020-04-02 21:52:34
+	 */
+	void loadData(database_t &store, const database_t &db) {
+		if (opt_verbose >= VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
+
+		assert (store.maxSignature >= db.numSignature);
+		assert (store.maxMember >= db.numMember);
+
+		/*
+		 * Copy signatures+members to writable memory
+		 */
+
+		store.numSignature = db.numSignature;
+		::memcpy(store.signatures, db.signatures, sizeof(*store.signatures) * db.numSignature);
+
+		store.numMember = db.numMember;
+		::memcpy(store.members, db.members, sizeof(*store.members) * db.numMember);
+
+		// `numMember` may not be zero
+		if (store.numMember == 0)
+			store.numMember = 1;
+
+		// re-create member index
+		for (uint32_t iMid = 1; iMid < store.numMember; iMid++) {
+			uint32_t ix = store.lookupMember(db.members[iMid].name);
+			assert(store.memberIndex[ix] == 0);
+			store.memberIndex[ix] = iMid;
+		}
+
+		/*
+		 * Create imprints for unsafe signature groups
+		 */
+
+		generatorTree_t tree(*this);
+
+		// reset progress
+		this->setupSpeed(db.numSignature);
+		this->tick = 0;
+
+		numEmpty = 0;
+		numUnsafe = 0;
+
+		// create imprints for unsafe signature groups
+		progress++; // skip reserved
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			if (opt_verbose >= VERBOSE_TICK && tick) {
+				tick = 0;
+				int perSecond = this->updateSpeed();
+
+				if (perSecond == 0 || progress > progressHi) {
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
+					        timeAsString(), progress, perSecond,
+					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
+					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
+				} else {
+					int eta = (int) ((progressHi - progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
+					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
+					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
+				}
+			}
+
+			const signature_t *pSignature = db.signatures + iSid;
+
+			// add imprint for unsafe signatures
+			if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
+				uint32_t sid = 0;
+				uint32_t tid = 0;
+
+				// avoid `"storage full"`. Give warning later
+				if (store.maxImprint - store.numImprint <= store.interleave)
+					break;
+
+				tree.decodeFast(pSignature->name);
+
+				if (!store.lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
+					store.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+			}
+
+			// stats
+			if (pSignature->firstMember == 0)
+				numEmpty++;
+			else if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
+				numUnsafe++;
+
+			this->progress++;
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (progress != progressHi) {
+			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n", timeAsString(), (unsigned) (this->progress + 1), store.signatures[this->progress + 1].name);
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+			        timeAsString(),
+			        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+			        numEmpty, numUnsafe);
 
 	}
 
@@ -1872,19 +1983,23 @@ int main(int argc, char *const *argv) {
 	app.pInputDb = &db;
 
 	if (app.opt_load)
-		app.modeLoadFile();
+		app.membersFromFile();
 	else
-		app.modeLoadGenerator();
+		app.membersFromGenerator();
 
-	app.compact();
+	if (app.arg_outputDatabase) {
+		if (app.opt_mode != app.MODE_COLLECT) {
+			app.reindexMembers();
+		}
 
-	/*
-	 * Check that all unsafe groups have no safe members (or the group would have been safe)
-	 */
-	for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-		if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
-			for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-				assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
+		/*
+		 * Check that all unsafe groups have no safe members (or the group would have been safe)
+		 */
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+			if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
+				for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+					assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
+				}
 			}
 		}
 	}
