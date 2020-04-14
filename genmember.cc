@@ -300,7 +300,9 @@ struct genmemberContext_t : context_t {
 	 * @param {member_t} pMember - Member to process
 	 * @param {tinyTree_t} treeR - candidate tree
 	 */
-	void findHeadTail(member_t *pMember, const generatorTree_t &treeR) {
+	void findHeadTail(member_t *pMember, const tinyTree_t &treeR) {
+
+		assert(~treeR.root & IBIT);
 
 		// safe until proven otherwise
 		pMember->flags &= ~signature_t::SIGMASK_UNSAFE;
@@ -315,18 +317,18 @@ struct genmemberContext_t : context_t {
 		 */
 		if (treeR.root == 0) {
 			assert(::strcmp(pMember->name, "0") == 0); // must be reserved name
-			assert(pMember - pStore->members == 1); // must be reserved entry
+			assert(pMember->sid == 1); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = 1;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = 1;
+			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
+			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember->sid;
 			return;
 		}
 		if (treeR.root == 1) {
 			assert(::strcmp(pMember->name, "a") == 0); // must be reserved name
-			assert(pMember - pStore->members == 2); // must be reserved entry
+			assert(pMember->sid == 2); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = 2;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = 2;
+			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
+			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember->sid;
 			return;
 		}
 
@@ -801,30 +803,8 @@ struct genmemberContext_t : context_t {
 		pMember->numEndpoint = numEndpoint;
 		pMember->numBackRef = numBackRef;
 
-		/*
-		 * handle heads/tails
-		 */
-
-		if (sid < 3) {
-			/*
-			 * @date 2020-03-29 23:16:43
-			 *
-			 * Reserved root sids
-			 *
-			 * `"N[0] = 0?!0:0"` // zero value, zero QnTF operator, zero reference
-			 * `"N[a] = 0?!0:a"` // self reference
-			 *
-			 */
-
-			// reserved root sids
-			assert(sid != 1 || strcmp(pNameR, "0") == 0);
-			assert(sid != 2 || strcmp(pNameR, "a") == 0);
-
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = sid;
-		} else {
-			findHeadTail(pMember, treeR);
-		}
+		// lookup signature and member id's
+		findHeadTail(pMember, treeR);
 
 		/*
 		 * Propose
@@ -836,16 +816,16 @@ struct genmemberContext_t : context_t {
 
 	}
 
-	/**
-	 * @date 2020-04-05 21:07:14
-	 *
-	 * Compare function for `qsort_r`
-	 *
-	 * @param {member_t} lhs - left hand side member
-	 * @param {member_t} rhs - right hand side member
-	 * @param {context_t} state - I/O contect needed to create trees
-	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
-	 */
+/**
+ * @date 2020-04-05 21:07:14
+ *
+ * Compare function for `qsort_r`
+ *
+ * @param {member_t} lhs - left hand side member
+ * @param {member_t} rhs - right hand side member
+ * @param {context_t} state - I/O contect needed to create trees
+ * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
+ */
 	static int /*__attribute__((optimize("O0")))*/ comparMember(const void *lhs, const void *rhs, void *state) {
 		if (lhs == rhs)
 			return 0;
@@ -900,9 +880,9 @@ struct genmemberContext_t : context_t {
 		return cmp;
 	}
 
-	/**
-	 * @date 2020-04-02 21:52:34
-	 */
+/**
+ * @date 2020-04-02 21:52:34
+ */
 	void reindexImprints(bool unsafeOnly) {
 		if (opt_verbose >= VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
@@ -995,16 +975,16 @@ struct genmemberContext_t : context_t {
 
 	}
 
-	/**
-	 * @date 2020-03-22 01:00:05
-	 *
-	 * Main entrypoint
-	 *
-	 * Create generator for given dataset and add newly unique signatures to the database
-	 */
+/**
+ * @date 2020-03-22 01:00:05
+ *
+ * Main entrypoint
+ *
+ * Create generator for given dataset and add newly unique signatures to the database
+ */
 	void /*__attribute__((optimize("O0")))*/ membersFromFile(void) {
 
-		generatorTree_t tree(*this);
+		tinyTree_t tree(*this);
 
 		/*
 		 * Load candidates from file.
@@ -1023,10 +1003,12 @@ struct genmemberContext_t : context_t {
 		this->tick = 0;
 
 		char name[64];
-		unsigned sid, numNode, numPlaceholder, numEndpoint, numBackRef;
+		unsigned sid, size, numPlaceholder, numEndpoint, numBackRef;
 
-		// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
-		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
+		skipDuplicate = skipSize = skipUnsafe = 0;
+
+		// <sid> <candidateName> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &size, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
 			if (opt_verbose >= VERBOSE_TICK && tick) {
 				tick = 0;
 				int perSecond = this->updateSpeed();
@@ -1093,15 +1075,15 @@ struct genmemberContext_t : context_t {
 			        skipDuplicate, skipSize, skipUnsafe);
 	}
 
-	/**
-	 * @date 2020-03-22 01:00:05
-	 *
-	 * Main entrypoint
-	 *
-	 * Create generator for given dataset and add newly unique signatures to the database
-	 *
-	 * @param {database_t} pStore - memory based database
-	 */
+/**
+ * @date 2020-03-22 01:00:05
+ *
+ * Main entrypoint
+ *
+ * Create generator for given dataset and add newly unique signatures to the database
+ *
+ * @param {database_t} pStore - memory based database
+ */
 	void /*__attribute__((optimize("O0")))*/ membersFromGenerator(void) {
 
 		generatorTree_t generator(*this);
@@ -1201,24 +1183,23 @@ struct genmemberContext_t : context_t {
 			        skipDuplicate, skipSize, skipUnsafe);
 	}
 
-	/**
-	 * @date 2020-04-07 22:53:08
-	 *
-	 * Compact members.
-	 * Remove orphans and sort on display name
-	 * This should have no effect pre-existing members (they were already sorted)
-	 *
-	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
-	 */
+/**
+ * @date 2020-04-07 22:53:08
+ *
+ * Compact members.
+ * Remove orphans and sort on display name
+ * This should have no effect pre-existing members (they were already sorted)
+ *
+ * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
+ */
 	void reindexMembers(void) {
-		generatorTree_t tree(*this);
+		tinyTree_t tree(*this);
 
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting\n", timeAsString());
 
-		// sort entries. Leave "0" and "a" untouched
-		assert(pStore->numMember >= 3);
-		qsort_r(pStore->members + 3, pStore->numMember - 3, sizeof(*pStore->members), comparMember, this);
+		// sort entries.
+		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
 
 		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Re-indexing\n", timeAsString());
@@ -1390,120 +1371,6 @@ struct genmemberContext_t : context_t {
 		if (opt_verbose >= VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
 			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
-
-	}
-
-	/**
-	 * @date 2020-04-02 21:52:34
-	 */
-	void loadData(database_t &store, const database_t &db) {
-		if (opt_verbose >= VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
-
-		assert (store.maxSignature >= db.numSignature);
-		assert (store.maxMember >= db.numMember);
-
-		/*
-		 * Copy signatures+members to writable memory
-		 */
-
-		store.numSignature = db.numSignature;
-		::memcpy(store.signatures, db.signatures, sizeof(*store.signatures) * db.numSignature);
-
-		store.numMember = db.numMember;
-		::memcpy(store.members, db.members, sizeof(*store.members) * db.numMember);
-
-		// `numMember` may not be zero
-		if (store.numMember == 0)
-			store.numMember = 1;
-
-		// re-create member index
-		for (uint32_t iMid = 1; iMid < store.numMember; iMid++) {
-			uint32_t ix = store.lookupMember(db.members[iMid].name);
-			assert(store.memberIndex[ix] == 0);
-			store.memberIndex[ix] = iMid;
-		}
-
-		/*
-		 * Create imprints for unsafe signature groups
-		 */
-
-		generatorTree_t tree(*this);
-
-		// reset progress
-		this->setupSpeed(db.numSignature);
-		this->tick = 0;
-
-		numEmpty = 0;
-		numUnsafe = 0;
-
-		// create imprints for unsafe signature groups
-		progress++; // skip reserved
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			if (opt_verbose >= VERBOSE_TICK && tick) {
-				tick = 0;
-				int perSecond = this->updateSpeed();
-
-				if (perSecond == 0 || progress > progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numSignature=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        timeAsString(), progress, perSecond,
-					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-					        store.numSignature, store.numSignature * 100.0 / store.maxSignature,
-					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
-				} else {
-					int eta = (int) ((progressHi - progress) / perSecond);
-
-					int etaH = eta / 3600;
-					eta %= 3600;
-					int etaM = eta / 60;
-					eta %= 60;
-					int etaS = eta;
-
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
-					        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
-				}
-			}
-
-			const signature_t *pSignature = db.signatures + iSid;
-
-			// add imprint for unsafe signatures
-			if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
-				uint32_t sid = 0;
-				uint32_t tid = 0;
-
-				// avoid `"storage full"`. Give warning later
-				if (store.maxImprint - store.numImprint <= store.interleave)
-					break;
-
-				tree.decodeFast(pSignature->name);
-
-				if (!store.lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
-					store.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
-			}
-
-			// stats
-			if (pSignature->firstMember == 0)
-				numEmpty++;
-			else if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
-				numUnsafe++;
-
-			this->progress++;
-		}
-
-		if (this->opt_verbose >= this->VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		if (progress != progressHi) {
-			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n", timeAsString(), (unsigned) (this->progress + 1), store.signatures[this->progress + 1].name);
-		}
-
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
-			        timeAsString(),
-			        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-			        numEmpty, numUnsafe);
 
 	}
 
@@ -2005,22 +1872,45 @@ int main(int argc, char *const *argv) {
 		else
 			store.memberIndexSize = app.opt_memberIndexSize;
 
-		// section needs minimal size or input data might not fit
-		if (store.maxMember < db.numMember)
-			store.maxMember = db.numMember;
-		if (store.memberIndexSize < db.memberIndexSize)
-			store.memberIndexSize = db.memberIndexSize;
+		/*
+		 * section inheriting
+		 */
 
-		// test if preset was present
-		if (store.interleave == 0 || store.interleaveStep == 0)
-			app.fatal("no preset for --interleave\n");
-		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
-			app.fatal("no preset for --maximprint\n");
-		if (store.maxMember == 0 || store.memberIndexSize == 0)
-			app.fatal("no preset for --maxmember\n");
+		// imprints need regeneration if `--unsafe` or settings change
+		if (!app.opt_unsafe && (app.opt_ratio == METRICS_DEFAULT_RATIO / 10.0) && !app.opt_interleave && !app.opt_maxImprint && !app.opt_imprintIndexSize) {
+			// inherit section
+			store.maxImprint = 0;
+		} else {
+			// recreate section
 
-		if (store.maxMember < db.numMember)
-			app.fatal("--maxmember too low. Expected at least %u\n", db.numMember);
+			// section needs minimal size or input data might not fit
+//			if (store.maxImprint < db.numImprint)
+//				store.maxImprint = db.numImprint;
+			if (store.imprintIndexSize < db.imprintIndexSize)
+				store.imprintIndexSize = db.imprintIndexSize;
+
+			// test if preset was present
+			if (store.interleave == 0 || store.interleaveStep == 0)
+				app.fatal("no preset for --interleave\n");
+			if (store.maxImprint == 0 || store.imprintIndexSize == 0)
+				app.fatal("no preset for --maximprint\n");
+		}
+
+		// only `--mode=collect` leave members untouched
+		if (app.opt_mode == app.MODE_COLLECT) {
+			// inherit section
+			store.maxMember = 0;
+		} else if (app.opt_maxMember == 0) {
+			// section needs minimal size or input data might not fit
+			if (store.maxMember < db.numMember)
+				store.maxMember = db.numMember;
+			if (store.memberIndexSize < db.memberIndexSize)
+				store.memberIndexSize = db.memberIndexSize;
+
+			// test if preset was present
+			if (store.maxMember == 0 || store.memberIndexSize == 0)
+				app.fatal("no preset for --maxmember\n");
+		}
 	}
 
 	// create new sections
@@ -2033,8 +1923,14 @@ int main(int argc, char *const *argv) {
 	 * Copy/inherit sections
 	 */
 
-	// inherit from existing
+	// templates are always inherited
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
+
+	// inherit sections
+	if (store.maxImprint == 0)
+		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_IMPRINT);
+	if (store.maxMember == 0)
+		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_MEMBER);
 
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) app.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
@@ -2056,6 +1952,37 @@ int main(int argc, char *const *argv) {
 	tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
 	tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
+	/*
+	 * Copy sections
+	 */
+
+	if (store.allocFlags & database_t::ALLOCMASK_SIGNATURE) {
+		assert(store.maxSignature >= db.numSignature);
+		::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
+		store.numSignature = db.numSignature;
+	}
+
+	if (store.allocFlags & database_t::ALLOCMASK_MEMBER) {
+		assert(store.maxMember >= db.numMember);
+		::memcpy(store.members, db.members, db.numMember * sizeof(*store.members));
+		if (store.memberIndexSize == db.memberIndexSize) {
+			::memcpy(store.memberIndex, db.memberIndex, db.memberIndexSize * sizeof(*store.memberIndex));
+		} else {
+			for (uint32_t iMid = 1; iMid < db.numMember; iMid++) {
+				uint32_t ix = store.lookupMember(store.members[iMid].name);
+				assert(store.memberIndex[ix] == 0);
+				store.memberIndex[ix] = iMid;
+			}
+		}
+		store.numMember = db.numMember;
+	}
+
+	// skip reserved first entry
+	if (store.numImprint == 0)
+		store.numImprint = 1;
+	if (store.numMember == 0)
+		store.numMember = 1;
+
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
 		        app.timeAsString(),
@@ -2065,29 +1992,28 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Load members from file to increase chance signature groups become safe
 	 */
-	app.loadData(store, db);
+	if (app.opt_load) {
+		app.membersFromFile();
+
+		if (app.opt_verbose >= app.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+			        app.timeAsString(),
+			        store.numMember, store.numMember * 100.0 / store.maxMember,
+			        0, 0);
+	}
 
 	/*
-	 * Invoke
+	 * Recreate imprints
 	 */
 
-	if (app.opt_selftest) {
-		/*
-		 * self tests
-		 */
-
-		exit(0);
-	}
+	if (store.allocFlags & database_t::ALLOCMASK_IMPRINT)
+		app.reindexImprints(app.opt_unsafe != 0);
 
 	/*
 	 * Invoke main entrypoint of application context
 	 */
 
-	app.pStore = &store;
-
-	if (app.opt_load)
-		app.membersFromFile();
-	else
+	if (app.opt_mode != app.MODE_PREPARE)
 		app.membersFromGenerator();
 
 	if (app.arg_outputDatabase) {

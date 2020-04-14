@@ -107,7 +107,11 @@ struct slookupContext_t : context_t {
 				 */
 				tinyTree_t tree(*this);
 
-				tree.decodeSafe(pName);
+				const char *slash = ::strchr(pName, '/');
+				if (slash)
+					tree.decodeSafe(pName, slash + 1);
+				else
+					tree.decodeSafe(pName);
 
 				if (tree.root & IBIT) {
 					// inverted root

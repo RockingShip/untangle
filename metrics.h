@@ -278,6 +278,7 @@ static const metricsImprint_t metricsImprint[] = {
 	{9, 0, 3024,   4, 0,          0,       0,      1}, // too large
 	//
 	// special presets for `genmember` assuming 4n9 signatures
+	{9, 1, 3024,   5, 8493341,    0,       0,      1},
 	{9, 0, 15120,  5, 8493341,    0,       0,      1},
 	{9, 0, 40320,  5, 40481281,   0,       0,      1}, // The high number of imprints is because row/col has a different spread which has less re-usability
 	{9, 0, 60480,  5, 26043121,   0,       0,      1},

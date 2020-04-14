@@ -220,7 +220,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * Found candidate, count uniques
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {number} numPlaceholder - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*

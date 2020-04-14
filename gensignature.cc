@@ -253,7 +253,9 @@ struct gensignatureContext_t : context_t {
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {string} pName - Tree name/notation
-	 * @param {number} numPlaceholder - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
@@ -336,9 +338,9 @@ struct gensignatureContext_t : context_t {
 
 		// distinguish between shallow compare (`"-+"`) or deep compare (`"<>"`)
 		if (cmp < 0) {
-			cmp = '-';
+			cmp = '-'; // worse by numbers
 		} else if (cmp > 0) {
-			cmp = '+';
+			cmp = '+'; // better by numbers
 		} else {
 			/*
 			 * Compare layouts, expensive
@@ -349,11 +351,11 @@ struct gensignatureContext_t : context_t {
 			cmp = treeL.compare(treeL.root, treeR, treeR.root);
 
 			if (cmp < 0)
-				cmp = '<';
+				cmp = '<'; // worse by compare
 			else if (cmp > 0)
-				cmp = '>';
+				cmp = '>'; // better by compare
 			else
-				cmp = '=';
+				cmp = '='; // equals
 		}
 
 		/*
@@ -365,10 +367,17 @@ struct gensignatureContext_t : context_t {
 			pSignature->numPlaceholder = numPlaceholder;
 			pSignature->numEndpoint = numEndpoint;
 			pSignature->numBackRef = numBackRef;
+
+			if (opt_text == 2)
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+
+		} else {
+
+			if (opt_text == 2)
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
+
 		}
 
-		if (opt_text == 2)
-			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 	}
 
 	/**
@@ -908,7 +917,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {string} pName - Tree name/notation
-	 * @param {number} numPlaceholder - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
@@ -939,7 +950,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {string} pName - Tree name/notation
-	 * @param {number} numPlaceholder - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
@@ -1057,7 +1070,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
 	 * @param {string} pName - Tree name/notation
-	 * @param {number} numUnique - number of unique endpoints in tree
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (opt_verbose >= VERBOSE_TICK && tick) {
