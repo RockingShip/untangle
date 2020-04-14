@@ -215,12 +215,16 @@ struct genmemberContext_t : context_t {
 	double opt_ratio;
 	/// @var {number} get task settings from SGE environment
 	uint32_t opt_sge;
+	/// @var {number} Start indexing imprints starting from `sidLo`
+	uint32_t opt_sidLo;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
 	/// @var {number} Number of tasks / last task
 	unsigned opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} reindex imprints based on empty/unsafe signature groups
+	unsigned opt_unsafe;
 	/// @var {number} generator upper bound
 	uint64_t opt_windowHi;
 	/// @var {number} generator lower bound
@@ -228,8 +232,6 @@ struct genmemberContext_t : context_t {
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
-	/// @var {database_t} - Input database
-	database_t *pInputDb;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
@@ -262,10 +264,11 @@ struct genmemberContext_t : context_t {
 		opt_mode = MODE_MERGE;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sge = 0;
+		opt_sidLo = 0;
 		opt_text = 0;
+		opt_unsafe = 0;
 
 		pStore = NULL;
-		pInputDb = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
@@ -295,14 +298,21 @@ struct genmemberContext_t : context_t {
 	 *   `"adbcabc?!!"` is unsafe because it can be rewritten as `"cdab^!/bcad"`
 	 *
 	 * @param {member_t} pMember - Member to process
-	 * @param {generatorTree_t} treeR - candidate tree
+	 * @param {tinyTree_t} treeR - candidate tree
 	 */
 	void findHeadTail(member_t *pMember, const generatorTree_t &treeR) {
 
 		// safe until proven otherwise
 		pMember->flags &= ~signature_t::SIGMASK_UNSAFE;
 
-		// special cases
+		/*
+		 * @date 2020-03-29 23:16:43
+		 *
+		 * Reserved root entries
+		 *
+		 * `"N[0] = 0?!0:0"` // zero value, zero QnTF operator, zero reference
+		 * `"N[a] = 0?!0:a"` // self reference
+		 */
 		if (treeR.root == 0) {
 			assert(::strcmp(pMember->name, "0") == 0); // must be reserved name
 			assert(pMember - pStore->members == 1); // must be reserved entry
@@ -573,6 +583,7 @@ struct genmemberContext_t : context_t {
 
 				if (pSignature->firstMember && pMember->size == pSignature->size) {
 					/*
+					 * Group contains unsafe members of same size.
 					 * empty group
 					 *
 					 * @date 2020-04-05 02:21:42
@@ -628,7 +639,7 @@ struct genmemberContext_t : context_t {
 				if (opt_text == 4)
 					printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
-				// one unsafe group less
+				// group has become safe
 				numUnsafe--;
 			}
 		} else {
@@ -724,24 +735,19 @@ struct genmemberContext_t : context_t {
 		uint32_t sid = 0;
 		uint32_t tid = 0;
 
-		/*
-		 * @date 2020-04-07 23:43:19
-		 *
-		 * Lookup against input imprints as `pStore` may be undefined
-		 */
-		if (!pInputDb->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
+		if (!pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
 			return;
 
 		signature_t *pSignature = pStore->signatures + sid;
 
-		// only if group is safe reject is structure is too large
+		// only if group is safe reject if structure is too large
 		if ((~pSignature->flags & signature_t::SIGMASK_UNSAFE) && treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
 			skipSize++;
 			return;
 		}
 
 		/*
-		 * Create a new member or reject as duplicate
+		 * test  for duplicates
 		 */
 
 		uint32_t ix = pStore->lookupMember(pNameR);
@@ -752,7 +758,7 @@ struct genmemberContext_t : context_t {
 		}
 
 		/*
-		 * Allocate member
+		 * Allocate and populate member
 		 */
 
 		member_t *pMember;
@@ -923,6 +929,11 @@ struct genmemberContext_t : context_t {
 				}
 			}
 
+			if (opt_sidLo && iSid < opt_sidLo) {
+				this->progress++;
+				continue;
+			}
+
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			// add imprint for unsafe signatures
@@ -997,6 +1008,17 @@ struct genmemberContext_t : context_t {
 
 		// <sid> <candidateName> <numNode> <numPlaceholder> <numEndpoint> <numBackRef>
 		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &numNode, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
+			if (opt_verbose >= VERBOSE_TICK && tick) {
+				tick = 0;
+				int perSecond = this->updateSpeed();
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				        timeAsString(), progress, perSecond,
+				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				        numEmpty, numUnsafe,
+				        skipDuplicate, skipSize, skipUnsafe);
+			}
+
 			tree.decodeFast(name);
 			foundTreeMember(tree, name, numPlaceholder, numEndpoint, numBackRef);
 			progress++;
@@ -1083,43 +1105,44 @@ struct genmemberContext_t : context_t {
 		 * create generator and candidate members
 		 */
 
-		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
-			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
+		// clear tree
+		generator.clearGenerator();
 
-			// clear tree
-			generator.clearGenerator();
+		// reset progress
+		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+		this->tick = 0;
+		generator.restartTick = 0;
 
-			// reset progress
-			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-			this->tick = 0;
-			generator.restartTick = 0;
+		/*
+		 * Generate candidates
+		 */
+		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), arg_numNodes, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
-			/*
-			 * Generate candidates
-			 */
-			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), numNode, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
-
-			if (numNode == 0) {
-				generator.root = 0; // "0"
-				foundTreeMember(generator, "0", 0, 0, 0);
-				generator.root = 1; // "a"
-				foundTreeMember(generator, "a", 1, 1, 0);
-			} else {
-				unsigned endpointsLeft = numNode * 2 + 1;
-				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
-			}
-
-			if (this->opt_verbose >= this->VERBOSE_TICK)
-				fprintf(stderr, "\r\e[K");
-
-			if (generator.windowLo == 0 && generator.windowHi == 0 && this->progress != this->progressHi) {
-				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
-				       __FUNCTION__, this->progress, this->progressHi, numNode);
-			}
+		if (arg_numNodes == 0) {
+			generator.root = 0; // "0"
+			foundTreeMember(generator, "0", 0, 0, 0);
+			generator.root = 1; // "a"
+			foundTreeMember(generator, "a", 1, 1, 0);
+		} else {
+			unsigned endpointsLeft = arg_numNodes * 2 + 1;
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
 		}
 
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (generator.windowLo == 0 && generator.windowHi == 0 && this->progress != this->progressHi) {
+			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
+			       __FUNCTION__, this->progress, this->progressHi, arg_numNodes);
+		}
+
+		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			        timeAsString(),
+			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+			        numEmpty, numUnsafe,
+			        skipDuplicate, skipSize, skipUnsafe);
 	}
 
 	/**
@@ -1146,7 +1169,7 @@ struct genmemberContext_t : context_t {
 
 		uint32_t lastMember = pStore->numMember;
 
-		// reset member index and friends
+		// clear member index and linked-list
 		::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
 		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++)
 			pStore->signatures[iSid].firstMember = 0;
@@ -1529,10 +1552,12 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
 		fprintf(stderr, "\t   --sge                     Get SGE task settings from environment\n");
+		fprintf(stderr, "\t   --sidlo=<number>          Lower end sid for imprints [default=%u]\n", args->opt_sidLo);
 		fprintf(stderr, "\t   --task=<id>,<last>        Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --test                    Run without output\n");
 		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%u]\n", args->opt_timer);
+		fprintf(stderr, "\t   --unsafe                  Reindex imprints based onempty/unsafe signature groups\n");
 		fprintf(stderr, "\t-v --verbose                 Say less\n");
 		fprintf(stderr, "\t   --windowhi=<number>       Upper end restart window [default=%lu]\n", args->opt_windowHi);
 		fprintf(stderr, "\t   --windowlo=<number>       Lower end restart window [default=%lu]\n", args->opt_windowLo);
@@ -1577,9 +1602,11 @@ int main(int argc, char *const *argv) {
 			LO_RATIO,
 			LO_SELFTEST,
 			LO_SGE,
+			LO_SIDLO,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
+			LO_UNSAFE,
 			LO_WINDOWHI,
 			LO_WINDOWLO,
 			// short opts
@@ -1610,9 +1637,11 @@ int main(int argc, char *const *argv) {
 			{"ratio",            1, 0, LO_RATIO},
 			{"selftest",         0, 0, LO_SELFTEST},
 			{"sge",              0, 0, LO_SGE},
+			{"sidlo",            1, 0, LO_SIDLO},
 			{"task",             1, 0, LO_TASK},
 			{"text",             2, 0, LO_TEXT},
 			{"timer",            1, 0, LO_TIMER},
+			{"unsafe",           0, 0, LO_UNSAFE},
 			{"verbose",          2, 0, LO_VERBOSE},
 			{"windowhi",         1, 0, LO_WINDOWHI},
 			{"windowlo",         1, 0, LO_WINDOWLO},
@@ -1653,7 +1682,7 @@ int main(int argc, char *const *argv) {
 				usage(argv, true, &app);
 				exit(0);
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = app.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
 				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
@@ -1667,13 +1696,13 @@ int main(int argc, char *const *argv) {
 				app.opt_load = optarg;
 				break;
 			case LO_MAXIMPRINT:
-				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
+				app.opt_maxImprint = app.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_MAXMEMBER:
-				app.opt_maxMember = (uint32_t) strtoul(optarg, NULL, 0);
+				app.opt_maxMember = app.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_MEMBERINDEXSIZE:
-				app.opt_memberIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_memberIndexSize = app.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_MODE: {
 				if (strcmp(optarg, "merge") == 0) {
@@ -1734,6 +1763,9 @@ int main(int argc, char *const *argv) {
 
 				break;
 			}
+			case LO_SIDLO:
+				app.opt_sidLo = strtoull(optarg, NULL, 0);
+				break;
 			case LO_TASK:
 				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
 					usage(argv, true, &app);
@@ -1753,6 +1785,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_TIMER:
 				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				break;
+			case LO_UNSAFE:
+				app.opt_unsafe++;
 				break;
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
@@ -1920,6 +1955,7 @@ int main(int argc, char *const *argv) {
 		if (store.memberIndexSize < db.memberIndexSize)
 			store.memberIndexSize = db.memberIndexSize;
 
+		// test if preset was present
 		if (store.interleave == 0 || store.interleaveStep == 0)
 			app.fatal("no preset for --interleave\n");
 		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
@@ -1937,12 +1973,18 @@ int main(int argc, char *const *argv) {
 
 	store.create();
 
+	/*
+	 * Copy/inherit sections
+	 */
+
 	// inherit from existing
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
 
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) app.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) app.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+
+	app.pStore = &store;
 
 	/*
 	 * Statistics
@@ -1958,8 +2000,14 @@ int main(int argc, char *const *argv) {
 	tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
 	tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
+	if (app.opt_verbose >= app.VERBOSE_SUMMARY)
+		fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+		        app.timeAsString(),
+		        store.numMember, store.numMember * 100.0 / store.maxMember,
+		        0, 0);
+
 	/*
-	 * Load original members
+	 * Load members from file to increase chance signature groups become safe
 	 */
 	app.loadData(store, db);
 
@@ -1980,7 +2028,6 @@ int main(int argc, char *const *argv) {
 	 */
 
 	app.pStore = &store;
-	app.pInputDb = &db;
 
 	if (app.opt_load)
 		app.membersFromFile();
