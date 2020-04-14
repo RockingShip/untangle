@@ -546,6 +546,47 @@ struct genmemberContext_t : context_t {
 	}
 
 	/**
+	 * @date 2020-04-08 16:01:14
+	 *
+	 * Allocate a new member, either by popping free list or assigning new
+	 * Member if zero except for name
+	 *
+	 * @param {string} pName - name/notation of member
+	 * @return {member_t}
+		 */
+	member_t *memberAlloc(const char *pName) {
+		member_t *pMember;
+
+		uint32_t mid = freeMemberRoot;
+		if (mid) {
+			pMember = pStore->members + mid;
+			freeMemberRoot = pMember->nextMember; // pop from free list
+			::strcpy(pMember->name, pName); // populate with name
+		} else {
+			mid = pStore->addMember(pName); // allocate new member
+			pMember = pStore->members + mid;
+		}
+
+		return pMember;
+	}
+
+	/**
+	 * @date 2020-04-08 16:04:15
+	 *
+	 * Release member by pushing it on the free list
+	 *
+	 * @param pMember
+	 */
+	void memberFree(member_t *pMember) {
+		// zero orphan so it won't be found by `lookupMember()`
+		::memset(pMember, 0, sizeof(*pMember));
+
+		// push member on the freelist
+		pMember->nextMember = freeMemberRoot;
+		freeMemberRoot = pMember - pStore->members;
+	}
+
+	/**
 	 * @date 2020-04-08 15:21:08
 	 *
 	 * Propose a member be added to a signature group.
@@ -564,11 +605,8 @@ struct genmemberContext_t : context_t {
 				 * Add to group if same node size
 				 */
 				if (pMember->size > pSignature->size) {
-					// zero orphan so it won't be found by `lookupMember()`
-					::memset(pMember, 0, sizeof(*pMember));
-					// push member on the freelist
-					pMember->nextMember = freeMemberRoot;
-					freeMemberRoot = pMember - pStore->members;
+					// release
+					this->memberFree(pMember);
 
 					skipUnsafe++;
 					return false;
@@ -614,18 +652,17 @@ struct genmemberContext_t : context_t {
 							}
 						}
 
-						// get member
+						// release first of chain
 						member_t *p = pStore->members + pSignature->firstMember;
-						// remove from list
+
 						pSignature->firstMember = p->nextMember;
-						// zero orphan so it won't be found by `lookupMember()`
-						::memset(p, 0, sizeof(*p));
-						// add to free list
-						p->nextMember = freeMemberRoot;
-						freeMemberRoot = p - pStore->members;
+
+						this->memberFree(p);
+
 					}
 
-					numEmpty++; // group has become empty
+					// group has become empty
+					numEmpty++;
 				}
 
 				// mark group as safe
@@ -645,12 +682,7 @@ struct genmemberContext_t : context_t {
 		} else {
 			if (pMember->flags & signature_t::SIGMASK_UNSAFE) {
 				// group is safe, candidate not. Drop candidate
-
-				// zero orphan so it won't be found by `lookupMember()`
-				::memset(pMember, 0, sizeof(*pMember));
-				// push member on the freelist
-				pMember->nextMember = freeMemberRoot;
-				freeMemberRoot = pMember - pStore->members;
+				this->memberFree(pMember);
 
 				skipUnsafe++;
 				return false;
@@ -761,23 +793,10 @@ struct genmemberContext_t : context_t {
 		 * Allocate and populate member
 		 */
 
-		member_t *pMember;
-
-		uint32_t mid = freeMemberRoot;
-		if (mid) {
-			pMember = pStore->members + mid;
-			freeMemberRoot = pMember->nextMember; // pop from free list
-			::strcpy(pMember->name, pNameR); // populate with name
-		} else {
-			mid = pStore->addMember(pNameR); // allocate new member
-			pMember = pStore->members + mid;
-		}
-
-		/*
-		 * Name/notation analysis
-		 */
+		member_t *pMember = this->memberAlloc(pNameR);
 
 		pMember->sid = sid;
+		pMember->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
 		pMember->numPlaceholder = numPlaceholder;
 		pMember->numEndpoint = numEndpoint;
 		pMember->numBackRef = numBackRef;
@@ -801,7 +820,7 @@ struct genmemberContext_t : context_t {
 			assert(sid != 1 || strcmp(pNameR, "0") == 0);
 			assert(sid != 2 || strcmp(pNameR, "a") == 0);
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = mid;
+			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
 			pMember->Qsid = pMember->Tsid = pMember->Fsid = sid;
 		} else {
 			findHeadTail(pMember, treeR);
@@ -1019,8 +1038,45 @@ struct genmemberContext_t : context_t {
 				        skipDuplicate, skipSize, skipUnsafe);
 			}
 
+			/*
+			 * test  for duplicates
+			 */
+
+			uint32_t ix = pStore->lookupMember(name);
+			if (pStore->memberIndex[ix] != 0) {
+				// duplicate candidate name
+				skipDuplicate++;
+				return;
+			}
+
+			/*
+			 * construct tree
+			 */
 			tree.decodeFast(name);
-			foundTreeMember(tree, name, numPlaceholder, numEndpoint, numBackRef);
+
+			/*
+			 * Allocate and populate member
+			 */
+
+			member_t *pMember = memberAlloc(name);
+
+			pMember->sid = sid;
+			pMember->size = tree.count - tinyTree_t::TINYTREE_NSTART;
+			pMember->numPlaceholder = numPlaceholder;
+			pMember->numEndpoint = numEndpoint;
+			pMember->numBackRef = numBackRef;
+
+			// lookup signature and member id's
+			findHeadTail(pMember, tree);
+
+			/*
+			 * Propose
+			 */
+			if (memberPropose(pMember)) {
+				// if member got accepted, fixate in index
+				pStore->memberIndex[ix] = pMember - pStore->members;
+			}
+
 			progress++;
 		}
 
