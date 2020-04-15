@@ -887,8 +887,14 @@ struct genmemberContext_t : callable_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Creating imprints for empty/unsafe signatures\n", ctx.timeAsString());
 
+		// clear signature and imprint index
+		::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
+		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+		// skip reserved entry
+		pStore->numImprint = 1;
+
 		/*
-		 * Create imprints for unsafe signature groups
+		 * Create imprints for signature groups
 		 */
 
 		generatorTree_t tree(ctx);
@@ -906,7 +912,7 @@ struct genmemberContext_t : callable_t {
 		// re-calculate
 		numEmpty = numUnsafe = 0;
 
-		// create imprints for unsafe signature groups
+		// create imprints for signature groups
 		ctx.progress++; // skip reserved
 		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -941,10 +947,11 @@ struct genmemberContext_t : callable_t {
 
 			const signature_t *pSignature = pStore->signatures + iSid;
 
-			// add imprint for unsafe signatures
+			/*
+			 * Add to imprint index, either all of empty/unsafe only
+			 */
+
 			if (!unsafeOnly || (pSignature->flags & signature_t::SIGMASK_UNSAFE)) {
-				uint32_t sid = 0;
-				uint32_t tid = 0;
 
 				// avoid `"storage full"`. Give warning later
 				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0) {
@@ -954,6 +961,8 @@ struct genmemberContext_t : callable_t {
 				}
 
 				tree.decodeFast(pSignature->name);
+
+				uint32_t sid, tid;
 
 				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
 					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);

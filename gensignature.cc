@@ -462,7 +462,7 @@ struct gensignatureContext_t : callable_t {
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 		::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
 		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-		// skip mandatory reserved entry
+		// skip reserved entry
 		pStore->numImprint = 1;
 
 		/*
@@ -951,7 +951,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			// clear database imprint and index
 			::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
 			::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-			// skip mandatory reserved entry
+			// skip reserved entry
 			pStore->numImprint = 1;
 
 			/*

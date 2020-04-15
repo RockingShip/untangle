@@ -139,9 +139,19 @@ If you are in need for textual lists of members:
 ```
 
 ```sh
-    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --text=1 >member-0n9-1.txt
+    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --text=1 >member-0n9-qntf-1.txt
     ./genmember member-0n9-qntf.db 1 member-1n9-qntf.db --qntf --text=1 >member-1n9-qntf-1.txt
     ./genmember member-1n9-qntf.db 2 member-2n9-qntf.db --qntf --text=1 >member-2n9-qntf-1.txt
     ./genmember member-2n9-qntf.db 3 member-3n9-qntf.db --qntf --text=1 >member-3n9-qntf-1.txt
     ./genmember member-3n9-qntf.db 4 member-4n9-qntf.db --qntf --text=1 >member-4n9-qntf-1.txt
+```
+
+or use pre-determined member list created with `genmember --text=1` or `genmember text=3`
+
+```sh
+    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --no-generate --load=member-0n9-1.txt
+    ./genmember member-0n9-qntf.db 1 member-1n9-qntf.db --qntf --no-generate --load=member-1n9-qntf-1.txt
+    ./genmember member-1n9-qntf.db 2 member-2n9-qntf.db --qntf --no-generate --load=member-2n9-qntf-1.txt
+    ./genmember member-2n9-qntf.db 3 member-3n9-qntf.db --qntf --no-generate --load=member-3n9-qntf-1.txt
+    ./genmember member-3n9-qntf.db 4 member-4n9-qntf.db --qntf --no-generate --load=member-4n9-qntf-1.txt
 ```
