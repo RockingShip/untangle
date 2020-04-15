@@ -801,7 +801,6 @@ void usage(char *const *argv, bool verbose, const gentransformContext_t *args) {
 		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t-q --quiet           Say more\n");
 		fprintf(stderr, "\t   --selftest        Validate prerequisites\n");
-		fprintf(stderr, "\t   --test            Run without output\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", args->opt_timer);
 		fprintf(stderr, "\t-v --verbose         Say less\n");

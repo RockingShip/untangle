@@ -565,11 +565,14 @@ struct generatorTree_t : tinyTree_t {
 			pTemplateData[numTemplateData++] = 0;
 		}
 
-//		fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
 		if (this->flags & context_t::MAGICMASK_QNTF) {
-			assert(numTemplateData == TEMPLATE_MAXDATA_QNTF);
+			if (numTemplateData != TEMPLATE_MAXDATA_QNTF)
+				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
+			assert(numTemplateData <= TEMPLATE_MAXDATA_QNTF);
 		} else {
-			assert(numTemplateData == TEMPLATE_MAXDATA_QTF);
+			if (numTemplateData != TEMPLATE_MAXDATA_QTF)
+				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
+			assert(numTemplateData <= TEMPLATE_MAXDATA_QTF);
 		}
 	}
 

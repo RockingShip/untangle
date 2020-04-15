@@ -195,6 +195,8 @@ struct genmemberContext_t : context_t {
 	unsigned arg_numNodes;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
+	/// @var {number} Invoke generator for new candidates
+	unsigned opt_generate;
 	/// @var {number} size of imprint index WARNING: must be prime
 	uint32_t opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
@@ -215,7 +217,9 @@ struct genmemberContext_t : context_t {
 	double opt_ratio;
 	/// @var {number} get task settings from SGE environment
 	uint32_t opt_sge;
-	/// @var {number} Start indexing imprints starting from `sidLo`
+	/// @var {number} Sid range upper bound
+	uint32_t opt_sidHi;
+	/// @var {number} Sid range lower bound
 	uint32_t opt_sidLo;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
@@ -252,6 +256,7 @@ struct genmemberContext_t : context_t {
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
 		opt_force = 0;
+		opt_generate = 1;
 		opt_imprintIndexSize = 0;
 		opt_interleave = 0;
 		opt_taskId = 0;
@@ -264,6 +269,7 @@ struct genmemberContext_t : context_t {
 		opt_mode = MODE_MERGE;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sge = 0;
+		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_text = 0;
 		opt_unsafe = 0;
@@ -736,7 +742,7 @@ struct genmemberContext_t : context_t {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
 				        timeAsString(), progress, perSecond,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				        numEmpty, numUnsafe,
+				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe, (double) cntCompare / cntHash);
 			} else {
 				int eta = (int) ((treeR.windowHi - progress) / perSecond);
@@ -750,7 +756,7 @@ struct genmemberContext_t : context_t {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
 				        timeAsString(), progress, perSecond, (progress - treeR.windowLo) * 100.0 / (treeR.windowHi - treeR.windowLo), etaH, etaM, etaS,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				        numEmpty, numUnsafe,
+				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe, (double) cntCompare / cntHash);
 			}
 
@@ -885,7 +891,7 @@ struct genmemberContext_t : context_t {
  */
 	void reindexImprints(bool unsafeOnly) {
 		if (opt_verbose >= VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Creating imprints for unsafe/empty signatures\n", timeAsString());
+			fprintf(stderr, "[%s] Creating imprints for empty/unsafe signatures\n", timeAsString());
 
 		/*
 		 * Create imprints for unsafe signature groups
@@ -893,12 +899,18 @@ struct genmemberContext_t : context_t {
 
 		generatorTree_t tree(*this);
 
+		// show window
+		if (opt_sidLo || opt_sidHi) {
+			if (opt_verbose >= VERBOSE_SUMMARY)
+				fprintf(stderr, "[%s] Sid window: %u-%u\n", context_t::timeAsString(), opt_sidLo, opt_sidHi ? opt_sidHi : pStore->numSignature);
+		}
+
 		// reset progress
 		this->setupSpeed(pStore->numSignature);
 		this->tick = 0;
 
-		numEmpty = 0;
-		numUnsafe = 0;
+		// re-calculate
+		numEmpty = numUnsafe = 0;
 
 		// create imprints for unsafe signature groups
 		progress++; // skip reserved
@@ -911,7 +923,7 @@ struct genmemberContext_t : context_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond,
 					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
+					        numEmpty, numUnsafe - numEmpty, (double) cntCompare / cntHash);
 				} else {
 					int eta = (int) ((progressHi - progress) / perSecond);
 
@@ -924,11 +936,11 @@ struct genmemberContext_t : context_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS,
 					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe, (double) cntCompare / cntHash);
+					        numEmpty, numUnsafe - numEmpty, (double) cntCompare / cntHash);
 				}
 			}
 
-			if (opt_sidLo && iSid < opt_sidLo) {
+			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi)) {
 				this->progress++;
 				continue;
 			}
@@ -941,8 +953,11 @@ struct genmemberContext_t : context_t {
 				uint32_t tid = 0;
 
 				// avoid `"storage full"`. Give warning later
-				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave)
+				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0) {
+					// break now, display text later/ Leave progress untouched
+					assert(iSid == progress);
 					break;
+				}
 
 				tree.decodeFast(pSignature->name);
 
@@ -953,7 +968,7 @@ struct genmemberContext_t : context_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			else if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
+			if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
 				numUnsafe++;
 
 			this->progress++;
@@ -962,16 +977,16 @@ struct genmemberContext_t : context_t {
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (progress != progressHi) {
-			fprintf(stderr, "[%s] WARNING: Imprint storage almost full. Truncating at sid=%u \"%s\"\n",
-			        timeAsString(), (unsigned) (this->progress + 1), pStore->signatures[this->progress + 1].name);
+		if (progress != progressHi && opt_sidHi == 0) {
+			fprintf(stderr, "[%s] WARNING: Imprint storage full. Truncating at sid=%u \"%s\"\n",
+			        timeAsString(), (unsigned) this->progress, pStore->signatures[this->progress].name);
 		}
 
 		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u(of loaded %u) numUnsafe=%u\n",
+			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f\n",
 			        timeAsString(),
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        numEmpty, (unsigned) (this->progress + 1), numUnsafe);
+			        numEmpty, numUnsafe - numEmpty, (double) cntCompare / cntHash);
 
 	}
 
@@ -991,7 +1006,7 @@ struct genmemberContext_t : context_t {
 		 */
 
 		if (opt_verbose >= VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Reading candidates from file\n", timeAsString());
+			fprintf(stderr, "[%s] Reading members from file\n", timeAsString());
 
 		FILE *f = fopen(this->opt_load, "r");
 		if (f == NULL)
@@ -1016,7 +1031,7 @@ struct genmemberContext_t : context_t {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
 				        timeAsString(), progress, perSecond,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				        numEmpty, numUnsafe,
+				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe);
 			}
 
@@ -1028,7 +1043,8 @@ struct genmemberContext_t : context_t {
 			if (pStore->memberIndex[ix] != 0) {
 				// duplicate candidate name
 				skipDuplicate++;
-				return;
+				progress++;
+				continue;
 			}
 
 			/*
@@ -1067,11 +1083,12 @@ struct genmemberContext_t : context_t {
 		if (this->opt_verbose >= this->VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+		if (this->opt_verbose >= this->VERBOSE_TICK)
+			fprintf(stderr, "[%s] Read members. numImprint=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 			        timeAsString(),
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-			        numEmpty, numUnsafe,
+			        numEmpty, numUnsafe - numEmpty,
 			        skipDuplicate, skipSize, skipUnsafe);
 	}
 
@@ -1179,7 +1196,7 @@ struct genmemberContext_t : context_t {
 			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 			        timeAsString(),
 			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-			        numEmpty, numUnsafe,
+			        numEmpty, numUnsafe - numEmpty,
 			        skipDuplicate, skipSize, skipUnsafe);
 	}
 
@@ -1305,18 +1322,16 @@ struct genmemberContext_t : context_t {
 			        timeAsString(), pStore->numMember, skipUnsafe);
 
 		/*
-		 * Recalculate unsafe/empty groups
+		 * Recalculate empty/unsafe groups
 		 */
 
-		numEmpty = 0;
-		numUnsafe = 0;
+		numEmpty = numUnsafe = 0;
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
-			if (pStore->signatures[iSid].firstMember == 0) {
+			if (pStore->signatures[iSid].firstMember == 0)
 				numEmpty++;
-			} else if (pStore->signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
+			if (pStore->signatures[iSid].flags & signature_t::SIGMASK_UNSAFE)
 				numUnsafe++;
 			}
-		}
 
 		if (numEmpty || numUnsafe) {
 			if (this->opt_verbose >= this->VERBOSE_SUMMARY)
@@ -1459,6 +1474,7 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force                   Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t   --[no-]generator          Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                    This list\n");
 		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%u]\n", app.opt_interleave);
@@ -1475,9 +1491,9 @@ void usage(char *const *argv, bool verbose, const genmemberContext_t *args) {
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
 		fprintf(stderr, "\t   --sge                     Get SGE task settings from environment\n");
-		fprintf(stderr, "\t   --sidlo=<number>          Lower end sid for imprints [default=%u]\n", args->opt_sidLo);
+		fprintf(stderr, "\t   --sidhi=<number>          Sid range upper bound [default=%u]\n", args->opt_sidHi);
+		fprintf(stderr, "\t   --sidlo=<number>          Sid range lower bound [default=%u]\n", args->opt_sidLo);
 		fprintf(stderr, "\t   --task=<id>,<last>        Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
-		fprintf(stderr, "\t   --test                    Run without output\n");
 		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%u]\n", args->opt_timer);
 		fprintf(stderr, "\t   --unsafe                  Reindex imprints based onempty/unsafe signature groups\n");
@@ -1510,6 +1526,7 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_FORCE,
+			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
 			LO_KEEP,
@@ -1518,6 +1535,7 @@ int main(int argc, char *const *argv) {
 			LO_MAXMEMBER,
 			LO_MEMBERINDEXSIZE,
 			LO_MODE,
+			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOQNTF,
 			LO_PARANOID,
@@ -1525,6 +1543,7 @@ int main(int argc, char *const *argv) {
 			LO_RATIO,
 			LO_SELFTEST,
 			LO_SGE,
+			LO_SIDHI,
 			LO_SIDLO,
 			LO_TASK,
 			LO_TEXT,
@@ -1543,6 +1562,7 @@ int main(int argc, char *const *argv) {
 			/* name, has_arg, flag, val */
 			{"debug",            1, 0, LO_DEBUG},
 			{"force",            0, 0, LO_FORCE},
+			{"generate",         0, 0, LO_GENERATE},
 			{"help",             0, 0, LO_HELP},
 			{"imprintindexsize", 1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",       1, 0, LO_INTERLEAVE},
@@ -1552,6 +1572,7 @@ int main(int argc, char *const *argv) {
 			{"maxmember",        1, 0, LO_MAXMEMBER},
 			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
 			{"mode",             1, 0, LO_MODE},
+			{"no-generate",       0, 0, LO_NOGENERATE},
 			{"no-paranoid",      0, 0, LO_NOPARANOID},
 			{"no-qntf",          0, 0, LO_NOQNTF},
 			{"paranoid",         0, 0, LO_PARANOID},
@@ -1560,6 +1581,7 @@ int main(int argc, char *const *argv) {
 			{"ratio",            1, 0, LO_RATIO},
 			{"selftest",         0, 0, LO_SELFTEST},
 			{"sge",              0, 0, LO_SGE},
+			{"sidhi",            1, 0, LO_SIDHI},
 			{"sidlo",            1, 0, LO_SIDLO},
 			{"task",             1, 0, LO_TASK},
 			{"text",             2, 0, LO_TEXT},
@@ -1601,6 +1623,9 @@ int main(int argc, char *const *argv) {
 			case LO_FORCE:
 				app.opt_force++;
 				break;
+			case LO_GENERATE:
+				app.opt_generate++;
+				break;
 			case LO_HELP:
 				usage(argv, true, &app);
 				exit(0);
@@ -1641,6 +1666,9 @@ int main(int argc, char *const *argv) {
 				}
 				break;
 			}
+			case LO_NOGENERATE:
+				app.opt_generate = 0;
+				break;
 			case LO_NOPARANOID:
 				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
@@ -1686,6 +1714,9 @@ int main(int argc, char *const *argv) {
 
 				break;
 			}
+			case LO_SIDHI:
+				app.opt_sidHi = strtoull(optarg, NULL, 0);
+				break;
 			case LO_SIDLO:
 				app.opt_sidLo = strtoull(optarg, NULL, 0);
 				break;
@@ -1915,7 +1946,7 @@ int main(int argc, char *const *argv) {
 
 	// create new sections
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: maxImprint=%u maxSignature=%u maxMember=%u\n", app.timeAsString(), store.maxImprint, store.maxSignature, store.maxMember);
+		fprintf(stderr, "[%s] Store create: interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", app.timeAsString(), store.interleave, store.maxImprint, store.maxSignature, store.maxMember);
 
 	store.create();
 
@@ -1983,24 +2014,27 @@ int main(int argc, char *const *argv) {
 	if (store.numMember == 0)
 		store.numMember = 1;
 
+	// count empty/members
+	app.numEmpty = app.numUnsafe = 0;
+	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+		if (store.signatures[iSid].firstMember == 0)
+			app.numEmpty++;
+		if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE)
+			app.numUnsafe++;
+	}
+
 	if (app.opt_verbose >= app.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
+		fprintf(stderr, "[%s] numImprint=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
 		        app.timeAsString(),
+		        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 		        store.numMember, store.numMember * 100.0 / store.maxMember,
-		        0, 0);
+		        app.numEmpty, app.numUnsafe - app.numEmpty);
 
 	/*
 	 * Load members from file to increase chance signature groups become safe
 	 */
-	if (app.opt_load) {
+	if (app.opt_load)
 		app.membersFromFile();
-
-		if (app.opt_verbose >= app.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
-			        app.timeAsString(),
-			        store.numMember, store.numMember * 100.0 / store.maxMember,
-			        0, 0);
-	}
 
 	/*
 	 * Recreate imprints
@@ -2010,16 +2044,18 @@ int main(int argc, char *const *argv) {
 		app.reindexImprints(app.opt_unsafe != 0);
 
 	/*
-	 * Invoke main entrypoint of application context
+	 * Fire up generator for new candidates
 	 */
 
-	if (app.opt_mode != app.MODE_PREPARE)
+	if (app.opt_generate)
 		app.membersFromGenerator();
 
-	if (app.arg_outputDatabase) {
-		if (app.opt_mode != app.MODE_COLLECT) {
+	/*
+	 * re-order and re-index members
+	 */
+
+	if (app.arg_outputDatabase || app.opt_text == 1 || app.opt_text == 2) {
 			app.reindexMembers();
-		}
 
 		/*
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)

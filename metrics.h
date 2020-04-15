@@ -370,7 +370,7 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 3, 81151,         79835,     5666,     29721,   0},
 	{9, 1, 4, 2887974,       2777493,   96363,    801917,  0},
 	{9, 0, 4, 29185094,      28304991,  791647,   5959653, 0},
-	{9, 1, 5, 858805139,     809357847, 10233318, 0,       0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics
+	{9, 1, 5, 858805139,     809357847, 10233318, 56349342, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics. numSignature takes about 8 hours.
 	{9, 0, 5, 25583691074,   0,         0,        6608427, 0},
 	{9, 1, 6, 633200151789,  0,         0,        0,       1}, // numProgress takes about 80 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        0,       1}, // from historic metrics
