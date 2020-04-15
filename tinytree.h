@@ -1107,10 +1107,6 @@ struct tinyTree_t {
 
 			nextNode = TINYTREE_NSTART;
 
-			// nodes already processed
-			uint32_t beenThere;
-			uint32_t beenWhat[TINYTREE_NEND];
-
 			// mark `zero` processed
 			beenThere = (1 << 0);
 			beenWhat[0] = 0;
@@ -1182,9 +1178,8 @@ struct tinyTree_t {
 		stack[stackPos++] = id & ~IBIT;
 
 		// re-walk the tree
-		beenThere = (1 << 0);
-
 		nextNode = TINYTREE_NSTART;
+		beenThere = (1 << 0);
 
 		do {
 			// pop stack

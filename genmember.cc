@@ -730,6 +730,12 @@ struct genmemberContext_t : callable_t {
 	 *
 	 * for `signature_t`, only use `flags`, `size` and `firstMember`.
 	 *
+	 * @date 2020-04-15 11:02:46
+	 *
+	 * For now, collect members only based on size instead of `compareMember()`.
+	 * Member properties still need to be discovered to make strategic decisions.
+	 * Collecting members is too expensive to ask questions on missing members later.
+	 *
 	 * @param {generatorTree_t} treeR - candidate tree
 	 * @param {string} pNameR - Tree name/notation
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree

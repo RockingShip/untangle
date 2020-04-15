@@ -41,13 +41,21 @@ Constants are a function of time containing all the steps required to determine 
 
 # Requirements
 
-*   64-bits CPU architecture
-*   SSE4.2 CRC assembler instruction
-*   32G-40G physical memory
-*   200G SSD storage (expect files upto 24G large)
-*   autotools
-*   jansson http://www.digip.org/jansson
-*   (optionally) AWS instances with StarGridEngine
+*   64-bits CPU architecture.
+*   SSE4.2 CRC assembler instruction.
+*   32G-64G physical memory.
+*   200G SSD storage. Expect files upto 24G or 60G when developing.
+*   autotools.
+*   JSON with jansson. http://www.digip.org/jansson (highly recommended) 
+*   AWS instances with StarGridEngine. (optionally) 
+
+# History
+
+This is a rewrite from scratch of version 1.35 and 1.50. 
+The merging of both failed at a critical moment due to personal reasons. 
+Also, a number of fundamental issues that were starting to backfire needed to be fixed.
+
+In total there are 6 normalisation levels and the project that needed these fractal structures. 
 
 # Installation
 
