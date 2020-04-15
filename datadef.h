@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 #include "context.h"
+#include <immintrin.h>
 
 /*
  * Fixed length transform name
@@ -43,8 +44,6 @@ typedef char transformName_t[MAXSLOTS + 1];
  *
  * Test vectors are also used to compare equality of two trees
  *
- * As this is a reference implementation, `SIMD` instructions should be avoided.
- *
  * @typedef {number[]}
  */
 struct footprint_t {
@@ -58,12 +57,42 @@ struct footprint_t {
 	/**
 	 * @date 2020-03-15 20:26:04
 	 *
-	 * Compare twwo prints and determine if both are same
+	 * Compare two prints and determine if both are same
 	 *
 	 * @param {footprint_t} rhs - right hand side of comparison
 	 * @return {boolean} `true` if same, `false` if different
 	 */
 	inline bool equals(const struct footprint_t &rhs) const {
+
+		/*
+		 * @date 2020-04-14 21:22:52
+		 * Update to SIMD
+		 */
+
+#if defined(__AVX2__)
+#warning AVX2 instructions not tested
+
+		const __m256i *L = (const __m256i *) this->bits;
+		const __m256i *R = (const __m256i *) rhs.bits;
+
+		if (_mm256_movemask_ps(_mm256_cmp_ps(L[0], R[0], _CMP_EQ_OQ)) != 0xffff) return false;
+		if (_mm256_movemask_ps(_mm256_cmp_ps(L[1], R[1], _CMP_EQ_OQ)) != 0xffff) return false;
+		if (_mm256_movemask_ps(_mm256_cmp_ps(L[2], R[2], _CMP_EQ_OQ)) != 0xffff) return false;
+		if (_mm256_movemask_ps(_mm256_cmp_ps(L[3], R[3], _CMP_EQ_OQ)) != 0xffff) return false;
+
+#elif defined(__SSE2__)
+
+		const __m128i *L = (const __m128i *) this->bits;
+		const __m128i *R = (const __m128i *) rhs.bits;
+
+		if (_mm_movemask_epi8(_mm_cmpeq_epi32(L[0], R[0])) != 0xffff) return false;
+		if (_mm_movemask_epi8(_mm_cmpeq_epi32(L[1], R[1])) != 0xffff) return false;
+		if (_mm_movemask_epi8(_mm_cmpeq_epi32(L[2], R[2])) != 0xffff) return false;
+		if (_mm_movemask_epi8(_mm_cmpeq_epi32(L[3], R[3])) != 0xffff) return false;
+
+#else
+#warning non-assembler implementation
+
 		// NOTE: QUADPERFOOTPRINT tests
 		if (this->bits[0] != rhs.bits[0]) return false;
 		if (this->bits[1] != rhs.bits[1]) return false;
@@ -73,6 +102,7 @@ struct footprint_t {
 		if (this->bits[5] != rhs.bits[5]) return false;
 		if (this->bits[6] != rhs.bits[6]) return false;
 		if (this->bits[7] != rhs.bits[7]) return false;
+#endif
 
 		return true;
 	}
@@ -80,14 +110,29 @@ struct footprint_t {
 	/**
 	 * @date 2020-03-15 20:29:35
 	 *
-	 * Calculate the crc of a footprint
+	 * Calculate the hash of a footprint
+	 *
+	 * It doesn't really have to be crc,  as long as the result has some linear distribution over index.
+	 * crc32 was chosen because it has a single assembler instruction on x86 platforms.
 	 *
 	 * @return {number} - calculate crc
 	 */
 	inline uint32_t crc32(void) const {
 
-		uint64_t crc64 = 0;
 		// NOTE: QUADPERFOOTPRINT tests
+#if defined(__SSE4_1__)
+		uint32_t crc32 = 0;
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[0]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[1]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[2]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[3]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[4]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[5]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[6]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[7]));
+		return crc32;
+#else
+		uint64_t crc64 = 0;
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[0]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[1]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[2]));
@@ -96,8 +141,9 @@ struct footprint_t {
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[5]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[6]));
 		__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(this->bits[7]));
+		return crc64;
+#endif
 
-		return (uint32_t) crc64;
 	}
 
 };
@@ -106,11 +152,16 @@ struct footprint_t {
  * @date 2020-03-15 19:16:31
  *
  * Footprint belonging to signature/transform
+ *
+ * @date 2020-04-14 23:29:59
+ *
+ * Implementing SSE2/AVX2 requires alignment. Extra space of alignment reduces the maximum number of available imprints.
  */
 struct imprint_t {
 	footprint_t footprint; // footprint
 	uint32_t sid;          // signature
 	uint32_t tid;          // skin/transform
+	uint32_t filler[2];    // need 16 byte alignment
 };
 
 /*

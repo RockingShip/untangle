@@ -1313,12 +1313,17 @@ struct tinyTree_t {
          * - the result is stored int `v` indexed by the location of the operator
          *
          * Each data entry is a 512-bit wide vector, split into uint64_t chunks.
-         * As this is a reference implementation, `SIMD` instructions should be avoided.
          *
 	 * @param {vector[]} v - the evaluated result of the unified operators
 	 * @date 2020-03-09 19:36:17
 	 */
 	inline void eval(footprint_t *v) const {
+
+		/*
+		 * @date 2020-04-13 18:42:52
+		 * Update to SIMD
+		 */
+
 #if defined(__AVX2__)
 		#warning AVX2 instructions not tested
 		/*
@@ -1341,25 +1346,20 @@ struct tinyTree_t {
 			if (N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
-				__m256i nTQ[4], nQF[4];
-				nTQ[0] = _mm256_andnot_si256(T[0], Q[0]);
-				nTQ[1] = _mm256_andnot_si256(T[1], Q[1]);
-				nQF[0] = _mm256_andnot_si256(Q[0], F[0]);
-				nQF[1] = _mm256_andnot_si256(Q[1], F[1]);
-				R[0] = _mm256_xor_si256(nTQ[0], nQF[0]);
-				R[1] = _mm256_xor_si256(nTQ[1], nQF[1]);
+				R[0] = _mm_xor_si256(_mm_andnot_si256(T[0], Q[0]), _mm_andnot_si256(Q[0], F[0]));
+				R[1] = _mm_xor_si256(_mm_andnot_si256(T[1], Q[1]), _mm_andnot_si256(Q[1], F[1]));
+				R[2] = _mm_xor_si256(_mm_andnot_si256(T[2], Q[2]), _mm_andnot_si256(Q[2], F[2]));
+				R[3] = _mm_xor_si256(_mm_andnot_si256(T[3], Q[3]), _mm_andnot_si256(Q[3], F[3]));
 			} else {
 				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
-				__m256i TQ[4], nQF[4];
-				TQ[0] = _mm256_and_si256(T[0], Q[0]);
-				TQ[1] = _mm256_and_si256(T[1], Q[1]);
-				nQF[0] = _mm256_andnot_si256(Q[0], F[0]);
-				nQF[1] = _mm256_andnot_si256(Q[1], F[1]);
-				R[0] = _mm256_xor_si256(TQ[0], nQF[0]);
-				R[1] = _mm256_xor_si256(TQ[1], nQF[1]);
+				R[0] = _mm_xor_si256(_mm_and_si256(T[0], Q[0]), _mm_andnot_si256(Q[0], F[0]));
+				R[1] = _mm_xor_si256(_mm_and_si256(T[1], Q[1]), _mm_andnot_si256(Q[1], F[1]));
+				R[2] = _mm_xor_si256(_mm_and_si256(T[2], Q[2]), _mm_andnot_si256(Q[2], F[2]));
+				R[3] = _mm_xor_si256(_mm_and_si256(T[3], Q[3]), _mm_andnot_si256(Q[3], F[3]));
 			}
 		}
+
 #elif defined(__SSE2__)
 		/*
 		 * 0x118 bytes of code when compiled with -O3 -msse2. This is default on x86-64
@@ -1381,35 +1381,17 @@ struct tinyTree_t {
 			if (N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
-				__m128i nTQ[4], nQF[4];
-				nTQ[0] = _mm_andnot_si128(T[0], Q[0]);
-				nTQ[1] = _mm_andnot_si128(T[1], Q[1]);
-				nTQ[2] = _mm_andnot_si128(T[2], Q[2]);
-				nTQ[3] = _mm_andnot_si128(T[3], Q[3]);
-				nQF[0] = _mm_andnot_si128(Q[0], F[0]);
-				nQF[1] = _mm_andnot_si128(Q[1], F[1]);
-				nQF[2] = _mm_andnot_si128(Q[2], F[2]);
-				nQF[3] = _mm_andnot_si128(Q[3], F[3]);
-				R[0] = _mm_xor_si128(nTQ[0], nQF[0]);
-				R[1] = _mm_xor_si128(nTQ[1], nQF[1]);
-				R[2] = _mm_xor_si128(nTQ[2], nQF[2]);
-				R[3] = _mm_xor_si128(nTQ[3], nQF[3]);
+				R[0] = _mm_xor_si128(_mm_andnot_si128(T[0], Q[0]), _mm_andnot_si128(Q[0], F[0]));
+				R[1] = _mm_xor_si128(_mm_andnot_si128(T[1], Q[1]), _mm_andnot_si128(Q[1], F[1]));
+				R[2] = _mm_xor_si128(_mm_andnot_si128(T[2], Q[2]), _mm_andnot_si128(Q[2], F[2]));
+				R[3] = _mm_xor_si128(_mm_andnot_si128(T[3], Q[3]), _mm_andnot_si128(Q[3], F[3]));
 			} else {
 				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
-				__m128i TQ[4], nQF[4];
-				TQ[0] = _mm_and_si128(T[0], Q[0]);
-				TQ[1] = _mm_and_si128(T[1], Q[1]);
-				TQ[2] = _mm_and_si128(T[2], Q[2]);
-				TQ[3] = _mm_and_si128(T[3], Q[3]);
-				nQF[0] = _mm_andnot_si128(Q[0], F[0]);
-				nQF[1] = _mm_andnot_si128(Q[1], F[1]);
-				nQF[2] = _mm_andnot_si128(Q[2], F[2]);
-				nQF[3] = _mm_andnot_si128(Q[3], F[3]);
-				R[0] = _mm_xor_si128(TQ[0], nQF[0]);
-				R[1] = _mm_xor_si128(TQ[1], nQF[1]);
-				R[2] = _mm_xor_si128(TQ[2], nQF[2]);
-				R[3] = _mm_xor_si128(TQ[3], nQF[3]);
+				R[0] = _mm_xor_si128(_mm_and_si128(T[0], Q[0]), _mm_andnot_si128(Q[0], F[0]));
+				R[1] = _mm_xor_si128(_mm_and_si128(T[1], Q[1]), _mm_andnot_si128(Q[1], F[1]));
+				R[2] = _mm_xor_si128(_mm_and_si128(T[2], Q[2]), _mm_andnot_si128(Q[2], F[2]));
+				R[3] = _mm_xor_si128(_mm_and_si128(T[3], Q[3]), _mm_andnot_si128(Q[3], F[3]));
 			}
 		}
 #elif 0
@@ -1443,6 +1425,7 @@ struct tinyTree_t {
 			}
 		}
 #else
+#warning non-assembler implementation
 		/*
 		 * 0x208 bytes of code when compiled with -O3
 		 */

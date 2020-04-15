@@ -167,6 +167,78 @@ struct footprint_t {
 	};
 
 	uint64_t bits[QUADPERFOOTPRINT]; // = 512/64 = 8 = QUADPERFOOTPRINT
+
+	/**
+	 * @date 2020-04-15 00:43:57
+	 *
+	 * Calculate the hash of a footprint.
+	 *
+	 * It doesn't really have to be crc,  as long as the result has some linear distribution over index.
+	 * crc32 was chosen because it has a single assembler instruction on x86 platforms.
+	 *
+	 * Inspired by Mark Adler's software implementation of "crc32c.c -- compute CRC-32C using the Intel crc32 instruction"
+	 *
+	 * @param {boolean} inverted - optionally invert input
+	 * @return {number} - calculate crc
+	 */
+	uint32_t crc32(bool inverted) const {
+
+		static uint32_t crc32c_table[8][256];
+
+		if (crc32c_table[0][0] == 0) {
+			/*
+			 * Initialize table
+			 */
+			uint32_t n, crc, k;
+			uint32_t poly = 0x82f63b78;
+
+			for (n = 0; n < 256; n++) {
+				crc = n;
+
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+				crc = (crc & 1) ? (crc >> 1) ^ poly : (crc >> 1);
+
+				crc32c_table[0][n] = crc;
+			}
+			for (n = 0; n < 256; n++) {
+				crc = crc32c_table[0][n];
+
+				for (k = 1; k < 8; k++) {
+					crc = crc32c_table[0][crc & 0xff] ^ (crc >> 8);
+					crc32c_table[k][n] = crc;
+				}
+			}
+
+		}
+
+		/*
+		 * Calculate crc
+		 */
+		uint64_t crc = 0;
+
+		for (unsigned j = 0; j < QUADPERFOOTPRINT; j++) {
+
+			crc ^= bits[j] ^ (inverted ? ~0LL : 0);
+
+			crc = crc32c_table[7][crc & 0xff] ^
+			      crc32c_table[6][(crc >> 8) & 0xff] ^
+			      crc32c_table[5][(crc >> 16) & 0xff] ^
+			      crc32c_table[4][(crc >> 24) & 0xff] ^
+			      crc32c_table[3][(crc >> 32) & 0xff] ^
+			      crc32c_table[2][(crc >> 40) & 0xff] ^
+			      crc32c_table[1][(crc >> 48) & 0xff] ^
+			      crc32c_table[0][crc >> 56];
+		}
+
+		return crc;
+	}
+
 };
 
 /**
@@ -2182,20 +2254,14 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Calculate crc of entry point
 	 */
-	uint64_t crc64 = 0;
-	if (pTree->root & IBIT) {
-		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
-			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root & ~IBIT].bits[i] ^ ~0LL));
-	} else {
-		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
-			__asm__ __volatile__ ("crc32q %1, %0" : "+r"(crc64) : "rm"(pEval[pTree->root].bits[i]));
-	}
+
+	uint32_t crc32 = 0;
 
 	/*
 	 * if quiet only return crc
 	 */
 	if (opt_quiet)
-		return (uint32_t) (crc64 & 0xffffffff);
+		return crc32;
 
 	/*
 	 * Output result of test vector prefixed with sign indicating if root is inverted
@@ -2204,7 +2270,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
 		printf("%016lx ", pEval[pTree->root & ~IBIT].bits[i]);
 
-	printf("{%08lx} ", crc64);
+	printf("{%08x} ", crc32);
 
 	/*
 	 * Output tree
@@ -2245,7 +2311,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	}
 
 	printf("\n");
-	return (uint32_t) (crc64 & 0xffffffff);
+	return (uint32_t) (crc32 & 0xffffffff);
 }
 
 /**

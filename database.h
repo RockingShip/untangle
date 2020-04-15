@@ -28,6 +28,12 @@
  *
  * `mmap()` is used to exploit the use of shared memory.
  * When running parallel jobs the large imprint section can be shared.
+ *
+ * @date 2020-04-15 02:00:58
+ *
+ * The initial starting positions of the indices use crc as a hash function.
+ * It doesn't really have to be crc,  as long as the result has some linear distribution over index.
+ * crc32 was chosen because it has a single assembler instruction on x86 platforms.
  */
 
 /*
