@@ -225,7 +225,7 @@ struct generatorTree_t : tinyTree_t {
 		pRestartData = NULL;
 		restartTick = 0;
 		numFoundRestart = 0;
-		memset(templateIndex, 0, sizeof(templateIndex));
+		::memset(templateIndex, 0, sizeof(templateIndex));
 
 		// allocate structures
 		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << PACKED_SIZE, sizeof(*this->pIsType));

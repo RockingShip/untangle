@@ -36,6 +36,16 @@
  *
  *   `--text` displays resulting signature collection
  *   `--text=2` displays all candidates
+ *
+ * @date 2020-03-29 13:47:04
+ *
+ * Mystery of the missing candidates.
+ * The candidates are now ordered using `compare()`.
+ * This has the side effect that components might be (forced) unordered which fails validation and gets rejected.
+ * For example: the top-level `F` component of `"ab>ab+21&?"` which is `"ab>ab+&"` and unordered.
+ * see: `"./eval 'ab>ab+21&?' --F"` and `"./eval 'ab>ab+21&?' --F --fast"`
+ *
+
  */
 
 /*
@@ -939,18 +949,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
-			memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
-			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-
-			/*
-			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
-			 */
-
-			tree.decodeFast(pBasename);
-
-			// add to database
-			pStore->numImprint = 1; // skip mandatory zero entry
-			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
+			::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
+			::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+			// skip mandatory reserved entry
+			pStore->numImprint = 1;
 
 			/*
 			 * Lookup all possible permutations
@@ -1237,8 +1239,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			assert(pInterleave);
 
 			// prepare database
-			memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-			memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
+			::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+			::memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
 			pStore->numImprint = 1; // skip reserved first entry
 			pStore->numSignature = 1; // skip reserved first entry
 			pStore->interleave = pInterleave->numStored;
@@ -1321,8 +1323,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
-				memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-				pStore->numImprint = 1; // skip mandatory zero entry
+				::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+				pStore->numImprint = 1; // skip mandatory reserved entry
 				ctx.cntHash = 0;
 				ctx.cntCompare = 0;
 

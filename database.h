@@ -199,7 +199,7 @@ struct database_t {
 
 		hndl = 0;
 		rawDatabase = NULL;
-		memset(&fileHeader, 0, sizeof(fileHeader));
+		::memset(&fileHeader, 0, sizeof(fileHeader));
 		allocFlags = 0;
 
 		// transform store
@@ -1224,7 +1224,7 @@ struct database_t {
 			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
 
 		// clear before use
-		memset(pSignature, 0, sizeof(*pSignature));
+		::memset(pSignature, 0, sizeof(*pSignature));
 
 		// only populate key fields
 		strcpy(pSignature->name, name);
@@ -1277,7 +1277,7 @@ struct database_t {
 			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
 
 		// clear before use
-		memset(pMember, 0, sizeof(*pMember));
+		::memset(pMember, 0, sizeof(*pMember));
 
 		// only populate key fields
 		strcpy(pMember->name, name);

@@ -290,7 +290,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	void performListCandidates(database_t *pStore, unsigned numNode) {
 
 		this->pStore = pStore;
-		pStore->numSignature = 1; // skip mandatory zero entry
+		pStore->numSignature = 1; // skip mandatory reserved entry
 
 		/*
 		 * Setup generator
