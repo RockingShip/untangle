@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-15 15:39:56 Dropped `genmember --mode`.
 2020-04-15 14:22:47 Separate application and I/O context.
 2020-04-15 02:09:54 `eval` now using software version of `crc32` instruction.
 2020-04-14 00:54:23 Upgraded `genmember` and made usage simpeler.

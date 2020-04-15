@@ -171,18 +171,6 @@
  */
 struct genmemberContext_t : callable_t {
 
-	enum {
-		/// @constant {number} - Merge members. Default mode of operation
-		MODE_MERGE = 0,
-
-		/// @constant {number} - Use imprints to index empty/unsage signature groups. Intended with high interleave.
-		MODE_PREPARE = 1,
-
-		/// @constant {number} - High speed worker with low resource footprin
-		MODE_COLLECT = 2,
-
-	};
-
 	/*
 	 * User specified program arguments and options
 	 */
@@ -214,8 +202,6 @@ struct genmemberContext_t : callable_t {
 	uint32_t opt_maxMember;
 	/// @var {number} size of member index WARNING: must be prime
 	uint32_t opt_memberIndexSize;
-	/// @var {number} Mode of operation
-	uint32_t opt_mode;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} get task settings from SGE environment
@@ -269,7 +255,6 @@ struct genmemberContext_t : callable_t {
 		opt_maxImprint = 0;
 		opt_maxMember = 0;
 		opt_memberIndexSize = 0;
-		opt_mode = MODE_MERGE;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sge = 0;
 		opt_sidHi = 0;
@@ -1500,7 +1485,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>      Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
-		fprintf(stderr, "\t   --mode=<mode>             Mode (merge/perpare/collect) [default=%s]\n", modeNames[app.opt_mode]);
 		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --prepare                 Prepare dataset for empty/unsafe groups\n");
 		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
@@ -1551,7 +1535,6 @@ int main(int argc, char *const *argv) {
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
 			LO_MEMBERINDEXSIZE,
-			LO_MODE,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOQNTF,
@@ -1588,7 +1571,6 @@ int main(int argc, char *const *argv) {
 			{"maximprint",       1, 0, LO_MAXIMPRINT},
 			{"maxmember",        1, 0, LO_MAXMEMBER},
 			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
-			{"mode",             1, 0, LO_MODE},
 			{"no-generate",       0, 0, LO_NOGENERATE},
 			{"no-paranoid",      0, 0, LO_NOPARANOID},
 			{"no-qntf",          0, 0, LO_NOQNTF},
@@ -1669,20 +1651,6 @@ int main(int argc, char *const *argv) {
 			case LO_MEMBERINDEXSIZE:
 				app.opt_memberIndexSize = ctx.nextPrime(strtoull(optarg, NULL, 0));
 				break;
-			case LO_MODE: {
-				if (strcmp(optarg, "merge") == 0) {
-					app.opt_mode = app.MODE_MERGE;
-				} else if (strcmp(optarg, "prepare") == 0) {
-					app.opt_mode = app.MODE_PREPARE;
-				} else if (strcmp(optarg, "collect") == 0) {
-					app.opt_mode = app.MODE_COLLECT;
-					app.opt_text = 3; // also track new members
-				} else {
-					fprintf(stderr, "=--mode must be one of [merge,prepare,collect]\n");
-					exit(1);
-				}
-				break;
-			}
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
 				break;
@@ -1944,9 +1912,8 @@ int main(int argc, char *const *argv) {
 				ctx.fatal("no preset for --maximprint\n");
 		}
 
-		// only `--mode=collect` leave members untouched
-		if (app.opt_mode == app.MODE_COLLECT) {
-			// inherit section
+		if (!app.arg_outputDatabase && app.opt_text != 1 && app.opt_text != 2) {
+			// inherit section if not outputting anything (collecting)
 			store.maxMember = 0;
 		} else if (app.opt_maxMember == 0) {
 			// section needs minimal size or input data might not fit
