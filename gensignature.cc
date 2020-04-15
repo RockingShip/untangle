@@ -86,11 +86,14 @@
  *
  * @typedef {object}
  */
-struct gensignatureContext_t : context_t {
+struct gensignatureContext_t : callable_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
+
+	/// @var {copntext_t} I/O context
+	context_t &ctx;
 
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
@@ -129,7 +132,7 @@ struct gensignatureContext_t : context_t {
 	/**
 	 * Constructor
 	 */
-	gensignatureContext_t() {
+	gensignatureContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
@@ -159,24 +162,24 @@ struct gensignatureContext_t : context_t {
 	 */
 	void loadSignatures(database_t *pStore, const database_t *pDB) {
 
-		tinyTree_t tree(*this);
+		tinyTree_t tree(ctx);
 
-		if (this->opt_verbose >= VERBOSE_ACTIONS)
-			fprintf(stderr, "\r\e[K[%s] Loading signatures\n", timeAsString());
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "\r\e[K[%s] Loading signatures\n", ctx.timeAsString());
 
-		this->setupSpeed(pDB->numSignature);
-		this->tick = 0;
+		ctx.setupSpeed(pDB->numSignature);
+		ctx.tick = 0;
 
 		for (uint32_t iSid = 1; iSid < pDB->numSignature; iSid++) {
-			if (opt_verbose >= VERBOSE_TICK && tick) {
-				tick = 0;
-				int perSecond = this->updateSpeed();
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				ctx.tick = 0;
+				int perSecond = ctx.updateSpeed();
 
-				if (perSecond == 0 || progress > progressHi) {
+				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-					        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+					        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
-					int eta = (int) ((progressHi - progress) / perSecond);
+					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
 					int etaH = eta / 3600;
 					eta %= 3600;
@@ -185,10 +188,10 @@ struct gensignatureContext_t : context_t {
 					int etaS = eta;
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-					        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 				}
 			}
-			this->progress++;
+			ctx.progress++;
 
 			const signature_t *pDbSignature = pDB->signatures + iSid;
 
@@ -222,11 +225,11 @@ struct gensignatureContext_t : context_t {
 			pStore->numSignature++;
 
 		}
-		if (this->opt_verbose >= this->VERBOSE_TICK)
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "\r\e[K[%s] Loaded signatures. numSignature=%d numImprint=%d\n", timeAsString(), pStore->numSignature, pStore->numImprint);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "\r\e[K[%s] Loaded signatures. numSignature=%d numImprint=%d\n", ctx.timeAsString(), pStore->numSignature, pStore->numImprint);
 
 	}
 
@@ -258,15 +261,15 @@ struct gensignatureContext_t : context_t {
 	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			tick = 0;
-			int perSecond = this->updateSpeed();
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			int perSecond = ctx.updateSpeed();
 
-			if (perSecond == 0 || progress > progressHi) {
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 			} else {
-				int eta = (int) ((progressHi - progress) / perSecond);
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
 				int etaH = eta / 3600;
 				eta %= 3600;
@@ -275,7 +278,7 @@ struct gensignatureContext_t : context_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 			}
 		}
 
@@ -305,7 +308,7 @@ struct gensignatureContext_t : context_t {
 			pSignature->numBackRef = numBackRef;
 
 			if (opt_text == 2) {
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, '*', pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '*', pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
 
 			return;
@@ -345,7 +348,7 @@ struct gensignatureContext_t : context_t {
 			/*
 			 * Compare layouts, expensive
 			 */
-			tinyTree_t treeL(*this);
+			tinyTree_t treeL(ctx);
 			treeL.decodeFast(pSignature->name);
 
 			cmp = treeL.compare(treeL.root, treeR, treeR.root);
@@ -369,12 +372,12 @@ struct gensignatureContext_t : context_t {
 			pSignature->numBackRef = numBackRef;
 
 			if (opt_text == 2)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 
 		} else {
 
 			if (opt_text == 2)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
 
 		}
 
@@ -451,13 +454,13 @@ struct gensignatureContext_t : context_t {
 		/*
 		 * create generator
 		 */
-		generatorTree_t generator(*this);
+		generatorTree_t generator(ctx);
 
 		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// reset progress
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
-			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-			this->tick = 0;
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS,ctx.opt_flags & context_t::MAGICMASK_QNTF, numNode);
+			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+			ctx.tick = 0;
 
 			// clear tree
 			generator.clearGenerator();
@@ -465,8 +468,8 @@ struct gensignatureContext_t : context_t {
 			/*
 			 * Generate candidates
 			 */
-			if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", timeAsString(), numNode, MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
 			if (numNode == 0) {
 				generator.root = 0; // "0"
@@ -478,12 +481,12 @@ struct gensignatureContext_t : context_t {
 				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeCandidate);
 			}
 
-			if (this->opt_verbose >= this->VERBOSE_TICK)
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
-			if (this->progress != this->progressHi) {
+			if (ctx.progress != ctx.progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
-				       __FUNCTION__, this->progress, this->progressHi, numNode);
+				       __FUNCTION__, ctx.progress, ctx.progressHi, numNode);
 			}
 		}
 
@@ -491,8 +494,8 @@ struct gensignatureContext_t : context_t {
 		 * Sort signatures. skip first reserved entry
 		 */
 
-		if (this->opt_verbose >= this->VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Sorting signatures\n", timeAsString());
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Sorting signatures\n", ctx.timeAsString());
 
 		assert(pStore->numSignature >= 3);
 		qsort_r(pStore->signatures + 3, pStore->numSignature - 3, sizeof(*pStore->signatures), comparSignature, this);
@@ -511,7 +514,7 @@ struct gensignatureContext_t : context_t {
 		 * Done
 		 */
 		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%d numImprint=%d\n",
-		        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, progress, pStore->numSignature, pStore->numImprint);
+		        ctx.timeAsString(), MAXSLOTS, (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress, pStore->numSignature, pStore->numImprint);
 
 	}
 
@@ -534,7 +537,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	/**
 	 * Constructor
 	 */
-	gensignatureSelftest_t() {
+	gensignatureSelftest_t(context_t &ctx) : gensignatureContext_t(ctx) {
 		opt_selftest = 0;
 		selftestWindowResults = NULL;
 	}
@@ -560,7 +563,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		unsigned numPassed = 0;
 		footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
 
-		tinyTree_t tree(*this);
+		tinyTree_t tree(ctx);
 
 		/*
 		 * quickly test that `tinyTree_t` does level-2 normalisation
@@ -724,8 +727,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			}
 		}
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed %d tests\n", this->timeAsString(), __FUNCTION__, numPassed);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
 	/**
@@ -759,7 +762,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		unsigned numPassed = 0;
 
-		tinyTree_t tree(*this);
+		tinyTree_t tree(ctx);
 
 		// test name. NOTE: this is deliberately "not ordered"
 		const char *pBasename = "abc!defg!!hi!";
@@ -857,9 +860,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			time_t seconds = ::time(NULL);
 			for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
 
-				if (this->opt_verbose >= VERBOSE_TICK && this->tick) {
-					fprintf(stderr, "\r[%s] %.5f%%", this->timeAsString(), iTransform * 100.0 / MAXTRANSFORM);
-					this->tick = 0;
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					fprintf(stderr, "\r[%s] %.5f%%", ctx.timeAsString(), iTransform * 100.0 / MAXTRANSFORM);
+					ctx.tick = 0;
 				}
 
 				// Load base name with skin
@@ -885,7 +888,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			}
 
-			if (this->opt_verbose >= this->VERBOSE_TICK)
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
 
@@ -895,7 +898,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// base estimated size on 791647 signatures
 			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlot=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
-			        this->timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
+			        ctx.timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 			// test that number of imprints match
@@ -906,8 +909,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			}
 		}
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed %d tests\n", this->timeAsString(), __FUNCTION__, numPassed);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
 	/**
@@ -922,25 +925,25 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			tick = 0;
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			if (ctx.progressHi)
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
 			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
+				fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), tree.windowLo);
 		}
 
-		assert(this->progress < 2000000);
+		assert(ctx.progress < 2000000);
 
 		// assert entry is unique
-		if (selftestWindowResults[this->progress] != NULL) {
+		if (selftestWindowResults[ctx.progress] != NULL) {
 			printf("{\"error\":\"entry not unique\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, selftestWindowResults[this->progress], pName, this->progress);
+			       __FUNCTION__, selftestWindowResults[ctx.progress], pName, ctx.progress);
 			exit(1);
 		}
 
 		// populate entry
-		selftestWindowResults[this->progress] = ::strdup(pName);
+		selftestWindowResults[ctx.progress] = ::strdup(pName);
 	}
 
 	/**
@@ -955,33 +958,33 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			tick = 0;
-			if (progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", timeAsString(), tree.windowLo * 100.0 / progressHi);
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			if (ctx.progressHi)
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
 			else
-				fprintf(stderr, "\r\e[K[%s] %ld", timeAsString(), tree.windowLo);
+				fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), tree.windowLo);
 		}
 
-		assert(this->progress < 2000000);
+		assert(ctx.progress < 2000000);
 
 		// assert entry is present
-		if (selftestWindowResults[this->progress] == NULL) {
+		if (selftestWindowResults[ctx.progress] == NULL) {
 			printf("{\"error\":\"missing\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, pName, this->progress);
+			       __FUNCTION__, pName, ctx.progress);
 			exit(1);
 		}
 
 		// compare
-		if (::strcmp(pName, selftestWindowResults[this->progress]) != 0) {
+		if (::strcmp(pName, selftestWindowResults[ctx.progress]) != 0) {
 			printf("{\"error\":\"entry missmatch\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
-			       __FUNCTION__, selftestWindowResults[this->progress], pName, this->progress);
+			       __FUNCTION__, selftestWindowResults[ctx.progress], pName, ctx.progress);
 			exit(1);
 		}
 
 		// release resources
-		::free(selftestWindowResults[this->progress]);
-		selftestWindowResults[this->progress] = NULL;
+		::free(selftestWindowResults[ctx.progress]);
+		selftestWindowResults[ctx.progress] = NULL;
 	}
 
 
@@ -995,16 +998,16 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	  */
 	void performSelfTestWindow(void) {
 		// allocate resources
-		selftestWindowResults = (char **) myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
+		selftestWindowResults = (char **) ctx.myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
 
 		// set generator into `3n9 QnTF-only` mode
-		this->opt_flags &= ~context_t::MAGICMASK_QNTF;
+		ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
 		arg_numNodes = 3;
 
-		generatorTree_t generator(*this);
+		generatorTree_t generator(ctx);
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
@@ -1022,14 +1025,14 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
-			this->progressHi = pMetrics->numProgress;
-			this->progress = 0;
-			this->tick = 0;
+			ctx.progressHi = pMetrics->numProgress;
+			ctx.progress = 0;
+			ctx.tick = 0;
 
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowCreate);
 		}
 
-		if (this->opt_verbose >= this->VERBOSE_TICK)
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
 		/*
@@ -1045,21 +1048,21 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.windowLo = 0;
 			generator.windowHi = 0;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
-			this->progressHi = pMetrics->numProgress;
-			this->progress = 0;
-			this->tick = 0;
+			ctx.progressHi = pMetrics->numProgress;
+			ctx.progress = 0;
+			ctx.tick = 0;
 
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowVerify);
 		}
 
-		if (this->opt_verbose >= this->VERBOSE_TICK)
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
 		// release resources
-		myFree("genrestartdataContext_t::selftestResults", selftestWindowResults);
+		ctx.myFree("genrestartdataContext_t::selftestResults", selftestWindowResults);
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed\n", this->timeAsString(), __FUNCTION__);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
 	}
 
 	/**
@@ -1075,15 +1078,15 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * @param {number} numBackRef - number of back-references
 	 */
 	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			tick = 0;
-			int perSecond = this->updateSpeed();
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			int perSecond = ctx.updateSpeed();
 
-			if (perSecond == 0 || progress > progressHi) {
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-				        timeAsString(), progress, perSecond, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 			} else {
-				int eta = (int) ((progressHi - progress) / perSecond);
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
 				int etaH = eta / 3600;
 				eta %= 3600;
@@ -1092,7 +1095,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) cntCompare / cntHash);
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
 			}
 		}
 
@@ -1115,7 +1118,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		this->pStore = pStore;
 
 		// create generator
-		generatorTree_t generator(*this);
+		generatorTree_t generator(ctx);
 
 		/*
 		 * Scan metrics for setting that require metrics to be collected
@@ -1126,7 +1129,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				continue; // skip automated handling
 
 			// set index to default ratio
-			pStore->imprintIndexSize = this->nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
+			pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
 
 			// find metrics for setting
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNode);
@@ -1148,8 +1151,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// prepare I/O context
-			this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-			this->tick = 0;
+			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+			ctx.tick = 0;
 
 			// special case (root only)
 			generator.root = 0; // "0"
@@ -1161,7 +1164,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
 			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeMetrics);
 
-			if (this->opt_verbose >= this->VERBOSE_TICK)
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
 
 			// estimate speed and storage for default ratio
@@ -1170,16 +1173,16 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			{
 
-				this->cntHash = 0;
-				this->cntCompare = 0;
+				ctx.cntHash = 0;
+				ctx.cntCompare = 0;
 
 				// wait for a tick
-				for (this->tick = 0; this->tick == 0;) {
+				for (ctx.tick = 0; ctx.tick == 0;) {
 					generator.decodeFast("ab+"); // waste some time
 				}
 
 				// do random lookups for 10 seconds
-				for (this->tick = 0; this->tick < 5;) {
+				for (ctx.tick = 0; ctx.tick < 5;) {
 					// load random signature with random tree
 					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
@@ -1193,16 +1196,16 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					assert(sid == s);
 				}
 
-				speed = this->cntHash / 5.0 / 1e6;
+				speed = ctx.cntHash / 5.0 / 1e6;
 				storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 			}
 
 			fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%-4d numNode=%d numSignature=%d numImprint=%d speed=%.3fM/s storage=%.3fGb\n",
-			        this->timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode, pStore->numSignature, pStore->numImprint, speed, storage);
+			        ctx.timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode, pStore->numSignature, pStore->numImprint, speed, storage);
 
-			if (this->progress != this->progressHi) {
+			if (ctx.progress != ctx.progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
-				       __FUNCTION__, this->progress, this->progressHi, pRound->numNode);
+				       __FUNCTION__, ctx.progress, ctx.progressHi, pRound->numNode);
 			}
 
 			/*
@@ -1210,19 +1213,19 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			 */
 
 			// what you wish...
-			if (~this->opt_debug & DEBUGMASK_GEN_RATIO)
+			if (~ctx.opt_debug & ctx.DEBUGMASK_GEN_RATIO)
 				continue;
 			if (pRound->numNode < 4)
 				continue; // no point for smaller trees
 
 			for (unsigned iRatio = 20; iRatio <= 60; iRatio += 2) {
-				pStore->imprintIndexSize = this->nextPrime(pRound->numImprint * (iRatio / 10.0));
+				pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
 				memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 				pStore->numImprint = 1; // skip mandatory zero entry
-				this->cntHash = 0;
-				this->cntCompare = 0;
+				ctx.cntHash = 0;
+				ctx.cntCompare = 0;
 
 				fprintf(stderr, "[%d %d %.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
 
@@ -1234,22 +1237,22 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					pStore->addImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, iSid);
 				}
 
-				fprintf(stderr, "[%d %d %.1f %ld %ld %.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, this->cntHash, this->cntCompare, (double) this->cntCompare / this->cntHash);
+				fprintf(stderr, "[%d %d %.1f %ld %ld %.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, ctx.cntHash, ctx.cntCompare, (double) ctx.cntCompare / ctx.cntHash);
 
 				/*
 				 * perform a speedtest
 				 */
 
-				this->cntHash = 0;
-				this->cntCompare = 0;
+				ctx.cntHash = 0;
+				ctx.cntCompare = 0;
 
 				// wait for a tick
-				for (this->tick = 0; this->tick == 0;) {
+				for (ctx.tick = 0; ctx.tick == 0;) {
 					generator.decodeFast("ab+"); // waste some time
 				}
 
 				// do random lookups for 10 seconds
-				for (this->tick = 0; this->tick < 5;) {
+				for (ctx.tick = 0; ctx.tick < 5;) {
 					// load random signature with random tree
 					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
@@ -1264,23 +1267,30 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				}
 
 				fprintf(stderr, "[speed=%7.3fM/s storage=%7.3fG hits=%.5f]\n",
-				        this->cntHash / 5.0 / 1e6,
+				        ctx.cntHash / 5.0 / 1e6,
 				        ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
-				        (double) this->cntCompare / this->cntHash);
+				        (double) ctx.cntCompare / ctx.cntHash);
 			}
 		}
 	}
 
 };
 
-
 /*
- * I/O and Application context.
+ * I/O context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {gensignatureContext_t} Application
+ * @global {context_t} I/O context
  */
-gensignatureSelftest_t app;
+context_t ctx;
+
+/*
+ * Application context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {gensignatureSelftest_t} Application context
+ */
+gensignatureSelftest_t app(ctx);
 
 /**
  * @date 2020-03-11 23:06:35
@@ -1308,9 +1318,9 @@ void sigintHandler(int sig) {
  * @param {number} sig - signal (ignored)
  */
 void sigalrmHandler(int sig) {
-	if (app.opt_timer) {
-		app.tick++;
-		alarm(app.opt_timer);
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
 	}
 }
 
@@ -1323,7 +1333,7 @@ void sigalrmHandler(int sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
+void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]  -- Add signatures of given node size\n", argv[0]);
 	fprintf(stderr, "       %s --metrics <input.db>                -- Collect metrics\n", argv[0]);
 	fprintf(stderr, "       %s --selftest <input.db>               -- Test prerequisites\n", argv[0]);
@@ -1338,14 +1348,14 @@ void usage(char *const *argv, bool verbose, const gensignatureContext_t *args) {
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
 		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose                 Say less\n");
 	}
 }
@@ -1445,21 +1455,21 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_FORCE:
 				app.opt_force++;
 				break;
 			case LO_HELP:
-				usage(argv, true, &app);
+				usage(argv, true);
 				exit(0);
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
 				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
-					app.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
 			case LO_KEEP:
 				app.opt_keep++;
@@ -1474,19 +1484,19 @@ int main(int argc, char *const *argv) {
 				app.opt_metrics++;
 				break;
 			case LO_NOPARANOID:
-				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.opt_flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				app.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				app.opt_flags |= context_t::MAGICMASK_PARANOID;
+				ctx.opt_flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				app.opt_flags |= context_t::MAGICMASK_QNTF;
+				ctx.opt_flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
@@ -1495,16 +1505,16 @@ int main(int argc, char *const *argv) {
 				app.opt_selftest++;
 				break;
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = app.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TEXT:
 				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -1541,7 +1551,7 @@ int main(int argc, char *const *argv) {
 		app.arg_outputDatabase = argv[optind++];
 
 	if (app.arg_inputDatabase == NULL) {
-		usage(argv, false, &app);
+		usage(argv, false);
 		exit(1);
 	}
 
@@ -1563,9 +1573,9 @@ int main(int argc, char *const *argv) {
 	}
 
 	// register timer handler
-	if (app.opt_timer) {
+	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
-		::alarm(app.opt_timer);
+		::alarm(ctx.opt_timer);
 	}
 
 	/*
@@ -1573,22 +1583,22 @@ int main(int argc, char *const *argv) {
 	 */
 
 	// Open input
-	database_t db(app);
+	database_t db(ctx);
 
 	db.open(app.arg_inputDatabase, true);
 
-	if (db.flags && app.opt_verbose >= app.VERBOSE_SUMMARY)
-		app.logFlags(db.flags);
+	if (db.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+		ctx.logFlags(db.flags);
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
-		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
+	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
 
 	/*
 	 * create output
 	 */
 
-	database_t store(app);
+	database_t store(ctx);
 
 	/*
 	 * @date 2020-03-17 13:57:25
@@ -1656,45 +1666,45 @@ int main(int argc, char *const *argv) {
 					app.opt_maxSignature += app.opt_maxSignature / 20;
 			}
 
-			if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprint=%d maxSignature=%d\n", app.timeAsString(), app.opt_ratio, app.opt_maxImprint, app.opt_maxSignature);
+			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), app.opt_ratio, app.opt_maxImprint, app.opt_maxSignature);
 		}
 
 		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
 		}
 
 		if (app.opt_imprintIndexSize == 0)
-			store.imprintIndexSize = app.nextPrime(store.maxImprint * app.opt_ratio);
+			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxSignature == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & app.MAGICMASK_QNTF, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxSignature = pMetrics ? pMetrics->numSignature : 0;
 		} else {
 			store.maxSignature = app.opt_maxSignature;
 		}
 
 		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = app.nextPrime(store.maxSignature * app.opt_ratio);
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
 		else
 			store.signatureIndexSize = app.opt_signatureIndexSize;
 
 		if (store.interleave == 0 || store.interleaveStep == 0)
-			app.fatal("no preset for --interleave\n");
+			ctx.fatal("no preset for --interleave\n");
 		if (store.maxImprint == 0 || store.imprintIndexSize == 0)
-			app.fatal("no preset for --maximprint\n");
+			ctx.fatal("no preset for --maximprint\n");
 		if (store.maxSignature == 0 || store.signatureIndexSize == 0)
-			app.fatal("no preset for --maxsignature\n");
+			ctx.fatal("no preset for --maxsignature\n");
 	}
 
 	// create new sections
-	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
-		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", app.timeAsString(), store.maxSignature, store.maxImprint);
+	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), store.maxSignature, store.maxImprint);
 
 	store.create();
 
@@ -1702,22 +1712,22 @@ int main(int argc, char *const *argv) {
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
 
 	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) app.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	app.pEvalFwd = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	/*
 	 * Statistics
 	 */
 
-	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
-	if (app.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000)
+		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
 
 	// initialise evaluators
-	tinyTree_t tree(app);
-	tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+	tinyTree_t tree(ctx);
+	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Invoke
@@ -1771,7 +1781,7 @@ int main(int argc, char *const *argv) {
 	}
 
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_SUMMARY && !app.opt_text) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));

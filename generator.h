@@ -81,6 +81,15 @@
 #include <string.h>
 #include "tinytree.h"
 
+/*
+ * @date 2020-04-15 13:27:57
+ *
+ * Placeholder base type for generator callbacks
+ */
+struct callable_t {
+
+};
+
 /**
  * @date 2020-03-17 20:22:08
  *
@@ -207,7 +216,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @param {context_t} ctx - I/O context
 	 */
-	inline generatorTree_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
+	generatorTree_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
 		assert(TINYTREE_NEND < 32 - 3);
 
@@ -701,7 +710,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @typedef {callback} generateTreeCallback_t
 	 */
-	typedef void(context_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned, unsigned, unsigned);
+	typedef void(callable_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned, unsigned, unsigned);
 
 	/**
 	 * @date 2020-03-18 22:17:26
@@ -716,7 +725,8 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {object} cbObject - callback object
 	 * @param {object} cbMember - callback member in object
 	 */
-	void callFoundTree(context_t *cbObject, generateTreeCallback_t cbMember) {
+	void callFoundTree(callable_t *cbObject, generateTreeCallback_t cbMember) {
+
 		// test that tree is within limits
 		assert(this->count >= TINYTREE_NSTART && this->count <= TINYTREE_NEND);
 
@@ -922,7 +932,7 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {object} cbMember - callback member in object
 	 * @param {uint64_t} stack - `decode` stack
 	 */
-	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned nodesLeft, unsigned endpointsLeft, unsigned numPlaceholder, unsigned stack, context_t *cbObject, generateTreeCallback_t cbMember) {
+	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned nodesLeft, unsigned endpointsLeft, unsigned numPlaceholder, unsigned stack, callable_t *cbObject, generateTreeCallback_t cbMember) {
 
 		assert (numPlaceholder <= MAXSLOTS);
 		assert (endpointsLeft <= TINYTREE_MAXNODES * 2 + 1);

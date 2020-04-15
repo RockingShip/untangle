@@ -62,11 +62,14 @@
  *
  * @typedef {object}
  */
-struct genrestartdataContext_t : context_t {
+struct genrestartdataContext_t : callable_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
+
+	/// @var {copntext_t} I/O context
+	context_t &ctx;
 
 	/// @var {number} size of structures used in this invocation
 	unsigned arg_numNodes;
@@ -74,7 +77,7 @@ struct genrestartdataContext_t : context_t {
 	/**
 	 * Constructor
 	 */
-	genrestartdataContext_t() {
+	genrestartdataContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_numNodes = 0;
 	}
@@ -86,7 +89,7 @@ struct genrestartdataContext_t : context_t {
 	 */
 	void main(void) {
 		// create generator
-		generatorTree_t generator(*this);
+		generatorTree_t generator(ctx);
 
 		printf("#ifndef _RESTARTDATA_H\n");
 		printf("#define _RESTARTDATA_H\n");
@@ -124,8 +127,8 @@ struct genrestartdataContext_t : context_t {
 				// clear tree
 				generator.clearGenerator();
 
-				setupSpeed(pMetrics->numProgress);
-				this->tick = 0;
+				ctx.setupSpeed(pMetrics->numProgress);
+				ctx.tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
 				unsigned endpointsLeft = numArgs * 2 + 1;
@@ -149,12 +152,12 @@ struct genrestartdataContext_t : context_t {
 					buildProgressIndex[numArgs][iQnTF] = 0;
 				}
 
-				if (this->opt_verbose >= this->VERBOSE_TICK)
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 					fprintf(stderr, "\r\e[K");
 
-				if (this->opt_verbose >= this->VERBOSE_SUMMARY) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 					fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld\n",
-					        this->timeAsString(), MAXSLOTS, iQnTF, numArgs, this->progress);
+					        ctx.timeAsString(), MAXSLOTS, iQnTF, numArgs, ctx.progress);
 				}
 			}
 		}
@@ -201,7 +204,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	/**
 	 * Constructor
 	 */
-	genrestartdataSelftest_t() : genrestartdataContext_t() {
+	genrestartdataSelftest_t(context_t &ctx) : genrestartdataContext_t(ctx) {
 		// arguments and options
 		opt_selftest = 0;
 		opt_text = 0;
@@ -228,15 +231,15 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		/*
 		 * Ticker
 		 */
-		if (opt_verbose >= VERBOSE_TICK && tick) {
-			tick = 0;
-			int perSecond = this->updateSpeed();
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			int perSecond = ctx.updateSpeed();
 
-			if (perSecond == 0 || progress > progressHi) {
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%d",
-				        timeAsString(), progress, perSecond, pStore->numSignature);
+				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature);
 			} else {
-				int eta = (int) ((progressHi - progress) / perSecond);
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
 				int etaH = eta / 3600;
 				eta %= 3600;
@@ -245,7 +248,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
-				        timeAsString(), progress, perSecond, progress * 100.0 / progressHi, etaH, etaM, etaS, pStore->numSignature);
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature);
 			}
 		}
 
@@ -269,7 +272,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		// ...and add if not found
 		if (pStore->signatureIndex[ix] == 0) {
 
-			printf("%ld\t%s\t%d\t%d\n", progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
+			printf("%ld\t%s\t%d\t%d\n", ctx.progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
 
 			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
@@ -292,15 +295,15 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		/*
 		 * Setup generator
 		 */
-		generatorTree_t generator(*this);
+		generatorTree_t generator(ctx);
 
 		// clear tree
 		generator.clearGenerator();
 
 		// reset progress
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, this->opt_flags & context_t::MAGICMASK_QNTF, numNode);
-		this->setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-		this->tick = 0;
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, numNode);
+		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+		ctx.tick = 0;
 
 		/*
 		 * Run generator
@@ -313,26 +316,34 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			foundTreeCandidate(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = numNode * 2 + 1;
-			generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
+			generator.generateTrees(numNode, endpointsLeft, 0, 0, static_cast<callable_t *>(this), (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
 		}
 
-		if (this->opt_verbose >= this->VERBOSE_TICK)
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (this->opt_verbose >= this->VERBOSE_SUMMARY)
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
-			        this->timeAsString(), MAXSLOTS, (this->opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, this->progress, pStore->numSignature);
+			        ctx.timeAsString(), MAXSLOTS, (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
 	}
 
 };
 
 /*
- * I/O and Application context.
+ * I/O context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {genrestartdataContext_t} Application
+ * @global {context_t} I/O context
  */
-genrestartdataSelftest_t app;
+context_t ctx;
+
+/*
+ * Application context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {genrestartdataSelftest_t} Application context
+ */
+genrestartdataSelftest_t app(ctx);
 
 /**
  * Construct a time themed prefix string for console logging
@@ -360,9 +371,9 @@ const char *timeAsString(void) {
 void sigalrmHandler(int sig) {
 	(void) sig; // trick compiler t see parameter is used
 
-	if (app.opt_timer) {
-		app.tick++;
-		alarm(app.opt_timer);
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
 	}
 }
 
@@ -374,7 +385,7 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  * @date  2020-03-19 20:02:40
  */
-void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args) {
+void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
 	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates with given node size\n", argv[0]);
 //	fprintf(stderr, "       %s --selftest       -- Test prerequisites\n", argv[0]);
@@ -382,12 +393,12 @@ void usage(char *const *argv, bool verbose, const genrestartdataContext_t *args)
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
-		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (app.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
 		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", args->opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
 }
@@ -467,25 +478,25 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
-				usage(argv, true, &app);
+				usage(argv, true);
 				exit(0);
 			case LO_NOPARANOID:
-				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.opt_flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				app.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				app.opt_flags |= context_t::MAGICMASK_PARANOID;
+				ctx.opt_flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				app.opt_flags |= context_t::MAGICMASK_QNTF;
+				ctx.opt_flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_SELFTEST:
 				app.opt_selftest++;
@@ -494,10 +505,10 @@ int main(int argc, char *const *argv) {
 				app.opt_text++;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -517,14 +528,14 @@ int main(int argc, char *const *argv) {
 		if (argc - optind >= 1) {
 			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
 		} else {
-			usage(argv, false, &app);
+			usage(argv, false);
 			exit(1);
 		}
 	} else {
 		// regular mode
 		if (argc - optind >= 0) {
 		} else {
-			usage(argv, false, &app);
+			usage(argv, false);
 			exit(1);
 		}
 	}
@@ -537,7 +548,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * register timer handler
 	 */
-	if (app.opt_timer) {
+	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
 		::alarm(1);
 	}
@@ -550,16 +561,16 @@ int main(int argc, char *const *argv) {
 
 	if (app.opt_text) {
 		// create database to detect duplicates
-		pStore = new database_t(app);
+		pStore = new database_t(ctx);
 
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.opt_flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
 		if (!pMetrics) {
 			fprintf(stderr, "preset for numNode not found\n");
 			exit(1);
 		}
 
 		pStore->maxSignature = pMetrics->numCandidate;
-		pStore->signatureIndexSize = app.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
+		pStore->signatureIndexSize = ctx.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
 
 		pStore->create();
 	}
@@ -568,10 +579,10 @@ int main(int argc, char *const *argv) {
 	 * Statistics
 	 */
 
-	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
-	if (app.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000)
+		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
 
 	/*
 	 * Invoke

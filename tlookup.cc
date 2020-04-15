@@ -46,11 +46,14 @@
  *
  * @typedef {object}
  */
-struct tlookupContext_t : context_t {
+struct tlookupContext_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
+
+	/// @var {copntext_t} I/O context
+	context_t &ctx;
 
 	/// @var {string} name of output database
 	const char *arg_database;
@@ -58,7 +61,7 @@ struct tlookupContext_t : context_t {
 	/**
 	 * Constructor
 	 */
-	tlookupContext_t() {
+	tlookupContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_database = "untangle.db";
 	}
@@ -163,12 +166,21 @@ struct tlookupContext_t : context_t {
 };
 
 /*
- * I/O and Application context.
+ *
+ * I/O context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {gentransformContext_t} Application
+ * @global {context_t} I/O context
  */
-tlookupContext_t app;
+context_t ctx;
+
+/*
+ * Application context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {tlookupContext_t} Application context
+ */
+tlookupContext_t app(ctx);
 
 /**
  * @date 2020-03-13 13:38:55
@@ -180,9 +192,9 @@ tlookupContext_t app;
  * @param {number} sig - signal (ignored)
  */
 void sigalrmHandler(int sig) {
-	if (app.opt_timer) {
-		app.tick++;
-		alarm(app.opt_timer);
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
 	}
 }
 
@@ -195,7 +207,7 @@ void sigalrmHandler(int sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose, const tlookupContext_t *args) {
+void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.arg_database);
@@ -273,13 +285,13 @@ int main(int argc, char *const *argv) {
 				app.arg_database = optarg;
 				break;
 			case LO_HELP:
-				usage(argv, true, &app);
+				usage(argv, true);
 				exit(0);
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -292,22 +304,22 @@ int main(int argc, char *const *argv) {
 	}
 
 	// register timer handler
-	if (app.opt_timer) {
+	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
-		::alarm(app.opt_timer);
+		::alarm(ctx.opt_timer);
 	}
 
 	/*
 	 * Open database
 	 */
 
-	database_t db(app);
+	database_t db(ctx);
 
 	// open database
 	db.open(app.arg_database, true);
 
         if (db.maxTransform == 0)
-	        app.fatal("Missing transform section: %s\n", app.arg_database);
+	        ctx.fatal("Missing transform section: %s\n", app.arg_database);
 
         /*
          * Invoke main entrypoint of application context for every argument

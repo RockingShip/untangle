@@ -190,7 +190,7 @@ void sigalrmHandler(int sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {slookupContext_t} args - argument context
  */
-void usage(char *const *argv, bool verbose, const slookupContext_t *args) {
+void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s name [...]\n", argv[0]);
 
 	if (verbose) {
@@ -286,7 +286,7 @@ int main(int argc, char *const *argv) {
 				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
-				usage(argv, true, &app);
+				usage(argv, true);
 				exit(0);
 			case LO_IMPRINT:
 				app.opt_imprint++;
@@ -327,7 +327,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (argc - optind < 0) {
-		usage(argv, false, &app);
+		usage(argv, false);
 		exit(1);
 	}
 
