@@ -440,6 +440,99 @@ struct gensignatureContext_t : callable_t {
 	}
 
 	/**
+	 * @date 2020-04-15 19:07:53
+	 *
+	 * Recreate imprint index for signature groups
+	 */
+	void reindexImprints(void) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Re-indexing signatures\n", ctx.timeAsString());
+
+		// clear signature and imprint index
+		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
+		::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
+		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+		// skip mandatory reserved entry
+		pStore->numImprint = 1;
+
+		/*
+		 * Create imprints for signature groups
+		 */
+
+		generatorTree_t tree(ctx);
+
+		// reset progress
+		ctx.setupSpeed(pStore->numSignature);
+		ctx.tick = 0;
+
+		// create imprints for signature groups
+		ctx.progress++; // skip reserved
+		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				ctx.tick = 0;
+				int perSecond = ctx.updateSpeed();
+
+				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) | hash=%.3f",
+					        ctx.timeAsString(), ctx.progress, perSecond,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					        (double) ctx.cntCompare / ctx.cntHash);
+				} else {
+					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) | hash=%.3f",
+					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					        (double) ctx.cntCompare / ctx.cntHash);
+				}
+			}
+
+			const signature_t *pSignature = pStore->signatures + iSid;
+
+			/*
+			 * Add to name index
+			 */
+
+			{
+				uint32_t ix = pStore->lookupSignature(pSignature->name);
+				assert(pStore->signatureIndex[ix] == 0);
+				pStore->signatureIndex[ix] = iSid;
+			}
+
+			/*
+			 * Add to imprint index
+			 */
+
+			{
+				tree.decodeFast(pSignature->name);
+
+				uint32_t sid, tid;
+
+				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
+					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+			}
+
+			ctx.progress++;
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Re-indexed signatures. numImprint=%u(%.0f%%) | hash=%.3f\n",
+			        ctx.timeAsString(),
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        (double) ctx.cntCompare / ctx.cntHash);
+
+	}
+
+	/**
 	 * @date 2020-03-22 01:00:05
 	 *
 	 * Main entrypoint
@@ -497,8 +590,14 @@ struct gensignatureContext_t : callable_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting signatures\n", ctx.timeAsString());
 
-		assert(pStore->numSignature >= 3);
-		qsort_r(pStore->signatures + 3, pStore->numSignature - 3, sizeof(*pStore->signatures), comparSignature, this);
+		assert(pStore->numSignature >= 1);
+		qsort_r(pStore->signatures + 1, pStore->numSignature - 1, sizeof(*pStore->signatures), comparSignature, this);
+
+		/*
+		 * Reindex
+		 */
+
+		this->reindexImprints();
 
 		/*
 		 * List result

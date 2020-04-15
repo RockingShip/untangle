@@ -1465,13 +1465,8 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s --mode=merge   <input.db> <numnode> [<output.db>]                -- Add candidate members of given node size\n", argv[0]);
-	fprintf(stderr, "       %s --mode=prepare <input.db> <numnode> [<output.db>]                -- Prepare for high-speed collecting\n", argv[0]);
-	fprintf(stderr, "       %s --mode=collect <input.db> <numnode>                              -- Collect members\n", argv[0]);
-	fprintf(stderr, "       %s --mode=merge   <input.db> <numnode> [<output.db>] --load=<file>  -- Merge collected members\n", argv[0]);
+	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]\n", argv[0]);
 //	fprintf(stderr, "       %s --selftest <input.db>            -- Test prerequisites\n", argv[0]);
-
-	static const char *modeNames[] = {"merge", "prepare", "collect"};
 
 	if (verbose) {
 		fprintf(stderr, "\n");
