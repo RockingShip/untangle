@@ -96,14 +96,15 @@ struct context_t {
 		// @formatter:on
 	};
 
+	/// @var {number} system flags
+	uint32_t flags;
+
 	/*
 	 * User specified program arguments and options
 	 */
 
 	/// @var {number} intentionally undocumented
 	uint32_t opt_debug;
-	/// @var {number} program flags
-	uint32_t opt_flags;
 	/// @var {number} --timer, interval timer for verbose updates
 	unsigned opt_timer;
 	/// @var {number} --verbose, What do you want to know
@@ -142,8 +143,8 @@ struct context_t {
 	 * Constructor
 	 */
 	context_t() {
+		flags = 0;
 		opt_debug = 0;
-		opt_flags = 0;
 		opt_timer = 1; // default is 1-second intervals
 		opt_verbose = VERBOSE_TICK;
 		tick = 0;

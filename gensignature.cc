@@ -561,7 +561,7 @@ struct gensignatureContext_t : callable_t {
 
 		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// reset progress
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS,ctx.opt_flags & context_t::MAGICMASK_QNTF, numNode);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			ctx.tick = 0;
 
@@ -572,7 +572,7 @@ struct gensignatureContext_t : callable_t {
 			 * Generate candidates
 			 */
 			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
 			if (numNode == 0) {
 				generator.root = 0; // "0"
@@ -623,7 +623,7 @@ struct gensignatureContext_t : callable_t {
 		 * Done
 		 */
 		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%d numImprint=%d\n",
-		        ctx.timeAsString(), MAXSLOTS, (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress, pStore->numSignature, pStore->numImprint);
+		        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress, pStore->numSignature, pStore->numImprint);
 
 	}
 
@@ -723,7 +723,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				 * Load the tree with a single operator
 				 */
 
-				tree.flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
+				ctx.flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
 				tree.clearTree();
 				tree.root = tree.addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
@@ -1114,13 +1114,13 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		selftestWindowResults = (char **) ctx.myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
 
 		// set generator into `3n9 QnTF-only` mode
-		ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
+		ctx.flags &= ~context_t::MAGICMASK_QNTF;
 		arg_numNodes = 3;
 
 		generatorTree_t generator(ctx);
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
@@ -1134,7 +1134,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// apply settings
-			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pMetrics->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
@@ -1157,7 +1157,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// apply settings
-			generator.flags = pMetrics->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pMetrics->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = 0;
 			generator.windowHi = 0;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
@@ -1259,7 +1259,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// prepare generator
-			generator.flags = pRound->qntf ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pRound->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 			generator.initialiseGenerator(); // let flags take effect
 			generator.clearGenerator();
 
@@ -1461,8 +1461,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
@@ -1597,16 +1597,16 @@ int main(int argc, char *const *argv) {
 				app.opt_metrics++;
 				break;
 			case LO_NOPARANOID:
-				ctx.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				ctx.flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				ctx.opt_flags |= context_t::MAGICMASK_PARANOID;
+				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				ctx.opt_flags |= context_t::MAGICMASK_QNTF;
+				ctx.flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -1700,8 +1700,9 @@ int main(int argc, char *const *argv) {
 
 	db.open(app.arg_inputDatabase, true);
 
-	if (db.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		ctx.logFlags(db.flags);
+	// display system flags when database was created
+	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+		ctx.logFlags(db.creationFlags);
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -1784,7 +1785,7 @@ int main(int argc, char *const *argv) {
 		}
 
 		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
@@ -1796,7 +1797,7 @@ int main(int argc, char *const *argv) {
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxSignature == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxSignature = pMetrics ? pMetrics->numSignature : 0;
 		} else {
 			store.maxSignature = app.opt_maxSignature;

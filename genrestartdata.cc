@@ -197,7 +197,7 @@ struct genrestartdataContext_t : callable_t {
 				printf("// %d: numNode=%d qntf=%d \n", this->numRestart, numArgs, iQnTF);
 
 				// apply settings
-				generator.flags = (iQnTF) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
+				ctx.flags = (iQnTF) ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 				generator.initialiseGenerator();
 
 				// clear tree
@@ -380,7 +380,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		generator.clearGenerator();
 
 		// reset progress
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, numNode);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
 		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		ctx.tick = 0;
 
@@ -403,7 +403,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
 	}
 
 };
@@ -472,8 +472,8 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
-		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
 		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
@@ -563,16 +563,16 @@ int main(int argc, char *const *argv) {
 				usage(argv, true);
 				exit(0);
 			case LO_NOPARANOID:
-				ctx.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				ctx.flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				ctx.opt_flags |= context_t::MAGICMASK_PARANOID;
+				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				ctx.opt_flags |= context_t::MAGICMASK_QNTF;
+				ctx.flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -642,7 +642,7 @@ int main(int argc, char *const *argv) {
 		// create database to detect duplicates
 		pStore = new database_t(ctx);
 
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
 		if (!pMetrics) {
 			fprintf(stderr, "preset for numNode not found\n");
 			exit(1);

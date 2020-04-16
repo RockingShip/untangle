@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ```
 2020-04-16 21:48:38 AVX2 machine instructions.
 2020-04-16 16:36:35 Fixed broken `restartdata[]`.
+2020-04-16 12:53:10 Moved/merged system flags to `context_t` so changes have effect after constructors.
 2020-04-15 21:53:14 `gensignature` re-create signature index+imprints after sorting
 2020-04-15 15:39:56 Dropped `genmember --mode`.
 2020-04-15 14:22:47 Separate application and I/O context.

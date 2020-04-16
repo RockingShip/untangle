@@ -84,8 +84,6 @@ struct gentransformContext_t {
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 
-	/// @var {number} database compatibility and settings
-	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} --keep, do not delete output database in case of errors
@@ -101,7 +99,6 @@ struct gentransformContext_t {
 	gentransformContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
-		opt_flags = 0;
 		opt_force = 0;
 		opt_keep = 0;
 		opt_selftest = 0;
@@ -984,8 +981,6 @@ int main(int argc, char *const *argv) {
 	// set section sizes to be created
 	store.maxTransform = MAXTRANSFORM;
 	store.transformIndexSize = MAXTRANSFORMINDEX;
-	// additional creation flags
-	store.flags = app.opt_flags;
 
 	// create memory-based store
 	store.create();

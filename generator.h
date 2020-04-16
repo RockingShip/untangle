@@ -423,7 +423,7 @@ struct generatorTree_t : tinyTree_t {
 			 * Get number of nodes already allocated.
 			 * Last created nodeId is in top-of-stack.
 			 */
-			unsigned numNode = (pTOS[iStack]) ? pTOS[iStack] - TINYTREE_NSTART + 1: 0;
+			unsigned numNode = (pTOS[iStack]) ? pTOS[iStack] - TINYTREE_NSTART + 1 : 0;
 
 			/*
 			 * Iterate through all possible `Q,T,F` possibilities
@@ -438,7 +438,7 @@ struct generatorTree_t : tinyTree_t {
 			for (unsigned F = 0; F < TINYTREE_NSTART + numNode; F++) {
 			// @formatter:on
 
-				if (!Ti && (this->flags & context_t::MAGICMASK_QNTF)) {
+				if (!Ti && (ctx.flags & context_t::MAGICMASK_QNTF)) {
 					// reject `non-QnTF` template in `QnTF-only` invocation
 					continue;
 				}
@@ -570,7 +570,7 @@ struct generatorTree_t : tinyTree_t {
 			pTemplateData[numTemplateData++] = 0;
 		}
 
-		if (this->flags & context_t::MAGICMASK_QNTF) {
+		if (ctx.flags & context_t::MAGICMASK_QNTF) {
 			if (numTemplateData != TEMPLATE_MAXDATA_QNTF)
 				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
 			assert(numTemplateData <= TEMPLATE_MAXDATA_QNTF);

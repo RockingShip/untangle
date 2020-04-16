@@ -155,7 +155,7 @@ struct database_t {
 	int                hndl;
 	const uint8_t      *rawDatabase;                // base location of mmap segment
 	fileHeader_t       fileHeader;                  // file header
-	uint32_t           flags;                       // creation constraints
+	uint32_t           creationFlags;               // creation constraints
 	uint32_t           allocFlags;                  // memory constraints
 	// transforms
 	uint32_t           numTransform;                // number of elements in collection
@@ -195,7 +195,7 @@ struct database_t {
 	 */
 	database_t(context_t &ctx) : ctx(ctx) {
 		// copy user flags+debug settings
-		flags = ctx.opt_flags;
+		creationFlags = 0;
 
 		hndl = 0;
 		rawDatabase = NULL;
@@ -485,7 +485,7 @@ struct database_t {
 		if (fileHeader.magic_sizeofMember != sizeof(member_t))
 			ctx.fatal("db magic_sizeofMember. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofMember, sizeof(member_t));
 
-		flags = fileHeader.magic_flags;
+		creationFlags = fileHeader.magic_flags;
 
 		/*
 		 * map sections to starting positions in data
@@ -752,7 +752,7 @@ struct database_t {
 			fprintf(stderr, "\r\e[Kclosing");
 
 		fileHeader.magic = FILE_MAGIC;
-		fileHeader.magic_flags = this->flags;
+		fileHeader.magic_flags = ctx.flags;
 		fileHeader.magic_maxSlots = MAXSLOTS;
 		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
@@ -1316,7 +1316,7 @@ struct database_t {
 	json_t *jsonInfo(json_t *jResult) {
 		if (jResult == NULL)
 			jResult = json_object();
-		json_object_set_new_nocheck(jResult, "flags", json_integer(this->flags));
+		json_object_set_new_nocheck(jResult, "flags", json_integer(this->creationFlags));
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));

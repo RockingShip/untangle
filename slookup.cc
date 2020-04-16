@@ -292,16 +292,16 @@ int main(int argc, char *const *argv) {
 				app.opt_imprint++;
 				break;
 			case LO_NOPARANOID:
-				app.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				app.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				app.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				app.flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				app.opt_flags |= context_t::MAGICMASK_PARANOID;
+				app.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				app.opt_flags |= context_t::MAGICMASK_QNTF;
+				app.flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
@@ -346,8 +346,9 @@ int main(int argc, char *const *argv) {
 
 	db.open(app.opt_database, true);
 
-	if (db.flags && app.opt_verbose >= app.VERBOSE_SUMMARY)
-		app.logFlags(db.flags);
+	// display system flags when database was created
+	if (db.creationFlags && app.opt_verbose >= app.VERBOSE_SUMMARY)
+		app.logFlags(db.creationFlags);
 #if defined(ENABLE_JANSSON)
 	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));

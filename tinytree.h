@@ -91,12 +91,6 @@ struct tinyTree_t {
 	/// @var {context_t} I/O context
 	context_t &ctx;
 
-	/// @var {number} local copy of context_t::opt_debug for faster access
-	uint32_t debug;
-
-	/// @var {number} functionality flags
-	uint32_t flags;
-
 	/// @var {number} index of first free node
 	uint32_t count;
 
@@ -116,10 +110,6 @@ struct tinyTree_t {
 	 * @param {number} flags - Tree/node functionality
 	 */
 	inline tinyTree_t(context_t &ctx) : ctx(ctx) {
-		// copy user flags+debug settings
-		debug = ctx.opt_debug;
-		flags = ctx.opt_flags;
-
 		/*
 		 * Assert that the highest available node fits into a 5 bit value. `2^5` = 32.
 		 *  - for `beenThere[]` using it as index in uint32_t
@@ -144,6 +134,7 @@ struct tinyTree_t {
 	 * Copy constructor not supported, so using them will trigger "unresolved externals"
 	 */
 	tinyTree_t(const tinyTree_t &rhs);
+
 	tinyTree_t &operator=(const tinyTree_t &rhs);
 
 	/**
@@ -297,7 +288,7 @@ struct tinyTree_t {
 	 */
 	uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
-		if (this->flags & context_t::MAGICMASK_PARANOID) {
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert((Q & ~IBIT) < this->count);
 			assert((T & ~IBIT) < this->count);
 			assert((F & ~IBIT) < this->count);
@@ -489,7 +480,7 @@ struct tinyTree_t {
 		 * ./eval --qntf 'ab&' 'abc?'
 		 */
 
-		if ((this->flags & context_t::MAGICMASK_QNTF) && (~T & IBIT)) {
+		if ((ctx.flags & context_t::MAGICMASK_QNTF) && (~T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
@@ -533,9 +524,9 @@ struct tinyTree_t {
 	inline uint32_t addNormalised(uint32_t Q, uint32_t T, uint32_t F) {
 
 		// sanity checking
-		if (this->flags & context_t::MAGICMASK_PARANOID) {
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert(~Q & IBIT);                     // Q not inverted
-			assert((T & IBIT) || (~this->flags & context_t::MAGICMASK_QNTF));
+			assert((T & IBIT) || (~ctx.flags & context_t::MAGICMASK_QNTF));
 			assert(~F & IBIT);                     // F not inverted
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0
@@ -1336,7 +1327,7 @@ struct tinyTree_t {
 			// point to the first chunk of the `"result"`
 			__m256i *R = (__m256i *) v[i].bits;
 
-			// determine if the operator is `QTF` or `QnTF`_mm256_and_si256
+			// determine if the operator is `QTF` or `QnTF`
 			if (N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
@@ -1385,7 +1376,7 @@ struct tinyTree_t {
 			}
 		}
 #elif 0
-		#warning gcc vectors are inefficient
+#warning gcc vectors are inefficient
 		/*
 		 * 0xa94 bytes of code when compiled with -O3
 		 */

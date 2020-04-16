@@ -240,7 +240,7 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * Constructor
 	 */
-	genmemberContext_t(context_t &ctx) : ctx(ctx)  {
+	genmemberContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
@@ -1014,7 +1014,7 @@ struct genmemberContext_t : callable_t {
 		FILE *f = fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-			      __FUNCTION__, this->opt_load);
+			          __FUNCTION__, this->opt_load);
 
 		// reset progress
 		ctx.setupSpeed(0);
@@ -1113,7 +1113,7 @@ struct genmemberContext_t : callable_t {
 		 */
 
 		// get metrics
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
 
 		// apply settings for `--task`
@@ -1145,7 +1145,7 @@ struct genmemberContext_t : callable_t {
 		// apply restart data for > `4n9`
 		unsigned ofs = 0;
 		if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
-			ofs = restartIndex[this->arg_numNodes][(ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
+			ofs = restartIndex[this->arg_numNodes][(ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
 		if (ofs)
 			generator.pRestartData = restartData + ofs;
 
@@ -1175,7 +1175,7 @@ struct genmemberContext_t : callable_t {
 		 * Generate candidates
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.opt_flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
 
 		if (arg_numNodes == 0) {
 			generator.root = 0; // "0"
@@ -1334,7 +1334,7 @@ struct genmemberContext_t : callable_t {
 				numEmpty++;
 			if (pStore->signatures[iSid].flags & signature_t::SIGMASK_UNSAFE)
 				numUnsafe++;
-			}
+		}
 
 		if (numEmpty || numUnsafe) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
@@ -1388,7 +1388,7 @@ struct genmemberContext_t : callable_t {
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
 
 	}
 
@@ -1489,9 +1489,9 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>      Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
-		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --prepare                 Prepare dataset for empty/unsafe groups\n");
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.opt_flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
@@ -1575,7 +1575,7 @@ int main(int argc, char *const *argv) {
 			{"maximprint",       1, 0, LO_MAXIMPRINT},
 			{"maxmember",        1, 0, LO_MAXMEMBER},
 			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
-			{"no-generate",       0, 0, LO_NOGENERATE},
+			{"no-generate",      0, 0, LO_NOGENERATE},
 			{"no-paranoid",      0, 0, LO_NOPARANOID},
 			{"no-qntf",          0, 0, LO_NOQNTF},
 			{"paranoid",         0, 0, LO_PARANOID},
@@ -1659,16 +1659,16 @@ int main(int argc, char *const *argv) {
 				app.opt_generate = 0;
 				break;
 			case LO_NOPARANOID:
-				ctx.opt_flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOQNTF:
-				ctx.opt_flags &= ~context_t::MAGICMASK_QNTF;
+				ctx.flags &= ~context_t::MAGICMASK_QNTF;
 				break;
 			case LO_PARANOID:
-				ctx.opt_flags |= context_t::MAGICMASK_PARANOID;
+				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QNTF:
-				ctx.opt_flags |= context_t::MAGICMASK_QNTF;
+				ctx.flags |= context_t::MAGICMASK_QNTF;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -1826,8 +1826,9 @@ int main(int argc, char *const *argv) {
 
 	db.open(app.arg_inputDatabase, true);
 
-	if (db.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		ctx.logFlags(db.flags);
+	// display system flags when database was created
+	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+		ctx.logFlags(db.creationFlags);
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -1874,7 +1875,7 @@ int main(int argc, char *const *argv) {
 			if (app.arg_numNodes < 4)
 				pMetrics = getMetricsImprint(MAXSLOTS, 0, store.interleave, 4);
 			else
-				pMetrics = getMetricsImprint(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, store.interleave, app.arg_numNodes);
+				pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, store.interleave, app.arg_numNodes);
 
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
@@ -1887,7 +1888,7 @@ int main(int argc, char *const *argv) {
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxMember == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.opt_flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
 			store.maxMember = pMetrics ? pMetrics->numMember : 0;
 		} else {
 			store.maxMember = app.opt_maxMember;
@@ -2049,7 +2050,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (app.arg_outputDatabase || app.opt_text == 1 || app.opt_text == 2) {
-			app.reindexMembers();
+		app.reindexMembers();
 
 		/*
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)
