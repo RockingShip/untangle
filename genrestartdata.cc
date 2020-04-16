@@ -77,10 +77,13 @@ struct genrestartdataContext_t : callable_t {
 	/// @var {number} Number of restart entries found
 	uint32_t numRestart;
 
+	/// @var {number} - THE generator
+	generatorTree_t generator;
+
 	/**
 	 * Constructor
 	 */
-	genrestartdataContext_t(context_t &ctx) : ctx(ctx) {
+	genrestartdataContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
 		// arguments and options
 		arg_numNodes = 0;
 
@@ -161,8 +164,6 @@ struct genrestartdataContext_t : callable_t {
 	 * Main entrypoint
 	 */
 	void main(void) {
-		// create generator
-		generatorTree_t generator(ctx);
 
 		// put generator in `genrestartdata` mode
 		ctx.opt_debug |= context_t::DEBUGMASK_GENERATOR_TABS;
@@ -200,14 +201,13 @@ struct genrestartdataContext_t : callable_t {
 				ctx.flags = (iQnTF) ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 				generator.initialiseGenerator();
 
-				// clear tree
-				generator.clearGenerator();
-
 				ctx.setupSpeed(pMetrics->numProgress);
 				ctx.tick = 0;
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
 				unsigned endpointsLeft = numArgs * 2 + 1;
+
+				generator.clearGenerator();
 				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
 
 				// was there any output
@@ -371,14 +371,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		this->pStore = pStore;
 		pStore->numSignature = 1; // skip reserved entry
 
-		/*
-		 * Setup generator
-		 */
-		generatorTree_t generator(ctx);
-
-		// clear tree
-		generator.clearGenerator();
-
 		// reset progress
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
 		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -395,7 +387,9 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			foundTreeCandidate(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = numNode * 2 + 1;
-			generator.generateTrees(numNode, endpointsLeft, 0, 0, static_cast<callable_t *>(this), (generatorTree_t::generateTreeCallback_t) &genrestartdataSelftest_t::foundTreeCandidate);
+
+			generator.clearGenerator();
+			generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataSelftest_t::foundTreeCandidate));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)

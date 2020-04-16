@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-16 22:39:21 Move generator creation to before displaying memory usage.
 2020-04-16 21:48:38 AVX2 machine instructions.
 2020-04-16 16:36:35 Fixed broken `restartdata[]`.
 2020-04-16 12:53:10 Moved/merged system flags to `context_t` so changes have effect after constructors.

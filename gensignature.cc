@@ -139,10 +139,13 @@ struct gensignatureContext_t : callable_t {
 	/// @var {footprint_t[]} - Evaluator for referse transforms
 	footprint_t *pEvalRev;
 
+	/// @var {number} - THE generator
+	generatorTree_t generator;
+
 	/**
 	 * Constructor
 	 */
-	gensignatureContext_t(context_t &ctx) : ctx(ctx) {
+	gensignatureContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
@@ -554,11 +557,6 @@ struct gensignatureContext_t : callable_t {
 	void main(database_t *pStore) {
 		this->pStore = pStore;
 
-		/*
-		 * create generator
-		 */
-		generatorTree_t generator(ctx);
-
 		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// reset progress
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
@@ -581,7 +579,9 @@ struct gensignatureContext_t : callable_t {
 				foundTreeCandidate(generator, "a", 1, 1, 0);
 			} else {
 				unsigned endpointsLeft = numNode * 2 + 1;
-				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureContext_t::foundTreeCandidate);
+
+				generator.clearGenerator();
+				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
 			}
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -1117,8 +1117,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		ctx.flags &= ~context_t::MAGICMASK_QNTF;
 		arg_numNodes = 3;
 
-		generatorTree_t generator(ctx);
-
 		// find metrics for setting
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, arg_numNodes);
 		assert(pMetrics);
@@ -1130,9 +1128,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		 */
 
 		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
-			// clear tree
-			generator.clearGenerator();
-
 			// apply settings
 			ctx.flags = pMetrics->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 			generator.windowLo = windowLo;
@@ -1142,7 +1137,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
-			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowCreate);
+			generator.clearGenerator();
+			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureSelftest_t::foundTreeWindowCreate));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -1165,7 +1161,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
-			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeWindowVerify);
+			generator.clearGenerator();
+			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureSelftest_t::foundTreeWindowVerify));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -1230,9 +1227,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	void performMetrics(database_t *pStore) {
 		this->pStore = pStore;
 
-		// create generator
-		generatorTree_t generator(ctx);
-
 		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
@@ -1261,7 +1255,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			// prepare generator
 			ctx.flags = pRound->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
 			generator.initialiseGenerator(); // let flags take effect
-			generator.clearGenerator();
 
 			// prepare I/O context
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -1275,7 +1268,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
-			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, (generatorTree_t::generateTreeCallback_t) &gensignatureSelftest_t::foundTreeMetrics);
+
+			generator.clearGenerator();
+			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, reinterpret_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureSelftest_t::foundTreeMetrics));
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");

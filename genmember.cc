@@ -230,6 +230,9 @@ struct genmemberContext_t : callable_t {
 	/// @var {footprint_t[]} - Evaluator for referse transforms
 	footprint_t *pEvalRev;
 
+	/// @var {number} - THE generator
+	generatorTree_t generator;
+
 	uint32_t skipDuplicate;
 	uint32_t skipSize;
 	uint32_t skipUnsafe;
@@ -240,7 +243,7 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * Constructor
 	 */
-	genmemberContext_t(context_t &ctx) : ctx(ctx) {
+	genmemberContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		arg_numNodes = 0;
@@ -1106,8 +1109,6 @@ struct genmemberContext_t : callable_t {
 	 */
 	void /*__attribute__((optimize("O0")))*/ membersFromGenerator(void) {
 
-		generatorTree_t generator(ctx);
-
 		/*
 		 * Apply window/task setting on generator
 		 */
@@ -1163,9 +1164,6 @@ struct genmemberContext_t : callable_t {
 		 * create generator and candidate members
 		 */
 
-		// clear tree
-		generator.clearGenerator();
-
 		// reset progress
 		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		ctx.tick = 0;
@@ -1184,7 +1182,9 @@ struct genmemberContext_t : callable_t {
 			foundTreeMember(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
-			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, static_cast<callable_t *>(this), (generatorTree_t::generateTreeCallback_t) &genmemberContext_t::foundTreeMember);
+
+			generator.clearGenerator();
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genmemberContext_t::foundTreeMember));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
