@@ -70,15 +70,12 @@ struct footprint_t {
 		 */
 
 #if defined(__AVX2__)
-#warning AVX2 instructions not tested
 
 		const __m256i *L = (const __m256i *) this->bits;
 		const __m256i *R = (const __m256i *) rhs.bits;
 
-		if (_mm256_movemask_ps(_mm256_cmp_ps(L[0], R[0], _CMP_EQ_OQ)) != 0xffff) return false;
-		if (_mm256_movemask_ps(_mm256_cmp_ps(L[1], R[1], _CMP_EQ_OQ)) != 0xffff) return false;
-		if (_mm256_movemask_ps(_mm256_cmp_ps(L[2], R[2], _CMP_EQ_OQ)) != 0xffff) return false;
-		if (_mm256_movemask_ps(_mm256_cmp_ps(L[3], R[3], _CMP_EQ_OQ)) != 0xffff) return false;
+		if (_mm256_movemask_epi8(_mm256_cmpeq_epi32(L[0], R[0])) != 0xffffffff) return false;
+		if (_mm256_movemask_epi8(_mm256_cmpeq_epi32(L[1], R[1])) != 0xffffffff) return false;
 
 #elif defined(__SSE2__)
 
@@ -122,14 +119,14 @@ struct footprint_t {
 		// NOTE: QUADPERFOOTPRINT tests
 #if defined(__SSE4_1__)
 		uint32_t crc32 = 0;
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[0]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[1]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[2]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[3]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[4]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[5]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[6]));
-		crc32 = __builtin_ia32_crc32di(crc32, this->bits[7]));
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[0]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[1]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[2]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[3]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[4]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[5]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[6]);
+		crc32 = __builtin_ia32_crc32di(crc32, this->bits[7]);
 		return crc32;
 #else
 		uint64_t crc64 = 0;
@@ -161,7 +158,11 @@ struct imprint_t {
 	footprint_t footprint; // footprint
 	uint32_t sid;          // signature
 	uint32_t tid;          // skin/transform
-	uint32_t filler[2];    // need 16 byte alignment
+	uint32_t filler16[2];  // need 16 byte alignment
+#if defined(__AVX2__)
+#warning AVX2 will give zero speed improvement and waste memory due to alignment
+	uint32_t filler32[4];  // need 32 byte alignment
+#endif
 };
 
 /*

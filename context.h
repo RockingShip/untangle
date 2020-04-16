@@ -208,9 +208,21 @@ struct context_t {
 			return NULL;
 
 		totalAllocated += __nmemb * __size;
-		void *ret = ::calloc(__nmemb, __size);
+
+		/*
+		 * @date 2020-04-16 20:06:57
+		 *
+		 * AVX2 needs 32byte alignment
+		 */
+
+		// round size up to nearest 32 bytes
+		__size *= __nmemb;
+		__size += 32;
+		__size &= ~31ULL;
+
+		void *ret = ::aligned_alloc(32, __size);
 		if (ret == 0)
-			fatal("failed to allocate %ld bytes for \"%s\"\n", __nmemb * __size, name);
+			fatal("failed to allocate %ld bytes for \"%s\"\n", __size, name);
 
 		if (opt_verbose >= VERBOSE_INITIALIZE)
 			fprintf(stderr, "memory +%p %s\n", ret, name);

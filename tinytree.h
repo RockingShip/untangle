@@ -1320,7 +1320,6 @@ struct tinyTree_t {
 		 */
 
 #if defined(__AVX2__)
-		#warning AVX2 instructions not tested
 		/*
 		 * 0x263 bytes of code when compiled with -O3 -mavx2
 		 */
@@ -1337,21 +1336,17 @@ struct tinyTree_t {
 			// point to the first chunk of the `"result"`
 			__m256i *R = (__m256i *) v[i].bits;
 
-			// determine if the operator is `QTF` or `QnTF`
+			// determine if the operator is `QTF` or `QnTF`_mm256_and_si256
 			if (N[i].T & IBIT) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				// R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
-				R[0] = _mm_xor_si256(_mm_andnot_si256(T[0], Q[0]), _mm_andnot_si256(Q[0], F[0]));
-				R[1] = _mm_xor_si256(_mm_andnot_si256(T[1], Q[1]), _mm_andnot_si256(Q[1], F[1]));
-				R[2] = _mm_xor_si256(_mm_andnot_si256(T[2], Q[2]), _mm_andnot_si256(Q[2], F[2]));
-				R[3] = _mm_xor_si256(_mm_andnot_si256(T[3], Q[3]), _mm_andnot_si256(Q[3], F[3]));
+				R[0] = _mm256_xor_si256(_mm256_andnot_si256(T[0], Q[0]), _mm256_andnot_si256(Q[0], F[0]));
+				R[1] = _mm256_xor_si256(_mm256_andnot_si256(T[1], Q[1]), _mm256_andnot_si256(Q[1], F[1]));
 			} else {
 				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				// R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
-				R[0] = _mm_xor_si256(_mm_and_si256(T[0], Q[0]), _mm_andnot_si256(Q[0], F[0]));
-				R[1] = _mm_xor_si256(_mm_and_si256(T[1], Q[1]), _mm_andnot_si256(Q[1], F[1]));
-				R[2] = _mm_xor_si256(_mm_and_si256(T[2], Q[2]), _mm_andnot_si256(Q[2], F[2]));
-				R[3] = _mm_xor_si256(_mm_and_si256(T[3], Q[3]), _mm_andnot_si256(Q[3], F[3]));
+				R[0] = _mm256_xor_si256(_mm256_and_si256(T[0], Q[0]), _mm256_andnot_si256(Q[0], F[0]));
+				R[1] = _mm256_xor_si256(_mm256_and_si256(T[1], Q[1]), _mm256_andnot_si256(Q[1], F[1]));
 			}
 		}
 

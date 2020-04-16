@@ -670,7 +670,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		unsigned testNr = 0;
 		unsigned numPassed = 0;
-		footprint_t *pEval = new footprint_t[tinyTree_t::TINYTREE_NEND];
+
+		// needs 32 byte alignment for AVX2
+		footprint_t *pEval = (footprint_t *) ::aligned_alloc(32, pStore->align32(sizeof(*pEval) * tinyTree_t::TINYTREE_NEND));
 
 		tinyTree_t tree(ctx);
 

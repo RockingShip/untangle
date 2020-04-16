@@ -17,7 +17,7 @@ bin_PROGRAMS = \
 restartdata.h : genrestartdata.cc
 	@echo "#"
 	@echo "# If you are not developing when this happens, most likely timestamps are incorrect"
-	@echo "# Instead of waiting 6 minutes:"
+	@echo "# Instead of waiting 60 minutes:"
 	@echo "# - Restore pre-calculated version of \"restartdata.h\"'"
 	@echo "# - Perform \"touch restartdata.h\""
 	@echo "#"
