@@ -74,12 +74,85 @@ struct genrestartdataContext_t : callable_t {
 	/// @var {number} size of structures used in this invocation
 	unsigned arg_numNodes;
 
+	/// @var {number} Number of restart entries found
+	uint32_t numRestart;
+
 	/**
 	 * Constructor
 	 */
 	genrestartdataContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_numNodes = 0;
+
+		numRestart = 0;
+	}
+
+	/**
+	 * @date 2020-04-16 10:10:46
+	 *
+	 * Found restart tab, Output restart entry
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - tree notation/name
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
+	 */
+	void foundTreePrintTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+		/*
+		 * Simply count how often called
+		 */
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			ctx.tick = 0;
+			int perSecond = ctx.updateSpeed();
+
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
+				        ctx.timeAsString(), ctx.progress, perSecond);
+			} else {
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+			}
+		}
+
+		// tree is incomplete and requires a slightly different notation
+		printf("%12ldLL/*", ctx.progress);
+		for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
+			uint32_t qtf = tree.packedN[iNode];
+			uint32_t Q = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
+			uint32_t To = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
+			uint32_t F = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
+			uint32_t Ti = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
+
+			if (Q >= tinyTree_t::TINYTREE_NSTART)
+				putchar("123456789"[Q - tinyTree_t::TINYTREE_NSTART]);
+			else
+				putchar("0abcdefghi"[Q]);
+			if (To >= tinyTree_t::TINYTREE_NSTART)
+				putchar("123456789"[To - tinyTree_t::TINYTREE_NSTART]);
+			else
+				putchar("0abcdefghi"[To]);
+			if (F >= tinyTree_t::TINYTREE_NSTART)
+				putchar("123456789"[F - tinyTree_t::TINYTREE_NSTART]);
+			else
+				putchar("0abcdefghi"[F]);
+			putchar(Ti ? '!' : '?');
+		}
+		printf("*/,");
+
+		// `genprogress` needs to know how many restart points are generated.
+		this->numRestart++;
+
+		if (this->numRestart % 8 == 1)
+			printf("\n");
 	}
 
 	/**
@@ -91,6 +164,9 @@ struct genrestartdataContext_t : callable_t {
 		// create generator
 		generatorTree_t generator(ctx);
 
+		// put generator in `genrestartdata` mode
+		ctx.opt_debug |= context_t::DEBUGMASK_GENERATOR_TABS;
+
 		printf("#ifndef _RESTARTDATA_H\n");
 		printf("#define _RESTARTDATA_H\n");
 		printf("\n");
@@ -100,7 +176,7 @@ struct genrestartdataContext_t : callable_t {
 		uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES][2];
 
 		printf("const uint64_t restartData[] = { 0,\n\n");
-		generator.numFoundRestart = 1; // skip first zero
+		this->numRestart = 1; // skip first zero
 
 		// @formatter:off
 		for (unsigned numArgs = 0; numArgs < tinyTree_t::TINYTREE_MAXNODES; numArgs++)
@@ -115,10 +191,10 @@ struct genrestartdataContext_t : callable_t {
 				if (pMetrics->noauto)
 					continue; // skip automated handling
 
-				buildProgressIndex[numArgs][iQnTF] = generator.numFoundRestart;
+				buildProgressIndex[numArgs][iQnTF] = this->numRestart;
 
 				// output section header
-				printf("// %ld: numNode=%d qntf=%d \n", generator.numFoundRestart, numArgs, iQnTF);
+				printf("// %d: numNode=%d qntf=%d \n", this->numRestart, numArgs, iQnTF);
 
 				// apply settings
 				generator.flags = (iQnTF) ? generator.flags | context_t::MAGICMASK_QNTF : generator.flags & ~context_t::MAGICMASK_QNTF;
@@ -132,18 +208,18 @@ struct genrestartdataContext_t : callable_t {
 
 				// do not supply a callback so `generateTrees` is aware restart data is being created
 				unsigned endpointsLeft = numArgs * 2 + 1;
-				generator.generateTrees(numArgs, endpointsLeft, 0, 0, NULL, NULL);
+				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
 
 				// was there any output
-				if (buildProgressIndex[numArgs][iQnTF] != generator.numFoundRestart) {
+				if (buildProgressIndex[numArgs][iQnTF] != this->numRestart) {
 					// yes, output section delimiter
 					printf(" 0xffffffffffffffffLL,");
-					generator.numFoundRestart++;
+					this->numRestart++;
 
 					// align
-					while (generator.numFoundRestart % 8 != 1) {
+					while (this->numRestart % 8 != 1) {
 						printf("0,");
-						generator.numFoundRestart++;
+						this->numRestart++;
 					}
 
 					printf("\n");
@@ -155,10 +231,9 @@ struct genrestartdataContext_t : callable_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 					fprintf(stderr, "\r\e[K");
 
-				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 					fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld\n",
 					        ctx.timeAsString(), MAXSLOTS, iQnTF, numArgs, ctx.progress);
-				}
 			}
 		}
 
@@ -176,6 +251,10 @@ struct genrestartdataContext_t : callable_t {
 
 		printf("};\n\n");
 		printf("#endif\n");
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Done\n", ctx.timeAsString());
+
 	}
 
 };
@@ -592,6 +671,10 @@ int main(int argc, char *const *argv) {
 		/*
 		 * self tests
 		 */
+
+		fprintf(stderr, "no selftest available\n");
+		exit(1);
+
 	} else if (app.opt_text) {
 		/*
 		 * list candidates

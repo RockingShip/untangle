@@ -955,6 +955,16 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->numImprint = 1;
 
 			/*
+			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
+			 */
+
+			tree.decodeFast(pBasename);
+
+			// add to database
+			pStore->numImprint = 1; // skip mandatory zero entry
+			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
+
+			/*
 			 * Lookup all possible permutations
 			 */
 
@@ -973,8 +983,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 				// lookup
 				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid)) {
-					printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"tid\":\"%s\"}\n",
-					       __FUNCTION__, pStore->fwdTransformNames[iTransform]);
+					printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"interleave\":%u,\"tid\":\"%s\"}\n",
+					       __FUNCTION__, pStore->interleave, pStore->fwdTransformNames[iTransform]);
 					exit(1);
 				}
 
@@ -1314,7 +1324,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			 */
 
 			// what you wish...
-			if (~ctx.opt_debug & ctx.DEBUGMASK_GEN_RATIO)
+			if (~ctx.opt_debug & ctx.DEBUGMASK_METRICS_RATIO)
 				continue;
 			if (pRound->numNode < 4)
 				continue; // no point for smaller trees

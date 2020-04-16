@@ -196,9 +196,6 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {number} Indication that a restart point has passed
 	uint64_t restartTick;
 
-	/// @var {number} Number of restart entries found
-	uint64_t numFoundRestart;
-
 	/// @var {number[]} template data for generator
 	uint32_t *pTemplateData;
 
@@ -224,7 +221,6 @@ struct generatorTree_t : tinyTree_t {
 		windowHi = 0;
 		pRestartData = NULL;
 		restartTick = 0;
-		numFoundRestart = 0;
 		::memset(templateIndex, 0, sizeof(templateIndex));
 
 		// allocate structures
@@ -727,19 +723,19 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	void callFoundTree(callable_t *cbObject, generateTreeCallback_t cbMember) {
 
+		// test if `genrestartdata` mode
+		if (ctx.opt_debug & ctx.DEBUGMASK_GENERATOR_TABS)
+			return;
+
 		// test that tree is within limits
 		assert(this->count >= TINYTREE_NSTART && this->count <= TINYTREE_NEND);
 
 		// test if tree is within progress range
 		// NOTE: first tree has `progress==0`
-		if (windowLo && ctx.progress < windowLo) {
-			ctx.progress++;
+		if (windowLo && ctx.progress < windowLo)
 			return;
-		}
-		if (windowHi && ctx.progress >= windowHi) {
-			ctx.progress++;
+		if (windowHi && ctx.progress >= windowHi)
 			return;
-		}
 
 		// set root
 		this->root = this->count - 1;
@@ -885,14 +881,8 @@ struct generatorTree_t : tinyTree_t {
 		/*
 		 * invoke the callback
 		 */
-		if (cbObject != NULL) {
-			uint32_t savCount = this->count;
-			(*cbObject.*cbMember)(*this, name, numPlaceholder, numEndpoint, numBackRef);
-			assert(savCount == this->count); // `count`` may not change
-		}
+		(*cbObject.*cbMember)(*this, name, numPlaceholder, numEndpoint, numBackRef);
 
-		// bump counter after processing
-		ctx.progress++;
 	}
 
 	/**
@@ -983,62 +973,11 @@ struct generatorTree_t : tinyTree_t {
 					this->restartTick++;
 				}
 
-			} else if (cbObject == NULL) {
+			} else if (ctx.opt_debug & ctx.DEBUGMASK_GENERATOR_TABS) {
 				/*
-				 * Generate restart data
+				 * Hit a restart tab, intended for `genrestartdata`
 				 */
-				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					ctx.tick = 0;
-					int perSecond = ctx.updateSpeed();
-
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
-						        ctx.timeAsString(), ctx.progress, perSecond);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
-					}
-				}
-
-				// tree is incomplete and requires a slightly different notation
-				printf("%12ldLL/*", ctx.progress);
-				for (uint32_t iNode = TINYTREE_NSTART; iNode < this->count; iNode++) {
-					const tinyNode_t *pNode = &this->N[iNode];
-					uint32_t Q = pNode->Q;
-					uint32_t To = pNode->T & ~IBIT;
-					uint32_t Ti = pNode->T & IBIT;
-					uint32_t F = pNode->F;
-
-					if (Q >= TINYTREE_NSTART)
-						putchar("123456789"[Q - TINYTREE_NSTART]);
-					else
-						putchar("0abcdefghi"[Q]);
-					if (To >= TINYTREE_NSTART)
-						putchar("123456789"[To - TINYTREE_NSTART]);
-					else
-						putchar("0abcdefghi"[To]);
-					if (F >= TINYTREE_NSTART)
-						putchar("123456789"[F - TINYTREE_NSTART]);
-					else
-						putchar("0abcdefghi"[F]);
-					putchar(Ti ? '!' : '?');
-				}
-				printf("*/,");
-
-				// `genprogress` needs to know how many restart points are generated.
-				numFoundRestart++;
-
-				if (numFoundRestart % 8 == 1)
-					printf("\n");
-
+				(*cbObject.*cbMember)(*this, "", 0, 0, 0);
 			}
 		}
 
@@ -1061,6 +1000,8 @@ struct generatorTree_t : tinyTree_t {
 				} else if (endpointsLeft == newEndpoint && newStack == (1U << (R - TINYTREE_NSTART))) {
 					// all endpoints populated and stack only current pushed node
 					this->callFoundTree(cbObject, cbMember);
+					// bump counter after processing
+					ctx.progress++;
 				}
 				this->pop();
 			}

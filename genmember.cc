@@ -1840,6 +1840,12 @@ int main(int argc, char *const *argv) {
 	database_t store(ctx);
 
 	if (app.opt_selftest) {
+		/*
+		 * self tests
+		 */
+
+		fprintf(stderr, "no selftest available\n");
+		exit(1);
 
 	} else {
 		/*

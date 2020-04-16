@@ -87,10 +87,12 @@ struct context_t {
 		// @formatter:off
 		// common flags go from low to high
 
-		// un-common flags go from high to low
-		DEBUGFLAG_GEN_RATIO     = 31,    // Let `gensignature --metrics`
+		// un-common or internal flags go from high to low
+		DEBUGFLAG_GENERATOR_TABS    = 30,    // Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
+		DEBUGFLAG_METRICS_RATIO     = 31,    // Let `gensignature --metrics` generate ratio metrics
 
-		DEBUGMASK_GEN_RATIO     = 1 << DEBUGFLAG_GEN_RATIO,
+		DEBUGMASK_GENERATOR_TABS    = 1 << DEBUGFLAG_GENERATOR_TABS,
+		DEBUGMASK_METRICS_RATIO     = 1 << DEBUGFLAG_METRICS_RATIO,
 		// @formatter:on
 	};
 
