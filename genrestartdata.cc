@@ -74,6 +74,11 @@ struct genrestartdataContext_t : callable_t {
 	/// @var {number} size of structures used in this invocation
 	unsigned arg_numNodes;
 
+	/// @var {number} task Id. First task=1
+	unsigned opt_taskId;
+	/// @var {number} Number of tasks / last task
+	unsigned opt_taskLast;
+
 	/// @var {number} Number of restart entries found
 	uint32_t numRestart;
 
@@ -87,7 +92,121 @@ struct genrestartdataContext_t : callable_t {
 		// arguments and options
 		arg_numNodes = 0;
 
+		opt_taskId = 0;
+		opt_taskLast = 0;
+
 		numRestart = 0;
+	}
+
+	/**
+	 * @date 2020-03-24 13:20:42
+	 *
+	 * Found restart tab, Simple count how often
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - tree notation/name
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
+	 */
+	bool foundTreeRestartTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+		/*
+		 * Simply count how often called
+		 */
+		numRestart++;
+
+		// counting tabs, no recursion
+		return false;
+	}
+
+	/**
+	 * @date 2020-04-16 00:02:10
+	 *
+	 * Determine mow many restart tabs current settings has.
+	 */
+	unsigned countRestartTabs(void) {
+
+		// put generator in `genrestartdata` mode
+		ctx.opt_debug |= context_t::DEBUGMASK_GENERATOR_TABS;
+		numRestart = 0;
+
+		/*
+		 * Run generator
+		 */
+
+		unsigned numNode = 1 + generator.restartTabDepth - tinyTree_t::TINYTREE_NSTART; // one level deeper than `restartTabDepth`
+		unsigned endpointsLeft = numNode * 2 + 1;
+
+		generator.clearGenerator();
+		generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
+
+		return numRestart;
+	}
+
+	/**
+	 * @date 2020-03-24 13:20:42
+	 *
+	 * Decide which restart tab to process or not
+	 *
+	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - tree notation/name
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
+	 */
+	bool foundTreeFilterTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+
+
+		/*
+		 * numRestart start at zero, opt_taskId at 1
+		 */
+		numRestart++;
+
+		if (numRestart == this->opt_taskId)
+			return true; // active tab, recurse
+		else
+			return false; // inactive tab
+	}
+
+	/**
+	 * @date 2020-04-16 11:59:53
+	 *
+	 * Count and output number of raw trees per restart tab.
+	 */
+	void mainTask(void) {
+
+		/*
+		 * Check that `taskLast` is correct
+		 */
+		unsigned numTabs = this->countRestartTabs();
+
+		if (numRestart != this->opt_taskLast) {
+			printf("{\"error\":\"taskLast does not match number of restart tabs\",\"where\":\"%s\",\"encountered\":\"%u\",\"expected\":\"%u\"\n",
+			       __FUNCTION__, this->opt_taskLast, numTabs);
+			exit(1);
+		}
+
+		/*
+		 * Setup generator
+		 */
+
+		// put generator in `genrestartdata` mode
+		ctx.opt_debug |= context_t::DEBUGMASK_GENERATOR_TABS;
+
+		/*
+		 * Run generator to count number of restart tabs
+		 */
+
+		numRestart = 0;
+		unsigned endpointsLeft = this->arg_numNodes * 2 + 1;
+
+		generator.clearGenerator();
+		generator.generateTrees(this->arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
+
+
+		printf("called %u times\n", numRestart);
 	}
 
 	/**
@@ -100,8 +219,9 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreePrintTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreePrintTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*
 		 * Simply count how often called
 		 */
@@ -156,6 +276,9 @@ struct genrestartdataContext_t : callable_t {
 
 		if (this->numRestart % 8 == 1)
 			printf("\n");
+
+		// collecting restartdata, so continue with recursion
+		return true;
 	}
 
 	/**
@@ -302,11 +425,13 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 	 * Found candidate, count uniques
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - tree notation/name
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*
 		 * Ticker
 		 */
@@ -355,6 +480,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 
 			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
+
+		return true;
 	}
 
 	/**
@@ -364,6 +491,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
  	 *
  	 * Candidates with back-references might be found more than once.
  	 *
+ 	 * param {database_t} pStore - database fo store candidate and reject duplicates
  	 * param {number} numNode - Tree size
  	 */
 	void performListCandidates(database_t *pStore, unsigned numNode) {
@@ -461,6 +589,7 @@ void sigalrmHandler(int sig) {
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
 	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates with given node size\n", argv[0]);
+	fprintf(stderr, "       %s --task=n,m <numnode> -- display single line for requested task/tab\n", argv[0]);
 //	fprintf(stderr, "       %s --selftest       -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
@@ -470,6 +599,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
+		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
+		fprintf(stderr, "\t   --task=<id>,<last>      Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose               Say less\n");
@@ -501,6 +632,8 @@ int main(int argc, char *const *argv) {
 			LO_PARANOID,
 			LO_QNTF,
 			LO_SELFTEST,
+			LO_SGE,
+			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -520,6 +653,8 @@ int main(int argc, char *const *argv) {
 			{"qntf",        0, 0, LO_QNTF},
 			{"quiet",       2, 0, LO_QUIET},
 			{"selftest",    0, 0, LO_SELFTEST},
+			{"sge",         0, 0, LO_SGE},
+			{"task",        1, 0, LO_TASK},
 			{"text",        0, 0, LO_TEXT},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
@@ -574,6 +709,44 @@ int main(int argc, char *const *argv) {
 			case LO_SELFTEST:
 				app.opt_selftest++;
 				break;
+			case LO_SGE: {
+				const char *p;
+
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
+				}
+
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "task id exceeds last\n");
+					exit(1);
+				}
+
+				break;
+			}
+			case LO_TASK:
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+					usage(argv, true);
+					exit(1);
+				}
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
+					exit(1);
+				}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
+				}
+				break;
 			case LO_TEXT:
 				app.opt_text++;
 				break;
@@ -596,18 +769,12 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Program arguments
 	 */
-	if (app.opt_text != 0) {
-		// text mode
-		if (argc - optind >= 1) {
+
+	if (argc - optind >= 1)
 			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
-		} else {
-			usage(argv, false);
-			exit(1);
-		}
-	} else {
-		// regular mode
-		if (argc - optind >= 0) {
-		} else {
+
+	if (app.opt_text != 0 || app.opt_taskLast != 0) {
+		if (app.arg_numNodes == 0) {
 			usage(argv, false);
 			exit(1);
 		}
@@ -680,6 +847,7 @@ int main(int argc, char *const *argv) {
 		 * regular mode
 		 */
 
+		// output comment here because of `argv[]`
 		printf("// generated by %s on \"%s\"\n\n", argv[0], timeAsString());
 
 		app.main();

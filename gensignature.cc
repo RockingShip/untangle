@@ -268,12 +268,13 @@ struct gensignatureContext_t : callable_t {
 	 * All the trees passed to this function are natural ordered trees.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {string} pName - Tree name/notation
+	 * @param {string} pName - tree notation/name
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
@@ -324,7 +325,7 @@ struct gensignatureContext_t : callable_t {
 				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '*', pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
 
-			return;
+			return true;
 		}
 
 		/*
@@ -394,6 +395,7 @@ struct gensignatureContext_t : callable_t {
 
 		}
 
+		return true;
 	}
 
 	/**
@@ -1032,12 +1034,13 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling the generator with windowLo/Hi for each possible tree
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {string} pName - Tree name/notation
+	 * @param {string} pName - tree notation/name
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			ctx.tick = 0;
 			if (ctx.progressHi)
@@ -1057,6 +1060,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		// populate entry
 		selftestWindowResults[ctx.progress] = ::strdup(pName);
+
+		return true;
 	}
 
 	/**
@@ -1065,12 +1070,13 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * Selftest windowing by calling generator without a window and test if results match.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {string} pName - Tree name/notation
+	 * @param {string} pName - tree notation/name
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			ctx.tick = 0;
 			if (ctx.progressHi)
@@ -1098,6 +1104,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		// release resources
 		::free(selftestWindowResults[ctx.progress]);
 		selftestWindowResults[ctx.progress] = NULL;
+
+		return true;
 	}
 
 
@@ -1182,12 +1190,13 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 * expand collection of unique structures.
 	 *
 	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {string} pName - Tree name/notation
+	 * @param {string} pName - tree notation/name
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
@@ -1222,6 +1231,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			sid = pStore->addSignature(pName);
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, sid);
 		}
+
+		return true;
 	}
 
 	void performMetrics(database_t *pStore) {

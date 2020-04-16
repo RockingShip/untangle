@@ -196,6 +196,9 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {number} Indication that a restart point has passed
 	uint64_t restartTick;
 
+	/// @var {number} Node depth at which to handle restart tabs.
+	uint32_t restartTabDepth;
+
 	/// @var {number[]} template data for generator
 	uint32_t *pTemplateData;
 
@@ -221,6 +224,8 @@ struct generatorTree_t : tinyTree_t {
 		windowHi = 0;
 		pRestartData = NULL;
 		restartTick = 0;
+		restartTabDepth = TINYTREE_NSTART + 2; // for `7n9` +3 is a better choice. But `7n9-pure` still has 70177 restart tabs.
+
 		::memset(templateIndex, 0, sizeof(templateIndex));
 
 		// allocate structures
@@ -705,8 +710,14 @@ struct generatorTree_t : tinyTree_t {
 	 * Typedef of callback function to `"void foundTree(generatorTree_t &tree, unsigned numUnique)"`
 	 *
 	 * @typedef {callback} generateTreeCallback_t
+	 * @param {generatorTree_t} tree - candidate tree
+	 * @param {string} pName - tree notation/name
+	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
+	 * @param {number} numEndpoint - number of non-zero endpoints in tree
+	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	typedef void(callable_t::* generateTreeCallback_t)(const generatorTree_t &, const char *, unsigned, unsigned, unsigned);
+	typedef bool(callable_t::* generateTreeCallback_t)(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef);
 
 	/**
 	 * @date 2020-03-18 22:17:26
@@ -948,7 +959,7 @@ struct generatorTree_t : tinyTree_t {
 		 * Recursion on its 3nd level (when trees are 2 nodes in size) is a good moment to check conditions
 		 * This makes that restarting sensible for trees >= 4 nodes
 		 */
-		if (this->count == TINYTREE_NSTART + 2) {
+		if (this->count == this->restartTabDepth) {
 			if (this->pRestartData) {
 				/*
 				 * assert that restart data is in sync with reality

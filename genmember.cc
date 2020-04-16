@@ -204,8 +204,6 @@ struct genmemberContext_t : callable_t {
 	uint32_t opt_memberIndexSize;
 	/// @var {number} index/data ratio
 	double opt_ratio;
-	/// @var {number} get task settings from SGE environment
-	uint32_t opt_sge;
 	/// @var {number} Sid range upper bound
 	uint32_t opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -259,7 +257,6 @@ struct genmemberContext_t : callable_t {
 		opt_maxMember = 0;
 		opt_memberIndexSize = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
-		opt_sge = 0;
 		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_text = 0;
@@ -729,8 +726,9 @@ struct genmemberContext_t : callable_t {
 	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
 	 * @param {number} numEndpoint - number of non-zero endpoints in tree
 	 * @param {number} numBackRef - number of back-references
+	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	void foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
@@ -773,14 +771,14 @@ struct genmemberContext_t : callable_t {
 		uint32_t tid = 0;
 
 		if (!pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
-			return;
+			return true;
 
 		signature_t *pSignature = pStore->signatures + sid;
 
 		// only if group is safe reject if structure is too large
 		if ((~pSignature->flags & signature_t::SIGMASK_UNSAFE) && treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
 			skipSize++;
-			return;
+			return true;
 		}
 
 		/*
@@ -791,7 +789,7 @@ struct genmemberContext_t : callable_t {
 		if (pStore->memberIndex[ix] != 0) {
 			// duplicate candidate name
 			skipDuplicate++;
-			return;
+			return true;
 		}
 
 		/*
@@ -817,6 +815,7 @@ struct genmemberContext_t : callable_t {
 			pStore->memberIndex[ix] = pMember - pStore->members;
 		}
 
+		return true;
 	}
 
 	/**
