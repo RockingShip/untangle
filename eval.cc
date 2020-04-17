@@ -178,10 +178,9 @@ struct footprint_t {
 	 *
 	 * Inspired by Mark Adler's software implementation of "crc32c.c -- compute CRC-32C using the Intel crc32 instruction"
 	 *
-	 * @param {boolean} inverted - optionally invert input
 	 * @return {number} - calculate crc
 	 */
-	uint32_t crc32(bool inverted) const {
+	uint32_t crc32(void) const {
 
 		static uint32_t crc32c_table[8][256];
 
@@ -224,7 +223,7 @@ struct footprint_t {
 
 		for (unsigned j = 0; j < QUADPERFOOTPRINT; j++) {
 
-			crc ^= bits[j] ^ (inverted ? ~0LL : 0);
+			crc ^= bits[j];
 
 			crc = crc32c_table[7][crc & 0xff] ^
 			      crc32c_table[6][(crc >> 8) & 0xff] ^
@@ -2255,7 +2254,10 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	 * Calculate crc of entry point
 	 */
 
-	uint32_t crc32 = 0;
+	uint32_t crc32 = pEval[pTree->root & ~IBIT].crc32();
+	// Inverted `T` is a concept not present in footprints. As a compromise, invert the result.
+	if (pTree->root & IBIT)
+		crc32 ^= 0xffffffff;
 
 	/*
 	 * if quiet only return crc

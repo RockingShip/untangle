@@ -1288,6 +1288,8 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-09 19:36:17
+	 *
          * Evaluate the tree and store the result in v[]
          *
          * `this->N` contains the unified operators.
@@ -1300,8 +1302,51 @@ struct tinyTree_t {
          *
          * Each data entry is a 512-bit wide vector, split into uint64_t chunks.
          *
+         * @date 2020-04-17 09:19:47
+         *
+         * The array `v[]` is a list of `MAXSLOT`! trees with pre-determined footprints for all the inputs.
+         * The initial footprints are setup as described in `initialiseVector()`
+         * Evaluation is performed by first selecting the tree matching the required transform/skin
+         * and then starting from the first real node `nstart` executing the unified operator as described in the tree.
+         *
+         * Example for `MAXSLOTS`=3, `MAXNODES`=2 and tree `"abc+^"`.
+         * Derived from these setttings:
+         *  `KSTART`=1
+         *  `NSTART`=`KSTART`+`MAXSLOTS` = 4
+         *  `NEND`=`NSTART`+MAXNODES` = 6
+         *
+         * To evaluate the above:
+         *  - convert the tree to placeholder/skin notation, which is `"cab+^/bca"`
+         *  - select the evaluator tree (column) beloning to transform `"bca"`.
+         *  - Solve `"ab+"` being `"[KSTART+0] OR [KSTART+1]"` which is stored in `"[NSTART+0]"`
+         *  - Solve `"cab+^"` being `"[KSTART+2] XOR [NSTART+0]"` which is stored in `"[NSTART+1]"`
+         *
+         * Table below shows how the evaluator `v[]` would look like after evaluating the tree above:
+         *
+         *                         base   <-------------------- ---transform/skin--------------------------->
+         *        v[]           |  expr   |    abc   |    bac   |    acb   |    bca   |    cab   |    cba   |
+         * ---------------------+---------+----------+----------+----------+----------+----------+----------+
+         * N[tid*NEND+0]        |         | 00000000 | 00000000 | 00000000 | 00000000 | 00000000 | 00000000 |
+         * N[tid*NEND+KSTART+0] | (a)     | 10101010 | 11001100 | 10101010 | 11001100 | 11110000 | 11110000 |
+         * N[tid*NEND+KSTART+1] | (b)     | 11001100 | 10101010 | 11110000 | 11110000 | 10101010 | 11001100 |
+         * N[tid*NEND+KSTART+2] | (c)     | 11110000 | 11110000 | 11001100 | 10101010 | 11001100 | 10101010 |
+         * N[tid*NEND+NSTART+0] | (ab+)=x |          |          |          | 11111100 |          |          |
+         * N[tid*NEND+NSTART+1] | (cx^)=r |          |          |          | 01010110 |          |          |
+         *
+         * The resulting footprint is "01010110" which can be interpreted as:
+         *
+         *  c | b | a | answer "abc+^"  |
+         * ---+---+---+-----------------+
+         *  0 | 0 | 0 |        0        |
+         *  0 | 0 | 1 |        1        |
+         *  0 | 1 | 0 |        1        |
+         *  0 | 1 | 1 |        0        |
+         *  1 | 0 | 0 |        1        |
+         *  1 | 0 | 1 |        0        |
+         *  1 | 1 | 0 |        1        |
+         *  1 | 1 | 1 |        0        |
+         *
 	 * @param {vector[]} v - the evaluated result of the unified operators
-	 * @date 2020-03-09 19:36:17
 	 */
 	inline void eval(footprint_t *v) const {
 
@@ -1438,6 +1483,8 @@ struct tinyTree_t {
 	}
 
 	/**
+	 * @date 2020-03-15 15:39:59
+	 *
 	 * Create an initial data vector for the evaluator
 	 *
 	 * During evaluation there are number of states values can possible take.
@@ -1482,7 +1529,6 @@ struct tinyTree_t {
 	 * @param {footprint_t) pFootprint - footprint to initialise
 	 * @param {footprint_t) maxTransform - How many transforms
 	 * @param {uint64_t[]) pTransformData - forward or reverse transform data
-	 * @date 2020-03-15 15:39:59
 	 */
 	void initialiseVector(context_t &ctx, footprint_t *pFootprint, uint32_t numTransform, uint64_t *pTransformData) {
 
