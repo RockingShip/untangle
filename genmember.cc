@@ -796,6 +796,10 @@ struct genmemberContext_t : callable_t {
 		 * Allocate and populate member
 		 */
 
+		// test if in "collect without store" mode.
+		if (pStore->members == NULL)
+			return true;
+
 		member_t *pMember = this->memberAlloc(pNameR);
 
 		pMember->sid = sid;
@@ -1243,7 +1247,7 @@ struct genmemberContext_t : callable_t {
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u | hash=%.3f %s",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u | hash=%.3f",
 					        ctx.timeAsString(), ctx.progress, perSecond, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
