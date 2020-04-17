@@ -3,7 +3,7 @@
 /*
  * @date 2020-03-14 11:09:15
  *
- * `gensignature` scans `Xn9` space using `generator_t` and adds associative unique footprints to a given dataset.
+ * `gensignature` scans `*n9` space using `generator_t` and adds associative unique footprints to a given dataset.
  * Associative unique is when all other permutation of endpoints are excluded.
  *
  * `gensignature` can also generate SQL used for signature group analysis.

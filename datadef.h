@@ -69,7 +69,7 @@ struct footprint_t {
 		 * Update to SIMD
 		 */
 
-#if defined(__AVX2__)
+#if 0 && defined(__AVX2__)
 
 		const __m256i *L = (const __m256i *) this->bits;
 		const __m256i *R = (const __m256i *) rhs.bits;
@@ -117,7 +117,7 @@ struct footprint_t {
 	inline uint32_t crc32(void) const {
 
 		// NOTE: QUADPERFOOTPRINT tests
-#if defined(__SSE4_1__)
+#if defined(__SSE4_2__)
 		uint32_t crc32 = 0;
 		crc32 = __builtin_ia32_crc32di(crc32, this->bits[0]);
 		crc32 = __builtin_ia32_crc32di(crc32, this->bits[1]);
@@ -159,7 +159,7 @@ struct imprint_t {
 	uint32_t sid;          // signature
 	uint32_t tid;          // skin/transform
 	uint32_t filler16[2];  // need 16 byte alignment
-#if defined(__AVX2__)
+#if 0 && defined(__AVX2__)
 #warning AVX2 will give zero speed improvement and waste memory due to alignment
 	uint32_t filler32[4];  // need 32 byte alignment
 #endif

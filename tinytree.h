@@ -1355,7 +1355,7 @@ struct tinyTree_t {
 		 * Update to SIMD
 		 */
 
-#if defined(__AVX2__)
+#if 0 && defined(__AVX2__)
 		/*
 		 * 0x263 bytes of code when compiled with -O3 -mavx2
 		 */
