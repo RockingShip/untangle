@@ -34,6 +34,13 @@
  * The initial starting positions of the indices use crc as a hash function.
  * It doesn't really have to be crc,  as long as the result has some linear distribution over index.
  * crc32 was chosen because it has a single assembler instruction on x86 platforms.
+ *
+ * @date 2020-04-17 11:10:10
+ *
+ * Add support versioned memory for fast erasing and deleting of entries.
+ * An entry is deleted if `"index[ix] == 0 && version != NULL && version[ix] == iVersion"`
+ * An entry is empty(or deleted) if `"index[ix] == 0 || (version != NULL && version[ix] != iVersion)"`
+ * An entry is valid if `"index[ix] != 0 && (version == NULL || version[ix] == iVersion)"`
  */
 
 /*
@@ -188,6 +195,10 @@ struct database_t {
 	member_t           *members;                    // member collection
 	uint32_t           memberIndexSize;             // index size (must be prime)
 	uint32_t           *memberIndex;                // index
+	// versioned memory
+	uint32_t           iVersion;                    // version current incarnation
+	uint32_t           *imprintVersion;             // versioned memory for `imprintIndex`
+	uint32_t           *signatureVersion;           // versioned memory for `signatureIndex`
 	// @formatter:on
 
 	/**
@@ -233,6 +244,11 @@ struct database_t {
 		members = NULL;
 		memberIndexSize = 0;
 		memberIndex = NULL;
+
+		// versioned memory
+		iVersion = 0;
+		imprintVersion = NULL;
+		signatureVersion = NULL;
 	};
 
 	/**
@@ -544,10 +560,14 @@ struct database_t {
 		if (allocFlags & ALLOCMASK_IMPRINT) {
 			ctx.myFree("database_t::imprints", imprints);
 			ctx.myFree("database_t::imprintIndex", imprintIndex);
+			if (imprintVersion)
+				ctx.myFree("database_t::imprintVersion", imprintVersion);
 		}
 		if (allocFlags & ALLOCMASK_SIGNATURE) {
 			ctx.myFree("database_t::signatures", signatures);
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
+			if (signatureVersion)
+				ctx.myFree("database_t::signatureVersion", signatureVersion);
 		}
 		if (allocFlags & ALLOCMASK_MEMBER) {
 			ctx.myFree("database_t::members", members);
@@ -571,6 +591,42 @@ struct database_t {
 			 */
 			ctx.myFree("database_t::rawDatabase", (void *) rawDatabase);
 		}
+	}
+
+	/**
+	 * @date 2020-04-17 00:54:09
+	 *
+	 * Enable versioned memory for selected indices
+	 */
+	inline void enabledVersioned(void) {
+
+		// allocate version indices
+		if (allocFlags & ALLOCMASK_IMPRINT)
+			imprintVersion = (uint32_t *) ctx.myAlloc("database_t::imprintVersion", imprintIndexSize, sizeof(*imprintVersion));
+		if (allocFlags & ALLOCMASK_SIGNATURE)
+			signatureVersion = (uint32_t *) ctx.myAlloc("database_t::signatureVersion", signatureIndexSize, sizeof(*signatureVersion));
+
+		// clear versioned memory
+		iVersion = 0;
+		InvalidateVersioned();
+	}
+
+	/**
+	 * @date 2020-04-17 00:54:09
+	 *
+	 * Invalidate versioned memory effectively resetting the indices
+	 */
+	inline void InvalidateVersioned(void) {
+		// clear versioned memory
+		if (iVersion == 0) {
+			if (imprintVersion)
+				::memset(imprintVersion, 0, (sizeof(*imprintVersion) * imprintIndexSize));
+			if (signatureVersion)
+				::memset(signatureVersion, 0, (sizeof(*signatureVersion) * signatureIndexSize));
+		}
+
+		// bump version number.
+		iVersion++;
 	}
 
 	/**
@@ -978,21 +1034,42 @@ struct database_t {
 		if (bump > 2147000041)
 			bump = 2147000041; // may never exceed last 32bit prime
 
-		for (;;) {
-			ctx.cntCompare++;
-			if (this->imprintIndex[ix] == 0)
-				return ix; // "not-found"
+		if (imprintVersion == NULL) {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->imprintIndex[ix] == 0)
+					return ix; // "not-found"
 
-			const imprint_t *pImprint = this->imprints + this->imprintIndex[ix]; // point to data
+				const imprint_t *pImprint = this->imprints + this->imprintIndex[ix]; // point to data
 
-			if (pImprint->footprint.equals(v))
-				return ix; // "found"
+				if (pImprint->footprint.equals(v))
+					return ix; // "found"
 
-			// overflow, jump to next entry
-			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
-			ix += bump;
-			if (ix >= imprintIndexSize)
-				ix -= imprintIndexSize; // effectively modulo
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= imprintIndexSize)
+					ix -= imprintIndexSize; // effectively modulo
+			}
+		} else {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->imprintVersion[ix] != iVersion)
+					return ix; // "not-found"
+
+				if (this->imprintIndex[ix] != 0) {
+					const imprint_t *pImprint = this->imprints + this->imprintIndex[ix]; // point to data
+
+					if (pImprint->footprint.equals(v))
+						return ix; // "found"
+				}
+
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= imprintIndexSize)
+					ix -= imprintIndexSize; // effectively modulo
+			}
 		}
 	}
 
@@ -1069,7 +1146,7 @@ struct database_t {
 				/*
 				 * Was something found
 				 */
-				if (this->imprintIndex[ix] != 0) {
+				if ((this->imprintVersion == NULL || this->imprintVersion[ix] == iVersion) && this->imprintIndex[ix] != 0) {
 					/*
 					 * Is so, then found the stripe which is the starting point. iTransform is relative to that
 					 */
@@ -1097,7 +1174,7 @@ struct database_t {
 				/*
 				 * Was something found
 				 */
-				if (this->imprintIndex[ix] != 0) {
+				if ((this->imprintVersion == NULL || this->imprintVersion[ix] == iVersion) && this->imprintIndex[ix] != 0) {
 					/*
 					* Is so, then found the stripe which is the starting point. iTransform is relative to that
 					*/
@@ -1151,8 +1228,11 @@ struct database_t {
 				uint32_t ix = this->lookupImprint(v[pTree->root]);
 
 				// add to the database is not there
-				if (this->imprintIndex[ix] == 0) {
+				if (this->imprintIndex[ix] == 0 || (this->imprintVersion != NULL && this->imprintVersion[ix] != iVersion)) {
 					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
+					if (this->imprintVersion)
+						this->imprintVersion[ix] = iVersion;
+
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// populate non-key fields
 					pImprint->sid = sid;
@@ -1186,8 +1266,11 @@ struct database_t {
 				uint32_t ix = this->lookupImprint(v[pTree->root]);
 
 				// add to the database is not there
-				if (this->imprintIndex[ix] == 0) {
+				if (this->imprintIndex[ix] == 0 || (this->imprintVersion != NULL && this->imprintVersion[ix] != iVersion)) {
 					this->imprintIndex[ix] = this->addImprint(v[pTree->root]);
+					if (this->imprintVersion)
+						this->imprintVersion[ix] = iVersion;
+
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// populate non-key fields
 					pImprint->sid = sid;
@@ -1224,21 +1307,42 @@ struct database_t {
 		if (bump > 2147000041)
 			bump = 2147000041; // may never exceed last 32bit prime
 
-		for (;;) {
-			ctx.cntCompare++;
-			if (this->signatureIndex[ix] == 0)
-				return ix; // "not-found"
+		if (signatureVersion == NULL) {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->signatureIndex[ix] == 0)
+					return ix; // "not-found"
 
-			const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
+				const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
 
-			if (::strcmp(pSignature->name, name) == 0)
-				return ix; // "found"
+				if (::strcmp(pSignature->name, name) == 0)
+					return ix; // "found"
 
-			// overflow, jump to next entry
-			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
-			ix += bump;
-			if (ix >= signatureIndexSize)
-				ix -= signatureIndexSize;
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= signatureIndexSize)
+					ix -= signatureIndexSize;
+			}
+
+		} else {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->signatureVersion[ix] != iVersion)
+					return ix; // "not-found"
+
+				if (this->signatureVersion[ix] != 0) {
+					const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
+
+					if (::strcmp(pSignature->name, name) == 0)
+						return ix; // "found"
+				}
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= signatureIndexSize)
+					ix -= signatureIndexSize;
+			}
 		}
 
 	}

@@ -950,6 +950,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		 * Storage is based on worst-case scenario.
 		 * Actual storage needs to be tested/runtime decided.
 		 */
+
+		// enable versioned memory or imprint index
+		pStore->enabledVersioned();
+
 		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
 			if (pInterleave->numSlot != MAXSLOTS)
 				continue; // only process settings that match `MAXSLOTS`
@@ -963,8 +967,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
-			::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
-			::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+			pStore->InvalidateVersioned();
 			// skip reserved entry
 			pStore->numImprint = 1;
 
@@ -975,7 +978,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			tree.decodeFast(pBasename);
 
 			// add to database
-			pStore->numImprint = 1; // skip mandatory zero entry
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
 
 			/*
@@ -1255,6 +1257,9 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	void createMetrics(void) {
 
+		// enable versioned memory or imprint index
+		pStore->enabledVersioned();
+
 		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
@@ -1273,8 +1278,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			assert(pInterleave);
 
 			// prepare database
-			::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-			::memset(pStore->signatureIndex, 0, sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize);
+			pStore->InvalidateVersioned();
 			pStore->numImprint = 1; // skip reserved first entry
 			pStore->numSignature = 1; // skip reserved first entry
 			pStore->interleave = pInterleave->numStored;
@@ -1359,7 +1363,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
-				::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+				pStore->InvalidateVersioned();
 				pStore->numImprint = 1; // skip mandatory reserved entry
 				ctx.cntHash = 0;
 				ctx.cntCompare = 0;

@@ -254,7 +254,6 @@ static const metricsImprint_t metricsImprint[] = {
 	{9, 1, 504,    4, 19338792,   10.006,  1.780,  0},
 	{9, 1, 720,    4, 61887211,   7.396,   5.694,  0},
 	{9, 1, 3024,   4, 87834669,   7.217,   8.083,  0},
-	{9, 1, 504,    5, 1035381442, 0,       0,      1}, // from historic metrics
 	//
 	{9, 0, 504,    0, 6,          93.006,  0.000,  0},
 	{9, 0, 120,    0, 7,          72.315,  0.000,  0},
@@ -274,10 +273,9 @@ static const metricsImprint_t metricsImprint[] = {
 	{9, 0, 720,    3, 3283078,    9.359,   0.302,  0},
 	{9, 0, 120,    4, 89019740,   7.756,   8.189,  0}, // <-- default
 	{9, 0, 504,    4, 181859539,  7.046,   16.733, 0},
-	{9, 0, 720,    4, 531756796,  3.989,   48.920, 0},
-	{9, 0, 3024,   4, 0,          0,       0,      1}, // too large
+	{9, 0, 720,    4, 531756796,  3.989,   48.920, 1}, // unpractical
 	//
-	// special presets for `genmember` assuming 4n9 signatures
+	// special presets for `genmember` using 4n9 signatures
 	{9, 1, 3024,   5, 8493341,    0,       0,      1},
 	{9, 0, 15120,  5, 8493341,    0,       0,      1},
 	{9, 0, 40320,  5, 40481281,   0,       0,      1}, // The high number of imprints is because row/col has a different spread which has less re-usability
@@ -351,7 +349,7 @@ struct metricsGenerator_t {
 	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
-	/// @var {number} - Total members (before compacting). Provided by `genmember`. Working from `4n9` signature space
+	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space
 	uint64_t numMember; // (including mandatory zero entry)
 
 	/// @var {number} - Ignore when recalculating metrics
@@ -370,7 +368,9 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 3, 81406,         79835,     5666,     29721,    0},
 	{9, 1, 4, 2969462,       2777493,   96363,    801917,   0},
 	{9, 0, 4, 29990974,      28304991,  791647,   5959653,  0},
-	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 0}, // numCandidate takes about 15 minutes. numSignature is from historic metrics. numSignature takes about 8 hours.
+	// for 5n9-QnTF: numCandidate takes about 15 minutes. numSignature takes about 8 hours. numMember using 4n9 signature space.
+	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 0},
+	// below only intended for members
 	{9, 0, 5, 17927026892,   0,         0,        0,        0},
 	{9, 1, 6, 410335296888,  0,         0,        0,        0}, // numProgress takes about 60 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        0,        1}, // from historic metrics
