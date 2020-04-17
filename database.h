@@ -889,6 +889,8 @@ struct database_t {
 	 */
 
 	/**
+	 * @date 2020-03-12 10:28:05
+	 *
 	 * Lookup a transform name and return its matching enumeration id.
 	 * Transform names can be short meaning that trailing endpoints which are in sync can be omitted.
 	 * Example: For `"bdacefghi"`, `"bdac"` is the minimum transform name and `"efghi"` is the "long" part.
@@ -900,7 +902,6 @@ struct database_t {
 	 * @param {string} pName - Transform name
 	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
 	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
-	 * @date 2020-03-12 10:28:05
 	 */
 	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
 		assert(pIndex);
@@ -924,22 +925,24 @@ struct database_t {
 	}
 
 	/**
+ 	 * @date 2020-03-13 14:20:29
+ 	 *
 	 * Lookup a forward transform name and return its matching enumeration id.
  	 *
 	 * @param {string} pName - Transform name
  	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
- 	 * @date 2020-03-13 14:20:29
  	 */
 	inline uint32_t lookupFwdTransform(const char *pName) {
 		return lookupTransform(pName, this->fwdTransformNameIndex);
 	}
 
 	/**
+  	 * @date 2020-03-13 14:20:29
+  	 *
 	 * Lookup a reverse transform name and return its matching enumeration id.
   	 *
  	 * @param {string} pName - Transform name
   	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
-  	 * @date 2020-03-13 14:20:29
   	 */
 	inline uint32_t lookupRevTransform(const char *pName) {
 		return lookupTransform(pName, this->revTransformNameIndex);
@@ -950,13 +953,14 @@ struct database_t {
 	 */
 
 	/**
+	 * @date 2020-03-15 20:07:14
+	 *
 	 * Lookup value in index using a hash array with overflow.
 	 * Returns the offset within the index.
 	 * If contents of index is 0, then not found, otherwise it the index where to find the data in `pImprint`.
 	 *
 	 * @param v {footprint_t} v - value to index
 	 * @return {number} offset into index
-	 * @date 2020-03-15 20:07:14
 	 */
 	inline uint32_t lookupImprint(const footprint_t &v) const {
 
@@ -1024,6 +1028,8 @@ struct database_t {
 	 */
 
 	/**
+	 * @date 2020-03-16 21:20:18
+	 *
 	 * Associative lookup of a footprint
 	 *
 	 * Find any orientation of the footprint and return the matching structure and skin with identical effect
@@ -1034,7 +1040,6 @@ struct database_t {
 	 * @param {uint32_t} sid - found structure id
 	 * @param {uint32_t} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
 	 * @return {boolean} - `true` if found, `false` if not.
-	 * @date 2020-03-16 21:20:18
 	 */
 	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t *sid, uint32_t *tid) {
 		/*
@@ -1112,16 +1117,17 @@ struct database_t {
 	}
 
 	/**
-	* Associative lookup of a footprint
-	*
-	* Find any orientation of the footprint and return the matching structure and skin with identical effect
-	*
-	* @param {tinyTree_t} pTree - Tree containg expression
-	* @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
-	* @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
-	* @param {uint32_t} sid - structure id to attach to imprints.
-	* @date 2020-03-16 21:46:02
-	*/
+	 * @date 2020-03-16 21:46:02
+	 *
+	 * Associative lookup of a footprint
+	 *
+	 * Find any orientation of the footprint and return the matching structure and skin with identical effect
+	 *
+	 * @param {tinyTree_t} pTree - Tree containg expression
+	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
+	 * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
+	 * @param {uint32_t} sid - structure id to attach to imprints.
+	 */
 	inline void addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t sid) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
@@ -1309,9 +1315,9 @@ struct database_t {
 #if defined(ENABLE_JANSSON)
 
 	/**
-	 * Encode dimensions as json object
-	 *
 	 * @date 2020-03-12 19:36:56
+	 *
+	 * Encode dimensions as json object
 	 */
 	json_t *jsonInfo(json_t *jResult) {
 		if (jResult == NULL)

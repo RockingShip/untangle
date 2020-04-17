@@ -53,4 +53,5 @@ tlookup
 *.log
 *.o
 *.tar
+*.txt
 *.zip
