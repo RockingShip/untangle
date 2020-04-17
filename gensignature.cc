@@ -189,8 +189,11 @@ struct gensignatureContext_t : callable_t {
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
+					        ctx.timeAsString(), ctx.progress, perSecond,
+					        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					        (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -200,8 +203,11 @@ struct gensignatureContext_t : callable_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
+					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+					        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					        (double) ctx.cntCompare / ctx.cntHash);
 				}
 			}
 			ctx.progress++;
@@ -242,7 +248,9 @@ struct gensignatureContext_t : callable_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "\r\e[K[%s] Loaded signatures. numSignature=%d numImprint=%d\n", ctx.timeAsString(), pStore->numSignature, pStore->numImprint);
+			fprintf(stderr, "\r\e[K[%s] Loaded signatures. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n", ctx.timeAsString(),
+			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint);
 
 	}
 
@@ -280,8 +288,11 @@ struct gensignatureContext_t : callable_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f %s",
+				        ctx.timeAsString(), ctx.progress,
+				        perSecond,pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -291,8 +302,11 @@ struct gensignatureContext_t : callable_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f %s",
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 		}
 
@@ -624,8 +638,10 @@ struct gensignatureContext_t : callable_t {
 		/*
 		 * Done
 		 */
-		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%d numImprint=%d\n",
-		        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress, pStore->numSignature, pStore->numImprint);
+		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
+		        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
+		        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+		        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint);
 
 	}
 
@@ -1202,8 +1218,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%d numImprint=%d | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        (double) ctx.cntCompare / ctx.cntHash);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1213,8 +1232,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%d numImprint=%d | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature, pStore->numImprint, (double) ctx.cntCompare / ctx.cntHash);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
+				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				        (double) ctx.cntCompare / ctx.cntHash);
 			}
 		}
 
@@ -1225,8 +1247,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
 
 		if (sid == 0) {
-			const char *pName = tree.encode(tree.root);
-
 			// add to database
 			sid = pStore->addSignature(pName);
 			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, sid);
@@ -1319,8 +1339,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 			}
 
-			fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%-4d numNode=%d numSignature=%d numImprint=%d speed=%.3fM/s storage=%.3fGb\n",
-			        ctx.timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode, pStore->numSignature, pStore->numImprint, speed, storage);
+			fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%-4d numNode=%d numSignature=%u(%.0f%%) numImprint=%u(%.0f%% speed=%.3fM/s storage=%.3fGb\n",
+			        ctx.timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode,
+			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        speed, storage);
 
 			if (ctx.progress != ctx.progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%ld,\"expected\":%ld,\"numNode\":%d}\n",
@@ -1346,7 +1369,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				ctx.cntHash = 0;
 				ctx.cntCompare = 0;
 
-				fprintf(stderr, "[%d %d %.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
+				fprintf(stderr, "[numImprint=%u imprintIndexSize=%u ratio=%.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
 
 				// reindex
 				for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
@@ -1356,7 +1379,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					pStore->addImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, iSid);
 				}
 
-				fprintf(stderr, "[%d %d %.1f %ld %ld %.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, ctx.cntHash, ctx.cntCompare, (double) ctx.cntCompare / ctx.cntHash);
+				fprintf(stderr, "\r\e[K[numImprint=%u imprintIndexSize=%u ratio=%.1f cntHash=%ld cntCompare=%ld hash=%.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, ctx.cntHash, ctx.cntCompare, (double) ctx.cntCompare / ctx.cntHash);
 
 				/*
 				 * perform a speedtest
@@ -1786,8 +1809,9 @@ int main(int argc, char *const *argv) {
 					app.opt_maxSignature += app.opt_maxSignature / 20;
 			}
 
+
 			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Set limits to ratio=%.1f maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), app.opt_ratio, app.opt_maxImprint, app.opt_maxSignature);
+				fprintf(stderr, "[%s] Set limits to maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), app.opt_maxImprint, app.opt_maxSignature);
 		}
 
 		if (app.opt_maxImprint == 0) {
