@@ -108,8 +108,8 @@ unsigned opt_skin = 0;
 unsigned opt_code = 0;
 /// @global {number} --fast, do not normalise input
 unsigned opt_fast = 0;
-/// @global {number} --qntf, output exclusively as QnTF
-unsigned opt_qntf = 0;
+/// @global {number} --pure, `QTF->QnTF` rewriting
+unsigned opt_pure = 0;
 /// @global {number} --seed=n, Random seed to generate evaluator test pattern
 unsigned opt_seed = 1;
 /// @global {number} --shrinkwrap, Adjust nstart to highest found endpount
@@ -135,7 +135,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
 		fprintf(stderr, "\t   --fast       Do not normalise input\n");
 		fprintf(stderr, "\t-h --help       This list\n");
-		fprintf(stderr, "\t   --qntf       Output exclusively as QnTF\n");
+		fprintf(stderr, "\t   --pure       Output using exclusively  QnTF\n");
 		fprintf(stderr, "\t-q --quiet      Say more\n");
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
 		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
@@ -502,7 +502,7 @@ struct tree_t {
 	 *
 	 * Perform level 1 normalisation on a `"Q,T,F"` triplet and add to the tree only when unique.
 	 *
-	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and QnTF expanding.
+	 * Level 1 Normalisations include: inverting, function grouping, dyadic ordering and `QTF->QnTF` rewriting.
 	 *
 	 * @param {number} Q
 	 * @param {number} T
@@ -694,10 +694,10 @@ struct tree_t {
 		 *
 		 * a ?  b : c -> a?~(a?~b:c):c  "?" QTF
 		 *
-		 * ./eval --qntf 'ab&' 'abc?'
+		 * ./eval --pure 'ab&' 'abc?'
 		 */
 
-		if (opt_qntf && (~T & IBIT)) {
+		if (opt_pure && (~T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
@@ -2365,7 +2365,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	// @formatter:off
 	for (unsigned iFast=0; iFast<2; iFast++) // decode notation in fast mode
 	for (unsigned iSkin=0; iSkin<2; iSkin++) // use placeholder/skin notation
-	for (unsigned iQnTF=0; iQnTF<2; iQnTF++) { // force `QnTF` rewrites
+	for (unsigned iPure=0; iPure<2; iPure++) { // force rewriting
 	// @formatter:on
 
 		/*
@@ -2394,7 +2394,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			 */
 
 			opt_fast = iFast; // decode fast or safe
-			opt_qntf = iQnTF; // expand `QTF` to `QnTF` only
+			opt_pure = iPure; // expand `QTF->QnTF` rewriting
 
 			pTree->nstart = pTree->kstart + 3;
 			pTree->count = pTree->nstart;
@@ -2478,8 +2478,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 					encountered ^= 1; // invert result
 
 				if (expected != encountered) {
-					fprintf(stderr, "fail: testNr=%u iFast=%d iQnTF=%d iSkin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
-					        testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+					fprintf(stderr, "fail: testNr=%u iFast=%d iPure=%d iSkin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
+					        testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
 				numPassed++;
@@ -2514,8 +2514,8 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_QNTF = 1,
-			LO_FAST,
+			LO_FAST = 1,
+			LO_PURE,
 			LO_SEED,
 			LO_SELFTEST,
 			LO_SHRINKWRAP,
@@ -2535,7 +2535,7 @@ int main(int argc, char *const *argv) {
 			/* name, has_arg, flag, val */
 			{"code",       0, 0, LO_CODE},
 			{"help",       0, 0, LO_HELP},
-			{"qntf",       0, 0, LO_QNTF},
+			{"pure",       0, 0, LO_PURE},
 			{"quiet",      0, 0, LO_QUIET},
 			{"fast",       0, 0, LO_FAST},
 			{"seed",       1, 0, LO_SEED},
@@ -2588,8 +2588,8 @@ int main(int argc, char *const *argv) {
 			case LO_Q:
 				opt_Q++;
 				break;
-			case LO_QNTF:
-				opt_qntf++;
+			case LO_PURE:
+				opt_pure++;
 				break;
 			case LO_QUIET:
 				opt_quiet++;

@@ -480,7 +480,7 @@ struct tinyTree_t {
 		 * ./eval --qntf 'ab&' 'abc?'
 		 */
 
-		if ((ctx.flags & context_t::MAGICMASK_QNTF) && (~T & IBIT)) {
+		if ((ctx.flags & context_t::MAGICMASK_PURE) && (~T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
@@ -526,7 +526,7 @@ struct tinyTree_t {
 		// sanity checking
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert(~Q & IBIT);                     // Q not inverted
-			assert((T & IBIT) || (~ctx.flags & context_t::MAGICMASK_QNTF));
+			assert((T & IBIT) || (~ctx.flags & context_t::MAGICMASK_PURE));
 			assert(~F & IBIT);                     // F not inverted
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0

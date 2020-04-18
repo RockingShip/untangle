@@ -71,10 +71,10 @@ struct context_t {
 	enum {
 		// @formatter:off
 		MAGICFLAG_PARANOID      = 0,    // Force extra asserts
-		MAGICFLAG_QNTF          = 1,    // Force generation of QnTF
+		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
-		MAGICMASK_QNTF          = 1 << MAGICFLAG_QNTF,
+		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
 		// @formatter:on
 	};
 
@@ -302,7 +302,7 @@ struct context_t {
 		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
 		        flags,
 		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
-		        (flags & context_t::MAGICMASK_QNTF) ? " QNTF" : ""
+		        (flags & context_t::MAGICMASK_PURE) ? " PURE" : ""
 		);
 	}
 

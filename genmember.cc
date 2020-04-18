@@ -74,19 +74,19 @@
  * @date 2020-04-07 01:07:34
  *
  * At this moment calculating and collecting:
- * `restartData[]` for `7n9-QnTF`. This is a premier!
- * signature group members for 6n9-QnTF. This is also premier.
+ * `restartData[]` for `7n9-pure`. This is a premier!
+ * signature group members for 6n9-pure. This is also premier.
  *
- * `QnTF` dataset looks promising:
+ * pure dataset looks promising:
  * share the same `4n9` address space, which holds 791646 signature groups.
- * `3n9-QnTF` has 790336 empty and 0 unsafe groups
- * `4n9-QnTF` has 695291 ampty and 499 unsafe groups
- * `5n9-QnTF` has .. ampty and .. unsafe groups
- * now scanning `6n9-QnTF` for the last 46844.
+ * `3n9-pure` has 790336 empty and 0 unsafe groups
+ * `4n9-pure` has 695291 ampty and 499 unsafe groups
+ * `5n9-pure` has .. empty and .. unsafe groups
+ * now scanning `6n9-pure` for the last 46844.
  * thats needs to get as low as possible, searching `7n9` is far above my resources.
  * Speed is about 1590999 candidates/s
  *
- * The `QnTF` dataset achieves the same using only `"Q?!T:F"` / `"abc!"` nodes/operators.
+ * The pure dataset achieves the same using only `"Q?!T:F"` / `"abc!"` nodes/operators.
  * This releases the requirement to store information about the inverted state of `T`.
  * `T` is always inverted.
  * To compensate for loss of variety more nodes are needed.
@@ -622,7 +622,7 @@ struct genmemberContext_t : callable_t {
 					 *
 					 * @date 2020-04-05 02:21:42
 					 *
-					 * For `5n9-QnTF` it turns out that the chance of finding safe replacements is rare.
+					 * For `5n9-pure` it turns out that the chance of finding safe replacements is rare.
 					 * And you need to collect all non-safe members if the group is unsafe.
 					 * Orphaning them depletes resources too fast.
 					 *
@@ -1117,7 +1117,7 @@ struct genmemberContext_t : callable_t {
 		 */
 
 		// get metrics
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
 		assert(pMetrics);
 
 		// apply settings for `--task`
@@ -1149,7 +1149,7 @@ struct genmemberContext_t : callable_t {
 		// apply restart data for > `4n9`
 		unsigned ofs = 0;
 		if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
-			ofs = restartIndex[this->arg_numNodes][(ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0];
+			ofs = restartIndex[this->arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0];
 		if (ofs)
 			generator.pRestartData = restartData + ofs;
 
@@ -1176,7 +1176,7 @@ struct genmemberContext_t : callable_t {
 		 * Generate candidates
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
 
 		if (arg_numNodes == 0) {
 			generator.root = 0; // "0"
@@ -1390,8 +1390,8 @@ struct genmemberContext_t : callable_t {
 		 * Done
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] {\"numSlot\":%u,\"qntf\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
+			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
 
 	}
 
@@ -1494,7 +1494,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
 		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --prepare                 Prepare dataset for empty/unsafe groups\n");
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure               QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
@@ -1544,9 +1544,9 @@ int main(int argc, char *const *argv) {
 			LO_MEMBERINDEXSIZE,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
-			LO_NOQNTF,
+			LO_NOPURE,
 			LO_PARANOID,
-			LO_QNTF,
+			LO_PURE,
 			LO_RATIO,
 			LO_SELFTEST,
 			LO_SGE,
@@ -1580,9 +1580,9 @@ int main(int argc, char *const *argv) {
 			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
 			{"no-generate",      0, 0, LO_NOGENERATE},
 			{"no-paranoid",      0, 0, LO_NOPARANOID},
-			{"no-qntf",          0, 0, LO_NOQNTF},
+			{"no-pure",          0, 0, LO_NOPURE},
 			{"paranoid",         0, 0, LO_PARANOID},
-			{"qntf",             0, 0, LO_QNTF},
+			{"pure",             0, 0, LO_PURE},
 			{"quiet",            2, 0, LO_QUIET},
 			{"ratio",            1, 0, LO_RATIO},
 			{"selftest",         0, 0, LO_SELFTEST},
@@ -1664,14 +1664,14 @@ int main(int argc, char *const *argv) {
 			case LO_NOPARANOID:
 				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_NOQNTF:
-				ctx.flags &= ~context_t::MAGICMASK_QNTF;
+			case LO_NOPURE:
+				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
 			case LO_PARANOID:
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_QNTF:
-				ctx.flags |= context_t::MAGICMASK_QNTF;
+			case LO_PURE:
+				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -1878,7 +1878,7 @@ int main(int argc, char *const *argv) {
 			if (app.arg_numNodes < 4)
 				pMetrics = getMetricsImprint(MAXSLOTS, 0, store.interleave, 4);
 			else
-				pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, store.interleave, app.arg_numNodes);
+				pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, app.arg_numNodes);
 
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
@@ -1891,7 +1891,7 @@ int main(int argc, char *const *argv) {
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxMember == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
 			store.maxMember = pMetrics ? pMetrics->numMember : 0;
 		} else {
 			store.maxMember = app.opt_maxMember;

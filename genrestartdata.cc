@@ -10,11 +10,11 @@
  * Usage:
  *   `"./genrestart"`
  *      to generate `restartdata.h`
- *   `"./genrestart --text [--qntf] <numnode>"`
+ *   `"./genrestart --text [--pure] <numnode>"`
  *      to generate a textual list of candidates
  *
- * Selfcheck consists of brute-force checking windowing and restarting of a `3n9-QnTF` generator.
- * Or a simple query if `a `numNode` argument is supplied with optional `--qntf`.
+ * Selfcheck consists of brute-force checking windowing and restarting of a `3n9-pure` generator.
+ * Or a simple query if `a `numNode` argument is supplied with optional `--pure`.
  * For the latter `--text` can also be supplied to display all trees caught by `foundTree()`
  *
  * @date 2020-03-27 00:18:13
@@ -304,24 +304,24 @@ struct genrestartdataContext_t : callable_t {
 
 		// @formatter:off
 		for (unsigned numArgs = 0; numArgs < tinyTree_t::TINYTREE_MAXNODES; numArgs++)
-		for (int iQnTF = 1; iQnTF >= 0; iQnTF--) {
+		for (int iPure = 1; iPure >= 0; iPure--) {
 		// @formatter:on
 
 			// mark section not in use
-			buildProgressIndex[numArgs][iQnTF] = 0;
+			buildProgressIndex[numArgs][iPure] = 0;
 
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iQnTF, numArgs);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iPure, numArgs);
 			if (pMetrics) {
 				if (pMetrics->noauto)
 					continue; // skip automated handling
 
-				buildProgressIndex[numArgs][iQnTF] = this->numRestart;
+				buildProgressIndex[numArgs][iPure] = this->numRestart;
 
 				// output section header
-				printf("// %d: numNode=%d qntf=%d \n", this->numRestart, numArgs, iQnTF);
+				printf("// %d: numNode=%d pure=%d \n", this->numRestart, numArgs, iPure);
 
 				// apply settings
-				ctx.flags = (iQnTF) ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
+				ctx.flags = iPure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 				generator.initialiseGenerator();
 
 				ctx.setupSpeed(pMetrics->numProgress);
@@ -334,7 +334,7 @@ struct genrestartdataContext_t : callable_t {
 				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
 
 				// was there any output
-				if (buildProgressIndex[numArgs][iQnTF] != this->numRestart) {
+				if (buildProgressIndex[numArgs][iPure] != this->numRestart) {
 					// yes, output section delimiter
 					printf(" 0xffffffffffffffffLL,");
 					this->numRestart++;
@@ -348,15 +348,15 @@ struct genrestartdataContext_t : callable_t {
 					printf("\n");
 				} else {
 					// no, erase index entry
-					buildProgressIndex[numArgs][iQnTF] = 0;
+					buildProgressIndex[numArgs][iPure] = 0;
 				}
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 					fprintf(stderr, "\r\e[K");
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-					fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld\n",
-					        ctx.timeAsString(), MAXSLOTS, iQnTF, numArgs, ctx.progress);
+					fprintf(stderr, "[%s] numSlot=%d pure=%d numNode=%d numProgress=%ld\n",
+					        ctx.timeAsString(), MAXSLOTS, iPure, numArgs, ctx.progress);
 			}
 		}
 
@@ -500,7 +500,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		pStore->numSignature = 1; // skip reserved entry
 
 		// reset progress
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
 		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		ctx.tick = 0;
 
@@ -524,8 +524,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%d qntf=%d numNode=%d numProgress=%ld numCandidate=%d\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
+			fprintf(stderr, "[%s] numSlot=%d pure=%d numNode=%d numProgress=%ld numCandidate=%d\n",
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
 	}
 
 };
@@ -595,8 +595,8 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
-		fprintf(stderr, "\t   --[no-]qntf             Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure             Enable QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
 		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
@@ -628,9 +628,9 @@ int main(int argc, char *const *argv) {
 			LO_ANCIENT = 1,
 			LO_DEBUG,
 			LO_NOPARANOID,
-			LO_NOQNTF,
+			LO_NOPURE,
 			LO_PARANOID,
-			LO_QNTF,
+			LO_PURE,
 			LO_SELFTEST,
 			LO_SGE,
 			LO_TASK,
@@ -648,9 +648,9 @@ int main(int argc, char *const *argv) {
 			{"debug",       1, 0, LO_DEBUG},
 			{"help",        0, 0, LO_HELP},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
-			{"no-qntf",     0, 0, LO_NOQNTF},
+			{"no-pure",     0, 0, LO_NOPURE},
 			{"paranoid",    0, 0, LO_PARANOID},
-			{"qntf",        0, 0, LO_QNTF},
+			{"pure",        0, 0, LO_PURE},
 			{"quiet",       2, 0, LO_QUIET},
 			{"selftest",    0, 0, LO_SELFTEST},
 			{"sge",         0, 0, LO_SGE},
@@ -694,14 +694,14 @@ int main(int argc, char *const *argv) {
 			case LO_NOPARANOID:
 				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_NOQNTF:
-				ctx.flags &= ~context_t::MAGICMASK_QNTF;
+			case LO_NOPURE:
+				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
 			case LO_PARANOID:
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_QNTF:
-				ctx.flags |= context_t::MAGICMASK_QNTF;
+			case LO_PURE:
+				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -803,7 +803,7 @@ int main(int argc, char *const *argv) {
 		// create database to detect duplicates
 		pStore = new database_t(ctx);
 
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, app.arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
 		if (!pMetrics) {
 			fprintf(stderr, "preset for numNode not found\n");
 			exit(1);

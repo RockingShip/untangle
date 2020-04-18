@@ -570,7 +570,7 @@ struct gensignatureContext_t : callable_t {
 	void main(void) {
 		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
 			// reset progress
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, numNode);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			ctx.tick = 0;
 
@@ -581,7 +581,7 @@ struct gensignatureContext_t : callable_t {
 			 * Generate candidates
 			 */
 			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF ? "-QnTF" : "");
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
 
 			if (numNode == 0) {
 				generator.root = 0; // "0"
@@ -633,8 +633,8 @@ struct gensignatureContext_t : callable_t {
 		/*
 		 * Done
 		 */
-		fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
-		        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_QNTF) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
+		fprintf(stderr, "[%s] numSlot=%d pure=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
+		        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
 		        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 		        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint);
 
@@ -708,7 +708,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		// @formatter:off
 		for (unsigned iFast=0; iFast<2; iFast++) // decode notation in fast mode
 		for (unsigned iSkin=0; iSkin<2; iSkin++) // use placeholder/skin notation
-		for (unsigned iQnTF=0; iQnTF<2; iQnTF++) { // force `QnTF` rewrites
+		for (unsigned iPure=0; iPure<2; iPure++) { // force `QnTF` rewrites
 		// @formatter:on
 
 			/*
@@ -736,7 +736,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				 * Load the tree with a single operator
 				 */
 
-				ctx.flags = context_t::MAGICMASK_PARANOID | (iQnTF ? context_t::MAGICMASK_QNTF : 0);
+				ctx.flags = context_t::MAGICMASK_PARANOID | (iPure ? context_t::MAGICMASK_PURE : 0);
 				tree.clearTree();
 				tree.root = tree.addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
@@ -754,8 +754,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					} else {
 						int ret = tree.decodeSafe(treeName, skin);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
-							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, skin, ret);
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iPure\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
+							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
 							exit(1);
 						}
 					}
@@ -766,8 +766,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					} else {
 						int ret = tree.decodeSafe(treeName);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
-							       __FUNCTION__, testNr, iFast, iQnTF, iSkin, treeName, ret);
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iPure\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
+							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, ret);
 						}
 					}
 				}
@@ -843,7 +843,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 					if (expected != encountered) {
 						printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
-						       __FUNCTION__, testNr, iFast, iQnTF, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						       __FUNCTION__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 						exit(1);
 					}
 					numPassed++;
@@ -1133,12 +1133,12 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		// allocate resources
 		selftestWindowResults = (char **) ctx.myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
 
-		// set generator into `3n9 QnTF-only` mode
-		ctx.flags &= ~context_t::MAGICMASK_QNTF;
+		// set generator into `3n9-pure` mode
+		ctx.flags &= ~context_t::MAGICMASK_PURE;
 		arg_numNodes = 3;
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_QNTF, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
 		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
@@ -1149,10 +1149,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
 			// apply settings
-			ctx.flags = pMetrics->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 			generator.windowLo = windowLo;
 			generator.windowHi = windowLo + 1;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
 			ctx.progressHi = pMetrics->numProgress;
 			ctx.progress = 0;
 			ctx.tick = 0;
@@ -1173,10 +1173,10 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			generator.clearGenerator();
 
 			// apply settings
-			ctx.flags = pMetrics->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 			generator.windowLo = 0;
 			generator.windowHi = 0;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->qntf];
+			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
 			ctx.progressHi = pMetrics->numProgress;
 			ctx.progress = 0;
 			ctx.tick = 0;
@@ -1272,7 +1272,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
 
 			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->qntf, pRound->numNode);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->pure, pRound->numNode);
 			assert(pMetrics);
 			const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, pRound->interleave);
 			assert(pInterleave);
@@ -1285,7 +1285,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// prepare generator
-			ctx.flags = pRound->qntf ? ctx.flags | context_t::MAGICMASK_QNTF : ctx.flags & ~context_t::MAGICMASK_QNTF;
+			ctx.flags = pRound->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 			generator.initialiseGenerator(); // let flags take effect
 
 			// prepare I/O context
@@ -1337,8 +1337,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			speed = ctx.cntHash / 5.0 / 1e6;
 			storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 
-			fprintf(stderr, "[%s] numSlot=%d qntf=%d interleave=%-4d numNode=%d numSignature=%u(%.0f%%) numImprint=%u(%.0f%% speed=%.3fM/s storage=%.3fGb\n",
-			        ctx.timeAsString(), MAXSLOTS, pRound->qntf, pRound->interleave, pRound->numNode,
+			fprintf(stderr, "[%s] numSlot=%d pure=%d interleave=%-4d numNode=%d numSignature=%u(%.0f%%) numImprint=%u(%.0f%% speed=%.3fM/s storage=%.3fGb\n",
+			        ctx.timeAsString(), MAXSLOTS, pRound->pure, pRound->interleave, pRound->numNode,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        speed, storage);
@@ -1489,7 +1489,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
-		fprintf(stderr, "\t   --[no-]qntf               Enable QnTF-only mode [default=%s]\n", (ctx.flags & context_t::MAGICMASK_QNTF) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure               QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                   Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
@@ -1531,9 +1531,9 @@ int main(int argc, char *const *argv) {
 			LO_MAXSIGNATURE,
 			LO_METRICS,
 			LO_NOPARANOID,
-			LO_NOQNTF,
+			LO_NOPURE,
 			LO_PARANOID,
-			LO_QNTF,
+			LO_PURE,
 			LO_RATIO,
 			LO_SELFTEST,
 			LO_SIGNATUREINDEXSIZE,
@@ -1558,9 +1558,9 @@ int main(int argc, char *const *argv) {
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
 			{"metrics",            2, 0, LO_METRICS},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
-			{"no-qntf",            0, 0, LO_NOQNTF},
+			{"no-pure",            0, 0, LO_NOPURE},
 			{"paranoid",           0, 0, LO_PARANOID},
-			{"qntf",               0, 0, LO_QNTF},
+			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
 			{"selftest",           0, 0, LO_SELFTEST},
@@ -1627,14 +1627,14 @@ int main(int argc, char *const *argv) {
 			case LO_NOPARANOID:
 				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_NOQNTF:
-				ctx.flags &= ~context_t::MAGICMASK_QNTF;
+			case LO_NOPURE:
+				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
 			case LO_PARANOID:
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_QNTF:
-				ctx.flags |= context_t::MAGICMASK_QNTF;
+			case LO_PURE:
+				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -1822,7 +1822,7 @@ int main(int argc, char *const *argv) {
 		}
 
 		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.opt_interleave, app.arg_numNodes);
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.opt_interleave, app.arg_numNodes);
 			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
@@ -1834,7 +1834,7 @@ int main(int argc, char *const *argv) {
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
 		if (app.opt_maxSignature == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_QNTF, app.arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
 			store.maxSignature = pMetrics ? pMetrics->numSignature : 0;
 		} else {
 			store.maxSignature = app.opt_maxSignature;

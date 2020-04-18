@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-18 14:01:13 Rename all `QnTF` which are not operator related to `pure`.
 2020-04-17 23:16:52 Add versioned memory to `database_t`.
 2020-04-17 13:33:03 Disable AVX2.
 2020-04-16 22:47:39 Prepare `generatorTree_t` and `genrestartdata` for 7n9.

@@ -226,9 +226,9 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_NOPARANOID,
-			LO_NOQNTF,
+			LO_NOPURE,
 			LO_PARANOID,
-			LO_QNTF,
+			LO_PURE,
 			LO_TIMER,
 			// short opts
 			LO_DATABASE = 'D',
@@ -246,9 +246,9 @@ int main(int argc, char *const *argv) {
 			{"help",        0, 0, LO_HELP},
 			{"imprint",     0, 0, LO_IMPRINT},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
-			{"no-qntf",     0, 0, LO_NOQNTF},
+			{"no-pure",     0, 0, LO_NOPURE},
 			{"paranoid",    0, 0, LO_PARANOID},
-			{"qntf",        0, 0, LO_QNTF},
+			{"pure",        0, 0, LO_PURE},
 			{"quiet",       2, 0, LO_QUIET},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
@@ -294,14 +294,14 @@ int main(int argc, char *const *argv) {
 			case LO_NOPARANOID:
 				app.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_NOQNTF:
-				app.flags &= ~context_t::MAGICMASK_QNTF;
+			case LO_NOPURE:
+				app.flags &= ~context_t::MAGICMASK_PURE;
 				break;
 			case LO_PARANOID:
 				app.flags |= context_t::MAGICMASK_PARANOID;
 				break;
-			case LO_QNTF:
-				app.flags |= context_t::MAGICMASK_QNTF;
+			case LO_PURE:
+				app.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;

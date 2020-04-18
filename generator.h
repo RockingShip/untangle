@@ -20,10 +20,10 @@
  *
  * @date 2020-03-17 23:54:39
  *
- * Building `QnTF` datasets is two-pass:
- *  - First pass is build `QTF` signature base.
- *  - Second pass is to optimize signature names to `QnTF`-only notation.
- *  - `QnTF` databases should be considered `10n9` with full completeness up to `5n9`.
+ * Building pure datasets is two-pass:
+ *  - First pass is build signature base.
+ *  - Second pass is to optimize signature names to `QnTF`-only (pure) notation.
+ *  - Pure databases should be considered `10n9` with full completeness up to `5n9`.
  *
  *  @date 2020-03-18 21:12:26
  *
@@ -162,8 +162,8 @@ struct generatorTree_t : tinyTree_t {
 		PACKED_COMPARE = 0x40, // needs run-time compare
 
 		/// @constant {number} - size of `pTemplateData[]`
-		TEMPLATE_MAXDATA_QTF = 5116361,
-		TEMPLATE_MAXDATA_QNTF = 2719253,
+		TEMPLATE_MAXDATA = 5116361,
+		TEMPLATE_MAXDATA_PURE = 2719253,
 	};
 
 	/// @var {number[]} lookup table for `push()` index by packed `QTF`
@@ -233,7 +233,7 @@ struct generatorTree_t : tinyTree_t {
 		pTOS = (uint8_t *) ctx.myAlloc("generatorTree_t::pTOS", 1 << TINYTREE_MAXNODES, sizeof(*this->pTOS));
 		pCacheQTF = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheQTF", 1 << PACKED_SIZE, sizeof(*this->pCacheQTF));
 		pCacheVersion = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheVersion", 1 << PACKED_SIZE, sizeof(*this->pCacheVersion));
-		pTemplateData = (uint32_t *) ctx.myAlloc("generatorTree_t::pTemplateData", TEMPLATE_MAXDATA_QTF, sizeof(*pTemplateData));
+		pTemplateData = (uint32_t *) ctx.myAlloc("generatorTree_t::pTemplateData", TEMPLATE_MAXDATA, sizeof(*pTemplateData));
 
 		// clear versioned memory
 		iVersion = 0;
@@ -298,7 +298,7 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	void initialiseGenerator(void) {
 		/*
-		 * Create lookup table indexed by packed QnTF notation to determine if `Q,T,F` combo is normalised
+		 * Create lookup table indexed by packed notation to determine if `Q,T,F` combo is normalised
 		 * Exclude ordered dyadics.
 		 */
 
@@ -443,8 +443,8 @@ struct generatorTree_t : tinyTree_t {
 			for (unsigned F = 0; F < TINYTREE_NSTART + numNode; F++) {
 			// @formatter:on
 
-				if (!Ti && (ctx.flags & context_t::MAGICMASK_QNTF)) {
-					// reject `non-QnTF` template in `QnTF-only` invocation
+				if (!Ti && (ctx.flags & context_t::MAGICMASK_PURE)) {
+					// reject `non-pure` template with `--pure` invocation
 					continue;
 				}
 
@@ -575,14 +575,14 @@ struct generatorTree_t : tinyTree_t {
 			pTemplateData[numTemplateData++] = 0;
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_QNTF) {
-			if (numTemplateData != TEMPLATE_MAXDATA_QNTF)
+		if (ctx.flags & context_t::MAGICMASK_PURE) {
+			if (numTemplateData != TEMPLATE_MAXDATA_PURE)
 				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
-			assert(numTemplateData <= TEMPLATE_MAXDATA_QNTF);
+			assert(numTemplateData <= TEMPLATE_MAXDATA_PURE);
 		} else {
-			if (numTemplateData != TEMPLATE_MAXDATA_QTF)
+			if (numTemplateData != TEMPLATE_MAXDATA)
 				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
-			assert(numTemplateData <= TEMPLATE_MAXDATA_QTF);
+			assert(numTemplateData <= TEMPLATE_MAXDATA);
 		}
 	}
 

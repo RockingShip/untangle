@@ -192,8 +192,8 @@ struct metricsImprint_t {
 	/// @var {number} - Valid when match `MAXSLOTS`
 	unsigned numSlot;
 
-	/// @var {number} - Valid when match `qntf`
-	unsigned qntf;
+	/// @var {number} - Valid when match `pure`
+	unsigned pure;
 
 	/// @var {number} - Valid when match `interleave` (higher values implies more imprints per signature)
 	unsigned interleave;
@@ -290,20 +290,20 @@ static const metricsImprint_t metricsImprint[] = {
  * Get metrics for imprints
  *
  * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
- * @param {number} qntf - `QnTF-only` mode
+ * @param {number} pure - pure mode
  * @param {number} interleave - The interleave value communicated with user
  * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsImprint_t *getMetricsImprint(unsigned numSlot, unsigned qntf, unsigned interleave, unsigned numNode) {
-	// qntf is 0/1
-	if (qntf)
-		qntf = 1;
+const metricsImprint_t *getMetricsImprint(unsigned numSlot, unsigned pure, unsigned interleave, unsigned numNode) {
+	// pure is 0/1
+	if (pure)
+		pure = 1;
 
 	// walk through list
 	for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlot == numSlot && pMetrics->qntf == qntf && pMetrics->interleave == interleave && pMetrics->numNode == numNode)
+		if (pMetrics->numSlot == numSlot && pMetrics->pure == pure && pMetrics->interleave == interleave && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found
@@ -325,8 +325,8 @@ struct metricsGenerator_t {
 
 	/// @var {number} - Valid when match MAXSLOTS
 	unsigned numSlot;
-	/// @var {number} - `QnTF` mode
-	unsigned qntf;
+	/// @var {number} - `pure` mode
+	unsigned pure;
 	/// @var {number} - Valid when match `numNode` (higher values implies more signatures)
 	unsigned numNode;
 
@@ -368,7 +368,7 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 3, 81406,         79835,     5666,     29721,    0},
 	{9, 1, 4, 2969462,       2777493,   96363,    801917,   0},
 	{9, 0, 4, 29990974,      28304991,  791647,   5959653,  0},
-	// for 5n9-QnTF: numCandidate takes about 15 minutes. numSignature takes about 8 hours. numMember using 4n9 signature space.
+	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours. numMember using 4n9 signature space.
 	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 0},
 	// below only intended for members
 	{9, 0, 5, 17927026892,   0,         0,        0,        0},
@@ -388,15 +388,15 @@ static const metricsGenerator_t metricsGenerator[] = {
  * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned qntf, unsigned numNode) {
-	// qntf is 0/1
-	if (qntf)
-		qntf = 1;
+const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned pure, unsigned numNode) {
+	// pure is 0/1
+	if (pure)
+		pure = 1;
 
 	// walk through list
 	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlot == numSlot && pMetrics->qntf == qntf && pMetrics->numNode == numNode)
+		if (pMetrics->numSlot == numSlot && pMetrics->pure == pure && pMetrics->numNode == numNode)
 			return pMetrics; // found
 	}
 	// not found
@@ -419,10 +419,10 @@ const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned qntf, u
  * Measurements were performed on random signature lookups with random skins.
  */
 
-double ratioMetrics_QnTF[][8][3] = {
+double ratioMetrics_pure[][8][3] = {
 	// each triplet = [speed M/s, Storage Gb, avg. cache hits per lookup }
 	//
-	//      QnTF-i120                 QnTF-i504                QnTF-i720                QnTF-i3024
+	//      pure-i120                 pure-i504                pure-i720                pure-i3024
 	{{6.273, 0.834, 2.19980}, {7.282,  1.548, 2.20292}, {5.429, 4.951, 2.22969}, {5.989, 7.029, 2.23827}}, // r=2.0
 	{{6.482, 0.842, 1.98826}, {7.657,  1.563, 1.99072}, {5.616, 5.000, 2.01456}, {6.186, 7.099, 2.02260}}, // r=2.2
 	{{6.717, 0.851, 1.83789}, {7.915,  1.579, 1.84022}, {5.808, 5.050, 1.86352}, {6.386, 7.169, 1.87256}}, // r=2.4
@@ -446,10 +446,10 @@ double ratioMetrics_QnTF[][8][3] = {
 	{{8.826, 1.001, 1.21849}, {10.248, 1.857, 1.22058}, {7.607, 5.941, 1.23593}, {8.284, 8.435, 1.24294}}, // r=6.0
 };
 
-double ratioMetrics_QTF[][8][3] = {
+double ratioMetrics[][8][3] = {
 	// each triplet = [speed M/s, Storage Gb, avg. cache hits per lookup }
 	//
-	//      QTF-i120                 QTF-i504                  QTF-i720
+	//          i120                     i504                      i720
 	{{5.617, 7.120, 2.25985}, {6.233, 14.551, 2.31815}, {4.150, 42.539, 2.55734}}, // r=2.0
 	{{5.932, 7.192, 2.03981}, {6.675, 14.696, 2.09536}, {4.177, 42.964, 2.32632}}, // r=2.2
 	{{5.997, 7.263, 1.88737}, {6.947, 14.842, 1.93758}, {4.142, 43.390, 2.15550}}, // r=2.4

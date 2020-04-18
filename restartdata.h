@@ -7,13 +7,13 @@
 
 const uint64_t restartData[] = { 0,
 
-// 1: numNode=0 qntf=1 
-// 1: numNode=0 qntf=0 
-// 1: numNode=1 qntf=1 
-// 1: numNode=1 qntf=0 
-// 1: numNode=2 qntf=1 
-// 1: numNode=2 qntf=0 
-// 1: numNode=3 qntf=1 
+// 1: numNode=0 pure=1
+// 1: numNode=0 pure=0
+// 1: numNode=1 pure=1
+// 1: numNode=1 pure=0
+// 1: numNode=2 pure=1
+// 1: numNode=2 pure=0
+// 1: numNode=3 pure=1
            0LL/*a0b!a0c!*/,          15LL/*a0b!a01!*/,          72LL/*a0b!ab0!*/,          84LL/*a0b!abb!*/,          96LL/*a0b!abc!*/,         111LL/*a0b!ab1!*/,         168LL/*a0b!ac0!*/,         183LL/*a0b!acb!*/,
          198LL/*a0b!acc!*/,         213LL/*a0b!acd!*/,         231LL/*a0b!ac1!*/,         316LL/*a0b!a10!*/,         373LL/*a0b!a1b!*/,         430LL/*a0b!a1c!*/,         515LL/*a0b!a11!*/,         572LL/*a0b!b0c!*/,
          587LL/*a0b!b01!*/,         644LL/*a0b!ba0!*/,         656LL/*a0b!bac!*/,         671LL/*a0b!ba1!*/,         728LL/*a0b!bc0!*/,         743LL/*a0b!bca!*/,         758LL/*a0b!bcc!*/,         773LL/*a0b!bcd!*/,
@@ -51,7 +51,7 @@ const uint64_t restartData[] = { 0,
        13037LL/*abc!d10!*/,       13156LL/*abc!d1a!*/,       13275LL/*abc!d1b!*/,       13394LL/*abc!d1c!*/,       13513LL/*abc!d1e!*/,       13672LL/*abc!d11!*/,       13791LL/*abc!1a0!*/,       13876LL/*abc!1ab!*/,
        13961LL/*abc!1ac!*/,       14046LL/*abc!1ad!*/,       14165LL/*abc!1b0!*/,       14250LL/*abc!1ba!*/,       14335LL/*abc!1bc!*/,       14420LL/*abc!1bd!*/,       14539LL/*abc!1c0!*/,       14624LL/*abc!1ca!*/,
        14709LL/*abc!1cb!*/,       14794LL/*abc!1cd!*/,       14913LL/*abc!1d0!*/,       15032LL/*abc!1da!*/,       15151LL/*abc!1db!*/,       15270LL/*abc!1dc!*/,       15389LL/*abc!1de!*/, 0xffffffffffffffffLL,
-// 297: numNode=3 qntf=0 
+// 297: numNode=3 pure=0
            0LL/*a0b!a0c!*/,          28LL/*a0b!a01!*/,         129LL/*a0b!ab0!*/,         151LL/*a0b!abb!*/,         173LL/*a0b!abc!*/,         201LL/*a0b!ab1!*/,         302LL/*a0b!ac0!*/,         330LL/*a0b!acb!*/,
          358LL/*a0b!acc!*/,         386LL/*a0b!acd!*/,         420LL/*a0b!ac1!*/,         574LL/*a0b!a10!*/,         675LL/*a0b!a1b!*/,         776LL/*a0b!a1c!*/,         930LL/*a0b!a11!*/,        1031LL/*a0b!b0c!*/,
         1059LL/*a0b!b01!*/,        1160LL/*a0b!ba0!*/,        1182LL/*a0b!bac!*/,        1210LL/*a0b!ba1!*/,        1311LL/*a0b!bc0!*/,        1339LL/*a0b!bca!*/,        1367LL/*a0b!bcc!*/,        1395LL/*a0b!bcd!*/,
@@ -153,7 +153,7 @@ const uint64_t restartData[] = { 0,
        77700LL/*abc?d10?*/,       77919LL/*abc?d1a?*/,       78138LL/*abc?d1b?*/,       78357LL/*abc?d1c?*/,       78576LL/*abc?d1e?*/,       78872LL/*abc?1ab?*/,       79026LL/*abc?1ac?*/,       79180LL/*abc?1ad?*/,
        79399LL/*abc?1ba?*/,       79553LL/*abc?1bc?*/,       79707LL/*abc?1bd?*/,       79926LL/*abc?1ca?*/,       80080LL/*abc?1cb?*/,       80234LL/*abc?1cd?*/,       80453LL/*abc?1da?*/,       80672LL/*abc?1db?*/,
        80891LL/*abc?1dc?*/,       81110LL/*abc?1de?*/, 0xffffffffffffffffLL,0,0,0,0,0,
-// 1105: numNode=4 qntf=1 
+// 1105: numNode=4 pure=1
            0LL/*a0b!a0c!*/,        3402LL/*a0b!a01!*/,       10387LL/*a0b!ab0!*/,       12342LL/*a0b!abb!*/,       14297LL/*a0b!abc!*/,       17699LL/*a0b!ab1!*/,       24684LL/*a0b!ac0!*/,       28086LL/*a0b!acb!*/,
        31488LL/*a0b!acc!*/,       34890LL/*a0b!acd!*/,       40355LL/*a0b!ac1!*/,       54325LL/*a0b!a10!*/,       61310LL/*a0b!a1b!*/,       68295LL/*a0b!a1c!*/,       82265LL/*a0b!a11!*/,       89250LL/*a0b!b0c!*/,
        92652LL/*a0b!b01!*/,       99637LL/*a0b!ba0!*/,      101592LL/*a0b!bac!*/,      104994LL/*a0b!ba1!*/,      111979LL/*a0b!bc0!*/,      115381LL/*a0b!bca!*/,      118783LL/*a0b!bcc!*/,      122185LL/*a0b!bcd!*/,
@@ -191,7 +191,7 @@ const uint64_t restartData[] = { 0,
      2450928LL/*abc!d10!*/,     2476439LL/*abc!d1a!*/,     2501950LL/*abc!d1b!*/,     2527461LL/*abc!d1c!*/,     2552972LL/*abc!d1e!*/,     2596308LL/*abc!d11!*/,     2621819LL/*abc!1a0!*/,     2635789LL/*abc!1ab!*/,
      2649759LL/*abc!1ac!*/,     2663729LL/*abc!1ad!*/,     2689240LL/*abc!1b0!*/,     2703210LL/*abc!1ba!*/,     2717180LL/*abc!1bc!*/,     2731150LL/*abc!1bd!*/,     2756661LL/*abc!1c0!*/,     2770631LL/*abc!1ca!*/,
      2784601LL/*abc!1cb!*/,     2798571LL/*abc!1cd!*/,     2824082LL/*abc!1d0!*/,     2849593LL/*abc!1da!*/,     2875104LL/*abc!1db!*/,     2900615LL/*abc!1dc!*/,     2926126LL/*abc!1de!*/, 0xffffffffffffffffLL,
-// 1401: numNode=4 qntf=0 
+// 1401: numNode=4 pure=0
            0LL/*a0b!a0c!*/,       11712LL/*a0b!a01!*/,       34492LL/*a0b!ab0!*/,       41030LL/*a0b!abb!*/,       47568LL/*a0b!abc!*/,       59280LL/*a0b!ab1!*/,       82060LL/*a0b!ac0!*/,       93772LL/*a0b!acb!*/,
       105484LL/*a0b!acc!*/,      117196LL/*a0b!acd!*/,      136420LL/*a0b!ac1!*/,      183341LL/*a0b!a10!*/,      206121LL/*a0b!a1b!*/,      228901LL/*a0b!a1c!*/,      275822LL/*a0b!a11!*/,      298602LL/*a0b!b0c!*/,
       310314LL/*a0b!b01!*/,      333094LL/*a0b!ba0!*/,      339632LL/*a0b!bac!*/,      351344LL/*a0b!ba1!*/,      374124LL/*a0b!bc0!*/,      385836LL/*a0b!bca!*/,      397548LL/*a0b!bcc!*/,      409260LL/*a0b!bcd!*/,
@@ -293,7 +293,7 @@ const uint64_t restartData[] = { 0,
     28529298LL/*abc?d10?*/,    28616978LL/*abc?d1a?*/,    28704658LL/*abc?d1b?*/,    28792338LL/*abc?d1c?*/,    28880018LL/*abc?d1e?*/,    29031693LL/*abc?1ab?*/,    29078614LL/*abc?1ac?*/,    29125535LL/*abc?1ad?*/,
     29213215LL/*abc?1ba?*/,    29260136LL/*abc?1bc?*/,    29307057LL/*abc?1bd?*/,    29394737LL/*abc?1ca?*/,    29441658LL/*abc?1cb?*/,    29488579LL/*abc?1cd?*/,    29576259LL/*abc?1da?*/,    29663939LL/*abc?1db?*/,
     29751619LL/*abc?1dc?*/,    29839299LL/*abc?1de?*/, 0xffffffffffffffffLL,0,0,0,0,0,
-// 2209: numNode=5 qntf=1 
+// 2209: numNode=5 pure=1
            0LL/*a0b!a0c!*/,     1013105LL/*a0b!a01!*/,     2514443LL/*a0b!ab0!*/,     2969923LL/*a0b!abb!*/,     3425403LL/*a0b!abc!*/,     4438508LL/*a0b!ab1!*/,     5939846LL/*a0b!ac0!*/,     6952951LL/*a0b!acb!*/,
      7966056LL/*a0b!acc!*/,     8979161LL/*a0b!acd!*/,    11026797LL/*a0b!ac1!*/,    14767676LL/*a0b!a10!*/,    16269014LL/*a0b!a1b!*/,    17770352LL/*a0b!a1c!*/,    21511231LL/*a0b!a11!*/,    23012569LL/*a0b!b0c!*/,
     24025674LL/*a0b!b01!*/,    25527012LL/*a0b!ba0!*/,    25982492LL/*a0b!bac!*/,    26995597LL/*a0b!ba1!*/,    28496935LL/*a0b!bc0!*/,    29510040LL/*a0b!bca!*/,    30523145LL/*a0b!bcc!*/,    31536250LL/*a0b!bcd!*/,
@@ -331,7 +331,7 @@ const uint64_t restartData[] = { 0,
    743525400LL/*abc!d10!*/,   751956829LL/*abc!d1a!*/,   760388258LL/*abc!d1b!*/,   768819687LL/*abc!d1c!*/,   777251116LL/*abc!d1e!*/,   794709897LL/*abc!d11!*/,   803141326LL/*abc!1a0!*/,   806882205LL/*abc!1ab!*/,
    810623084LL/*abc!1ac!*/,   814363963LL/*abc!1ad!*/,   822795392LL/*abc!1b0!*/,   826536271LL/*abc!1ba!*/,   830277150LL/*abc!1bc!*/,   834018029LL/*abc!1bd!*/,   842449458LL/*abc!1c0!*/,   846190337LL/*abc!1ca!*/,
    849931216LL/*abc!1cb!*/,   853672095LL/*abc!1cd!*/,   862103524LL/*abc!1d0!*/,   870534953LL/*abc!1da!*/,   878966382LL/*abc!1db!*/,   887397811LL/*abc!1dc!*/,   895829240LL/*abc!1de!*/, 0xffffffffffffffffLL,
-// 2505: numNode=5 qntf=0 
+// 2505: numNode=5 pure=0
            0LL/*a0b!a0c!*/,     6548492LL/*a0b!a01!*/,    15764199LL/*a0b!ab0!*/,    18615559LL/*a0b!abb!*/,    21466919LL/*a0b!abc!*/,    28015411LL/*a0b!ab1!*/,    37231118LL/*a0b!ac0!*/,    43779610LL/*a0b!acb!*/,
     50328102LL/*a0b!acc!*/,    56876594LL/*a0b!acd!*/,    70459000LL/*a0b!ac1!*/,    94149215LL/*a0b!a10!*/,   103364922LL/*a0b!a1b!*/,   112580629LL/*a0b!a1c!*/,   136270844LL/*a0b!a11!*/,   145486551LL/*a0b!b0c!*/,
    152035043LL/*a0b!b01!*/,   161250750LL/*a0b!ba0!*/,   164102110LL/*a0b!bac!*/,   170650602LL/*a0b!ba1!*/,   179866309LL/*a0b!bc0!*/,   186414801LL/*a0b!bca!*/,   192963293LL/*a0b!bcc!*/,   199511785LL/*a0b!bcd!*/,
@@ -433,7 +433,7 @@ const uint64_t restartData[] = { 0,
  17004790030LL/*abc?d10?*/, 17059601021LL/*abc?d1a?*/, 17114412012LL/*abc?d1b?*/, 17169223003LL/*abc?d1c?*/, 17224033994LL/*abc?d1e?*/, 17340026825LL/*abc?1ab?*/, 17363717040LL/*abc?1ac?*/, 17387407255LL/*abc?1ad?*/,
  17442218246LL/*abc?1ba?*/, 17465908461LL/*abc?1bc?*/, 17489598676LL/*abc?1bd?*/, 17544409667LL/*abc?1ca?*/, 17568099882LL/*abc?1cb?*/, 17591790097LL/*abc?1cd?*/, 17646601088LL/*abc?1da?*/, 17701412079LL/*abc?1db?*/,
  17756223070LL/*abc?1dc?*/, 17811034061LL/*abc?1de?*/, 0xffffffffffffffffLL,0,0,0,0,0,
-// 3313: numNode=6 qntf=1 
+// 3313: numNode=6 pure=1
            0LL/*a0b!a0c!*/,   416344290LL/*a0b!a01!*/,   916966948LL/*a0b!ab0!*/,  1071873005LL/*a0b!abb!*/,  1226779062LL/*a0b!abc!*/,  1643123352LL/*a0b!ab1!*/,  2143746010LL/*a0b!ac0!*/,  2560090300LL/*a0b!acb!*/,
   2976434590LL/*a0b!acc!*/,  3392778880LL/*a0b!acd!*/,  4404967711LL/*a0b!ac1!*/,  5885874458LL/*a0b!a10!*/,  6386497116LL/*a0b!a1b!*/,  6887119774LL/*a0b!a1c!*/,  8368026521LL/*a0b!a11!*/,  8868649179LL/*a0b!b0c!*/,
   9284993469LL/*a0b!b01!*/,  9785616127LL/*a0b!ba0!*/,  9940522184LL/*a0b!bac!*/, 10356866474LL/*a0b!ba1!*/, 10857489132LL/*a0b!bc0!*/, 11273833422LL/*a0b!bca!*/, 11690177712LL/*a0b!bcc!*/, 12106522002LL/*a0b!bcd!*/,
