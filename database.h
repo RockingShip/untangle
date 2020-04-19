@@ -223,8 +223,8 @@ struct database_t {
 		revTransformIds = NULL;
 
 		// imprint store
-		interleave = 0;
-		interleaveStep = 0;
+		interleave = 1;
+		interleaveStep = 1;
 		numImprint = 0;
 		maxImprint = 0;
 		imprints = NULL;

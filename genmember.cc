@@ -1948,25 +1948,11 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Store create: interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxImprint, store.maxSignature, store.maxMember);
 
 	store.create();
-
-	/*
-	 * Copy/inherit sections
-	 */
-
-	// templates are always inherited
-	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
-
-	// inherit sections
-	if (store.maxImprint == 0)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_IMPRINT);
-	if (store.maxMember == 0)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_MEMBER);
+	app.pStore = &store;
 
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
-	app.pStore = &store;
 
 	/*
 	 * Statistics
@@ -1986,12 +1972,23 @@ int main(int argc, char *const *argv) {
 	 * Copy sections
 	 */
 
+	// templates
+	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
+
+	// signatures
 	if (store.allocFlags & database_t::ALLOCMASK_SIGNATURE) {
 		assert(store.maxSignature >= db.numSignature);
 		::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
 		store.numSignature = db.numSignature;
 	}
 
+	// imprints
+	if (store.maxImprint == 0)
+		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_IMPRINT);
+
+	// members
+	if (store.maxMember == 0)
+		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_MEMBER);
 	if (store.allocFlags & database_t::ALLOCMASK_MEMBER) {
 		assert(store.maxMember >= db.numMember);
 		::memcpy(store.members, db.members, db.numMember * sizeof(*store.members));

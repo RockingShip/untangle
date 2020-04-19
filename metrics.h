@@ -68,6 +68,31 @@ enum {
  * @date 2020-03-25 03:09:01
  *
  * Note that speed/storage is based on worst-case 4n9 structures with 9 unique endpoints
+ *
+ * @date 2020-04-18 01:59:50
+ *
+ * Interleave can be used to set imprint index row/col.
+ * And now, as it seems: windowing based on interleave.
+ *
+ * For the low sid's: Theoretical an signature group requiring 362880 imprints.
+ * The advantage is that it has the fastest speed.
+ * The generator has a throughput of 150M/sec
+ * After an associative lookup 1.5M/s
+ * The index needs tuning and is probably in a slow setting.
+ *
+ * Wise would be to put the index into the fastest mode first.
+ * Instead of the theoretical of 362880, there are a large number of 4560 (at the moment 25%).
+ * Then recreate the index based on the signatures excluding what has been found.
+ * Set the index into the second fastest speed.
+ *
+ * Get frequency chart.
+ * Look for the collection/setting which can detect relatively the most.
+ * like sumWithThreshold(unsafe/empty candidates)) / 362880 (or any other interleave)
+ *
+ * Select those sids
+ *
+ * The intermediate databases can be kept small with many active entries.
+ * That collection can be sliced in parallel with `--windowhi/--windowlo`.
  */
 struct metricsInterleave_t {
 	/*
@@ -103,23 +128,41 @@ struct metricsInterleave_t {
 	/// @var {number} - Some indication of runtime index storage in G bytes. (worse case)
 	float storage;
 
-	int zero; // to screen align data
+	/// @var {number} - Ignore when recalculating metrics
+	int noauto;
 };
 
 /*
  * NOTE: run `gensignature --selftest` after changing this table.
+ *
+ * @date 2020-04-18 22:46:31
+ *
+ * Note: For writes `"numStored == interleaveStep"` is more cpu cache friendlier.
+ *       For reads `"numStored != interleaveStep"` is more cpu cache friendlier.
+ *
+ * Note: There are two duplicates:
+ *   `"numStored==362880, interleaveStep=362880"` vs. `"numStored==362880, interleaveStep=1"`
+ *   `"numStored==1, interleaveStep=362880"` vs. `"numStored==1, interleaveStep=1"`
+ *   The most cpu cache friendly alternate has been chosen.
  */
 static const metricsInterleave_t metricsInterleave[] = {
-	{9, 120 /*5!*/,    3024,       120,    8850,   6.896,    0}, // runtime slowest
-	{9, 504,           720/*6!*/,  720,    51840,  28.78,    0},
-	{9, 720 /*6!*/,    504,        720,    90720,  41.095,   0},
-	{9, 3024,          120 /*5!*/, 120,    362880, 172.420,  0}, // runtime fastest
-	// some high-speed pairs for limited index size (for `genmember`)
-	{9, 5040/*7!*/,    72,         5040,   362880, 287.330,  0},
-	{9, 15120,         24 /*4!*/,  24,     362880, 861.876,  0},
-	{9, 40320 /*8!*/,  9,          40320,  362880, 2298.240, 0},
-	{9, 60480,         6 /*3!*/,   6,      362880, 3447.331, 0},
-	{9, 362880 /*9!*/, 1,          362880, 362880, 3447.331, 0},
+	{9, 362880 /*9!*/, 1,            362880, 362880, 3447.331, 0}, // fastest R slowest W
+	{9, 181440,        2 /*2!*/,     2,      362880, 3447.331, 0},
+	{9, 60480,         6 /*3!*/,     6,      362880, 3447.331, 0},
+	{9, 40320 /*8!*/,  9,            40320,  362880, 2298.240, 0},
+	{9, 15120,         24 /*4!*/,    24,     362880, 861.876,  0},
+	{9, 5040/*7!*/,    72,           5040,   362880, 287.330,  0},
+	{9, 3024,          120 /*5!*/,   120,    362880, 172.420,  0},
+	{9, 720 /*6!*/,    504,          720,    90720,  41.095,   0},
+	{9, 504,           720/*6!*/,    720,    51840,  28.78,    0},
+	{9, 120 /*5!*/,    3024,         120,    8850,   6.896,    0},
+	// the following are too slow at reading to be practical
+	{9, 72,            5040/*7!*/,   5040,   51840,  28.78,    1},
+	{9, 24 /*4!*/,     15120,        24,     8850,   6.896,    1},
+	{9, 9,             40320/*8!*/,  40320,  51840,  28.78,    1},
+	{9, 6 /*3!*/,      60480,        6,      8850,   6.896,    1},
+	{9, 2 /*2!*/,      181440,       2,      8850,   6.896,    1},
+	{9, 1,             362880/*9!*/, 362880, 8850,   6.896,    1}, // slowest R fastest W
 	//
 	{0}
 };
