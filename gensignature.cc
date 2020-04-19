@@ -859,6 +859,51 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	/**
 	 * @date 2020-03-15 16:35:43
 	 *
+	 * Test that skins are properly encodes/decoded
+	 */
+	void performSelfTestSkin(void) {
+
+		tinyTree_t tree(ctx);
+
+			// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
+			assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
+			assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
+
+			// calculate `"abc!defg!!hi!"/cabdefghi"`
+			tree.decodeSafe("abc!defg!!hi!");
+			footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
+			tree.eval(pEncountered);
+
+			// calculate `"cab!defg!!hi!"` (manually applying forward transform)
+			tree.decodeSafe("cab!defg!!hi!");
+			footprint_t *pExpect = pEvalFwd;
+			tree.eval(pExpect);
+
+			// compare
+			if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
+				printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
+				       __FUNCTION__);
+				exit(1);
+			}
+
+			// test that cache lookups work
+			// calculate `"abc!de!fabc!!"`
+			tree.decodeSafe("abc!de!fabc!!");
+			tree.eval(pEvalFwd);
+
+			const char *pExpectedName = tree.encode(tree.root);
+
+			// compare
+			if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
+				printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+				       __FUNCTION__, pExpectedName, "abc!de!f2!");
+				exit(1);
+			}
+		}
+
+	/**
+	 * @date 2020-03-15 16:35:43
+	 *
 	 * Test that associative imprint lookups are working as expected
 	 *
 	 * Searching for footprints requires an associative.
@@ -903,46 +948,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		assert(::strcmp(pBasename, tree.encode(tree.root, NULL)) == 0);
 
 		/*
-		 * Basic test evaluator
-		 */
-		{
-			// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
-			assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
-			assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
-
-			// calculate `"abc!defg!!hi!"/cabdefghi"`
-			tree.decodeSafe("abc!defg!!hi!");
-			footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
-			tree.eval(pEncountered);
-
-			// calculate `"cab!defg!!hi!"` (manually applying forward transform)
-			tree.decodeSafe("cab!defg!!hi!");
-			footprint_t *pExpect = pEvalFwd;
-			tree.eval(pExpect);
-
-			// compare
-			if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
-				printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
-				       __FUNCTION__);
-				exit(1);
-			}
-
-			// test that cache lookups work
-			// calculate `"abc!de!fabc!!"`
-			tree.decodeSafe("abc!de!fabc!!");
-			tree.eval(pEvalFwd);
-
-			const char *pExpectedName = tree.encode(tree.root);
-
-			// compare
-			if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
-				printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
-				       __FUNCTION__, pExpectedName, "abc!de!f2!");
-				exit(1);
-			}
-		}
-
-		/*
 		 * @date 2020-03-17 00:34:54
 		 *
 		 * Generate all possible situations
@@ -956,6 +961,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		pStore->enabledVersioned();
 
 		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+			if (pInterleave->noauto)
+				continue; // skip automated handling
 			if (pInterleave->numSlot != MAXSLOTS)
 				continue; // only process settings that match `MAXSLOTS`
 
@@ -1268,6 +1275,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 			if (pRound->noauto)
 				continue; // skip automated handling
+			if (pRound->numSlot != MAXSLOTS)
+				continue; // only process settings that match `MAXSLOTS`
 
 			// set index to default ratio
 			pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
@@ -1786,13 +1795,16 @@ int main(int argc, char *const *argv) {
 			// get highest `numNode` and `numImprint`
 			if (app.opt_maxImprint == 0) {
 				for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlot; pMetrics++) {
-					if (!pMetrics->noauto) {
-						if (!pMetrics->noauto && app.opt_maxImprint < pMetrics->numImprint)
+					if (pMetrics->noauto)
+						continue; // skip automated handling
+					if (pMetrics->numSlot != MAXSLOTS)
+						continue; // only process settings that match `MAXSLOTS`
+
+					if (app.opt_maxImprint < pMetrics->numImprint)
 							app.opt_maxImprint = pMetrics->numImprint;
 						if (highestNumNode < pMetrics->numNode)
 							highestNumNode = pMetrics->numNode;
 					}
-				}
 
 				// Give extra 5% expansion space
 				if (app.opt_maxImprint > UINT32_MAX - app.opt_maxImprint / 20)
@@ -1804,11 +1816,14 @@ int main(int argc, char *const *argv) {
 			// get highest `numSignature` but only for the highest `numNode` found above
 			if (app.opt_maxSignature == 0) {
 				for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
-					if (!pMetrics->noauto && pMetrics->numNode <= highestNumNode) {
+					if (pMetrics->noauto)
+						continue; // skip automated handling
+					if (pMetrics->numSlot != MAXSLOTS)
+						continue; // only process settings that match `MAXSLOTS`
+
 						if (app.opt_maxSignature < pMetrics->numSignature)
 							app.opt_maxSignature = pMetrics->numSignature;
 					}
-				}
 
 				// Give extra 5% expansion space
 				if (app.opt_maxSignature > UINT32_MAX - app.opt_maxSignature / 20)
@@ -1893,6 +1908,7 @@ int main(int argc, char *const *argv) {
 		 */
 
 		app.performSelfTestTree();
+		app.performSelfTestSkin();
 		app.performSelfTestInterleave();
 		app.performSelfTestWindow();
 
