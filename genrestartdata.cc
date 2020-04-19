@@ -547,9 +547,9 @@ context_t ctx;
 genrestartdataSelftest_t app(ctx);
 
 /**
- * Construct a time themed prefix string for console logging
- *
  * @date 2020-03-18 18:08:48
+ *
+ * Construct a time themed prefix string for console logging
  */
 const char *timeAsString(void) {
 	static char tstr[256];
@@ -562,12 +562,13 @@ const char *timeAsString(void) {
 }
 
 /**
+ * @date 2020-03-18 18:09:31
+ *
  * Signal handlers
  *
  * Bump interval timer
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-18 18:09:31
  */
 void sigalrmHandler(int sig) {
 	(void) sig; // trick compiler t see parameter is used
@@ -579,12 +580,13 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * @date 2020-03-19 20:02:40
+ *
  * Program usage. Keep this directly above `main()`
  *
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
- * @date  2020-03-19 20:02:40
  */
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
@@ -608,12 +610,13 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
+ * @date 2020-03-18 18:13:24
+ *
  * Program main entry point
  *
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-18 18:13:24
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);

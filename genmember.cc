@@ -178,12 +178,12 @@ struct genmemberContext_t : callable_t {
 	/// @var {copntext_t} I/O context
 	context_t &ctx;
 
-	/// @var {string} name of output database
-	const char *arg_outputDatabase;
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
-	/// @var {number} size of signatures to be generated in this invocation
+	/// @var {number} Tree size in nodes to be generated for this invocation;
 	unsigned arg_numNodes;
+	/// @var {string} name of output database
+	const char *arg_outputDatabase;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -243,8 +243,9 @@ struct genmemberContext_t : callable_t {
 	 */
 	genmemberContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
 		// arguments and options
-		arg_outputDatabase = NULL;
+		arg_inputDatabase = NULL;
 		arg_numNodes = 0;
+		arg_outputDatabase = NULL;
 		opt_force = 0;
 		opt_generate = 1;
 		opt_imprintIndexSize = 0;
@@ -1468,7 +1469,7 @@ void sigalrmHandler(int sig) {
 }
 
 /**
- * @date  2020-03-14 11:17:04
+ * @date 2020-03-14 11:17:04
  *
  * Program usage. Keep this directly above `main()`
  *
@@ -1512,7 +1513,7 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
- * @date   2020-03-14 11:19:40
+ * @date 2020-03-14 11:19:40
  *
  * Program main entry point
  * Process all user supplied arguments to construct a application context.

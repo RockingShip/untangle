@@ -122,7 +122,7 @@ unsigned opt_T = 0;
 unsigned opt_F = 0;
 
 /**
- * @date  2020-03-06 21:06:01
+ * @date 2020-03-06 21:06:01
  *
  * Program usage. Keep high in source code for easy reference
  *
@@ -2491,7 +2491,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 }
 
 /**
- * @date   2020-03-06 20:22:23
+ * @date 2020-03-06 20:22:23
  *
  * Program main entry point
  *

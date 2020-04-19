@@ -199,7 +199,7 @@ void sigalrmHandler(int sig) {
 }
 
 /**
- * @date  2020-03-13 13:37:44
+ * @date 2020-03-13 13:37:44
  *
  * Program usage. Keep this directly above `main()`
  *
@@ -218,7 +218,7 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
- * @date   2020-03-13 13:30:32
+ * @date 2020-03-13 13:30:32
  *
  * Program main entry point
  * Program main entry point

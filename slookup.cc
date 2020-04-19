@@ -182,7 +182,7 @@ void sigalrmHandler(int sig) {
 }
 
 /**
- * @date  2020-04-07 16:28:23
+ * @date 2020-04-07 16:28:23
  *
  * Program usage. Keep this directly above `main()`
  *

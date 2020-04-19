@@ -490,7 +490,7 @@ struct tinyTree_t {
 	}
 
 	/*
-	 * @date  2020-03-18 18:20:45
+	 * @date 2020-03-18 18:20:45
 	 *
 	 * Versioned memory.
 	 *

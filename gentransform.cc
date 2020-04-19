@@ -779,12 +779,13 @@ context_t ctx;
 gentransformSelftest_t app(ctx);
 
 /**
+ * @date 2020-03-11 23:06:35
+ *
  * Signal handler
  *
  * Delete partially created database unless explicitly requested
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-11 23:06:35
  */
 void sigintHandler(int sig) {
 	if (!app.opt_keep && app.arg_outputDatabase) {
@@ -794,12 +795,13 @@ void sigintHandler(int sig) {
 }
 
 /**
+ * @date 2020-03-11 23:06:35
+ *
  * Signal handlers
  *
  * Bump interval timer
  *
  * @param {number} sig - signal (ignored)
- * @date 2020-03-11 23:06:35
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
@@ -809,12 +811,13 @@ void sigalrmHandler(int sig) {
 }
 
 /**
+ * @date 2020-03-11 22:30:36
+ *
  * Program usage. Keep this directly above `main()`
  *
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
- * @date  2020-03-11 22:30:36
  */
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s [<output.db>]  -- Create initial database containing transforms\n", argv[0]);
@@ -835,6 +838,8 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
+ * @date 2020-03-06 20:22:23
+ *
  * Program main entry point
  * Process all user supplied arguments to construct a application context.
  * Activate application context.
@@ -842,7 +847,6 @@ void usage(char *const *argv, bool verbose) {
  * @param  {number} argc - number of arguments
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
- * @date   2020-03-06 20:22:23
  */
 int main(int argc, char *const *argv) {
 	setlinebuf(stdout);

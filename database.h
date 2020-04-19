@@ -1159,6 +1159,10 @@ struct database_t {
 		} else {
 			/*
 			 * index is populated with key rows, runtime scans cols
+			 *
+			 * @date 2020-04-18 22:51:05
+			 *
+			 * This path is cpu cache friendlier because of `iCol++`
 			 */
 			footprint_t *v = pFwdEvaluator;
 
@@ -1214,6 +1218,10 @@ struct database_t {
 		if (this->interleave == this->interleaveStep) {
 			/*
 			 * index is populated with key rows, runtime scans cols
+			 *
+			 * @date 2020-04-18 22:51:05
+			 *
+			 * This path is cpu cache friendlier because of `iCol++`
 			 */
 
 			footprint_t *v = pFwdEvaluator;

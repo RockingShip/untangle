@@ -274,7 +274,7 @@ struct generatorTree_t : tinyTree_t {
 	}
 
 	/**
-	 * @date  2020-04-11 21:48:14
+	 * @date 2020-04-11 21:48:14
 	 *
 	 * Breakdown packed record for debugging aid
 	 */
