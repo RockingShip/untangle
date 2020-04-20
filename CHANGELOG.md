@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## 2.1.0 2020-04-20 00:51:51
+
+This release is to mark the change in database version to `"20200419"` and the introduction of hints for interleave and imprint tuning.
+ 
 ```
 2020-04-20 00:24:45 Added `hint_t` to `database_t`
 2020-04-19 00:10:20 Added `genhint`.
@@ -31,8 +35,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 This release is to archive the current generator.
 
-For the `QnTF-only` dataset the generator needs to scan `6n9-QnTF` and possibly partially `7n9-QnTF` space.
-This requires a next-generation generator wit significantly less duplicates (currently 28%) and higher speed (`6n9-QnTF` 80 minutes). 
+For the `pure dataset the generator needs to scan `6n9-pure` and possibly partially `7n9-pure` space.
+This requires a next-generation generator wit significantly less duplicates (currently 28%) and higher speed (`6n9-pure` 80 minutes). 
 
  
 Normalisations:
