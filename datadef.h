@@ -209,7 +209,7 @@ struct signature_t {
  * The ordering of `numStored[]` is identical to that of `metricsInterleave[]`
  *
  * Imprint metrics are non-linear and difficult to predict.
- * Hints are used to determine optimal `--interleave` settings for (primarily) `genslice`.
+ * Hints are used to determine optimal `--interleave` settings for (primarily) `genhint`.
  */
 struct hint_t {
 	uint32_t numStored[MAXSLOTS * 2];

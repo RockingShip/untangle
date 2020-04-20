@@ -1491,23 +1491,23 @@ void usage(char *const *argv, bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "\t   --force                   Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t-h --help                    This list\n");
-		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%d]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --maxsignature=<number>   Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
-		fprintf(stderr, "\t   --metrics                 Collect metrics\n");
-		fprintf(stderr, "\t   --[no-]pure               QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                   Say more\n");
-		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
-		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
-		fprintf(stderr, "\t   --signatureindex=<number> Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
-		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-v --verbose                 Say less\n");
+		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t-h --help                          This list\n");
+		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%d]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --keep                          Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --metrics                       Collect metrics\n");
+		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                         Say more\n");
+		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --selftest                      Validate prerequisites\n");
+		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t-v --verbose                       Say less\n");
 	}
 }
 

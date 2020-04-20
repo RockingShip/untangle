@@ -1483,32 +1483,32 @@ void usage(char *const *argv, bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "\t   --force                   Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t   --[no-]generator          Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
-		fprintf(stderr, "\t-h --help                    This list\n");
-		fprintf(stderr, "\t   --imprintindex=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>     Imprint index interleave [default=%u]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --keep                    Do not delete output database in case of errors\n");
-		fprintf(stderr, "\t   --load=<file>             Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
-		fprintf(stderr, "\t   --maximprint=<number>     Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --maxmember=<number>      Maximum number of members [default=%u]\n", app.opt_maxMember);
-		fprintf(stderr, "\t   --memberindex=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
-		fprintf(stderr, "\t   --[no-]paranoid           Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --prepare                 Prepare dataset for empty/unsafe groups\n");
-		fprintf(stderr, "\t   --[no-]pure               QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                   Say more\n");
-		fprintf(stderr, "\t   --ratio=<number>          Index/data ratio [default=%.1f]\n", app.opt_ratio);
-		fprintf(stderr, "\t   --selftest                Validate prerequisites\n");
-		fprintf(stderr, "\t   --sge                     Get SGE task settings from environment\n");
-		fprintf(stderr, "\t   --sidhi=<number>          Sid range upper bound [default=%u]\n", app.opt_sidHi);
-		fprintf(stderr, "\t   --sidlo=<number>          Sid range lower bound [default=%u]\n", app.opt_sidLo);
-		fprintf(stderr, "\t   --task=<id>,<last>        Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
-		fprintf(stderr, "\t   --text                    Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>         Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --unsafe                  Reindex imprints based onempty/unsafe signature groups\n");
-		fprintf(stderr, "\t-v --verbose                 Say less\n");
-		fprintf(stderr, "\t   --windowhi=<number>       Upper end restart window [default=%lu]\n", app.opt_windowHi);
-		fprintf(stderr, "\t   --windowlo=<number>       Lower end restart window [default=%lu]\n", app.opt_windowLo);
+		fprintf(stderr, "\t   --force                       Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t   --[no-]generator              Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
+		fprintf(stderr, "\t-h --help                        This list\n");
+		fprintf(stderr, "\t   --imprintindexsize=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>         Imprint index interleave [default=%u]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --keep                        Do not delete output database in case of errors\n");
+		fprintf(stderr, "\t   --load=<file>                 Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --maximprint=<number>         Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxmember=<number>          Maximum number of members [default=%u]\n", app.opt_maxMember);
+		fprintf(stderr, "\t   --memberindexsize=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
+		fprintf(stderr, "\t   --[no-]paranoid               Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --prepare                     Prepare dataset for empty/unsafe groups\n");
+		fprintf(stderr, "\t   --[no-]pure                   QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                       Say more\n");
+		fprintf(stderr, "\t   --ratio=<number>              Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --selftest                    Validate prerequisites\n");
+		fprintf(stderr, "\t   --sge                         Get SGE task settings from environment\n");
+		fprintf(stderr, "\t   --sidhi=<number>              Sid range upper bound [default=%u]\n", app.opt_sidHi);
+		fprintf(stderr, "\t   --sidlo=<number>              Sid range lower bound [default=%u]\n", app.opt_sidLo);
+		fprintf(stderr, "\t   --task=<id>,<last>            Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
+		fprintf(stderr, "\t   --text                        Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>             Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --unsafe                      Reindex imprints based onempty/unsafe signature groups\n");
+		fprintf(stderr, "\t-v --verbose                     Say less\n");
+		fprintf(stderr, "\t   --windowhi=<number>           Upper end restart window [default=%lu]\n", app.opt_windowHi);
+		fprintf(stderr, "\t   --windowlo=<number>           Lower end restart window [default=%lu]\n", app.opt_windowLo);
 	}
 }
 
