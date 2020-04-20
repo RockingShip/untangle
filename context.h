@@ -225,6 +225,9 @@ struct context_t {
 		if (ret == 0)
 			fatal("failed to allocate %ld bytes for \"%s\"\n", __size, name);
 
+		// clear area
+		::memset(ret, 0, __size);
+
 		if (opt_verbose >= VERBOSE_INITIALIZE)
 			fprintf(stderr, "memory +%p %s\n", ret, name);
 

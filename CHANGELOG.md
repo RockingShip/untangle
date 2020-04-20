@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-20 00:24:45 Added `hint_t` to `database_t`
 2020-04-19 00:10:20 Added `genslice`.
 2020-04-18 14:01:13 Rename all `QnTF` which are not operator related to `pure`.
 2020-04-17 23:16:52 Add versioned memory to `database_t`.

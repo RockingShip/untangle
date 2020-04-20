@@ -146,26 +146,6 @@ struct footprint_t {
 };
 
 /*
- * @date 2020-03-15 19:16:31
- *
- * Footprint belonging to signature/transform
- *
- * @date 2020-04-14 23:29:59
- *
- * Implementing SSE2/AVX2 requires alignment. Extra space of alignment reduces the maximum number of available imprints.
- */
-struct imprint_t {
-	footprint_t footprint; // footprint
-	uint32_t sid;          // signature
-	uint32_t tid;          // skin/transform
-	uint32_t filler16[2];  // need 16 byte alignment
-#if 0 && defined(__AVX2__)
-#warning AVX2 will give zero speed improvement and waste memory due to alignment
-	uint32_t filler32[4];  // need 32 byte alignment
-#endif
-};
-
-/*
  * @date 2020-03-22 17:43:03
  *
  * Footprint belonging to signature/transform
@@ -192,6 +172,13 @@ struct signature_t {
 	uint32_t firstMember;
 
 	/*
+	 * the following are 16-bit values and align better here
+	 */
+
+	/// @var {number} idex to `hints`
+	uint16_t hintId;
+
+	/*
 	 * the following are 8-bit values and align better if placed last
 	 */
 
@@ -212,6 +199,59 @@ struct signature_t {
 
 	/// @var {string} Notation/name of signature. With space for inverted root and terminator
 	char name[SIGNATURENAMELENGTH];
+};
+
+/*
+ * @date 2020-04-19 21:03:08
+ *
+ * Interleave/Imprint hints.
+ * Stores the number of imprints per signature for each interleave setting.
+ * The ordering of `numStored[]` is identical to that of `metricsInterleave[]`
+ *
+ * Imprint metrics are non-linear and difficult to predict.
+ * Hints are used to determine optimal `--interleave` settings for (primarily) `genslice`.
+ */
+struct hint_t {
+	uint32_t numStored[MAXSLOTS * 2];
+
+	/**
+	 * @date 2020-04-19 22:28:43
+	 *
+	 * Compare two hints and determine if both are same
+	 *
+	 * @param {hint_t} rhs - right hand side of comparison
+	 * @return {boolean} `true` if same, `false` if different
+	 */
+	inline bool equals(const struct hint_t &rhs) const {
+
+		for (unsigned j = 0; j < MAXSLOTS * 2; j++) {
+			if (this->numStored[j] != rhs.numStored[j])
+				return false;
+		}
+
+		return true;
+	}
+
+};
+
+/*
+ * @date 2020-03-15 19:16:31
+ *
+ * Footprint belonging to signature/transform
+ *
+ * @date 2020-04-14 23:29:59
+ *
+ * Implementing SSE2/AVX2 requires alignment. Extra space of alignment reduces the maximum number of available imprints.
+ */
+struct imprint_t {
+	footprint_t footprint; // footprint
+	uint32_t sid;          // signature
+	uint32_t tid;          // skin/transform
+	uint32_t filler16[2];  // need 16 byte alignment for SSE
+#if 0 && defined(__AVX2__)
+	#warning AVX2 will give zero speed improvement and waste memory due to alignment
+	uint32_t filler32[4];  // need 32 byte alignment
+#endif
 };
 
 /*

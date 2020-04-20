@@ -78,7 +78,7 @@
 #endif
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20200402
+#define FILE_MAGIC        0x20200419
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -96,8 +96,9 @@ struct fileHeader_t {
 	uint32_t magic;                  // magic+version
 	uint32_t magic_flags;            // conditions it was created
 	uint32_t magic_maxSlots;
-	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofSignature;
+	uint32_t magic_sizeofHint;
+	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofMember;
 	uint32_t magic_sizeofPatternFirst;
 	uint32_t magic_sizeofPatternSecond;
@@ -110,10 +111,12 @@ struct fileHeader_t {
 	// section sizes
 	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
-	uint32_t numImprint;
-	uint32_t imprintIndexSize;
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
+	uint32_t numHint;
+	uint32_t hintIndexSize;
+	uint32_t numImprint;
+	uint32_t imprintIndexSize;
 	uint32_t numMember;
 	uint32_t memberIndexSize;
 	uint32_t numPatternFirst;
@@ -131,10 +134,12 @@ struct fileHeader_t {
 	uint64_t offRevTransformIds;
 	uint64_t offFwdTransformNameIndex;
 	uint64_t offRevTransformNameIndex;
-	uint64_t offImprints;
-	uint64_t offImprintIndex;
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
+	uint64_t offHints;
+	uint64_t offHintIndex;
+	uint64_t offImprints;
+	uint64_t offImprintIndex;
 	uint64_t offMember;
 	uint64_t offMemberIndex;
 	uint64_t offPatternFirst;
@@ -175,6 +180,18 @@ struct database_t {
 	uint32_t           transformIndexSize;          // index size (must be prime)
 	uint32_t           *fwdTransformNameIndex;      // fwdTransformNames index
 	uint32_t           *revTransformNameIndex;      // revTransformNames index
+	// signature store
+	uint32_t           numSignature;                // number of signatures
+	uint32_t           maxSignature;                // maximum size of collection
+	signature_t        *signatures;                 // signature collection
+	uint32_t           signatureIndexSize;          // index size (must be prime)
+	uint32_t           *signatureIndex;             // index
+	// hint store
+	uint32_t           numHint;                     // number of hints
+	uint32_t           maxHint;                     // maximum size of collection
+	hint_t             *hints;                      // hint collection
+	uint32_t           hintIndexSize;               // index size (must be prime)
+	uint32_t           *hintIndex;                  // index
 	// imprint store
 	uint32_t           interleave;                  // imprint interleave factor (display value)
 	uint32_t           interleaveStep;              // imprint interleave factor (interleave distance)
@@ -183,12 +200,6 @@ struct database_t {
 	imprint_t          *imprints;                   // imprint collection
 	uint32_t           imprintIndexSize;            // index size (must be prime)
 	uint32_t           *imprintIndex;               // index
-	// signature store
-	uint32_t           numSignature;                // number of signatures
-	uint32_t           maxSignature;                // maximum size of collection
-	signature_t        *signatures;                 // signature collection
-	uint32_t           signatureIndexSize;          // index size (must be prime)
-	uint32_t           *signatureIndex;             // index
 	// member store
 	uint32_t           numMember;                   // number of members
 	uint32_t           maxMember;                   // maximum size of collection
@@ -222,6 +233,20 @@ struct database_t {
 		fwdTransformNameIndex = revTransformNameIndex = NULL;
 		revTransformIds = NULL;
 
+		// signature store
+		numSignature = 0;
+		maxSignature = 0;
+		signatures = NULL;
+		signatureIndexSize = 0;
+		signatureIndex = NULL;
+
+		// hint store
+		numHint = 0;
+		maxHint = 0;
+		hints = NULL;
+		hintIndexSize = 0;
+		hintIndex = NULL;
+
 		// imprint store
 		interleave = 1;
 		interleaveStep = 1;
@@ -230,13 +255,6 @@ struct database_t {
 		imprints = NULL;
 		imprintIndexSize = 0;
 		imprintIndex = NULL;
-
-		// signature store
-		numSignature = 0;
-		maxSignature = 0;
-		signatures = NULL;
-		signatureIndexSize = 0;
-		signatureIndex = NULL;
 
 		// member store
 		numMember = 0;
@@ -258,14 +276,16 @@ struct database_t {
 	 */
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
-		ALLOCFLAG_IMPRINT,
 		ALLOCFLAG_SIGNATURE,
+		ALLOCFLAG_HINT,
+		ALLOCFLAG_IMPRINT,
 		ALLOCFLAG_MEMBER,
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
-		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
+		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
+		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
 		// @formatter:on
 	};
@@ -293,6 +313,32 @@ struct database_t {
 			allocFlags |= ALLOCMASK_TRANSFORM;
 		}
 
+		// signature store
+		if (maxSignature) {
+			// increase with 5%
+			if (maxSignature < UINT32_MAX - maxSignature / 20)
+				maxSignature += maxSignature / 20;
+
+			assert(ctx.isPrime(signatureIndexSize));
+			numSignature = 1; // do not start at 1
+			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
+			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
+			allocFlags |= ALLOCMASK_SIGNATURE;
+		}
+
+		// hint store
+		if (maxHint) {
+			// increase with 5%
+			if (maxHint < UINT32_MAX - maxHint / 20)
+				maxHint += maxHint / 20;
+
+			assert(ctx.isPrime(hintIndexSize));
+			numHint = 1; // do not start at 1
+			hints = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
+			hintIndex = (uint32_t *) ctx.myAlloc("database_t::hintIndex", hintIndexSize, sizeof(*hintIndex));
+			allocFlags |= ALLOCMASK_HINT;
+		}
+
 		// imprint store
 		if (maxImprint) {
 			// increase with 5%
@@ -305,19 +351,6 @@ struct database_t {
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
-		}
-
-		// signature store
-		if (maxSignature) {
-			// increase with 5%
-			if (maxSignature < UINT32_MAX - maxSignature / 20)
-				maxSignature += maxSignature / 20;
-
-			assert(ctx.isPrime(signatureIndexSize));
-			numSignature = 1; // do not start at 1
-			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
-			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
-			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
 
 		// member store
@@ -374,6 +407,40 @@ struct database_t {
 			revTransformNameIndex = pDatabase->revTransformNameIndex;
 		}
 
+		// signature store
+		if (sections & database_t::ALLOCMASK_SIGNATURE) {
+			if (pDatabase->numSignature == 0) {
+				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			assert(maxSignature == 0);
+			this->maxSignature = pDatabase->maxSignature;
+			this->numSignature = pDatabase->numSignature;
+			this->signatures = pDatabase->signatures;
+
+			this->signatureIndexSize = pDatabase->signatureIndexSize;
+			this->signatureIndex = pDatabase->signatureIndex;
+		}
+
+		// hint store
+		if (sections & database_t::ALLOCMASK_HINT) {
+			if (pDatabase->numHint == 0) {
+				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			assert(maxHint == 0);
+			this->maxHint = pDatabase->maxHint;
+			this->numHint = pDatabase->numHint;
+			this->hints = pDatabase->hints;
+
+			this->hintIndexSize = pDatabase->hintIndexSize;
+			this->hintIndex = pDatabase->hintIndex;
+		}
+
 		// imprint store
 		if (sections & database_t::ALLOCMASK_IMPRINT) {
 			if (pDatabase->numImprint == 0) {
@@ -392,23 +459,6 @@ struct database_t {
 
 			this->imprintIndexSize = pDatabase->imprintIndexSize;
 			this->imprintIndex = pDatabase->imprintIndex;
-		}
-
-		// signature store
-		if (sections & database_t::ALLOCMASK_SIGNATURE) {
-			if (pDatabase->numSignature == 0) {
-				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			assert(maxSignature == 0);
-			this->maxSignature = pDatabase->maxSignature;
-			this->numSignature = pDatabase->numSignature;
-			this->signatures = pDatabase->signatures;
-
-			this->signatureIndexSize = pDatabase->signatureIndexSize;
-			this->signatureIndex = pDatabase->signatureIndex;
 		}
 
 		// member store
@@ -494,10 +544,12 @@ struct database_t {
 			ctx.fatal("db magic_maxslots. Encountered %d, Expected %d\n", fileHeader.magic_maxSlots, MAXSLOTS);
 		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
 			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", fileHeader.offEnd, (uint64_t) sbuf.st_size);
-		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
-			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
 			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
+		if (fileHeader.magic_sizeofHint != sizeof(hint_t))
+			ctx.fatal("db magic_sizeofHint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofHint, sizeof(hint_t));
+		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
+			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
 		if (fileHeader.magic_sizeofMember != sizeof(member_t))
 			ctx.fatal("db magic_sizeofMember. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofMember, sizeof(member_t));
 
@@ -518,6 +570,18 @@ struct database_t {
 		fwdTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offFwdTransformNameIndex);
 		revTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offRevTransformNameIndex);
 
+		// signatures
+		maxSignature = numSignature = fileHeader.numSignature;
+		signatures = (signature_t *) (rawDatabase + fileHeader.offSignatures);
+		signatureIndexSize = fileHeader.signatureIndexSize;
+		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
+
+		// hint
+		maxHint = numHint = fileHeader.numHint;
+		hints = (hint_t *) (rawDatabase + fileHeader.offHints);
+		hintIndexSize = fileHeader.hintIndexSize;
+		hintIndex = (uint32_t *) (rawDatabase + fileHeader.offHintIndex);
+
 		// imprints
 		interleave = fileHeader.interleave;
 		interleaveStep = fileHeader.interleaveStep;
@@ -525,12 +589,6 @@ struct database_t {
 		imprints = (imprint_t *) (rawDatabase + fileHeader.offImprints);
 		imprintIndexSize = fileHeader.imprintIndexSize;
 		imprintIndex = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
-
-		// signatures
-		maxSignature = numSignature = fileHeader.numSignature;
-		signatures = (signature_t *) (rawDatabase + fileHeader.offSignatures);
-		signatureIndexSize = fileHeader.signatureIndexSize;
-		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
 
 		// members
 		maxMember = numMember = fileHeader.numMember;
@@ -557,17 +615,21 @@ struct database_t {
 			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
 			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
 		}
-		if (allocFlags & ALLOCMASK_IMPRINT) {
-			ctx.myFree("database_t::imprints", imprints);
-			ctx.myFree("database_t::imprintIndex", imprintIndex);
-			if (imprintVersion)
-				ctx.myFree("database_t::imprintVersion", imprintVersion);
-		}
 		if (allocFlags & ALLOCMASK_SIGNATURE) {
 			ctx.myFree("database_t::signatures", signatures);
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
 			if (signatureVersion)
 				ctx.myFree("database_t::signatureVersion", signatureVersion);
+		}
+		if (allocFlags & ALLOCMASK_HINT) {
+			ctx.myFree("database_t::hints", hints);
+			ctx.myFree("database_t::hintIndex", hintIndex);
+		}
+		if (allocFlags & ALLOCMASK_IMPRINT) {
+			ctx.myFree("database_t::imprints", imprints);
+			ctx.myFree("database_t::imprintIndex", imprintIndex);
+			if (imprintVersion)
+				ctx.myFree("database_t::imprintVersion", imprintVersion);
 		}
 		if (allocFlags & ALLOCMASK_MEMBER) {
 			ctx.myFree("database_t::members", members);
@@ -670,10 +732,12 @@ struct database_t {
 		ctx.progressHi += align32(sizeof(*this->revTransformIds) * this->numTransform);
 		ctx.progressHi += align32(sizeof(*this->fwdTransformNameIndex * this->transformIndexSize));
 		ctx.progressHi += align32(sizeof(*this->revTransformNameIndex * this->transformIndexSize));
-		ctx.progressHi += align32(sizeof(*this->imprints) * this->numImprint);
-		ctx.progressHi += align32(sizeof(*this->imprintIndex) * this->imprintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->signatures) * this->numSignature);
 		ctx.progressHi += align32(sizeof(*this->signatureIndex) * this->signatureIndexSize);
+		ctx.progressHi += align32(sizeof(*this->hints) * this->numHint);
+		ctx.progressHi += align32(sizeof(*this->hintIndex) * this->hintIndexSize);
+		ctx.progressHi += align32(sizeof(*this->imprints) * this->numImprint);
+		ctx.progressHi += align32(sizeof(*this->imprintIndex) * this->imprintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->members) * this->numMember);
 		ctx.progressHi += align32(sizeof(*this->memberIndex) * this->memberIndexSize);
 		ctx.progress = 0;
@@ -735,6 +799,48 @@ struct database_t {
 		}
 
 		/*
+		 * write signatures
+		 */
+		if (this->numSignature) {
+			// first entry must be zero
+			signature_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->signatures, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.numSignature = this->numSignature;
+			fileHeader.offSignatures = flen;
+			flen += writeData(outf, this->signatures, align32(sizeof(*this->signatures) * this->numSignature));
+			if (this->signatureIndexSize) {
+				// Index
+				fileHeader.signatureIndexSize = this->signatureIndexSize;
+				fileHeader.offSignatureIndex = flen;
+				flen += writeData(outf, this->signatureIndex, align32(sizeof(*this->signatureIndex) * this->signatureIndexSize));
+			}
+		}
+
+		/*
+		 * write hints
+		 */
+		if (this->numHint) {
+			// first entry must be zero
+			hint_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->hints, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.numHint = this->numHint;
+			fileHeader.offHints = flen;
+			flen += writeData(outf, this->hints, align32(sizeof(*this->hints) * this->numHint));
+			if (this->hintIndexSize) {
+				// Index
+				fileHeader.hintIndexSize = this->hintIndexSize;
+				fileHeader.offHintIndex = flen;
+				flen += writeData(outf, this->hintIndex, align32(sizeof(*this->hintIndex) * this->hintIndexSize));
+			}
+		}
+
+		/*
 		 * write imprints
 		 */
 		if (this->numImprint) {
@@ -755,27 +861,6 @@ struct database_t {
 				fileHeader.imprintIndexSize = this->imprintIndexSize;
 				fileHeader.offImprintIndex = flen;
 				flen += writeData(outf, this->imprintIndex, align32(sizeof(*this->imprintIndex) * this->imprintIndexSize));
-			}
-		}
-
-		/*
-		 * write signatures
-		 */
-		if (this->numSignature) {
-			// first entry must be zero
-			signature_t zero;
-			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->signatures, &zero, sizeof(zero)) == 0);
-
-			// collection
-			fileHeader.numSignature = this->numSignature;
-			fileHeader.offSignatures = flen;
-			flen += writeData(outf, this->signatures, align32(sizeof(*this->signatures) * this->numSignature));
-			if (this->signatureIndexSize) {
-				// Index
-				fileHeader.signatureIndexSize = this->signatureIndexSize;
-				fileHeader.offSignatureIndex = flen;
-				flen += writeData(outf, this->signatureIndex, align32(sizeof(*this->signatureIndex) * this->signatureIndexSize));
 			}
 		}
 
@@ -810,8 +895,9 @@ struct database_t {
 		fileHeader.magic = FILE_MAGIC;
 		fileHeader.magic_flags = ctx.flags;
 		fileHeader.magic_maxSlots = MAXSLOTS;
-		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
+		fileHeader.magic_sizeofHint = sizeof(hint_t);
+		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.magic_sizeofMember = sizeof(member_t);
 		fileHeader.offEnd = flen;
 
@@ -1002,6 +1088,136 @@ struct database_t {
   	 */
 	inline uint32_t lookupRevTransform(const char *pName) {
 		return lookupTransform(pName, this->revTransformNameIndex);
+	}
+
+	/*
+	 * Signature store
+	 */
+
+	inline uint32_t lookupSignature(const char *name) {
+		ctx.cntHash++;
+
+		// calculate starting position
+		uint32_t crc32 = 0;
+		for (const char *pName = name; *pName; pName++)
+			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
+
+		uint32_t ix = crc32 % signatureIndexSize;
+		uint32_t bump = ix;
+		if (bump == 0)
+			bump = signatureIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		if (signatureVersion == NULL) {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->signatureIndex[ix] == 0)
+					return ix; // "not-found"
+
+				const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
+
+				if (::strcmp(pSignature->name, name) == 0)
+					return ix; // "found"
+
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= signatureIndexSize)
+					ix -= signatureIndexSize;
+			}
+
+		} else {
+			for (;;) {
+				ctx.cntCompare++;
+				if (this->signatureVersion[ix] != iVersion)
+					return ix; // "not-found"
+
+				if (this->signatureVersion[ix] != 0) {
+					const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
+
+					if (::strcmp(pSignature->name, name) == 0)
+						return ix; // "found"
+				}
+				// overflow, jump to next entry
+				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+				ix += bump;
+				if (ix >= signatureIndexSize)
+					ix -= signatureIndexSize;
+			}
+		}
+
+	}
+
+	inline uint32_t addSignature(const char *name) {
+		signature_t *pSignature = this->signatures + this->numSignature++;
+
+		if (this->numSignature > this->maxSignature)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
+
+		// clear before use
+		::memset(pSignature, 0, sizeof(*pSignature));
+
+		// only populate key fields
+		strcpy(pSignature->name, name);
+
+		return (uint32_t) (pSignature - this->signatures);
+	}
+
+	/*
+	 * Hint store
+	 */
+
+	/**
+	 * @date 2020-04-19 20:52:11
+	 *
+	 * Lookup value in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the data in `pHint`.
+	 *
+	 * @param v {hint_t} v - value to index
+	 * @return {number} offset into index
+	 */
+	inline uint32_t lookupHint(hint_t *pHint) {
+		ctx.cntHash++;
+
+		// calculate starting position
+		uint32_t crc32 = 0;
+		for (unsigned j=0; j<MAXSLOTS*2; j++)
+			crc32 = __builtin_ia32_crc32si(crc32, pHint->numStored[j]);
+
+		uint32_t ix = crc32 % hintIndexSize;
+		uint32_t bump = ix;
+		if (bump == 0)
+			bump = hintIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		for (;;) {
+			ctx.cntCompare++;
+			if (this->hintIndex[ix] == 0)
+				return ix; // "not-found"
+
+			if (this->hints[this->hintIndex[ix]].equals(*pHint))
+				return ix; // "found"
+
+			// overflow, jump to next entry
+			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+			ix += bump;
+			if (ix >= hintIndexSize)
+				ix -= hintIndexSize;
+		}
+	}
+
+	inline uint32_t addHint(hint_t *pHint) {
+		uint32_t hintId = this->numHint++;
+
+		if (this->numHint > this->maxHint)
+			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
+
+		::memcpy(&this->hints[hintId], pHint, sizeof(*pHint));
+
+		return hintId;
 	}
 
 	/*
@@ -1297,80 +1513,6 @@ struct database_t {
 	}
 
 	/*
-	 * Signature store
-	 */
-
-	inline uint32_t lookupSignature(const char *name) {
-		ctx.cntHash++;
-
-		// calculate starting position
-		uint32_t crc32 = 0;
-		for (const char *pName = name; *pName; pName++)
-			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
-
-		uint32_t ix = crc32 % signatureIndexSize;
-		uint32_t bump = ix;
-		if (bump == 0)
-			bump = signatureIndexSize - 1; // may never be zero
-		if (bump > 2147000041)
-			bump = 2147000041; // may never exceed last 32bit prime
-
-		if (signatureVersion == NULL) {
-			for (;;) {
-				ctx.cntCompare++;
-				if (this->signatureIndex[ix] == 0)
-					return ix; // "not-found"
-
-				const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
-
-				if (::strcmp(pSignature->name, name) == 0)
-					return ix; // "found"
-
-				// overflow, jump to next entry
-				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
-				ix += bump;
-				if (ix >= signatureIndexSize)
-					ix -= signatureIndexSize;
-			}
-
-		} else {
-			for (;;) {
-				ctx.cntCompare++;
-				if (this->signatureVersion[ix] != iVersion)
-					return ix; // "not-found"
-
-				if (this->signatureVersion[ix] != 0) {
-					const signature_t *pSignature = this->signatures + this->signatureIndex[ix];
-
-					if (::strcmp(pSignature->name, name) == 0)
-						return ix; // "found"
-				}
-				// overflow, jump to next entry
-				// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
-				ix += bump;
-				if (ix >= signatureIndexSize)
-					ix -= signatureIndexSize;
-			}
-		}
-
-	}
-
-	inline uint32_t addSignature(const char *name) {
-		signature_t *pSignature = this->signatures + this->numSignature++;
-
-		if (this->numSignature > this->maxSignature)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
-
-		// clear before use
-		::memset(pSignature, 0, sizeof(*pSignature));
-
-		// only populate key fields
-		strcpy(pSignature->name, name);
-
-		return (uint32_t) (pSignature - this->signatures);
-	}
-
-	/*
 	 * Member store
 	 */
 
@@ -1438,10 +1580,12 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
-		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
-		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
+		json_object_set_new_nocheck(jResult, "numHint", json_integer(this->numHint));
+		json_object_set_new_nocheck(jResult, "hintIndexSize", json_integer(this->hintIndexSize));
+		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
+		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "numMember", json_integer(this->numMember));
 		json_object_set_new_nocheck(jResult, "memberIndexSize", json_integer(this->memberIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader.offEnd));
