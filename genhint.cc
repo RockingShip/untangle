@@ -84,21 +84,21 @@ struct genhintContext_t : callable_t {
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
 	/// @var {number} size of hint index WARNING: must be prime
-	uint32_t opt_hintIndexSize;
+	unsigned opt_hintIndexSize;
 	/// @var {number} size of imprint index WARNING: must be prime
-	uint32_t opt_imprintIndexSize;
+	unsigned opt_imprintIndexSize;
 	/// @var {string} name of file containing interleave hints
 	const char *opt_load;
 	/// @var {number} Maximum number of hints to be stored database
-	uint32_t opt_maxHint;
+	unsigned opt_maxHint;
 	/// @var {number} Maximum number of imprints to be stored database
-	uint32_t opt_maxImprint;
+	unsigned opt_maxImprint;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} Sid range upper bound
-	uint32_t opt_sidHi;
+	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
-	uint32_t opt_sidLo;
+	unsigned opt_sidLo;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -196,8 +196,8 @@ struct genhintContext_t : callable_t {
 			 */
 
 			// lookup signature
-			uint32_t ix = pStore->lookupSignature(name);
-			uint32_t sid = pStore->signatureIndex[ix];
+			unsigned ix = pStore->lookupSignature(name);
+			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0) {
 				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
 				       __FUNCTION__, name, ctx.progress);
@@ -206,7 +206,7 @@ struct genhintContext_t : callable_t {
 
 			// lookup/add hintId
 			ix = pStore->lookupHint(&hint);
-			uint32_t hintId = pStore->hintIndex[ix];
+			unsigned hintId = pStore->hintIndex[ix];
 			if (hintId == 0)
 				pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
 
@@ -263,7 +263,7 @@ struct genhintContext_t : callable_t {
 		ctx.tick = 0;
 
 		// create imprints for signature groups
-		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 
 			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi))
 				continue;
@@ -328,8 +328,8 @@ struct genhintContext_t : callable_t {
 			// add to database
 			if (this->arg_outputDatabase) {
 				// lookup/add hintId
-				uint32_t ix = pStore->lookupHint(&hint);
-				uint32_t hintId = pStore->hintIndex[ix];
+				unsigned ix = pStore->lookupHint(&hint);
+				unsigned hintId = pStore->hintIndex[ix];
 				if (hintId == 0)
 					pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
 

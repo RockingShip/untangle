@@ -826,16 +826,16 @@ struct genmemberContext_t : callable_t {
 	 *
 	 * @param {member_t} lhs - left hand side member
 	 * @param {member_t} rhs - right hand side member
-	 * @param {context_t} state - I/O contect needed to create trees
+	 * @param {context_t} arg - I/O context
 	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
 	 */
-	static int /*__attribute__((optimize("O0")))*/ comparMember(const void *lhs, const void *rhs, void *state) {
+	static int /*__attribute__((optimize("O0")))*/ comparMember(const void *lhs, const void *rhs, void *arg) {
 		if (lhs == rhs)
 			return 0;
 
-		const member_t *pMemberL = (const member_t *) lhs;
-		const member_t *pMemberR = (const member_t *) rhs;
-		context_t *pApp = (context_t *) state;
+		const member_t *pMemberL = static_cast<const member_t *>(lhs);
+		const member_t *pMemberR = static_cast<const member_t *>(rhs);
+		context_t *pApp = static_cast<context_t *>(arg);
 
 		// test for empties (they should gather towards the end of `members[]`)
 		if (pMemberL->sid == 0 && pMemberR->sid == 0)
@@ -1223,7 +1223,7 @@ struct genmemberContext_t : callable_t {
 		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Re-indexing\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
 
 		uint32_t lastMember = pStore->numMember;
 
@@ -1323,7 +1323,7 @@ struct genmemberContext_t : callable_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Re-indexing. numMember=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] Indexed members. numMember=%u skipUnsafe=%u\n",
 			        ctx.timeAsString(), pStore->numMember, skipUnsafe);
 
 		/*
@@ -1846,7 +1846,16 @@ int main(int argc, char *const *argv) {
 #endif
 
 	/*
+	 * @date 2020-04-21 00:16:34
+	 *
 	 * create output
+	 *
+	 * Transforms, signature, hint and imprint data never change and can be inherited
+	 * Members can be inherited when nothing is added (missing output database)
+	 *
+	 * Sections can be inherited if their data or index settings remain unchanged
+	 *
+	 * NOTE: Signature data must be writable when `firstMember` changes (output database present)
 	 */
 
 	database_t store(ctx);

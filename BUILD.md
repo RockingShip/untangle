@@ -76,17 +76,17 @@ In this mode the `foundTree()` adds the candidate to the database and only displ
 You need to add 1 to the total because `wc` does not include the first reserved entry.
 
 ```sh
-    ./genrestartdata --text --qntf 0 2>/dev/null | wc
+    ./genrestartdata --text --pure 0 2>/dev/null | wc
     ./genrestartdata --text        0 2>/dev/null | wc
-    ./genrestartdata --text --qntf 1 2>/dev/null | wc
+    ./genrestartdata --text --pure 1 2>/dev/null | wc
     ./genrestartdata --text        1 2>/dev/null | wc
-    ./genrestartdata --text --qntf 2 2>/dev/null | wc
+    ./genrestartdata --text --pure 2 2>/dev/null | wc
     ./genrestartdata --text        2 2>/dev/null | wc
-    ./genrestartdata --text --qntf 3 2>/dev/null | wc
+    ./genrestartdata --text --pure 3 2>/dev/null | wc
     ./genrestartdata --text        3 2>/dev/null | wc
-    ./genrestartdata --text --qntf 4 2>/dev/null | wc
+    ./genrestartdata --text --pure 4 2>/dev/null | wc
     ./genrestartdata --text        4 2>/dev/null | wc
-    ./genrestartdata --text --qntf 5 2>/dev/null | wc
+    ./genrestartdata --text --pure 5 2>/dev/null | wc
     ./genrestartdata --text        5 2>/dev/null | wc
 ```
 
@@ -139,19 +139,19 @@ If you are in need for textual lists of members:
 ```
 
 ```sh
-    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --text=1 >member-0n9-qntf-1.txt
-    ./genmember member-0n9-qntf.db 1 member-1n9-qntf.db --qntf --text=1 >member-1n9-qntf-1.txt
-    ./genmember member-1n9-qntf.db 2 member-2n9-qntf.db --qntf --text=1 >member-2n9-qntf-1.txt
-    ./genmember member-2n9-qntf.db 3 member-3n9-qntf.db --qntf --text=1 >member-3n9-qntf-1.txt
-    ./genmember member-3n9-qntf.db 4 member-4n9-qntf.db --qntf --text=1 >member-4n9-qntf-1.txt
+    ./genmember 4n9.db             0 member-0n9-pure.db --pure --text=1 >member-0n9-pure-1.txt
+    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --text=1 >member-1n9-pure-1.txt
+    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --text=1 >member-2n9-pure-1.txt
+    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --text=1 >member-3n9-pure-1.txt
+    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --text=1 >member-4n9-pure-1.txt
 ```
 
 or use pre-determined member list created with `genmember --text=1` or `genmember text=3`
 
 ```sh
-    ./genmember 4n9.db             0 member-0n9-qntf.db --qntf --no-generate --load=member-0n9-1.txt
-    ./genmember member-0n9-qntf.db 1 member-1n9-qntf.db --qntf --no-generate --load=member-1n9-qntf-1.txt
-    ./genmember member-1n9-qntf.db 2 member-2n9-qntf.db --qntf --no-generate --load=member-2n9-qntf-1.txt
-    ./genmember member-2n9-qntf.db 3 member-3n9-qntf.db --qntf --no-generate --load=member-3n9-qntf-1.txt
-    ./genmember member-3n9-qntf.db 4 member-4n9-qntf.db --qntf --no-generate --load=member-4n9-qntf-1.txt
+    ./genmember 4n9.db             0 member-0n9-pure.db --pure --no-generate --load=member-0n9-1.txt
+    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --no-generate --load=member-1n9-pure-1.txt
+    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --no-generate --load=member-2n9-pure-1.txt
+    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --no-generate --load=member-3n9-pure-1.txt
+    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --no-generate --load=member-4n9-pure-1.txt
 ```

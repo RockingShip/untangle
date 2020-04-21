@@ -418,16 +418,16 @@ struct gensignatureContext_t : callable_t {
 	 *
 	 * @param {signature_t} lhs - left hand side signature
 	 * @param {signature_t} rhs - right hand side signature
-	 * @param {context_t} state - I/O contect needed to create trees
+	 * @param {context_t} arg - I/O context
 	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
 	 */
-	static int comparSignature(const void *lhs, const void *rhs, void *state) {
+	static int comparSignature(const void *lhs, const void *rhs, void *arg) {
 		if (lhs == rhs)
 			return 0;
 
-		const signature_t *pSignatureL = (const signature_t *) lhs;
-		const signature_t *pSignatureR = (const signature_t *) rhs;
-		context_t *pApp = (context_t *) state;
+		const signature_t *pSignatureL = static_cast<const signature_t *>(lhs);
+		const signature_t *pSignatureR = static_cast<const signature_t *>(rhs);
+		context_t *pApp = static_cast<context_t *>(arg);
 
 		// load trees
 		tinyTree_t treeL(*pApp);
@@ -472,9 +472,9 @@ struct gensignatureContext_t : callable_t {
 	 *
 	 * Recreate imprint index for signature groups
 	 */
-	void reindexImprints(void) {
+	void rebuildImprints(void) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Re-indexing signatures\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
 
 		// clear signature and imprint index
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
@@ -554,7 +554,7 @@ struct gensignatureContext_t : callable_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Re-indexed signatures. numImprint=%u(%.0f%%) | hash=%.3f\n",
+			fprintf(stderr, "[%s] Rebuild imprints. numImprint=%u(%.0f%%) | hash=%.3f\n",
 			        ctx.timeAsString(),
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        (double) ctx.cntCompare / ctx.cntHash);
@@ -569,9 +569,10 @@ struct gensignatureContext_t : callable_t {
 	 * Create generator for given dataset and add newly unique signatures to the database
 	 */
 	void main(void) {
-		for (unsigned numNode = arg_numNodes; numNode <= arg_numNodes; numNode++) {
+
+		 {
 			// reset progress
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 			ctx.tick = 0;
 
@@ -582,18 +583,18 @@ struct gensignatureContext_t : callable_t {
 			 * Generate candidates
 			 */
 			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), numNode, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
+				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
 
-			if (numNode == 0) {
+			if (arg_numNodes == 0) {
 				generator.root = 0; // "0"
 				foundTreeCandidate(generator, "0", 0, 0, 0);
 				generator.root = 1; // "a"
 				foundTreeCandidate(generator, "a", 1, 1, 0);
 			} else {
-				unsigned endpointsLeft = numNode * 2 + 1;
+				unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
 				generator.clearGenerator();
-				generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
+				generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
 			}
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -601,7 +602,7 @@ struct gensignatureContext_t : callable_t {
 
 			if (ctx.progress != ctx.progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
-				       __FUNCTION__, ctx.progress, ctx.progressHi, numNode);
+				       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 			}
 		}
 
@@ -619,7 +620,7 @@ struct gensignatureContext_t : callable_t {
 		 * Reindex
 		 */
 
-		this->reindexImprints();
+		this->rebuildImprints();
 
 		/*
 		 * List result
