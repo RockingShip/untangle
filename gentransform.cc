@@ -86,8 +86,6 @@ struct gentransformContext_t {
 
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
-	/// @var {number} --keep, do not delete output database in case of errors
-	unsigned opt_keep;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
 	/// @var {number} --selftest, perform a selftest
@@ -100,7 +98,6 @@ struct gentransformContext_t {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		opt_force = 0;
-		opt_keep = 0;
 		opt_selftest = 0;
 		opt_text = 0;
 	}
@@ -788,7 +785,7 @@ gentransformSelftest_t app(ctx);
  * @param {number} sig - signal (ignored)
  */
 void sigintHandler(int sig) {
-	if (!app.opt_keep && app.arg_outputDatabase) {
+	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
 	exit(1);
@@ -827,7 +824,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help            This list\n");
-		fprintf(stderr, "\t   --keep            Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t-q --quiet           Say more\n");
 		fprintf(stderr, "\t   --selftest        Validate prerequisites\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
@@ -860,7 +856,6 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_FORCE,
-			LO_KEEP,
 			LO_SELFTEST,
 			LO_TEXT,
 			LO_TIMER,
@@ -876,7 +871,6 @@ int main(int argc, char *const *argv) {
 			{"debug",    1, 0, LO_DEBUG},
 			{"force",    0, 0, LO_FORCE},
 			{"help",     0, 0, LO_HELP},
-			{"keep",     0, 0, LO_KEEP},
 			{"quiet",    2, 0, LO_QUIET},
 			{"selftest", 0, 0, LO_SELFTEST},
 			{"text",     0, 0, LO_TEXT},
@@ -918,9 +912,6 @@ int main(int argc, char *const *argv) {
 			case LO_HELP:
 				usage(argv, true);
 				exit(0);
-			case LO_KEEP:
-				app.opt_keep++;
-				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
@@ -995,8 +986,8 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	/*
 	 * Test prerequisite

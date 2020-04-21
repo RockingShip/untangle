@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-21 10:30:27 Moved `--unsafe` to system flags and enhanced.
 2020-04-21 10:19:51 Enhance database with section allocation and inheritance. 
 ```
 

@@ -117,8 +117,6 @@ struct gensignatureContext_t : callable_t {
 	uint32_t opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
 	unsigned opt_interleave;
-	/// @var {number} --keep, do not delete output database in case of errors
-	unsigned opt_keep;
 	/// @var {number} Maximum number of imprints to be stored database
 	uint32_t opt_maxImprint;
 	/// @var {number} Maximum number of signatures to be stored database
@@ -153,7 +151,6 @@ struct gensignatureContext_t : callable_t {
 		opt_force = 0;
 		opt_imprintIndexSize = 0;
 		opt_interleave = METRICS_DEFAULT_INTERLEAVE;
-		opt_keep = 0;
 		opt_maxImprint = 0;
 		opt_maxSignature = 0;
 		opt_metrics = 0;
@@ -1453,7 +1450,7 @@ gensignatureSelftest_t app(ctx);
  * @param {number} sig - signal (ignored)
  */
 void sigintHandler(int sig) {
-	if (!app.opt_keep && app.arg_outputDatabase) {
+	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
 	exit(1);
@@ -1495,7 +1492,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%d]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --keep                          Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics                       Collect metrics\n");
@@ -1536,7 +1532,6 @@ int main(int argc, char *const *argv) {
 			LO_FORCE,
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
-			LO_KEEP,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
 			LO_METRICS,
@@ -1563,7 +1558,6 @@ int main(int argc, char *const *argv) {
 			{"help",               0, 0, LO_HELP},
 			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",         1, 0, LO_INTERLEAVE},
-			{"keep",               0, 0, LO_KEEP},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
 			{"metrics",            2, 0, LO_METRICS},
@@ -1621,9 +1615,6 @@ int main(int argc, char *const *argv) {
 				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
-				break;
-			case LO_KEEP:
-				app.opt_keep++;
 				break;
 			case LO_MAXIMPRINT:
 				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
@@ -1739,9 +1730,20 @@ int main(int argc, char *const *argv) {
 	db.open(app.arg_inputDatabase, true);
 
 	// display system flags when database was created
-	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		ctx.logFlags(db.creationFlags);
-#if defined(ENABLE_JANSSON)
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		char dbText[128], ctxText[128];
+
+		ctx.flagsToText(db.creationFlags, dbText);
+		ctx.flagsToText(ctx.flags, ctxText);
+
+		if (db.creationFlags != ctx.flags)
+			fprintf(stderr, "[%s] WARNING: Database/system flags differ: database=[%s] current=[%s]\n", ctx.timeAsString(), dbText, ctxText);
+		else if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+	}
+
+
+	#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
@@ -1890,8 +1892,8 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	// initialise evaluators
 	tinyTree_t tree(ctx);

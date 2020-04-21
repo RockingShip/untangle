@@ -420,12 +420,15 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-h --help                     This list\n");
 		fprintf(stderr, "\t   --hintindexsize=<number>   Size of hint index [default=%u]\n", app.opt_hintIndexSize);
 		fprintf(stderr, "\t   --maxhint=<number>         Maximum number of hints [default=%u]\n", app.opt_maxHint);
+		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                    Say more\n");
 		fprintf(stderr, "\t   --sge                      Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --sid=[<lo>],<hi>          Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --[no-]unsafe                 Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                  Say less\n");
 	}
 }
@@ -458,11 +461,17 @@ int main(int argc, char *const *argv) {
 			LO_LOAD,
 			LO_MAXHINT,
 			LO_NOGENERATE,
+			LO_NOPARANOID,
+			LO_NOPURE,
+			LO_NOUNSAFE,
+			LO_PARANOID,
+			LO_PURE,
 			LO_SGE,
 			LO_SID,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
+			LO_UNSAFE,
 			// short opts
 			LO_HELP = 'h',
 			LO_QUIET = 'q',
@@ -472,23 +481,29 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",   1, 0, LO_DEBUG},
-			{"force",   0, 0, LO_FORCE},
+			{"debug",         1, 0, LO_DEBUG},
+			{"force",         0, 0, LO_FORCE},
 			{"generate",      0, 0, LO_GENERATE},
-			{"help",    0, 0, LO_HELP},
+			{"help",          0, 0, LO_HELP},
 			{"hintindexsize", 1, 0, LO_HINTINDEXSIZE},
 			{"load",          1, 0, LO_LOAD},
 			{"maxhint",       1, 0, LO_MAXHINT},
+			{"paranoid",      0, 0, LO_PARANOID},
+			{"pure",          0, 0, LO_PURE},
 			{"no-generate",   0, 0, LO_NOGENERATE},
-			{"quiet",   2, 0, LO_QUIET},
-			{"sge",     0, 0, LO_SGE},
-			{"sid",     1, 0, LO_SID},
-			{"task",    1, 0, LO_TASK},
-			{"text",    2, 0, LO_TEXT},
-			{"timer",   1, 0, LO_TIMER},
-			{"verbose", 2, 0, LO_VERBOSE},
+			{"no-paranoid",   0, 0, LO_NOPARANOID},
+			{"no-pure",       0, 0, LO_NOPURE},
+			{"no-unsafe",     0, 0, LO_NOUNSAFE},
+			{"quiet",         2, 0, LO_QUIET},
+			{"sge",           0, 0, LO_SGE},
+			{"sid",           1, 0, LO_SID},
+			{"task",          1, 0, LO_TASK},
+			{"text",          2, 0, LO_TEXT},
+			{"timer",         1, 0, LO_TIMER},
+			{"unsafe",        0, 0, LO_UNSAFE},
+			{"verbose",       2, 0, LO_VERBOSE},
 			//
-			{NULL,      0, 0, 0}
+			{NULL,            0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -537,6 +552,21 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
+				break;
+			case LO_NOPARANOID:
+				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+				break;
+			case LO_NOPURE:
+				ctx.flags &= ~context_t::MAGICMASK_PURE;
+				break;
+			case LO_NOUNSAFE:
+				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
+				break;
+			case LO_PARANOID:
+				ctx.flags |= context_t::MAGICMASK_PARANOID;
+				break;
+			case LO_PURE:
+				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -606,6 +636,9 @@ int main(int argc, char *const *argv) {
 			case LO_TIMER:
 				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
+			case LO_UNSAFE:
+				ctx.flags |= context_t::MAGICMASK_UNSAFE;
+				break;
 			case LO_VERBOSE:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
@@ -671,8 +704,19 @@ int main(int argc, char *const *argv) {
 	db.open(app.arg_inputDatabase, true);
 
 	// display system flags when database was created
-	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		ctx.logFlags(db.creationFlags);
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		char dbText[128], ctxText[128];
+
+		ctx.flagsToText(db.creationFlags, dbText);
+		ctx.flagsToText(ctx.flags, ctxText);
+
+		if (db.creationFlags != ctx.flags)
+			fprintf(stderr, "[%s] WARNING: Database/system flags differ: database=[%s] current=[%s]\n", ctx.timeAsString(), dbText, ctxText);
+		else if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+	}
+
+
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -732,8 +776,8 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	// apply settings for `--task`
 	if (app.opt_taskLast) {

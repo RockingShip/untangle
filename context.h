@@ -57,11 +57,12 @@ struct context_t {
 	enum {
 		// @formatter:off
 		VERBOSE_NONE       = 0,        // nothing
-		VERBOSE_SUMMARY    = 1,        // summary after performing an action
-		VERBOSE_ACTIONS    = 2,        // tell before performing an action
-		VERBOSE_TICK       = 3,        // timed progress of actions (default)
-		VERBOSE_VERBOSE    = 4,        // above average verbosity
-		VERBOSE_INITIALIZE = 5,        // allocations, database connection and such
+		VERBOSE_WARNING    = 1,        // summary after performing an action
+		VERBOSE_SUMMARY    = 2,        // summary after performing an action
+		VERBOSE_ACTIONS    = 3,        // tell before performing an action
+		VERBOSE_TICK       = 4,        // timed progress of actions (default)
+		VERBOSE_VERBOSE    = 5,        // above average verbosity
+		VERBOSE_INITIALIZE = 6,        // allocations, database connection and such
 		// @formatter:on
 	};
 
@@ -72,9 +73,11 @@ struct context_t {
 		// @formatter:off
 		MAGICFLAG_PARANOID      = 0,    // Force extra asserts
 		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting
+		MAGICFLAG_UNSAFE        = 2,    // Imprints for empty/unsafe groups
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
+		MAGICMASK_UNSAFE        = 1 << MAGICFLAG_UNSAFE,
 		// @formatter:on
 	};
 
@@ -297,16 +300,39 @@ struct context_t {
 	}
 
 	/**
-	 * @date 2020-03-15 23:15:44
+	 * @date 2020-04-21 10:42:11
 	 *
-	 * Display creation flags to stderr
+	 * Convert system model flags to string
+	 *
+	 * @param {number} flags - mask to encode
+	 * @param {string} pBuffer - optional buffer to store result
+	 * @return {string} Textual description of flags.
 	 */
-	void logFlags(uint32_t flags) {
-		fprintf(stderr, "[%s] FLAGS [%x]:%s%s\n", this->timeAsString(),
-		        flags,
-		        (flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
-		        (flags & context_t::MAGICMASK_PURE) ? " PURE" : ""
-		);
+	char *flagsToText(uint32_t flags, char *pBuffer = NULL) {
+		static char buffer[128];
+		if (pBuffer == NULL)
+			pBuffer = buffer;
+
+		*pBuffer = 0;
+
+		if (flags & MAGICMASK_PARANOID) {
+			::strcpy(pBuffer, "PARANOID");
+			flags &= ~MAGICMASK_PARANOID;
+		}
+		if (flags)
+			::strcpy(pBuffer, "p");
+		if (flags & MAGICMASK_PURE) {
+			::strcpy(pBuffer, "PURE");
+			flags &= ~MAGICMASK_PURE;
+		}
+		if (flags)
+			::strcpy(pBuffer, "p");
+		if (flags & MAGICMASK_UNSAFE) {
+			::strcpy(pBuffer, "UNSAFE");
+			flags &= ~MAGICMASK_UNSAFE;
+		}
+
+		return pBuffer;
 	}
 
 	/**

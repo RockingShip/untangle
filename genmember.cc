@@ -192,8 +192,6 @@ struct genmemberContext_t : callable_t {
 	uint32_t opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
 	unsigned opt_interleave;
-	/// @var {number} --keep, do not delete output database in case of errors
-	unsigned opt_keep;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} Maximum number of imprints to be stored database
@@ -252,7 +250,6 @@ struct genmemberContext_t : callable_t {
 		opt_interleave = 0;
 		opt_taskId = 0;
 		opt_taskLast = 0;
-		opt_keep = 0;
 		opt_load = NULL;
 		opt_maxImprint = 0;
 		opt_maxMember = 0;
@@ -1446,7 +1443,7 @@ genmemberSelftest_t app(ctx);
  * @param {number} sig - signal (ignored)
  */
 void sigintHandler(int sig) {
-	if (!app.opt_keep && app.arg_outputDatabase) {
+	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
 	exit(1);
@@ -1488,7 +1485,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-h --help                        This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>         Imprint index interleave [default=%u]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --keep                        Do not delete output database in case of errors\n");
 		fprintf(stderr, "\t   --load=<file>                 Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>         Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>          Maximum number of members [default=%u]\n", app.opt_maxMember);
@@ -1505,7 +1501,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --task=<id>,<last>            Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                        Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>             Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --unsafe                      Reindex imprints based onempty/unsafe signature groups\n");
+		fprintf(stderr, "\t   --[no-]unsafe                 Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                     Say less\n");
 		fprintf(stderr, "\t   --windowhi=<number>           Upper end restart window [default=%lu]\n", app.opt_windowHi);
 		fprintf(stderr, "\t   --windowlo=<number>           Lower end restart window [default=%lu]\n", app.opt_windowLo);
@@ -1538,7 +1534,6 @@ int main(int argc, char *const *argv) {
 			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
-			LO_KEEP,
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
@@ -1546,6 +1541,7 @@ int main(int argc, char *const *argv) {
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
+			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
@@ -1574,7 +1570,6 @@ int main(int argc, char *const *argv) {
 			{"help",             0, 0, LO_HELP},
 			{"imprintindexsize", 1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",       1, 0, LO_INTERLEAVE},
-			{"keep",             0, 0, LO_KEEP},
 			{"load",             1, 0, LO_LOAD},
 			{"maximprint",       1, 0, LO_MAXIMPRINT},
 			{"maxmember",        1, 0, LO_MAXMEMBER},
@@ -1582,6 +1577,7 @@ int main(int argc, char *const *argv) {
 			{"no-generate",      0, 0, LO_NOGENERATE},
 			{"no-paranoid",      0, 0, LO_NOPARANOID},
 			{"no-pure",          0, 0, LO_NOPURE},
+			{"no-unsafe",        0, 0, LO_NOUNSAFE},
 			{"paranoid",         0, 0, LO_PARANOID},
 			{"pure",             0, 0, LO_PURE},
 			{"quiet",            2, 0, LO_QUIET},
@@ -1644,9 +1640,6 @@ int main(int argc, char *const *argv) {
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
-			case LO_KEEP:
-				app.opt_keep++;
-				break;
 			case LO_LOAD:
 				app.opt_load = optarg;
 				break;
@@ -1667,6 +1660,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_NOPURE:
 				ctx.flags &= ~context_t::MAGICMASK_PURE;
+				break;
+			case LO_NOUNSAFE:
+				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
 				break;
 			case LO_PARANOID:
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
@@ -1734,7 +1730,7 @@ int main(int argc, char *const *argv) {
 				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_UNSAFE:
-				app.opt_unsafe++;
+				ctx.flags |= context_t::MAGICMASK_UNSAFE;
 				break;
 			case LO_VERBOSE:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
@@ -1831,8 +1827,18 @@ int main(int argc, char *const *argv) {
 	db.open(app.arg_inputDatabase, true);
 
 	// display system flags when database was created
-	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		ctx.logFlags(db.creationFlags);
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		char dbText[128], ctxText[128];
+
+		ctx.flagsToText(db.creationFlags, dbText);
+		ctx.flagsToText(ctx.flags, ctxText);
+
+		if (db.creationFlags != ctx.flags)
+			fprintf(stderr, "[%s] WARNING: Database/system flags differ: database=[%s] current=[%s]\n", ctx.timeAsString(), dbText, ctxText);
+		else if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+	}
+
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -1960,8 +1966,8 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", ctx.totalAllocated);
+	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	// initialise evaluators
 	tinyTree_t tree(ctx);
@@ -2037,7 +2043,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (store.allocFlags & database_t::ALLOCMASK_IMPRINT)
-		app.reindexImprints(app.opt_unsafe != 0);
+		app.reindexImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
 
 	/*
 	 * Fire up generator for new candidates

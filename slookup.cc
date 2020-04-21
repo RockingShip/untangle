@@ -348,7 +348,8 @@ int main(int argc, char *const *argv) {
 
 	// display system flags when database was created
 	if (db.creationFlags && app.opt_verbose >= app.VERBOSE_SUMMARY)
-		app.logFlags(db.creationFlags);
+		fprintf(stderr, "[%s] FLAGS [%s]\n", app.timeAsString(), app.flagsToText(db.creationFlags));
+
 #if defined(ENABLE_JANSSON)
 	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -374,8 +375,9 @@ int main(int argc, char *const *argv) {
 #if 0
 	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
-	if (app.totalAllocated >= 30000000000)
-		fprintf(stderr, "warning: allocated %lu memory\n", app.totalAllocated);
+	if (app.totalAllocated >= 30000000000 && app.opt_verbose >= app.VERBOSE_WARNING)
+		fprintf(stderr, "WARNING: allocated %lu memory\n", app.totalAllocated);
+
 #endif
 
 	if (app.opt_imprint) {
