@@ -176,7 +176,7 @@ slookupContext_t app;
  */
 void sigalrmHandler(int sig) {
 	if (app.opt_timer) {
-		app.tick++;
+		app.tick += 2;
 		alarm(app.opt_timer);
 	}
 }

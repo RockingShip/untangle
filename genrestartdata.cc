@@ -226,7 +226,6 @@ struct genrestartdataContext_t : callable_t {
 		 * Simply count how often called
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -244,6 +243,8 @@ struct genrestartdataContext_t : callable_t {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
 				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
 			}
+
+			ctx.tick = 0;
 		}
 
 		// tree is incomplete and requires a slightly different notation
@@ -436,7 +437,6 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 * Ticker
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -454,6 +454,8 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
 				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature);
 			}
+
+			ctx.tick = 0;
 		}
 
 		/*
@@ -574,7 +576,7 @@ void sigalrmHandler(int sig) {
 	(void) sig; // trick compiler t see parameter is used
 
 	if (ctx.opt_timer) {
-		ctx.tick++;
+		ctx.tick += 2;
 		alarm(ctx.opt_timer);
 	}
 }

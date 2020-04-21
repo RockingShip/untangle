@@ -1670,26 +1670,11 @@ struct database_t {
 
 			for (uint32_t iSid = 1; iSid < this->numSignature; iSid++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					ctx.tick = 0;
 					int perSecond = ctx.updateSpeed();
 
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
 
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					}
+					ctx.tick = 0;
 				}
 
 				const signature_t *pSignature = this->signatures + iSid;
@@ -1713,26 +1698,11 @@ struct database_t {
 			// rebuild
 			for (uint32_t iHint = 1; iHint < this->numHint; iHint++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					ctx.tick = 0;
 					int perSecond = ctx.updateSpeed();
 
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
 
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					}
+					ctx.tick = 0;
 				}
 
 				const hint_t *pHint = this->hints + iHint;
@@ -1756,26 +1726,11 @@ struct database_t {
 			// rebuild
 			for (uint32_t iImprint = 1; iImprint < this->numImprint; iImprint++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					ctx.tick = 0;
 					int perSecond = ctx.updateSpeed();
 
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
 
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					}
+					ctx.tick = 0;
 				}
 
 				const imprint_t *pImprint = this->imprints + iImprint;
@@ -1799,26 +1754,11 @@ struct database_t {
 			// rebuild
 			for (uint32_t iMember = 1; iMember < this->numMember; iMember++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					ctx.tick = 0;
 					int perSecond = ctx.updateSpeed();
 
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
 
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
-						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-						        (double) ctx.cntCompare / ctx.cntHash);
-					}
+					ctx.tick = 0;
 				}
 
 				const member_t *pMember = this->members + iMember;

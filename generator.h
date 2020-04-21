@@ -193,11 +193,8 @@ struct generatorTree_t : tinyTree_t {
 	/// @var {uint64_t[]} restart data
 	const uint64_t *pRestartData;
 
-	/// @var {number} Indication that a restart point has passed
-	uint64_t restartTick;
-
 	/// @var {number} Node depth at which to handle restart tabs.
-	uint32_t restartTabDepth;
+	unsigned restartTabDepth;
 
 	/// @var {number[]} template data for generator
 	uint32_t *pTemplateData;
@@ -223,7 +220,7 @@ struct generatorTree_t : tinyTree_t {
 		windowLo = 0;
 		windowHi = 0;
 		pRestartData = NULL;
-		restartTick = 0;
+		ctx.tick = 0;
 		restartTabDepth = TINYTREE_NSTART + 2; // for `7n9` +3 is a better choice. But `7n9-pure` still has 70177 restart tabs.
 
 		::memset(templateIndex, 0, sizeof(templateIndex));
@@ -980,8 +977,8 @@ struct generatorTree_t : tinyTree_t {
 					ctx.progress = *this->pRestartData;
 					return;
 				} else {
-					// passed restart point. Status on new line
-					this->restartTick++;
+					// passed restart point. not +2 but +1. Status on new line
+					ctx.tick++;
 				}
 
 			} else if (ctx.opt_debug & ctx.DEBUGMASK_GENERATOR_TABS) {

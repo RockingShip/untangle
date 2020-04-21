@@ -113,7 +113,7 @@ struct context_t {
 	/// @var {number} --verbose, What do you want to know
 	unsigned opt_verbose;
 
-	/// @var {number} - async indication that a timer interrupt occurred
+	/// @var {number} - async indication that a timer interrupt occurred. +1 for passing each restart point, +2 on timer event
 	uint32_t tick;
 	/// @var {uint64_t} - total memory allocated by `myAlloc()`
 	uint64_t totalAllocated;

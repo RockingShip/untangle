@@ -182,12 +182,13 @@ struct genhintContext_t : callable_t {
 				break;
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numHint=%u(%.0f%%)",
 				        ctx.timeAsString(), ctx.progress, perSecond,
 				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint);
+
+				ctx.tick = 0;
 			}
 
 			/*
@@ -268,7 +269,6 @@ struct genhintContext_t : callable_t {
 				continue;
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -286,6 +286,8 @@ struct genhintContext_t : callable_t {
 					fprintf(stderr, "\r\e[K[%s] %u(%7d/s) %.5f%% eta=%d:%02d:%02d",
 					        ctx.timeAsString(), iSid, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
 				}
+
+				ctx.tick = 0;
 			}
 
 			signature_t *pSignature = pStore->signatures + iSid;
@@ -396,7 +398,7 @@ void sigintHandler(int sig) {
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick++;
+		ctx.tick += 2;
 		alarm(ctx.opt_timer);
 	}
 }

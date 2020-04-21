@@ -182,7 +182,6 @@ struct gensignatureContext_t : callable_t {
 
 		for (uint32_t iSid = 1; iSid < pDB->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -206,6 +205,8 @@ struct gensignatureContext_t : callable_t {
 					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					        (double) ctx.cntCompare / ctx.cntHash);
 				}
+
+				ctx.tick = 0;
 			}
 			ctx.progress++;
 
@@ -281,7 +282,6 @@ struct gensignatureContext_t : callable_t {
 	 */
 	bool foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -305,6 +305,8 @@ struct gensignatureContext_t : callable_t {
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
+
+			ctx.tick = 0;
 		}
 
 		/*
@@ -495,7 +497,6 @@ struct gensignatureContext_t : callable_t {
 		ctx.progress++; // skip reserved
 		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -517,6 +518,8 @@ struct gensignatureContext_t : callable_t {
 					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					        (double) ctx.cntCompare / ctx.cntHash);
 				}
+
+				ctx.tick = 0;
 			}
 
 			const signature_t *pSignature = pStore->signatures + iSid;
@@ -1059,11 +1062,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	bool foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			if (ctx.progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), tree.windowLo);
+			ctx.tick = 0;
 		}
 
 		assert(ctx.progress < 2000000);
@@ -1095,11 +1098,11 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	bool foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			if (ctx.progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
 			else
 				fprintf(stderr, "\r\e[K[%s] %ld", ctx.timeAsString(), tree.windowLo);
+			ctx.tick = 0;
 		}
 
 		assert(ctx.progress < 2000000);
@@ -1215,7 +1218,6 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 	 */
 	bool foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -1239,6 +1241,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 				        (double) ctx.cntCompare / ctx.cntHash);
 			}
+
+			ctx.tick = 0;
 		}
 
 		// lookup
@@ -1326,8 +1330,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			for (ctx.tick = 0; ctx.tick == 0;)
 				generator.decodeFast("ab+"); // waste some time
 
-			// do random lookups for 10 seconds
-			for (ctx.tick = 0; ctx.tick < 5;) {
+			// do random lookups for 10 seconds (tick increments twice per second)
+			for (ctx.tick = 0; ctx.tick < 5 * 2;) {
 				// load random signature with random tree
 				uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 				uint32_t tid = rand() % pStore->numTransform;
@@ -1399,8 +1403,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					generator.decodeFast("ab+"); // waste some time
 				}
 
-				// do random lookups for 10 seconds
-				for (ctx.tick = 0; ctx.tick < 5;) {
+				// do random lookups for 10 seconds (tick increments twice per second)
+				for (ctx.tick = 0; ctx.tick < 5 * 2;) {
 					// load random signature with random tree
 					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
@@ -1467,7 +1471,7 @@ void sigintHandler(int sig) {
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick++;
+		ctx.tick += 2;
 		alarm(ctx.opt_timer);
 	}
 }

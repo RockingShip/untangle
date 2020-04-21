@@ -728,7 +728,6 @@ struct genmemberContext_t : callable_t {
 	 */
 	bool foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			ctx.tick = 0;
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -753,12 +752,12 @@ struct genmemberContext_t : callable_t {
 				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
-			if (treeR.restartTick) {
+			if (ctx.tick & 1) {
 				// passed a restart point
 				fprintf(stderr, "\n");
-				// todo: writable `restartTick`. Like make it a pointer to static
-				(*(generatorTree_t *) &treeR).restartTick = 0;
 			}
+
+			ctx.tick = 0;
 		}
 
 		/*
@@ -920,7 +919,6 @@ struct genmemberContext_t : callable_t {
 		ctx.progress++; // skip reserved
 		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -942,6 +940,8 @@ struct genmemberContext_t : callable_t {
 					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 				}
+
+				ctx.tick = 0;
 			}
 
 			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi)) {
@@ -1032,7 +1032,6 @@ struct genmemberContext_t : callable_t {
 		// <sid> <candidateName> <size> <numPlaceholder> <numEndpoint> <numBackRef>
 		while (fscanf(f, "%u %s %u %u %u %u\n", &sid, name, &size, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
@@ -1040,6 +1039,8 @@ struct genmemberContext_t : callable_t {
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe);
+
+				ctx.tick = 0;
 			}
 
 			/*
@@ -1168,7 +1169,6 @@ struct genmemberContext_t : callable_t {
 		// reset progress
 		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		ctx.tick = 0;
-		generator.restartTick = 0;
 
 		/*
 		 * Generate candidates
@@ -1241,7 +1241,6 @@ struct genmemberContext_t : callable_t {
 		ctx.progress++; // skip reserved
 		for (uint32_t iMid = 1; iMid < lastMember; iMid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				ctx.tick = 0;
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
@@ -1259,6 +1258,8 @@ struct genmemberContext_t : callable_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u | hash=%.3f",
 					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				}
+
+				ctx.tick = 0;
 			}
 
 			member_t *pMember = pStore->members + iMid;
@@ -1460,7 +1461,7 @@ void sigintHandler(int sig) {
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick++;
+		ctx.tick += 2;
 		alarm(ctx.opt_timer);
 	}
 }
