@@ -375,9 +375,6 @@ int main(int argc, char *const *argv) {
 #if 0
 	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
-	if (app.totalAllocated >= 30000000000 && app.opt_verbose >= app.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", app.totalAllocated);
-
 #endif
 
 	if (app.opt_imprint) {

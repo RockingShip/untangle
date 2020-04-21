@@ -42,20 +42,19 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <sys/sysinfo.h>
 #include "tinytree.h"
 #include "database.h"
 #include "generator.h"
-#include "restartdata.h"
 #include "metrics.h"
 
 /**
@@ -323,7 +322,7 @@ struct genhintContext_t : callable_t {
 					printf("\t%u", pStore->numImprint - 1);
 			}
 			if (this->opt_text)
-			printf("\n");
+				printf("\n");
 
 			// add to database
 			if (this->arg_outputDatabase) {
@@ -718,6 +717,21 @@ int main(int argc, char *const *argv) {
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
 	}
 
+	/*
+	 * apply settings for `--task`
+	 */
+	if (app.opt_taskLast) {
+		// split progress into chunks
+		uint64_t taskSize = db.numSignature / app.opt_taskLast;
+		if (taskSize == 0)
+			taskSize = 1;
+
+		app.opt_sidLo = taskSize * (app.opt_taskId - 1);
+		app.opt_sidHi = taskSize * app.opt_taskId;
+
+		if (app.opt_taskId == app.opt_taskLast)
+			app.opt_sidHi = db.numSignature;
+	}
 
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
@@ -764,36 +778,32 @@ int main(int argc, char *const *argv) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] Store create: maxImprint=%u maxSignature=%u\n", ctx.timeAsString(), store.maxImprint, store.maxSignature);
 
-	// actual create
-	store.create(0);
-	app.pStore = &store;
-
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	/*
-	 * Statistics
+	 * Finalise allocations and create database
 	 */
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		// Assuming with database allocations included
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(0);
+
+		struct sysinfo info;
+		if (sysinfo(&info) == 0) {
+			double percent = 100.0 * allocated / info.freeram;
+			if (percent > 80)
+				fprintf(stderr, "WARNING: using %.1f%% of free memory\n", percent);
+		}
+	}
+
+	// actual create
+	store.create(0);
+	app.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
-
-	// apply settings for `--task`
-	if (app.opt_taskLast) {
-		// split progress into chunks
-		uint64_t taskSize = db.numSignature / app.opt_taskLast;
-		if (taskSize == 0)
-			taskSize = 1;
-
-		app.opt_sidLo = taskSize * (app.opt_taskId - 1);
-		app.opt_sidHi = taskSize * app.opt_taskId;
-
-		if (app.opt_taskId == app.opt_taskLast)
-			app.opt_sidHi = db.numSignature;
-	}
 
 	/*
 	 * Copy/inherit sections

@@ -826,8 +826,6 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	/*
 	 * Invoke

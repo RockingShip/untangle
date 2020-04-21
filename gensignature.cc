@@ -66,16 +66,17 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <ctype.h>
+#include <errno.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <sys/sysinfo.h>
 #include "tinytree.h"
 #include "database.h"
 #include "generator.h"
@@ -570,7 +571,7 @@ struct gensignatureContext_t : callable_t {
 	 */
 	void main(void) {
 
-		 {
+		{
 			// reset progress
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -866,41 +867,41 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 		tinyTree_t tree(ctx);
 
-			// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
-			assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
-			assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
+		// `fwdTransform[3]` equals `"cabdefghi"` which is different than `revTransform[3]`
+		assert(strcmp(pStore->fwdTransformNames[3], "cabdefghi") == 0);
+		assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
 
-			// calculate `"abc!defg!!hi!"/cabdefghi"`
-			tree.decodeSafe("abc!defg!!hi!");
-			footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
-			tree.eval(pEncountered);
+		// calculate `"abc!defg!!hi!"/cabdefghi"`
+		tree.decodeSafe("abc!defg!!hi!");
+		footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
+		tree.eval(pEncountered);
 
-			// calculate `"cab!defg!!hi!"` (manually applying forward transform)
-			tree.decodeSafe("cab!defg!!hi!");
-			footprint_t *pExpect = pEvalFwd;
-			tree.eval(pExpect);
+		// calculate `"cab!defg!!hi!"` (manually applying forward transform)
+		tree.decodeSafe("cab!defg!!hi!");
+		footprint_t *pExpect = pEvalFwd;
+		tree.eval(pExpect);
 
-			// compare
-			if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
-				printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
-				       __FUNCTION__);
-				exit(1);
-			}
-
-			// test that cache lookups work
-			// calculate `"abc!de!fabc!!"`
-			tree.decodeSafe("abc!de!fabc!!");
-			tree.eval(pEvalFwd);
-
-			const char *pExpectedName = tree.encode(tree.root);
-
-			// compare
-			if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
-				printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
-				       __FUNCTION__, pExpectedName, "abc!de!f2!");
-				exit(1);
-			}
+		// compare
+		if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
+			printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
+			       __FUNCTION__);
+			exit(1);
 		}
+
+		// test that cache lookups work
+		// calculate `"abc!de!fabc!!"`
+		tree.decodeSafe("abc!de!fabc!!");
+		tree.eval(pEvalFwd);
+
+		const char *pExpectedName = tree.encode(tree.root);
+
+		// compare
+		if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
+			printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+			       __FUNCTION__, pExpectedName, "abc!de!f2!");
+			exit(1);
+		}
+	}
 
 	/**
 	 * @date 2020-03-15 16:35:43
@@ -1748,7 +1749,7 @@ int main(int argc, char *const *argv) {
 	}
 
 
-	#if defined(ENABLE_JANSSON)
+#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
@@ -1808,10 +1809,10 @@ int main(int argc, char *const *argv) {
 						continue; // only process settings that match `MAXSLOTS`
 
 					if (app.opt_maxImprint < pMetrics->numImprint)
-							app.opt_maxImprint = pMetrics->numImprint;
-						if (highestNumNode < pMetrics->numNode)
-							highestNumNode = pMetrics->numNode;
-					}
+						app.opt_maxImprint = pMetrics->numImprint;
+					if (highestNumNode < pMetrics->numNode)
+						highestNumNode = pMetrics->numNode;
+				}
 
 				// Give extra 5% expansion space
 				if (app.opt_maxImprint > UINT32_MAX - app.opt_maxImprint / 20)
@@ -1828,9 +1829,9 @@ int main(int argc, char *const *argv) {
 					if (pMetrics->numSlot != MAXSLOTS)
 						continue; // only process settings that match `MAXSLOTS`
 
-						if (app.opt_maxSignature < pMetrics->numSignature)
-							app.opt_maxSignature = pMetrics->numSignature;
-					}
+					if (app.opt_maxSignature < pMetrics->numSignature)
+						app.opt_maxSignature = pMetrics->numSignature;
+				}
 
 				// Give extra 5% expansion space
 				if (app.opt_maxSignature > UINT32_MAX - app.opt_maxSignature / 20)
@@ -1876,29 +1877,40 @@ int main(int argc, char *const *argv) {
 			ctx.fatal("no preset for --maxsignature\n");
 	}
 
-	// create new sections
-	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
-		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), store.maxSignature, store.maxImprint);
-
-	store.create(0);
-
-	// inherit from existing
-	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
-
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
-	app.pStore = &store;
-
 	/*
-	 * Statistics
+	 * Finalise allocations and create database
 	 */
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		// Assuming with database allocations included
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(0);
+
+		struct sysinfo info;
+		if (sysinfo(&info) == 0) {
+			double percent = 100.0 * allocated / info.freeram;
+			if (percent > 80)
+				fprintf(stderr, "WARNING: using %.1f%% of free memory\n", percent);
+		}
+	}
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), store.maxSignature, store.maxImprint);
+
+	// actual create
+	store.create(0);
+	app.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
+
+	/*
+	 * Copy/inherit sections
+	 */
+
+	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
 
 	// initialise evaluators
 	tinyTree_t tree(ctx);

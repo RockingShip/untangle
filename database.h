@@ -61,14 +61,13 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include "datadef.h"
 #include "tinytree.h"
 #include "config.h"
@@ -299,6 +298,56 @@ struct database_t {
 	};
 
 	/**
+	 * @date 2020-04-21 14:31:14
+	 *
+	 * Determine how much memory `create()` would require
+	 *
+  	 * @param {number} excludeSections - set of sections to exclude from allocating
+	 * @return {number} Required memory
+	 */
+	size_t estimateMemoryUsage(unsigned excludeSections) const {
+
+		size_t memUsage = 0;
+
+		// transform store
+		if (maxTransform && (~excludeSections & ALLOCMASK_TRANSFORM)) {
+			memUsage += maxTransform * sizeof(*this->fwdTransformData);
+			memUsage += maxTransform * sizeof(*this->revTransformData);
+			memUsage += maxTransform * sizeof(*this->fwdTransformNames);
+			memUsage += maxTransform * sizeof(*this->revTransformNames);
+			memUsage += maxTransform * sizeof(*this->revTransformIds);
+			memUsage += transformIndexSize * sizeof(*fwdTransformNameIndex);
+			memUsage += transformIndexSize * sizeof(*revTransformNameIndex);
+		}
+
+		// signature store
+		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE))
+			memUsage += ctx.raisePercent(maxSignature, 5) * sizeof(*signatures); // increase with 5%
+		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX))
+			memUsage += signatureIndexSize * sizeof(*signatureIndex);
+
+		// hint store
+		if (maxHint && (~excludeSections & ALLOCMASK_HINT))
+			memUsage += ctx.raisePercent(maxHint, 5) * sizeof(*hints); // increase with 5%
+		if (hintIndexSize && (~excludeSections & ALLOCMASK_HINTINDEX))
+			memUsage += hintIndexSize * sizeof(*hintIndex);
+
+		// imprint store
+		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT))
+			memUsage += ctx.raisePercent(maxImprint, 5) * sizeof(*imprints); // increase with 5%
+		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX))
+			memUsage += imprintIndexSize * sizeof(*imprintIndex);
+
+		// member store
+		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER))
+			memUsage += ctx.raisePercent(maxMember, 5) * sizeof(*members); // increase with 5%
+		if (memberIndexSize && (~excludeSections & ALLOCMASK_MEMBERINDEX))
+			memUsage += memberIndexSize * sizeof(*memberIndex);
+
+		return memUsage;
+	};
+
+	/**
 	 * @date 2020-03-12 16:05:37
 	 *
 	 * Create read-write database as memory store
@@ -323,9 +372,7 @@ struct database_t {
 		// signature store
 		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
-			if (maxSignature < UINT32_MAX - maxSignature / 20)
-				maxSignature += maxSignature / 20;
-
+			maxSignature = ctx.raisePercent(maxSignature, 5);
 			numSignature = 1; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
 			allocFlags |= ALLOCMASK_SIGNATURE;
@@ -339,9 +386,7 @@ struct database_t {
 		// hint store
 		if (maxHint && (~excludeSections & ALLOCMASK_HINT)) {
 			// increase with 5%
-			if (maxHint < UINT32_MAX - maxHint / 20)
-				maxHint += maxHint / 20;
-
+			maxHint = ctx.raisePercent(maxHint, 5);
 			numHint = 1; // do not start at 1
 			hints = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
 			allocFlags |= ALLOCMASK_HINT;
@@ -354,11 +399,9 @@ struct database_t {
 
 		// imprint store
 		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT)) {
-			// increase with 5%
-			if (maxImprint < UINT32_MAX - maxImprint / 20)
-				maxImprint += maxImprint / 20;
-
 			assert(interleave && interleaveStep);
+			// increase with 5%
+			maxImprint = ctx.raisePercent(maxImprint, 5);
 			numImprint = 1; // do not start at 1
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			allocFlags |= ALLOCMASK_IMPRINT;
@@ -373,9 +416,7 @@ struct database_t {
 		// member store
 		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
-			if (maxMember < UINT32_MAX - maxMember / 20)
-				maxMember += maxMember / 20;
-
+			maxMember = ctx.raisePercent(maxMember, 5);
 			numMember = 1; // do not start at 1
 			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
 			allocFlags |= ALLOCMASK_MEMBER;
@@ -388,7 +429,6 @@ struct database_t {
 
 	};
 
-
 	/**
 	 * @date 2020-03-15 22:25:41
 	 *
@@ -396,127 +436,127 @@ struct database_t {
 	 *
 	 * NOTE: call after calling `create()`
 	 *
-	 * @param {database_t} pDatabase - Database to inherit from
+	 * @param {database_t} pFrom - Database to inherit from
 	 * @param {string} pName - Name of database
-	 * @param {number} sections - set of sections to inherit
+	 * @param {number} inheritSections - set of sections to inherit
 	 */
-	void inheritSections(const database_t *pDatabase, const char *pName, unsigned sections) {
+	void inheritSections(const database_t *pFrom, const char *pName, unsigned inheritSections) {
 
 		// transform store
-		if (sections & ALLOCMASK_TRANSFORM) {
-			if (pDatabase->numTransform == 0) {
+		if (inheritSections & ALLOCMASK_TRANSFORM) {
+			if (pFrom->numTransform == 0) {
 				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
 			assert(maxTransform == 0);
-			maxTransform = pDatabase->maxTransform;
-			numTransform = pDatabase->numTransform;
+			maxTransform = pFrom->maxTransform;
+			numTransform = pFrom->numTransform;
 
-			fwdTransformData = pDatabase->fwdTransformData;
-			revTransformData = pDatabase->revTransformData;
-			fwdTransformNames = pDatabase->fwdTransformNames;
-			revTransformNames = pDatabase->revTransformNames;
-			revTransformIds = pDatabase->revTransformIds;
+			fwdTransformData = pFrom->fwdTransformData;
+			revTransformData = pFrom->revTransformData;
+			fwdTransformNames = pFrom->fwdTransformNames;
+			revTransformNames = pFrom->revTransformNames;
+			revTransformIds = pFrom->revTransformIds;
 
 			assert(transformIndexSize == 0);
-			transformIndexSize = pDatabase->transformIndexSize;
+			transformIndexSize = pFrom->transformIndexSize;
 
-			fwdTransformNameIndex = pDatabase->fwdTransformNameIndex;
-			revTransformNameIndex = pDatabase->revTransformNameIndex;
+			fwdTransformNameIndex = pFrom->fwdTransformNameIndex;
+			revTransformNameIndex = pFrom->revTransformNameIndex;
 		}
 
 		// signature store
-		if (sections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
-			if (pDatabase->numSignature == 0) {
+		if (inheritSections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
+			if (pFrom->numSignature == 0) {
 				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			if (sections & ALLOCMASK_SIGNATURE) {
+			if (inheritSections & ALLOCMASK_SIGNATURE) {
 				assert(~allocFlags & ALLOCMASK_SIGNATURE);
-			this->maxSignature = pDatabase->maxSignature;
-			this->numSignature = pDatabase->numSignature;
-			this->signatures = pDatabase->signatures;
+				this->maxSignature = pFrom->maxSignature;
+				this->numSignature = pFrom->numSignature;
+				this->signatures = pFrom->signatures;
 			}
 
-			if (sections & ALLOCMASK_SIGNATUREINDEX) {
+			if (inheritSections & ALLOCMASK_SIGNATUREINDEX) {
 				assert(~allocFlags & ALLOCMASK_SIGNATUREINDEX);
-			this->signatureIndexSize = pDatabase->signatureIndexSize;
-			this->signatureIndex = pDatabase->signatureIndex;
-		}
+				this->signatureIndexSize = pFrom->signatureIndexSize;
+				this->signatureIndex = pFrom->signatureIndex;
+			}
 		}
 
 		// hint store
-		if (sections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
-			if (pDatabase->numHint == 0) {
+		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
+			if (pFrom->numHint == 0) {
 				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			if (sections & ALLOCMASK_HINT) {
+			if (inheritSections & ALLOCMASK_HINT) {
 				assert(~allocFlags & ALLOCMASK_HINT);
-			this->maxHint = pDatabase->maxHint;
-			this->numHint = pDatabase->numHint;
-			this->hints = pDatabase->hints;
+				this->maxHint = pFrom->maxHint;
+				this->numHint = pFrom->numHint;
+				this->hints = pFrom->hints;
 			}
 
-			if (sections & ALLOCMASK_HINTINDEX) {
+			if (inheritSections & ALLOCMASK_HINTINDEX) {
 				assert(~allocFlags & ALLOCMASK_HINTINDEX);
-			this->hintIndexSize = pDatabase->hintIndexSize;
-			this->hintIndex = pDatabase->hintIndex;
-		}
+				this->hintIndexSize = pFrom->hintIndexSize;
+				this->hintIndex = pFrom->hintIndex;
+			}
 		}
 
 		// imprint store
-		if (sections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
-			if (pDatabase->numImprint == 0) {
+		if (inheritSections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
+			if (pFrom->numImprint == 0) {
 				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			this->interleave = pDatabase->interleave;
-			this->interleaveStep = pDatabase->interleaveStep;
+			this->interleave = pFrom->interleave;
+			this->interleaveStep = pFrom->interleaveStep;
 
-			if (sections & ALLOCMASK_IMPRINT) {
+			if (inheritSections & ALLOCMASK_IMPRINT) {
 				assert(~allocFlags & ALLOCMASK_IMPRINT);
-			this->maxImprint = pDatabase->maxImprint;
-			this->numImprint = pDatabase->numImprint;
-			this->imprints = pDatabase->imprints;
+				this->maxImprint = pFrom->maxImprint;
+				this->numImprint = pFrom->numImprint;
+				this->imprints = pFrom->imprints;
 			}
 
-			if (sections & ALLOCMASK_IMPRINTINDEX) {
+			if (inheritSections & ALLOCMASK_IMPRINTINDEX) {
 				assert(~allocFlags & ALLOCMASK_IMPRINTINDEX);
-			this->imprintIndexSize = pDatabase->imprintIndexSize;
-			this->imprintIndex = pDatabase->imprintIndex;
-		}
+				this->imprintIndexSize = pFrom->imprintIndexSize;
+				this->imprintIndex = pFrom->imprintIndex;
+			}
 		}
 
 		// member store
-		if (sections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
-			if (pDatabase->numMember == 0) {
+		if (inheritSections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
+			if (pFrom->numMember == 0) {
 				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			if (sections & ALLOCMASK_MEMBER) {
+			if (inheritSections & ALLOCMASK_MEMBER) {
 				assert(~allocFlags & ALLOCMASK_MEMBER);
-			this->maxMember = pDatabase->maxMember;
-			this->numMember = pDatabase->numMember;
-			this->members = pDatabase->members;
+				this->maxMember = pFrom->maxMember;
+				this->numMember = pFrom->numMember;
+				this->members = pFrom->members;
 			}
 
-			if (sections & ALLOCMASK_MEMBERINDEX) {
+			if (inheritSections & ALLOCMASK_MEMBERINDEX) {
 				assert(~allocFlags & ALLOCMASK_MEMBERINDEX);
-			this->memberIndexSize = pDatabase->memberIndexSize;
-			this->memberIndex = pDatabase->memberIndex;
+				this->memberIndexSize = pFrom->memberIndexSize;
+				this->memberIndex = pFrom->memberIndex;
+			}
 		}
-	}
 	}
 
 	/**
@@ -674,8 +714,8 @@ struct database_t {
 
 		if (signatureVersion)
 			ctx.myFree("database_t::signatureVersion", signatureVersion);
-			if (imprintVersion)
-				ctx.myFree("database_t::imprintVersion", imprintVersion);
+		if (imprintVersion)
+			ctx.myFree("database_t::imprintVersion", imprintVersion);
 
 		/*
 		 * Release resources
@@ -1242,7 +1282,7 @@ struct database_t {
 
 		// calculate starting position
 		uint32_t crc32 = 0;
-		for (unsigned j=0; j<MAXSLOTS*2; j++)
+		for (unsigned j = 0; j < MAXSLOTS * 2; j++)
 			crc32 = __builtin_ia32_crc32si(crc32, pHint->numStored[j]);
 
 		uint32_t ix = crc32 % hintIndexSize;

@@ -46,14 +46,14 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include "database.h"
 
@@ -986,8 +986,6 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
 
 	/*
 	 * Test prerequisite

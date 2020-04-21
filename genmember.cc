@@ -139,16 +139,17 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <ctype.h>
+#include <errno.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <sys/sysinfo.h>
 #include "tinytree.h"
 #include "database.h"
 #include "generator.h"
@@ -1959,33 +1960,38 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
-	// create new sections
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxImprint, store.maxSignature, store.maxMember);
-
-	store.create(0);
-	app.pStore = &store;
-
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	/*
-	 * Statistics
+	 * Finalise allocations and create database
 	 */
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		// Assuming with database allocations included
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(0);
+
+		struct sysinfo info;
+		if (sysinfo(&info) == 0) {
+			double percent = 100.0 * allocated / info.freeram;
+			if (percent > 80)
+				fprintf(stderr, "WARNING: using %.1f%% of free memory\n", percent);
+		}
+	}
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxImprint=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxImprint, store.maxMember);
+
+	// actual create
+	store.create(0);
+	app.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
-	if (ctx.totalAllocated >= 30000000000 && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-		fprintf(stderr, "WARNING: allocated %lu memory\n", ctx.totalAllocated);
-
-	// initialise evaluators
-	tinyTree_t tree(ctx);
-	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
-	 * Copy sections
+	 * Copy/inherit sections
 	 */
 
 	// templates
@@ -2041,6 +2047,14 @@ int main(int argc, char *const *argv) {
 		        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 		        store.numMember, store.numMember * 100.0 / store.maxMember,
 		        app.numEmpty, app.numUnsafe - app.numEmpty);
+
+	/*
+	 * initialise evaluators
+	 */
+
+	tinyTree_t tree(ctx);
+	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Load members from file to increase chance signature groups become safe

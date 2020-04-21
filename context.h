@@ -25,13 +25,13 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <assert.h>
-#include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
-#include <signal.h>
 
 /// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
 #define IBIT 0x80000000
@@ -278,9 +278,9 @@ struct context_t {
 	 * Raise number to next prime
 	 *
 	 * @param {uint64_t} n - number to test
-	 * @return {uint32_t} next highest prime, limited to 2^32-5
+	 * @return {unsigned} next highest prime, limited to 2^32-5
 	 */
-	uint32_t nextPrime(uint64_t n) {
+	unsigned nextPrime(uint64_t n) {
 		// limit to highest possible
 		if (n >= 4294967291)
 			return 4294967291;
@@ -297,6 +297,27 @@ struct context_t {
 				return n;
 			n += 2;
 		}
+	}
+
+	/**
+	 * @date 2020-04-21 14:41:24
+	 *
+	 * Raise number with given percent.
+	 * limit to largest possible prime
+	 *
+	 * @param {uint64_t} n - number to test
+	 * @param {unsigned} percent - percent to increase with
+	 * @return {unsigned} next highest prime, limited to 2^32-5
+	 */
+	unsigned raisePercent(uint64_t n, unsigned percent) {
+
+		if (n >= 4294967291)
+			return 4294967291; // largest possible prime
+		if (n >= 4294967291 - (n / 100 * percent))
+			return 4294967291; // overflow
+
+		// increase with given percent
+		return n + (n / 100 * percent);
 	}
 
 	/**
@@ -358,7 +379,7 @@ struct context_t {
 	 *
 	 * @return {number} - expected increment per second
 	 */
-	uint32_t updateSpeed(void) {
+	unsigned updateSpeed(void) {
 		// Test for first time
 		if (progressLast == 0) {
 			progressLast = progress;
