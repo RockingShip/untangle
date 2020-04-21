@@ -207,6 +207,8 @@ struct genmemberContext_t : callable_t {
 	uint32_t opt_sidHi;
 	/// @var {number} Sid range lower bound
 	uint32_t opt_sidLo;
+	/// @var {number} size of signature index WARNING: must be prime
+	uint32_t opt_signatureIndexSize;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -258,6 +260,7 @@ struct genmemberContext_t : callable_t {
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sidHi = 0;
 		opt_sidLo = 0;
+		opt_signatureIndexSize = 0;
 		opt_text = 0;
 		opt_unsafe = 0;
 
@@ -664,13 +667,6 @@ struct genmemberContext_t : callable_t {
 				pSignature->flags &= ~signature_t::SIGMASK_UNSAFE;
 				pSignature->size = pMember->size;
 
-				/*
-				 * Output first safe member of a signature group
-				 */
-
-				if (opt_text == 4)
-					printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
-
 				// group has become safe
 				numUnsafe--;
 			}
@@ -692,7 +688,7 @@ struct genmemberContext_t : callable_t {
 		/*
 		 * Output candidate members on-the-fly
 		 */
-		if (opt_text == 3)
+		if (opt_text == 1)
 			printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 		if (pSignature->firstMember == 0)
@@ -887,12 +883,15 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * @date 2020-04-02 21:52:34
 	 */
-	void reindexImprints(bool unsafeOnly) {
-		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Creating imprints for empty/unsafe signatures\n", ctx.timeAsString());
+	void rebuildImprints(bool unsafeOnly) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
+			if (unsafeOnly)
+				fprintf(stderr, "[%s] Rebuilding imprints for empty/unsafe signatures\n", ctx.timeAsString());
+			else
+				fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
+		}
 
 		// clear signature and imprint index
-		::memset(pStore->imprints, 0, sizeof(*pStore->imprints) * pStore->maxImprint);
 		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
 		// skip reserved entry
 		pStore->numImprint = 1;
@@ -953,7 +952,7 @@ struct genmemberContext_t : callable_t {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			/*
-			 * Add to imprint index, either all of empty/unsafe only
+			 * Add to imprint index, either all or empty/unsafe only
 			 */
 
 			if (!unsafeOnly || (pSignature->flags & signature_t::SIGMASK_UNSAFE)) {
@@ -995,7 +994,6 @@ struct genmemberContext_t : callable_t {
 			        ctx.timeAsString(),
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
-
 	}
 
 	/**
@@ -1035,11 +1033,11 @@ struct genmemberContext_t : callable_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
 				        ctx.timeAsString(), ctx.progress, perSecond,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe - numEmpty,
-				        skipDuplicate, skipSize, skipUnsafe);
+				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 
 				ctx.tick = 0;
 			}
@@ -1208,19 +1206,20 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * @date 2020-04-07 22:53:08
 	 *
-	 * Compact members.
-	 * Remove orphans and sort on display name
-	 * This should have no effect pre-existing members (they were already sorted)
+	 * Rebuild members by compacting them (removing orphans), sorting and re-chaining them.
+	 *
+	 * This should have no effect pre-loaded members (they were already sorted)
 	 *
 	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
 	 */
-	void reindexMembers(void) {
+	void finaliseMembers(void) {
 		tinyTree_t tree(ctx);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Sorting\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] Sorting members\n", ctx.timeAsString());
 
 		// sort entries.
+		assert(pStore->numMember >= 1);
 		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
@@ -1344,7 +1343,7 @@ struct genmemberContext_t : callable_t {
 				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
 		}
 
-		if (opt_text == 1) {
+		if (opt_text == 2) {
 			/*
 			 * Display members of complete dataset
 			 *
@@ -1358,7 +1357,7 @@ struct genmemberContext_t : callable_t {
 			}
 		}
 
-		if (opt_text == 2) {
+		if (opt_text == 3) {
 			/*
 			 * Display full members, grouped by signature
 			 */
@@ -1483,7 +1482,7 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force                       Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t   --[no-]generator              Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]generate               Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                        This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>         Imprint index interleave [default=%u]\n", app.opt_interleave);
@@ -1500,6 +1499,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --sge                         Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --sidhi=<number>              Sid range upper bound [default=%u]\n", app.opt_sidHi);
 		fprintf(stderr, "\t   --sidlo=<number>              Sid range lower bound [default=%u]\n", app.opt_sidLo);
+		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --task=<id>,<last>            Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                        Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>             Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
@@ -1551,6 +1551,7 @@ int main(int argc, char *const *argv) {
 			LO_SGE,
 			LO_SIDHI,
 			LO_SIDLO,
+			LO_SIGNATUREINDEXSIZE,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
@@ -1566,37 +1567,38 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",            1, 0, LO_DEBUG},
-			{"force",            0, 0, LO_FORCE},
-			{"generate",         0, 0, LO_GENERATE},
-			{"help",             0, 0, LO_HELP},
-			{"imprintindexsize", 1, 0, LO_IMPRINTINDEXSIZE},
-			{"interleave",       1, 0, LO_INTERLEAVE},
-			{"load",             1, 0, LO_LOAD},
-			{"maximprint",       1, 0, LO_MAXIMPRINT},
-			{"maxmember",        1, 0, LO_MAXMEMBER},
-			{"memberindexsize",  1, 0, LO_MEMBERINDEXSIZE},
-			{"no-generate",      0, 0, LO_NOGENERATE},
-			{"no-paranoid",      0, 0, LO_NOPARANOID},
-			{"no-pure",          0, 0, LO_NOPURE},
-			{"no-unsafe",        0, 0, LO_NOUNSAFE},
-			{"paranoid",         0, 0, LO_PARANOID},
-			{"pure",             0, 0, LO_PURE},
-			{"quiet",            2, 0, LO_QUIET},
-			{"ratio",            1, 0, LO_RATIO},
-			{"selftest",         0, 0, LO_SELFTEST},
-			{"sge",              0, 0, LO_SGE},
-			{"sidhi",            1, 0, LO_SIDHI},
-			{"sidlo",            1, 0, LO_SIDLO},
-			{"task",             1, 0, LO_TASK},
-			{"text",             2, 0, LO_TEXT},
-			{"timer",            1, 0, LO_TIMER},
-			{"unsafe",           0, 0, LO_UNSAFE},
-			{"verbose",          2, 0, LO_VERBOSE},
-			{"windowhi",         1, 0, LO_WINDOWHI},
-			{"windowlo",         1, 0, LO_WINDOWLO},
+			{"debug",              1, 0, LO_DEBUG},
+			{"force",              0, 0, LO_FORCE},
+			{"generate",           0, 0, LO_GENERATE},
+			{"help",               0, 0, LO_HELP},
+			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
+			{"interleave",         1, 0, LO_INTERLEAVE},
+			{"load",               1, 0, LO_LOAD},
+			{"maximprint",         1, 0, LO_MAXIMPRINT},
+			{"maxmember",          1, 0, LO_MAXMEMBER},
+			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
+			{"no-generate",        0, 0, LO_NOGENERATE},
+			{"no-paranoid",        0, 0, LO_NOPARANOID},
+			{"no-pure",            0, 0, LO_NOPURE},
+			{"no-unsafe",          0, 0, LO_NOUNSAFE},
+			{"paranoid",           0, 0, LO_PARANOID},
+			{"pure",               0, 0, LO_PURE},
+			{"quiet",              2, 0, LO_QUIET},
+			{"ratio",              1, 0, LO_RATIO},
+			{"selftest",           0, 0, LO_SELFTEST},
+			{"sge",                0, 0, LO_SGE},
+			{"sidhi",              1, 0, LO_SIDHI},
+			{"sidlo",              1, 0, LO_SIDLO},
+			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
+			{"task",               1, 0, LO_TASK},
+			{"text",               2, 0, LO_TEXT},
+			{"timer",              1, 0, LO_TIMER},
+			{"unsafe",             0, 0, LO_UNSAFE},
+			{"verbose",            2, 0, LO_VERBOSE},
+			{"windowhi",           1, 0, LO_WINDOWHI},
+			{"windowlo",           1, 0, LO_WINDOWLO},
 			//
-			{NULL,               0, 0, 0}
+			{NULL,                 0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -1710,6 +1712,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_SIDLO:
 				app.opt_sidLo = strtoull(optarg, NULL, 0);
+				break;
+			case LO_SIGNATUREINDEXSIZE:
+				app.opt_signatureIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TASK:
 				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
@@ -1861,6 +1866,25 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
+	/*
+	 * @date 2020-04-21 19:59:47
+	 *
+	 * if (rebuildSection)
+	 *   rebuild();
+	 * else if (inheritSection)
+	 *   inherit();
+	 * else
+	 *   copy();
+	 */
+
+	// sections that need rebuilding
+	unsigned rebuildSections = 0;
+	// sections to inherit from original database
+	unsigned inheritSections = database_t::ALLOCMASK_TRANSFORM;
+
+	// flag that members be collected and expanded
+	unsigned collectMembers = (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3);
+
 	if (app.opt_selftest) {
 		/*
 		 * self tests
@@ -1871,34 +1895,49 @@ int main(int argc, char *const *argv) {
 
 	} else {
 		/*
-		 * Set defaults
+		 * Allocate database section sizes
 		 */
 
-		// Signatures are always copied as they need modifiable `firstMember`
-		store.maxSignature = db.maxSignature;
-		store.signatureIndexSize = db.signatureIndexSize;
+		// input database will always have a minimal node size of 4.
+		unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
 
-		if (app.opt_interleave == 0) {
-			store.interleave = db.interleave;
-			store.interleaveStep = db.interleaveStep;
-		} else {
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_interleave);
-			assert(pMetrics); // was already checked
+		// interleave
+		if (app.opt_interleave)
+			store.interleave = app.opt_interleave; // manual
+		else if (db.interleave)
+			store.interleave = db.interleave; // inherit
+		else
+			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
 
-			store.interleave = pMetrics->numStored;
+		// find matching `interleaveStep`
+		{
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
+			if (!pMetrics)
+				ctx.fatal("no preset for --interleave\n");
+
 			store.interleaveStep = pMetrics->interleaveStep;
 		}
 
+		// signatures
+		store.maxSignature = db.maxSignature;
+		if (app.opt_signatureIndexSize == 0)
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
+		else
+			store.signatureIndexSize = app.opt_signatureIndexSize;
+
+		// optional hints
+		if (db.numHint != 0) {
+			store.maxHint = db.maxHint;
+			store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
+		}
+
+		// imprints
 		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics;
+			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, minNodes);
+			if (!pMetrics)
+				ctx.fatal("no preset for --maximprint\n");
 
-			// don't go below 4 nodes because input database has 4n9 signatures
-			if (app.arg_numNodes < 4)
-				pMetrics = getMetricsImprint(MAXSLOTS, 0, store.interleave, 4);
-			else
-				pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, app.arg_numNodes);
-
-			store.maxImprint = pMetrics ? pMetrics->numImprint : 0;
+			store.maxImprint = pMetrics->numImprint;
 		} else {
 			store.maxImprint = app.opt_maxImprint;
 		}
@@ -1908,9 +1947,13 @@ int main(int argc, char *const *argv) {
 		else
 			store.imprintIndexSize = app.opt_imprintIndexSize;
 
+		// members
 		if (app.opt_maxMember == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
-			store.maxMember = pMetrics ? pMetrics->numMember : 0;
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, minNodes);
+			if (!pMetrics)
+				ctx.fatal("no preset for --maxmember\n");
+
+			store.maxMember = pMetrics->numMember;
 		} else {
 			store.maxMember = app.opt_maxMember;
 		}
@@ -1924,40 +1967,37 @@ int main(int argc, char *const *argv) {
 		 * section inheriting
 		 */
 
-		// imprints need regeneration if `--unsafe` or settings change
-		if (!app.opt_unsafe && (app.opt_ratio == METRICS_DEFAULT_RATIO / 10.0) && !app.opt_interleave && !app.opt_maxImprint && !app.opt_imprintIndexSize) {
-			// inherit section
-			store.maxImprint = 0;
-		} else {
-			// recreate section
+		// changing interleave needs imprint rebuilding. This also validates imprintIndex
+		if (store.interleave != db.interleave)
+			rebuildSections |= database_t::ALLOCMASK_IMPRINT;
 
-			// section needs minimal size or input data might not fit
-//			if (store.maxImprint < db.numImprint)
-//				store.maxImprint = db.numImprint;
-			if (store.imprintIndexSize < db.imprintIndexSize)
-				store.imprintIndexSize = db.imprintIndexSize;
+		// signatures
+		if (!collectMembers)
+			inheritSections |= database_t::ALLOCMASK_SIGNATURE; // no output, signatures, imprints and members are read-only
+		if (store.signatureIndexSize != db.signatureIndexSize)
+			rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
 
-			// test if preset was present
-			if (store.interleave == 0 || store.interleaveStep == 0)
-				ctx.fatal("no preset for --interleave\n");
-			if (store.maxImprint == 0 || store.imprintIndexSize == 0)
-				ctx.fatal("no preset for --maximprint\n");
+		// optional hints
+		if (db.numHint > 0) {
+			inheritSections |= database_t::ALLOCMASK_HINT;
+			if (store.hintIndexSize != db.hintIndexSize)
+				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
 		}
 
-		if (!app.arg_outputDatabase && app.opt_text != 1 && app.opt_text != 2) {
-			// inherit section if not outputting anything (collecting)
-			store.maxMember = 0;
-		} else if (app.opt_maxMember == 0) {
-			// section needs minimal size or input data might not fit
-			if (store.maxMember < db.numMember)
-				store.maxMember = db.numMember;
-			if (store.memberIndexSize < db.memberIndexSize)
-				store.memberIndexSize = db.memberIndexSize;
+		// imprints
+		if (!collectMembers)
+			inheritSections |= database_t::ALLOCMASK_IMPRINT; // no output, signatures, imprints and members are read-only
+		if (store.imprintIndexSize != db.imprintIndexSize)
+			rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
 
-			// test if preset was present
-			if (store.maxMember == 0 || store.memberIndexSize == 0)
-				ctx.fatal("no preset for --maxmember\n");
-		}
+		// members
+		if (!collectMembers)
+			inheritSections |= database_t::ALLOCMASK_MEMBER; // no output, signatures, imprints and members are read-only
+		if (store.memberIndexSize != db.memberIndexSize)
+			rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
+
+		// rebuilt (rw) sections may not be inherited (ro)
+		inheritSections &= ~rebuildSections;
 	}
 
 	// allocate evaluators
@@ -1970,7 +2010,7 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(0);
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(inheritSections);
 
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
@@ -1984,55 +2024,72 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxImprint=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxImprint, store.maxMember);
 
 	// actual create
-	store.create(0);
+	store.create(inheritSections);
 	app.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
 
 	/*
-	 * Copy/inherit sections
+	 * Inherit/copy sections
 	 */
 
-	// templates
-	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
+	store.inheritSections(&db, app.arg_inputDatabase, inheritSections);
 
 	// signatures
-	if (store.allocFlags & database_t::ALLOCMASK_SIGNATURE) {
-		assert(store.maxSignature >= db.numSignature);
-		::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
-		store.numSignature = db.numSignature;
+	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+		if (db.numSignature == 0) {
+			// input section empty
+			store.numSignature = 1;
+		} else {
+			assert(store.maxSignature >= db.numSignature);
+			::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
+			store.numSignature = db.numSignature;
+		}
+	}
+
+	// hints
+	if (db.numHint > 0) {
+		if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_HINT) {
+			assert(store.maxHint >= db.numHint);
+			::memcpy(store.hints, db.hints, db.numHint * sizeof(*store.hints));
+			store.numHint = db.numHint;
+		}
 	}
 
 	// imprints
-	if (store.maxImprint == 0)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_IMPRINT);
+	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_IMPRINT) {
+		if (db.numImprint == 0) {
+			// input section empty
+			store.numImprint = 1;
+		} else {
+			assert(store.maxImprint >= db.numImprint);
+			::memcpy(store.imprints, db.imprints, db.numImprint * sizeof(*store.imprints));
+			store.numImprint = db.numImprint;
+		}
+	}
 
 	// members
-	if (store.maxMember == 0)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_MEMBER);
-	if (store.allocFlags & database_t::ALLOCMASK_MEMBER) {
-		assert(store.maxMember >= db.numMember);
-		::memcpy(store.members, db.members, db.numMember * sizeof(*store.members));
-		if (store.memberIndexSize == db.memberIndexSize) {
-			::memcpy(store.memberIndex, db.memberIndex, db.memberIndexSize * sizeof(*store.memberIndex));
+	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_MEMBER) {
+		if (db.numMember == 0) {
+			// input section empty
+			store.numMember = 1;
 		} else {
-			for (uint32_t iMid = 1; iMid < db.numMember; iMid++) {
-				uint32_t ix = store.lookupMember(store.members[iMid].name);
-				assert(store.memberIndex[ix] == 0);
-				store.memberIndex[ix] = iMid;
-			}
+			assert(store.maxMember >= db.numMember);
+			::memcpy(store.members, db.members, db.numMember * sizeof(*store.members));
+			store.numMember = db.numMember;
 		}
-		store.numMember = db.numMember;
 	}
 
 	// skip reserved first entry
-	if (store.numImprint == 0)
-		store.numImprint = 1;
-	if (store.numMember == 0)
-		store.numMember = 1;
+	assert(store.numSignature >= 1);
+	assert(store.numImprint >= 1);
+	assert(store.numMember >= 1);
 
-	// count empty/members
+	/*
+	 * count empty/unsafe
+	 */
+
 	app.numEmpty = app.numUnsafe = 0;
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0)
@@ -2063,11 +2120,16 @@ int main(int argc, char *const *argv) {
 		app.membersFromFile();
 
 	/*
-	 * Recreate imprints
+	 * Rebuild sections
 	 */
 
-	if (store.allocFlags & database_t::ALLOCMASK_IMPRINT)
-		app.reindexImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
+	if (rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+		// rebuild imprints
+		app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
+		rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+	if (rebuildSections)
+		store.rebuildIndices(rebuildSections);
 
 	/*
 	 * Fire up generator for new candidates
@@ -2080,8 +2142,9 @@ int main(int argc, char *const *argv) {
 	 * re-order and re-index members
 	 */
 
-	if (app.arg_outputDatabase || app.opt_text == 1 || app.opt_text == 2) {
-		app.reindexMembers();
+	if (collectMembers) {
+		// compact, sort and reindex members
+		app.finaliseMembers();
 
 		/*
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)

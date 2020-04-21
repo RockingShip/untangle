@@ -417,7 +417,7 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force                    Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t   --[no-]generator           Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]generate            Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                     This list\n");
 		fprintf(stderr, "\t   --hintindexsize=<number>   Size of hint index [default=%u]\n", app.opt_hintIndexSize);
 		fprintf(stderr, "\t   --maxhint=<number>         Maximum number of hints [default=%u]\n", app.opt_maxHint);

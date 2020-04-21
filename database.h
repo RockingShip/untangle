@@ -1692,20 +1692,31 @@ struct database_t {
 	 * @date 2020-04-20 23:03:50
 	 *
 	 * Rebuild indices when settings changes makes them invalid
+	 *
+	 * @param {number} sections - set of sections to reindex
 	 */
-	void rebuildIndices(void) {
+	void rebuildIndices(unsigned sections) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding indices\n", ctx.timeAsString());
 
 		// reset progress
-		ctx.setupSpeed(this->numSignature + this->numHint + this->numImprint + this->numMember);
+		uint64_t numProgress = 0;
+		if (sections & ALLOCMASK_SIGNATUREINDEX)
+			numProgress += this->numSignature;
+		if (sections & ALLOCMASK_HINTINDEX)
+			numProgress += this->numHint;
+		if (sections & ALLOCMASK_IMPRINTINDEX)
+			numProgress += this->numImprint;
+		if (sections & ALLOCMASK_MEMBERINDEX)
+			numProgress += this->numMember;
+		ctx.setupSpeed(numProgress);
 		ctx.tick = 0;
 
 		/*
 		 * Signatures
 		 */
 
-		if (allocFlags & ALLOCMASK_SIGNATUREINDEX) {
+		if (sections & ALLOCMASK_SIGNATUREINDEX) {
 			::memset(this->signatureIndex, 0, this->signatureIndexSize * sizeof(*this->signatureIndex));
 
 			for (uint32_t iSid = 1; iSid < this->numSignature; iSid++) {
@@ -1731,7 +1742,7 @@ struct database_t {
 		 * Hints
 		 */
 
-		if (allocFlags & ALLOCMASK_HINTINDEX) {
+		if (sections & ALLOCMASK_HINTINDEX) {
 			// clear
 			::memset(this->hintIndex, 0, this->hintIndexSize * sizeof(*this->hintIndex));
 
@@ -1759,7 +1770,7 @@ struct database_t {
 		 * Imprints
 		 */
 
-		if (allocFlags & ALLOCMASK_IMPRINTINDEX) {
+		if (sections & ALLOCMASK_IMPRINTINDEX) {
 			// clear
 			::memset(this->imprintIndex, 0, sizeof(*this->imprintIndex) * this->imprintIndexSize);
 
@@ -1787,7 +1798,7 @@ struct database_t {
 		 * Members
 		 */
 
-		if (allocFlags & ALLOCMASK_MEMBERINDEX) {
+		if (sections & ALLOCMASK_MEMBERINDEX) {
 			// clear
 			::memset(this->memberIndex, 0, sizeof(*this->memberIndex) * this->memberIndexSize);
 
@@ -1816,7 +1827,6 @@ struct database_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Indices built\n", ctx.timeAsString());
-
 	}
 
 #if defined(ENABLE_JANSSON)
