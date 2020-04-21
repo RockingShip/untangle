@@ -277,16 +277,24 @@ struct database_t {
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
 		ALLOCFLAG_SIGNATURE,
+		ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCFLAG_HINT,
+		ALLOCFLAG_HINTINDEX,
 		ALLOCFLAG_IMPRINT,
+		ALLOCFLAG_IMPRINTINDEX,
 		ALLOCFLAG_MEMBER,
+		ALLOCFLAG_MEMBERINDEX,
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
+		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
+		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
+		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
 		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
+		ALLOCMASK_MEMBERINDEX        = 1 << ALLOCFLAG_MEMBERINDEX,
 		// @formatter:on
 	};
 
@@ -295,13 +303,12 @@ struct database_t {
 	 *
 	 * Create read-write database as memory store
 	 *
-         * @param {context_t} ctx - I/O context 
-         * @param {databaseArguments_t} userArguments - creation arguments
+  	 * @param {number} excludeSections - set of sections to exclude from allocating
 	 */
-	void create(void) {
+	void create(unsigned excludeSections) {
 
 		// transform store
-		if (maxTransform) {
+		if (maxTransform && (~excludeSections & ALLOCMASK_TRANSFORM)) {
 			assert(maxTransform == MAXTRANSFORM);
 			fwdTransformData = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
 			revTransformData = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
@@ -314,56 +321,69 @@ struct database_t {
 		}
 
 		// signature store
-		if (maxSignature) {
+		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
 			if (maxSignature < UINT32_MAX - maxSignature / 20)
 				maxSignature += maxSignature / 20;
 
-			assert(ctx.isPrime(signatureIndexSize));
 			numSignature = 1; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
-			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATURE;
+		}
+		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX)) {
+			assert(ctx.isPrime(signatureIndexSize));
+			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
+			allocFlags |= ALLOCMASK_SIGNATUREINDEX;
 		}
 
 		// hint store
-		if (maxHint) {
+		if (maxHint && (~excludeSections & ALLOCMASK_HINT)) {
 			// increase with 5%
 			if (maxHint < UINT32_MAX - maxHint / 20)
 				maxHint += maxHint / 20;
 
-			assert(ctx.isPrime(hintIndexSize));
 			numHint = 1; // do not start at 1
 			hints = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
-			hintIndex = (uint32_t *) ctx.myAlloc("database_t::hintIndex", hintIndexSize, sizeof(*hintIndex));
 			allocFlags |= ALLOCMASK_HINT;
+		}
+		if (hintIndexSize && (~excludeSections & ALLOCMASK_HINTINDEX)) {
+			assert(ctx.isPrime(hintIndexSize));
+			hintIndex = (uint32_t *) ctx.myAlloc("database_t::hintIndex", hintIndexSize, sizeof(*hintIndex));
+			allocFlags |= ALLOCMASK_HINTINDEX;
 		}
 
 		// imprint store
-		if (maxImprint) {
+		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT)) {
 			// increase with 5%
 			if (maxImprint < UINT32_MAX - maxImprint / 20)
 				maxImprint += maxImprint / 20;
 
 			assert(interleave && interleaveStep);
-			assert(ctx.isPrime(imprintIndexSize));
 			numImprint = 1; // do not start at 1
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
-			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINT;
+		}
+		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX)) {
+			assert(interleave && interleaveStep);
+			assert(ctx.isPrime(imprintIndexSize));
+			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
+			allocFlags |= ALLOCMASK_IMPRINTINDEX;
 		}
 
 		// member store
-		if (maxMember) {
+		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
 			if (maxMember < UINT32_MAX - maxMember / 20)
 				maxMember += maxMember / 20;
 
-			assert(ctx.isPrime(memberIndexSize));
 			numMember = 1; // do not start at 1
 			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
-			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
 			allocFlags |= ALLOCMASK_MEMBER;
+		}
+		if (memberIndexSize && (~excludeSections & ALLOCMASK_MEMBERINDEX)) {
+			assert(ctx.isPrime(memberIndexSize));
+			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
+			allocFlags |= ALLOCMASK_MEMBERINDEX;
 		}
 
 	};
@@ -380,10 +400,10 @@ struct database_t {
 	 * @param {string} pName - Name of database
 	 * @param {number} sections - set of sections to inherit
 	 */
-	void inheritSections(const database_t *pDatabase, const char *pName, uint32_t sections) {
+	void inheritSections(const database_t *pDatabase, const char *pName, unsigned sections) {
 
 		// transform store
-		if (sections & database_t::ALLOCMASK_TRANSFORM) {
+		if (sections & ALLOCMASK_TRANSFORM) {
 			if (pDatabase->numTransform == 0) {
 				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
@@ -408,41 +428,51 @@ struct database_t {
 		}
 
 		// signature store
-		if (sections & database_t::ALLOCMASK_SIGNATURE) {
+		if (sections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
 			if (pDatabase->numSignature == 0) {
 				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			assert(maxSignature == 0);
+			if (sections & ALLOCMASK_SIGNATURE) {
+				assert(~allocFlags & ALLOCMASK_SIGNATURE);
 			this->maxSignature = pDatabase->maxSignature;
 			this->numSignature = pDatabase->numSignature;
 			this->signatures = pDatabase->signatures;
+			}
 
+			if (sections & ALLOCMASK_SIGNATUREINDEX) {
+				assert(~allocFlags & ALLOCMASK_SIGNATUREINDEX);
 			this->signatureIndexSize = pDatabase->signatureIndexSize;
 			this->signatureIndex = pDatabase->signatureIndex;
 		}
+		}
 
 		// hint store
-		if (sections & database_t::ALLOCMASK_HINT) {
+		if (sections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
 			if (pDatabase->numHint == 0) {
 				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			assert(maxHint == 0);
+			if (sections & ALLOCMASK_HINT) {
+				assert(~allocFlags & ALLOCMASK_HINT);
 			this->maxHint = pDatabase->maxHint;
 			this->numHint = pDatabase->numHint;
 			this->hints = pDatabase->hints;
+			}
 
+			if (sections & ALLOCMASK_HINTINDEX) {
+				assert(~allocFlags & ALLOCMASK_HINTINDEX);
 			this->hintIndexSize = pDatabase->hintIndexSize;
 			this->hintIndex = pDatabase->hintIndex;
 		}
+		}
 
 		// imprint store
-		if (sections & database_t::ALLOCMASK_IMPRINT) {
+		if (sections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
 			if (pDatabase->numImprint == 0) {
 				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
@@ -452,31 +482,41 @@ struct database_t {
 			this->interleave = pDatabase->interleave;
 			this->interleaveStep = pDatabase->interleaveStep;
 
-			assert(maxImprint == 0);
+			if (sections & ALLOCMASK_IMPRINT) {
+				assert(~allocFlags & ALLOCMASK_IMPRINT);
 			this->maxImprint = pDatabase->maxImprint;
 			this->numImprint = pDatabase->numImprint;
 			this->imprints = pDatabase->imprints;
+			}
 
+			if (sections & ALLOCMASK_IMPRINTINDEX) {
+				assert(~allocFlags & ALLOCMASK_IMPRINTINDEX);
 			this->imprintIndexSize = pDatabase->imprintIndexSize;
 			this->imprintIndex = pDatabase->imprintIndex;
 		}
+		}
 
 		// member store
-		if (sections & database_t::ALLOCMASK_MEMBER) {
+		if (sections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
 			if (pDatabase->numMember == 0) {
 				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
 				       __FUNCTION__, pName);
 				exit(1);
 			}
 
-			assert(maxMember == 0);
+			if (sections & ALLOCMASK_MEMBER) {
+				assert(~allocFlags & ALLOCMASK_MEMBER);
 			this->maxMember = pDatabase->maxMember;
 			this->numMember = pDatabase->numMember;
 			this->members = pDatabase->members;
+			}
 
+			if (sections & ALLOCMASK_MEMBERINDEX) {
+				assert(~allocFlags & ALLOCMASK_MEMBERINDEX);
 			this->memberIndexSize = pDatabase->memberIndexSize;
 			this->memberIndex = pDatabase->memberIndex;
 		}
+	}
 	}
 
 	/**
@@ -615,26 +655,27 @@ struct database_t {
 			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
 			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
 		}
-		if (allocFlags & ALLOCMASK_SIGNATURE) {
+		if (allocFlags & ALLOCMASK_SIGNATURE)
 			ctx.myFree("database_t::signatures", signatures);
+		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
-			if (signatureVersion)
-				ctx.myFree("database_t::signatureVersion", signatureVersion);
-		}
-		if (allocFlags & ALLOCMASK_HINT) {
+		if (allocFlags & ALLOCMASK_HINT)
 			ctx.myFree("database_t::hints", hints);
+		if (allocFlags & ALLOCMASK_HINTINDEX)
 			ctx.myFree("database_t::hintIndex", hintIndex);
-		}
-		if (allocFlags & ALLOCMASK_IMPRINT) {
+		if (allocFlags & ALLOCMASK_IMPRINT)
 			ctx.myFree("database_t::imprints", imprints);
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
 			ctx.myFree("database_t::imprintIndex", imprintIndex);
+		if (allocFlags & ALLOCMASK_MEMBER)
+			ctx.myFree("database_t::members", members);
+		if (allocFlags & ALLOCMASK_MEMBERINDEX)
+			ctx.myFree("database_t::memberIndex", memberIndex);
+
+		if (signatureVersion)
+			ctx.myFree("database_t::signatureVersion", signatureVersion);
 			if (imprintVersion)
 				ctx.myFree("database_t::imprintVersion", imprintVersion);
-		}
-		if (allocFlags & ALLOCMASK_MEMBER) {
-			ctx.myFree("database_t::members", members);
-			ctx.myFree("database_t::memberIndex", memberIndex);
-		}
 
 		/*
 		 * Release resources
@@ -663,9 +704,9 @@ struct database_t {
 	inline void enabledVersioned(void) {
 
 		// allocate version indices
-		if (allocFlags & ALLOCMASK_IMPRINT)
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
 			imprintVersion = (uint32_t *) ctx.myAlloc("database_t::imprintVersion", imprintIndexSize, sizeof(*imprintVersion));
-		if (allocFlags & ALLOCMASK_SIGNATURE)
+		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
 			signatureVersion = (uint32_t *) ctx.myAlloc("database_t::signatureVersion", signatureIndexSize, sizeof(*signatureVersion));
 
 		// clear versioned memory
@@ -1094,6 +1135,16 @@ struct database_t {
 	 * Signature store
 	 */
 
+	/**
+	 * Perform signature lookup
+	 *
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the signature.
+	 *
+	 * @param v {string} v - key value
+	 * @return {number} offset into index
+	 */
 	inline uint32_t lookupSignature(const char *name) {
 		ctx.cntHash++;
 
@@ -1149,6 +1200,12 @@ struct database_t {
 
 	}
 
+	/**
+ 	 * Add a new signature to the dataset
+ 	 *
+	 * @param v {string} v - key value
+	 * @return {number} signatureId
+	 */
 	inline uint32_t addSignature(const char *name) {
 		signature_t *pSignature = this->signatures + this->numSignature++;
 
@@ -1171,14 +1228,16 @@ struct database_t {
 	/**
 	 * @date 2020-04-19 20:52:11
 	 *
-	 * Lookup value in index using a hash array with overflow.
-	 * Returns the offset within the index.
-	 * If contents of index is 0, then not found, otherwise it the index where to find the data in `pHint`.
+	 * Perform hint lookup
 	 *
-	 * @param v {hint_t} v - value to index
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the hint.
+	 *
+	 * @param v {hint_t} v - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupHint(hint_t *pHint) {
+	inline uint32_t lookupHint(const hint_t *pHint) {
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -1209,6 +1268,12 @@ struct database_t {
 		}
 	}
 
+	/**
+ 	 * Add a new hint to the dataset
+ 	 *
+	 * @param v {hint_t} v - key value
+	 * @return {number} hintId
+	 */
 	inline uint32_t addHint(hint_t *pHint) {
 		uint32_t hintId = this->numHint++;
 
@@ -1227,11 +1292,13 @@ struct database_t {
 	/**
 	 * @date 2020-03-15 20:07:14
 	 *
-	 * Lookup value in index using a hash array with overflow.
-	 * Returns the offset within the index.
-	 * If contents of index is 0, then not found, otherwise it the index where to find the data in `pImprint`.
+	 * Perform imprint lookup
 	 *
-	 * @param v {footprint_t} v - value to index
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the imprint.
+	 *
+	 * @param v {footprint_t} v - key value
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupImprint(const footprint_t &v) const {
@@ -1292,8 +1359,8 @@ struct database_t {
 	/**
 	 * Add a new imprint to the dataset
 	 *
-	 * @param v {footprint_t} v - value to index
-	 * @return {number} imprint id which should be stored in the index.
+	 * @param v {footprint_t} v - key value
+	 * @return {number} imprintId
 	 */
 	inline uint32_t addImprint(const footprint_t &v) {
 		imprint_t *pImprint = this->imprints + this->numImprint++;
@@ -1516,6 +1583,16 @@ struct database_t {
 	 * Member store
 	 */
 
+	/**
+	 * Perform member lookup
+	 *
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the member.
+	 *
+	 * @param v {string} v - key value
+	 * @return {number} offset into index
+	 */
 	inline uint32_t lookupMember(const char *name) {
 		ctx.cntHash++;
 
@@ -1550,6 +1627,12 @@ struct database_t {
 
 	}
 
+	/**
+	 * Add a new member to the dataset
+	 *
+	 * @param v {string} name - key value
+	 * @return {number} memberId
+	 */
 	inline uint32_t addMember(const char *name) {
 		member_t *pMember = this->members + this->numMember++;
 
@@ -1565,6 +1648,196 @@ struct database_t {
 		return (uint32_t) (pMember - this->members);
 	}
 
+	/**
+	 * @date 2020-04-20 23:03:50
+	 *
+	 * Rebuild indices when settings changes makes them invalid
+	 */
+	void rebuildIndices(void) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Rebuilding indices\n", ctx.timeAsString());
+
+		// reset progress
+		ctx.setupSpeed(this->numSignature + this->numHint + this->numImprint + this->numMember);
+		ctx.tick = 0;
+
+		/*
+		 * Signatures
+		 */
+
+		if (allocFlags & ALLOCMASK_SIGNATUREINDEX) {
+			::memset(this->signatureIndex, 0, this->signatureIndexSize * sizeof(*this->signatureIndex));
+
+			for (uint32_t iSid = 1; iSid < this->numSignature; iSid++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					ctx.tick = 0;
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
+				}
+
+				const signature_t *pSignature = this->signatures + iSid;
+
+				uint32_t ix = this->lookupSignature(pSignature->name);
+				assert(this->signatureIndex[ix] == 0);
+				this->signatureIndex[ix] = iSid;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * Hints
+		 */
+
+		if (allocFlags & ALLOCMASK_HINTINDEX) {
+			// clear
+			::memset(this->hintIndex, 0, this->hintIndexSize * sizeof(*this->hintIndex));
+
+			// rebuild
+			for (uint32_t iHint = 1; iHint < this->numHint; iHint++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					ctx.tick = 0;
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
+				}
+
+				const hint_t *pHint = this->hints + iHint;
+
+				uint32_t ix = this->lookupHint(pHint);
+				assert(this->hintIndex[ix] == 0);
+				this->hintIndex[ix] = iHint;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * Imprints
+		 */
+
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX) {
+			// clear
+			::memset(this->imprintIndex, 0, sizeof(*this->imprintIndex) * this->imprintIndexSize);
+
+			// rebuild
+			for (uint32_t iImprint = 1; iImprint < this->numImprint; iImprint++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					ctx.tick = 0;
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
+				}
+
+				const imprint_t *pImprint = this->imprints + iImprint;
+
+				uint32_t ix = this->lookupImprint(pImprint->footprint);
+				assert(this->imprintIndex[ix] == 0);
+				this->imprintIndex[ix] = iImprint;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * Members
+		 */
+
+		if (allocFlags & ALLOCMASK_MEMBERINDEX) {
+			// clear
+			::memset(this->memberIndex, 0, sizeof(*this->memberIndex) * this->memberIndexSize);
+
+			// rebuild
+			for (uint32_t iMember = 1; iMember < this->numMember; iMember++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					ctx.tick = 0;
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
+				}
+
+				const member_t *pMember = this->members + iMember;
+
+				uint32_t ix = this->lookupMember(pMember->name);
+				assert(this->memberIndex[ix] == 0);
+				this->memberIndex[ix] = iMember;
+
+				ctx.progress++;
+			}
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Indices built\n", ctx.timeAsString());
+
+	}
 
 #if defined(ENABLE_JANSSON)
 

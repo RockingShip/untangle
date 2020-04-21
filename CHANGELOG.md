@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## 2.1.0 2020-04-20 00:51:51
+```
+2020-04-21 10:19:51 Enhance database with section allocation and inheritance. 
+```
+
+## [2.1.0] 2020-04-20 00:51:51
 
 This release is to mark the change in database version to `"20200419"` and the introduction of hints for interleave and imprint tuning.
  
@@ -53,4 +57,5 @@ Features:
 - Database creation `gentransform` `gensignature` `genmember`
 - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...HEAD
+[2.1.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...v2.1.0

@@ -1947,7 +1947,7 @@ int main(int argc, char *const *argv) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] Store create: interleave=%u maxImprint=%u maxSignature=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxImprint, store.maxSignature, store.maxMember);
 
-	store.create();
+	store.create(0);
 	app.pStore = &store;
 
 	// allocate evaluators

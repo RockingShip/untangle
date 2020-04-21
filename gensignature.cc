@@ -1873,7 +1873,7 @@ int main(int argc, char *const *argv) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] Store create: maxImprint=%d maxSignature=%d\n", ctx.timeAsString(), store.maxSignature, store.maxImprint);
 
-	store.create();
+	store.create(0);
 
 	// inherit from existing
 	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);

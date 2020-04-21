@@ -815,7 +815,7 @@ int main(int argc, char *const *argv) {
 		pStore->maxSignature = pMetrics->numCandidate;
 		pStore->signatureIndexSize = ctx.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
 
-		pStore->create();
+		pStore->create(0);
 	}
 
 	/*

@@ -987,7 +987,7 @@ int main(int argc, char *const *argv) {
 	store.transformIndexSize = MAXTRANSFORMINDEX;
 
 	// create memory-based store
-	store.create();
+	store.create(0);
 
 	/*
 	 * Statistics

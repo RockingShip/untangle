@@ -719,7 +719,7 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Store create: maxImprint=%u maxSignature=%u\n", ctx.timeAsString(), store.maxImprint, store.maxSignature);
 
 	// actual create
-	store.create();
+	store.create(0);
 	app.pStore = &store;
 
 	// allocate evaluators
