@@ -68,7 +68,7 @@ struct genrestartdataContext_t : callable_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {number} size of structures used in this invocation
@@ -80,7 +80,7 @@ struct genrestartdataContext_t : callable_t {
 	unsigned opt_taskLast;
 
 	/// @var {number} Number of restart entries found
-	uint32_t numRestart;
+	unsigned numRestart;
 
 	/// @var {number} - THE generator
 	generatorTree_t generator;
@@ -249,12 +249,12 @@ struct genrestartdataContext_t : callable_t {
 
 		// tree is incomplete and requires a slightly different notation
 		printf("%12ldLL/*", ctx.progress);
-		for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
-			uint32_t qtf = tree.packedN[iNode];
-			uint32_t Q = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
-			uint32_t To = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
-			uint32_t F = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
-			uint32_t Ti = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
+		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
+			unsigned qtf = tree.packedN[iNode];
+			unsigned Q = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
+			unsigned To = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
+			unsigned F = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
+			unsigned Ti = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
 
 			if (Q >= tinyTree_t::TINYTREE_NSTART)
 				putchar("123456789"[Q - tinyTree_t::TINYTREE_NSTART]);
@@ -473,7 +473,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		 */
 
 		// lookup..
-		uint32_t ix = pStore->lookupSignature(pName);
+		unsigned ix = pStore->lookupSignature(pName);
 
 		// ...and add if not found
 		if (pStore->signatureIndex[ix] == 0) {
@@ -776,7 +776,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (argc - optind >= 1)
-			app.arg_numNodes = (uint32_t) strtoul(argv[optind++], NULL, 0);
+			app.arg_numNodes = (unsigned) strtoul(argv[optind++], NULL, 0);
 
 	if (app.opt_text != 0 || app.opt_taskLast != 0) {
 		if (app.arg_numNodes == 0) {

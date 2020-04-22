@@ -78,7 +78,7 @@ struct gentransformContext_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of output database
@@ -129,50 +129,50 @@ struct gentransformContext_t {
 
 		assert(MAXSLOTS == 9);
 
-		uint32_t iTransform = 0; // enumeration of skin
-		uint32_t IM = 0; // bitmask of endpoints in use, initially empty
+		unsigned iTransform = 0; // enumeration of skin
+		unsigned IM = 0; // bitmask of endpoints in use, initially empty
 
-		for (uint32_t I = MAXSLOTS - 1; I != (uint32_t) -1; I--) {
+		for (unsigned I = MAXSLOTS - 1; I != (unsigned) -1; I--) {
 
 			if (IM & (1 << I)) continue; // if current endpoint already in use, skip
-			uint32_t HM = IM | (1 << I); // create new bitmap with current endpoint added
+			unsigned HM = IM | (1 << I); // create new bitmap with current endpoint added
 
-			for (uint32_t H = MAXSLOTS - 1; H != (uint32_t) -1; H--) {
+			for (unsigned H = MAXSLOTS - 1; H != (unsigned) -1; H--) {
 
 				if (HM & (1 << H)) continue;
-				uint32_t GM = HM | (1 << H);
+				unsigned GM = HM | (1 << H);
 
-				for (uint32_t G = MAXSLOTS - 1; G != (uint32_t) -1; G--) {
+				for (unsigned G = MAXSLOTS - 1; G != (unsigned) -1; G--) {
 
 					if (GM & (1 << G)) continue;
-					uint32_t FM = GM | (1 << G);
+					unsigned FM = GM | (1 << G);
 
-					for (uint32_t F = MAXSLOTS - 1; F != (uint32_t) -1; F--) {
+					for (unsigned F = MAXSLOTS - 1; F != (unsigned) -1; F--) {
 
 						if (FM & (1 << F)) continue;
-						uint32_t EM = FM | (1 << F);
+						unsigned EM = FM | (1 << F);
 
-						for (uint32_t E = MAXSLOTS - 1; E != (uint32_t) -1; E--) {
+						for (unsigned E = MAXSLOTS - 1; E != (unsigned) -1; E--) {
 
 							if (EM & (1 << E)) continue;
-							uint32_t DM = EM | (1 << E);
+							unsigned DM = EM | (1 << E);
 
-							for (uint32_t D = MAXSLOTS - 1; D != (uint32_t) -1; D--) {
+							for (unsigned D = MAXSLOTS - 1; D != (unsigned) -1; D--) {
 
 								if (DM & (1 << D)) continue;
-								uint32_t CM = DM | (1 << D);
+								unsigned CM = DM | (1 << D);
 
-								for (uint32_t C = MAXSLOTS - 1; C != (uint32_t) -1; C--) {
+								for (unsigned C = MAXSLOTS - 1; C != (unsigned) -1; C--) {
 
 									if (CM & (1 << C)) continue;
-									uint32_t BM = CM | (1 << C);
+									unsigned BM = CM | (1 << C);
 
-									for (uint32_t B = MAXSLOTS - 1; B != (uint32_t) -1; B--) {
+									for (unsigned B = MAXSLOTS - 1; B != (unsigned) -1; B--) {
 
 										if (BM & (1 << B)) continue;
-										uint32_t AM = BM | (1 << B);
+										unsigned AM = BM | (1 << B);
 
-										for (uint32_t A = MAXSLOTS - 1; A != (uint32_t) -1; A--) {
+										for (unsigned A = MAXSLOTS - 1; A != (unsigned) -1; A--) {
 
 											if (AM & (1 << A)) continue;
 
@@ -269,7 +269,7 @@ struct gentransformContext_t {
 			pIndex[i] = 0;
 
 		// first block is all zero, second block is entrypoint, third block is first-free
-		uint32_t nextFree = (MAXSLOTS + 1) * 2;
+		unsigned nextFree = (MAXSLOTS + 1) * 2;
 
 		/*
 		 * For each transform name
@@ -278,10 +278,10 @@ struct gentransformContext_t {
 
 			// transform name
 			const char *pStr = pNames[iTransform];
-			uint32_t ix = 0; // active entry
+			unsigned ix = 0; // active entry
 
 			// point to entrypoint
-			uint32_t pos = MAXSLOTS + 1;
+			unsigned pos = MAXSLOTS + 1;
 
 			// process transform name upto but not including the last endpoint
 			while (pStr[1]) {
@@ -321,7 +321,7 @@ struct gentransformContext_t {
 		// work backwards
 		while (nextFree >= (MAXSLOTS + 1)) {
 			// find first used entry which is also the default entry
-			for (uint32_t ix = 0; ix < MAXSLOTS; ix++) {
+			for (unsigned ix = 0; ix < MAXSLOTS; ix++) {
 				if (pIndex[nextFree + ix] != 0) {
 					// is it a node or leaf
 					if (pIndex[nextFree + ix] & IBIT) {
@@ -353,13 +353,13 @@ struct gentransformContext_t {
 	 *
 	 * @param {string} pName - Transform name
   	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
-	 * @return {uint32_t} - Transform enumeration id or IBIT if "not-found"
+	 * @return {number} - Transform enumeration id or IBIT if "not-found"
 	 */
-	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
+	inline unsigned lookupTransform(const char *pName, uint32_t *pIndex) {
 		assert(pIndex);
 
 		// starting position in index
-		uint32_t pos = MAXSLOTS + 1;
+		unsigned pos = MAXSLOTS + 1;
 
 		// walk through states
 		while (*pName) {
@@ -395,14 +395,14 @@ struct gentransformContext_t {
 		/*
 		 * Reverse Id's are the lookups of reverse names
 		 */
-		for (uint32_t t = 0; t < MAXTRANSFORM; t++)
+		for (unsigned t = 0; t < MAXTRANSFORM; t++)
 			pStore->revTransformIds[t] = lookupTransform(pStore->revTransformNames[t], pStore->fwdTransformNameIndex);
 
 		/*
 		 * dump contents on request
 		 */
 		if (opt_text) {
-			for (uint32_t t = 0; t < pStore->numTransform; t++)
+			for (unsigned t = 0; t < pStore->numTransform; t++)
 				printf("%d\t%s\t%s\t%d\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
 		}
 
@@ -697,8 +697,8 @@ struct gentransformSelftest_t : gentransformContext_t {
 			/*
 			 * walk through cells.
 			 */
-			for (uint32_t row = 0; row < numRows; row++) {
-				for (uint32_t col = 0; col < numCols; col++) {
+			for (unsigned row = 0; row < numRows; row++) {
+				for (unsigned col = 0; col < numCols; col++) {
 
 					/*
 					 * Validate "<first cell of grid column>/<first cell of grid row>" == "<cell>"

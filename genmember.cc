@@ -176,7 +176,7 @@ struct genmemberContext_t : callable_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of input database
@@ -190,25 +190,25 @@ struct genmemberContext_t : callable_t {
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
 	/// @var {number} size of imprint index WARNING: must be prime
-	uint32_t opt_imprintIndexSize;
+	unsigned opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
 	unsigned opt_interleave;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} Maximum number of imprints to be stored database
-	uint32_t opt_maxImprint;
+	unsigned opt_maxImprint;
 	/// @var {number} Maximum number of members to be stored database
-	uint32_t opt_maxMember;
+	unsigned opt_maxMember;
 	/// @var {number} size of member index WARNING: must be prime
-	uint32_t opt_memberIndexSize;
+	unsigned opt_memberIndexSize;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} Sid range upper bound
-	uint32_t opt_sidHi;
+	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
-	uint32_t opt_sidLo;
+	unsigned opt_sidLo;
 	/// @var {number} size of signature index WARNING: must be prime
-	uint32_t opt_signatureIndexSize;
+	unsigned opt_signatureIndexSize;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -232,12 +232,12 @@ struct genmemberContext_t : callable_t {
 	/// @var {number} - THE generator
 	generatorTree_t generator;
 
-	uint32_t skipDuplicate;
-	uint32_t skipSize;
-	uint32_t skipUnsafe;
-	uint32_t numUnsafe;
-	uint32_t numEmpty;
-	uint32_t freeMemberRoot;
+	unsigned skipDuplicate;
+	unsigned skipSize;
+	unsigned skipUnsafe;
+	unsigned numUnsafe;
+	unsigned numEmpty;
+	unsigned freeMemberRoot;
 
 	/**
 	 * Constructor
@@ -359,10 +359,10 @@ struct genmemberContext_t : callable_t {
 		{
 			char skin[MAXSLOTS + 1];
 
-			uint32_t Q = treeR.N[treeR.root].Q;
+			unsigned Q = treeR.N[treeR.root].Q;
 			{
 				const char *pComponentName = treeR.encode(Q, skin);
-				uint32_t ix = pStore->lookupMember(pComponentName);
+				unsigned ix = pStore->lookupMember(pComponentName);
 
 				pMember->Qmid = pStore->memberIndex[ix];
 				pMember->Qsid = pStore->members[pMember->Qmid].sid;
@@ -372,10 +372,10 @@ struct genmemberContext_t : callable_t {
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
 			}
 
-			uint32_t To = treeR.N[treeR.root].T & ~IBIT;
+			unsigned To = treeR.N[treeR.root].T & ~IBIT;
 			{
 				const char *pComponentName = treeR.encode(To, skin);
-				uint32_t ix = pStore->lookupMember(pComponentName);
+				unsigned ix = pStore->lookupMember(pComponentName);
 
 				pMember->Tmid = pStore->memberIndex[ix];
 				pMember->Tsid = pStore->members[pMember->Tmid].sid ^ (treeR.N[treeR.root].T & IBIT);
@@ -385,10 +385,10 @@ struct genmemberContext_t : callable_t {
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
 			}
 
-			uint32_t F = treeR.N[treeR.root].F;
+			unsigned F = treeR.N[treeR.root].F;
 			{
 				const char *pComponentName = treeR.encode(F, skin);
-				uint32_t ix = pStore->lookupMember(pComponentName);
+				unsigned ix = pStore->lookupMember(pComponentName);
 
 				pMember->Fmid = pStore->memberIndex[ix];
 				pMember->Fsid = pStore->members[pMember->Fmid].sid;
@@ -414,18 +414,18 @@ struct genmemberContext_t : callable_t {
 
 			// replace `hot` node with placeholder
 			for (unsigned hot = tinyTree_t::TINYTREE_NSTART; hot < treeR.root; hot++) {
-				uint32_t select = 1 << treeR.root | 1 << 0; // selected nodes to extract nodes
-				uint32_t nextPlaceholderPlaceholder = tinyTree_t::TINYTREE_KSTART;
+				unsigned select = 1 << treeR.root | 1 << 0; // selected nodes to extract nodes
+				unsigned nextPlaceholderPlaceholder = tinyTree_t::TINYTREE_KSTART;
 				uint32_t what[tinyTree_t::TINYTREE_NEND];
 				what[0] = 0; // replacement for zero
 
 				// scan tree for needed nodes, ignoring `hot` node
-				for (uint32_t k = treeR.root; k >= tinyTree_t::TINYTREE_NSTART; k--) {
+				for (unsigned k = treeR.root; k >= tinyTree_t::TINYTREE_NSTART; k--) {
 					if (k != hot && (select & (1 << k))) {
 						const tinyNode_t *pNode = treeR.N + k;
-						const uint32_t Q = pNode->Q;
-						const uint32_t To = pNode->T & ~IBIT;
-						const uint32_t F = pNode->F;
+						const unsigned Q = pNode->Q;
+						const unsigned To = pNode->T & ~IBIT;
+						const unsigned F = pNode->F;
 
 						if (Q >= tinyTree_t::TINYTREE_NSTART)
 							select |= 1 << Q;
@@ -446,13 +446,13 @@ struct genmemberContext_t : callable_t {
 				 * Replacing references by placeholders changes dyadic ordering.
 				 * `what[hot]` is not a reference but a placeholder
 				 */
-				for (uint32_t k = tinyTree_t::TINYTREE_NSTART; k <= treeR.root; k++) {
+				for (unsigned k = tinyTree_t::TINYTREE_NSTART; k <= treeR.root; k++) {
 					if (k != hot && select & (1 << k)) {
 						const tinyNode_t *pNode = treeR.N + k;
-						const uint32_t Q = pNode->Q;
-						const uint32_t To = pNode->T & ~IBIT;
-						const uint32_t Ti = pNode->T & IBIT;
-						const uint32_t F = pNode->F;
+						const unsigned Q = pNode->Q;
+						const unsigned To = pNode->T & ~IBIT;
+						const unsigned Ti = pNode->T & IBIT;
+						const unsigned F = pNode->F;
 
 						// assign placeholder to endpoint or `hot`
 						if (~select & (1 << Q)) {
@@ -518,8 +518,8 @@ struct genmemberContext_t : callable_t {
 				tree.encode(tree.root, name, skin);
 
 				// perform member lookup
-				uint32_t ix = pStore->lookupMember(name);
-				uint32_t midHead = pStore->memberIndex[ix];
+				unsigned ix = pStore->lookupMember(name);
+				unsigned midHead = pStore->memberIndex[ix];
 				if (midHead == 0) {
 					// unsafe
 					pMember->flags |= signature_t::SIGMASK_UNSAFE;
@@ -555,7 +555,7 @@ struct genmemberContext_t : callable_t {
 	member_t *memberAlloc(const char *pName) {
 		member_t *pMember;
 
-		uint32_t mid = freeMemberRoot;
+		unsigned mid = freeMemberRoot;
 		if (mid) {
 			pMember = pStore->members + mid;
 			freeMemberRoot = pMember->nextMember; // pop from free list
@@ -633,7 +633,7 @@ struct genmemberContext_t : callable_t {
 					 */
 					while (pSignature->firstMember) {
 						// remove all references to
-						for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+						for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 							member_t *p = pStore->members + iMid;
 
 							if (p->Qmid == pSignature->firstMember) {
@@ -762,8 +762,8 @@ struct genmemberContext_t : callable_t {
 		 * Find the matching signature group. It's layout only so ignore transformId.
 		 */
 
-		uint32_t sid = 0;
-		uint32_t tid = 0;
+		unsigned sid = 0;
+		unsigned tid = 0;
 
 		if (!pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
 			return true;
@@ -780,7 +780,7 @@ struct genmemberContext_t : callable_t {
 		 * test  for duplicates
 		 */
 
-		uint32_t ix = pStore->lookupMember(pNameR);
+		unsigned ix = pStore->lookupMember(pNameR);
 		if (pStore->memberIndex[ix] != 0) {
 			// duplicate candidate name
 			skipDuplicate++;
@@ -918,7 +918,7 @@ struct genmemberContext_t : callable_t {
 
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved
-		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -967,7 +967,7 @@ struct genmemberContext_t : callable_t {
 
 				tree.decodeFast(pSignature->name);
 
-				uint32_t sid, tid;
+				unsigned sid, tid;
 
 				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
 					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
@@ -1047,7 +1047,7 @@ struct genmemberContext_t : callable_t {
 			 * test  for duplicates
 			 */
 
-			uint32_t ix = pStore->lookupMember(name);
+			unsigned ix = pStore->lookupMember(name);
 			if (pStore->memberIndex[ix] != 0) {
 				// duplicate candidate name
 				skipDuplicate++;
@@ -1226,11 +1226,11 @@ struct genmemberContext_t : callable_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
 
-		uint32_t lastMember = pStore->numMember;
+		unsigned lastMember = pStore->numMember;
 
 		// clear member index and linked-list
 		::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
-		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++)
+		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++)
 			pStore->signatures[iSid].firstMember = 0;
 		pStore->numMember = 1;
 		skipDuplicate = skipSize = skipUnsafe = 0;
@@ -1240,7 +1240,7 @@ struct genmemberContext_t : callable_t {
 		ctx.tick = 0;
 
 		ctx.progress++; // skip reserved
-		for (uint32_t iMid = 1; iMid < lastMember; iMid++) {
+		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -1290,7 +1290,7 @@ struct genmemberContext_t : callable_t {
 					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
 
 					// add safe members to index
-					uint32_t ix = pStore->lookupMember(pMember->name);
+					unsigned ix = pStore->lookupMember(pMember->name);
 					assert(pStore->memberIndex[ix] == 0);
 					pStore->memberIndex[ix] = pStore->numMember;
 
@@ -1350,7 +1350,7 @@ struct genmemberContext_t : callable_t {
 			 *
 			 * <memberName> <numPlaceholder>
 			 */
-			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+			for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 				member_t *pMember = pStore->members + iMid;
 
 				tree.decodeFast(pMember->name);
@@ -1362,8 +1362,8 @@ struct genmemberContext_t : callable_t {
 			/*
 			 * Display full members, grouped by signature
 			 */
-			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
-				for (uint32_t iMid = pStore->signatures[iSid].firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+				for (unsigned iMid = pStore->signatures[iSid].firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 					member_t *pMember = pStore->members + iMid;
 
 					printf("%u:%s\t", iMid, pMember->name);
@@ -1715,7 +1715,7 @@ int main(int argc, char *const *argv) {
 				app.opt_sidLo = strtoull(optarg, NULL, 0);
 				break;
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TASK:
 				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
@@ -1773,7 +1773,7 @@ int main(int argc, char *const *argv) {
 		char *endptr;
 
 		errno = 0; // To distinguish success/failure after call
-		app.arg_numNodes = (uint32_t) strtoul(argv[optind++], &endptr, 0);
+		app.arg_numNodes = (unsigned) strtoul(argv[optind++], &endptr, 0);
 
 		// strip trailing spaces
 		while (*endptr && isspace(*endptr))
@@ -2150,9 +2150,9 @@ int main(int argc, char *const *argv) {
 		/*
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)
 		 */
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
-				for (uint32_t iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
 					assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
 				}
 			}

@@ -114,7 +114,7 @@ struct footprint_t {
 	 *
 	 * @return {number} - calculate crc
 	 */
-	inline uint32_t crc32(void) const {
+	inline unsigned crc32(void) const {
 
 		// NOTE: QUADPERFOOTPRINT tests
 #if defined(__SSE4_2__)

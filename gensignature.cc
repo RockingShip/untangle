@@ -105,7 +105,7 @@ struct gensignatureContext_t : callable_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of input database
@@ -119,13 +119,13 @@ struct gensignatureContext_t : callable_t {
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
 	/// @var {number} size of imprint index WARNING: must be prime
-	uint32_t opt_imprintIndexSize;
+	unsigned opt_imprintIndexSize;
 	/// @var {number} interleave for associative imprint index
 	unsigned opt_interleave;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} Maximum number of imprints to be stored database
-	uint32_t opt_maxImprint;
+	unsigned opt_maxImprint;
 	/// @var {number} Maximum number of signatures to be stored database
 	uint32_t opt_maxSignature;
 	/// @var {number} --metrics, Collect metrics intended for "metrics.h"
@@ -133,7 +133,7 @@ struct gensignatureContext_t : callable_t {
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} size of signature index WARNING: must be prime
-	uint32_t opt_signatureIndexSize;
+	unsigned opt_signatureIndexSize;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
 
@@ -234,8 +234,8 @@ struct gensignatureContext_t : callable_t {
 		 * Consider signature groups `unsafe` (no members yet)
 		 */
 
-		uint32_t sid = 0;
-		uint32_t tid = 0;
+		unsigned sid = 0;
+		unsigned tid = 0;
 
 		pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
 
@@ -423,7 +423,7 @@ struct gensignatureContext_t : callable_t {
 
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved
-		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -454,7 +454,7 @@ struct gensignatureContext_t : callable_t {
 
 			tree.decodeFast(pSignature->name);
 
-			uint32_t sid, tid;
+			unsigned sid, tid;
 
 			if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
 				pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
@@ -524,7 +524,7 @@ struct gensignatureContext_t : callable_t {
 			 * test  for duplicates
 			 */
 
-			uint32_t ix = pStore->lookupSignature(name);
+			unsigned ix = pStore->lookupSignature(name);
 			if (pStore->signatureIndex[ix] != 0) {
 				// duplicate candidate name
 				skipDuplicate++;
@@ -647,7 +647,7 @@ struct gensignatureContext_t : callable_t {
 		 * List result
 		 */
 		if (opt_text == 2) {
-			for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 				const signature_t *pSignature = pStore->signatures + iSid;
 				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
@@ -730,12 +730,12 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			 */
 
 			// @formatter:off
-			for (uint32_t Fo = 0; Fo < tinyTree_t::TINYTREE_KSTART + 3; Fo++) // operand of F: 0, a, b, c
-			for (uint32_t Fi = 0; Fi < 2; Fi++)                               // inverting of F
-			for (uint32_t To = 0; To < tinyTree_t::TINYTREE_KSTART + 3; To++)
-			for (uint32_t Ti = 0; Ti < 2; Ti++)
-			for (uint32_t Qo = 0; Qo < tinyTree_t::TINYTREE_KSTART + 3; Qo++)
-			for (uint32_t Qi = 0; Qi < 2; Qi++) {
+			for (unsigned Fo = 0; Fo < tinyTree_t::TINYTREE_KSTART + 3; Fo++) // operand of F: 0, a, b, c
+			for (unsigned Fi = 0; Fi < 2; Fi++)                               // inverting of F
+			for (unsigned To = 0; To < tinyTree_t::TINYTREE_KSTART + 3; To++)
+			for (unsigned Ti = 0; Ti < 2; Ti++)
+			for (unsigned Qo = 0; Qo < tinyTree_t::TINYTREE_KSTART + 3; Qo++)
+			for (unsigned Qi = 0; Qi < 2; Qi++) {
 			// @formatter:on
 
 				// additional rangecheck
@@ -812,7 +812,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					// bump test number
 					testNr++;
 
-					uint32_t q, t, f;
+					unsigned q, t, f;
 
 					/*
 					 * Substitute endpoints `a-c` with their actual values.
@@ -850,8 +850,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					unsigned expected = q ? t : f;
 
 					// extract encountered from footprint.
-					uint32_t ix = c << 2 | b << 1 | a;
-					uint32_t encountered = pEval[tree.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+					unsigned ix = c << 2 | b << 1 | a;
+					unsigned encountered = pEval[tree.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
 					if (tree.root & IBIT)
 						encountered ^= 1; // invert result
 
@@ -1006,7 +1006,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			 */
 
 			time_t seconds = ::time(NULL);
-			for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
+			for (unsigned iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					fprintf(stderr, "\r[%s] %.5f%%", ctx.timeAsString(), iTransform * 100.0 / MAXTRANSFORM);
@@ -1016,7 +1016,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				// Load base name with skin
 				tree.decodeFast(pBasename, pStore->fwdTransformNames[iTransform]);
 
-				uint32_t sid, tid;
+				unsigned sid, tid;
 
 				// lookup
 				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid)) {
@@ -1637,7 +1637,7 @@ int main(int argc, char *const *argv) {
 				app.opt_generate++;
 				break;
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
 				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
@@ -1648,13 +1648,10 @@ int main(int argc, char *const *argv) {
 				app.opt_load = optarg;
 				break;
 			case LO_MAXIMPRINT:
-				app.opt_maxImprint = (uint32_t) strtoul(optarg, NULL, 0);
+				app.opt_maxImprint = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = (uint32_t) strtoul(optarg, NULL, 0);
-				break;
-			case LO_METRICS:
-				app.opt_metrics = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_metrics + 1;
+				app.opt_maxSignature = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
@@ -1681,7 +1678,7 @@ int main(int argc, char *const *argv) {
 				app.opt_selftest++;
 				break;
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime((uint32_t) strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TEXT:
 				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
@@ -1712,7 +1709,7 @@ int main(int argc, char *const *argv) {
 		char *endptr;
 
 		errno = 0; // To distinguish success/failure after call
-		app.arg_numNodes = (uint32_t) strtoul(argv[optind++], &endptr, 0);
+		app.arg_numNodes = (unsigned) strtoul(argv[optind++], &endptr, 0);
 
 		// strip trailing spaces
 		while (*endptr && isspace(*endptr))

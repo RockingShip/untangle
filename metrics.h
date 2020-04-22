@@ -259,7 +259,7 @@ struct metricsImprint_t {
 	 */
 
 	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
-	uint32_t numImprint;
+	unsigned numImprint;
 
 	/// @var {double} - Estimated `database_t::lookupImprintAssociative()` in M/s. Provided by `gensignature --metrics`
 	double speed; // NOTE: based on random collection which changes per run.

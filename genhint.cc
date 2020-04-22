@@ -71,7 +71,7 @@ struct genhintContext_t : callable_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of input database

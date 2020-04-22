@@ -49,7 +49,7 @@
  */
 struct slookupContext_t {
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of database
@@ -86,7 +86,7 @@ struct slookupContext_t {
 		// Create worker tree
 
 		signature_t *pSignature = NULL;
-		uint32_t sid = 0, tid = 0;
+		unsigned sid = 0, tid = 0;
 
 		/*
 		 * Test to see if numeric id
@@ -129,7 +129,7 @@ struct slookupContext_t {
 				 * Find the signature index (fast)
 				 */
 
-				uint32_t ix = pStore->lookupSignature(pName);
+				unsigned ix = pStore->lookupSignature(pName);
 				sid = pStore->signatureIndex[ix];
 			}
 		}

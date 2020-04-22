@@ -1124,13 +1124,13 @@ struct database_t {
 	 *
 	 * @param {string} pName - Transform name
 	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
-	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+	 * @return {number} - Transform enumeration id or `IBIT` if "not-found"
 	 */
-	inline uint32_t lookupTransform(const char *pName, uint32_t *pIndex) {
+	inline unsigned lookupTransform(const char *pName, uint32_t *pIndex) {
 		assert(pIndex);
 
 		// starting position in index
-		uint32_t pos = MAXSLOTS + 1;
+		unsigned pos = MAXSLOTS + 1;
 
 		// walk through states
 		while (*pName) {
@@ -1153,9 +1153,9 @@ struct database_t {
 	 * Lookup a forward transform name and return its matching enumeration id.
  	 *
 	 * @param {string} pName - Transform name
- 	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+ 	 * @return {number} - Transform enumeration id or `IBIT` if "not-found"
  	 */
-	inline uint32_t lookupFwdTransform(const char *pName) {
+	inline unsigned lookupFwdTransform(const char *pName) {
 		return lookupTransform(pName, this->fwdTransformNameIndex);
 	}
 
@@ -1165,9 +1165,9 @@ struct database_t {
 	 * Lookup a reverse transform name and return its matching enumeration id.
   	 *
  	 * @param {string} pName - Transform name
-  	 * @return {uint32_t} - Transform enumeration id or `IBIT` if "not-found"
+  	 * @return {number} - Transform enumeration id or `IBIT` if "not-found"
   	 */
-	inline uint32_t lookupRevTransform(const char *pName) {
+	inline unsigned lookupRevTransform(const char *pName) {
 		return lookupTransform(pName, this->revTransformNameIndex);
 	}
 
@@ -1185,16 +1185,16 @@ struct database_t {
 	 * @param v {string} v - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupSignature(const char *name) {
+	inline unsigned lookupSignature(const char *name) {
 		ctx.cntHash++;
 
 		// calculate starting position
-		uint32_t crc32 = 0;
+		unsigned crc32 = 0;
 		for (const char *pName = name; *pName; pName++)
 			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
 
-		uint32_t ix = crc32 % signatureIndexSize;
-		uint32_t bump = ix;
+		unsigned ix = crc32 % signatureIndexSize;
+		unsigned bump = ix;
 		if (bump == 0)
 			bump = signatureIndexSize - 1; // may never be zero
 		if (bump > 2147000041)
@@ -1246,7 +1246,7 @@ struct database_t {
 	 * @param v {string} v - key value
 	 * @return {number} signatureId
 	 */
-	inline uint32_t addSignature(const char *name) {
+	inline unsigned addSignature(const char *name) {
 		signature_t *pSignature = this->signatures + this->numSignature++;
 
 		if (this->numSignature > this->maxSignature)
@@ -1258,7 +1258,7 @@ struct database_t {
 		// only populate key fields
 		strcpy(pSignature->name, name);
 
-		return (uint32_t) (pSignature - this->signatures);
+		return (unsigned) (pSignature - this->signatures);
 	}
 
 	/*
@@ -1277,16 +1277,16 @@ struct database_t {
 	 * @param v {hint_t} v - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupHint(const hint_t *pHint) {
+	inline unsigned lookupHint(const hint_t *pHint) {
 		ctx.cntHash++;
 
 		// calculate starting position
-		uint32_t crc32 = 0;
+		unsigned crc32 = 0;
 		for (unsigned j = 0; j < MAXSLOTS * 2; j++)
 			crc32 = __builtin_ia32_crc32si(crc32, pHint->numStored[j]);
 
-		uint32_t ix = crc32 % hintIndexSize;
-		uint32_t bump = ix;
+		unsigned ix = crc32 % hintIndexSize;
+		unsigned bump = ix;
 		if (bump == 0)
 			bump = hintIndexSize - 1; // may never be zero
 		if (bump > 2147000041)
@@ -1314,8 +1314,8 @@ struct database_t {
 	 * @param v {hint_t} v - key value
 	 * @return {number} hintId
 	 */
-	inline uint32_t addHint(hint_t *pHint) {
-		uint32_t hintId = this->numHint++;
+	inline unsigned addHint(hint_t *pHint) {
+		unsigned hintId = this->numHint++;
 
 		if (this->numHint > this->maxHint)
 			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
@@ -1341,17 +1341,17 @@ struct database_t {
 	 * @param v {footprint_t} v - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupImprint(const footprint_t &v) const {
+	inline unsigned lookupImprint(const footprint_t &v) const {
 
 		ctx.cntHash++;
 
 		// starting position
-		uint32_t crc = v.crc32();
+		unsigned crc = v.crc32();
 
-		uint32_t ix = crc % imprintIndexSize;
+		unsigned ix = crc % imprintIndexSize;
 
 		// increment when overflowing
-		uint32_t bump = ix;
+		unsigned bump = ix;
 		if (bump == 0)
 			bump = imprintIndexSize - 1; // may never be zero
 		if (bump > 2147000041)
@@ -1402,7 +1402,7 @@ struct database_t {
 	 * @param v {footprint_t} v - key value
 	 * @return {number} imprintId
 	 */
-	inline uint32_t addImprint(const footprint_t &v) {
+	inline unsigned addImprint(const footprint_t &v) {
 		imprint_t *pImprint = this->imprints + this->numImprint++;
 
 		if (this->numImprint > this->maxImprint)
@@ -1411,7 +1411,7 @@ struct database_t {
 		// only populate key fields
 		pImprint->footprint = v;
 
-		return (uint32_t) (pImprint - this->imprints);
+		return (unsigned) (pImprint - this->imprints);
 	}
 
 	/*
@@ -1437,11 +1437,11 @@ struct database_t {
 	 * @param {tinyTree_t} pTree - Tree containg expression
 	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
 	 * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
-	 * @param {uint32_t} sid - found structure id
-	 * @param {uint32_t} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
+	 * @param {number} sid - found structure id
+	 * @param {number} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
 	 * @return {boolean} - `true` if found, `false` if not.
 	 */
-	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t *sid, uint32_t *tid) {
+	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned *sid, unsigned *tid) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
@@ -1455,7 +1455,7 @@ struct database_t {
 			 */
 
 			// permutate all rows
-			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveStep) {
+			for (unsigned iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveStep) {
 
 				// find where the evaluator for the key is located in the evaluator store
 				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
@@ -1464,7 +1464,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				uint32_t ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[pTree->root]);
 
 				/*
 				 * Was something found
@@ -1496,7 +1496,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				uint32_t ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[pTree->root]);
 
 				/*
 				 * Was something found
@@ -1530,9 +1530,9 @@ struct database_t {
 	 * @param {tinyTree_t} pTree - Tree containg expression
 	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
 	 * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
-	 * @param {uint32_t} sid - structure id to attach to imprints.
+	 * @param {number} sid - structure id to attach to imprints.
 	 */
-	inline void addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t sid) {
+	inline void addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned sid) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
@@ -1556,7 +1556,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				uint32_t ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[pTree->root]);
 
 				// add to the database is not there
 				if (this->imprintIndex[ix] == 0 || (this->imprintVersion != NULL && this->imprintVersion[ix] != iVersion)) {
@@ -1585,7 +1585,7 @@ struct database_t {
 			 * index is populated with key cols, runtime scans rows
 			 */
 			// permutate rows
-			for (uint32_t iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveStep) {
+			for (unsigned iRow = 0; iRow < MAXTRANSFORM; iRow += this->interleaveStep) {
 
 				// find where the transform is located in the evaluator store
 				footprint_t *v = pRevEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
@@ -1594,7 +1594,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				uint32_t ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[pTree->root]);
 
 				// add to the database is not there
 				if (this->imprintIndex[ix] == 0 || (this->imprintVersion != NULL && this->imprintVersion[ix] != iVersion)) {
@@ -1633,16 +1633,16 @@ struct database_t {
 	 * @param v {string} v - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupMember(const char *name) {
+	inline unsigned lookupMember(const char *name) {
 		ctx.cntHash++;
 
 		// calculate starting position
-		uint32_t crc32 = 0;
+		unsigned crc32 = 0;
 		for (const char *pName = name; *pName; pName++)
 			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
 
-		uint32_t ix = crc32 % memberIndexSize;
-		uint32_t bump = ix;
+		unsigned ix = crc32 % memberIndexSize;
+		unsigned bump = ix;
 		if (bump == 0)
 			bump = memberIndexSize - 1; // may never be zero
 		if (bump > 2147000041)
@@ -1673,7 +1673,7 @@ struct database_t {
 	 * @param v {string} name - key value
 	 * @return {number} memberId
 	 */
-	inline uint32_t addMember(const char *name) {
+	inline unsigned addMember(const char *name) {
 		member_t *pMember = this->members + this->numMember++;
 
 		if (this->numMember > this->maxMember)
@@ -1685,7 +1685,7 @@ struct database_t {
 		// only populate key fields
 		strcpy(pMember->name, name);
 
-		return (uint32_t) (pMember - this->members);
+		return (unsigned) (pMember - this->members);
 	}
 
 	/**
@@ -1719,7 +1719,7 @@ struct database_t {
 		if (sections & ALLOCMASK_SIGNATUREINDEX) {
 			::memset(this->signatureIndex, 0, this->signatureIndexSize * sizeof(*this->signatureIndex));
 
-			for (uint32_t iSid = 1; iSid < this->numSignature; iSid++) {
+			for (unsigned iSid = 1; iSid < this->numSignature; iSid++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
@@ -1730,7 +1730,7 @@ struct database_t {
 
 				const signature_t *pSignature = this->signatures + iSid;
 
-				uint32_t ix = this->lookupSignature(pSignature->name);
+				unsigned ix = this->lookupSignature(pSignature->name);
 				assert(this->signatureIndex[ix] == 0);
 				this->signatureIndex[ix] = iSid;
 
@@ -1747,7 +1747,7 @@ struct database_t {
 			::memset(this->hintIndex, 0, this->hintIndexSize * sizeof(*this->hintIndex));
 
 			// rebuild
-			for (uint32_t iHint = 1; iHint < this->numHint; iHint++) {
+			for (unsigned iHint = 1; iHint < this->numHint; iHint++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
@@ -1758,7 +1758,7 @@ struct database_t {
 
 				const hint_t *pHint = this->hints + iHint;
 
-				uint32_t ix = this->lookupHint(pHint);
+				unsigned ix = this->lookupHint(pHint);
 				assert(this->hintIndex[ix] == 0);
 				this->hintIndex[ix] = iHint;
 
@@ -1775,7 +1775,7 @@ struct database_t {
 			::memset(this->imprintIndex, 0, sizeof(*this->imprintIndex) * this->imprintIndexSize);
 
 			// rebuild
-			for (uint32_t iImprint = 1; iImprint < this->numImprint; iImprint++) {
+			for (unsigned iImprint = 1; iImprint < this->numImprint; iImprint++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
@@ -1786,7 +1786,7 @@ struct database_t {
 
 				const imprint_t *pImprint = this->imprints + iImprint;
 
-				uint32_t ix = this->lookupImprint(pImprint->footprint);
+				unsigned ix = this->lookupImprint(pImprint->footprint);
 				assert(this->imprintIndex[ix] == 0);
 				this->imprintIndex[ix] = iImprint;
 
@@ -1803,7 +1803,7 @@ struct database_t {
 			::memset(this->memberIndex, 0, sizeof(*this->memberIndex) * this->memberIndexSize);
 
 			// rebuild
-			for (uint32_t iMember = 1; iMember < this->numMember; iMember++) {
+			for (unsigned iMember = 1; iMember < this->numMember; iMember++) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
@@ -1814,7 +1814,7 @@ struct database_t {
 
 				const member_t *pMember = this->members + iMember;
 
-				uint32_t ix = this->lookupMember(pMember->name);
+				unsigned ix = this->lookupMember(pMember->name);
 				assert(this->memberIndex[ix] == 0);
 				this->memberIndex[ix] = iMember;
 

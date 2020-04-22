@@ -289,7 +289,7 @@ struct tree_t {
  	 * @param {number} kstart - nstart of first node
 	 */
 
-	inline tree_t(uint32_t kstart, uint32_t nstart)
+	inline tree_t(unsigned kstart, unsigned nstart)
 		: kstart(kstart), nstart(nstart), count(nstart) {
 	}
 
@@ -322,7 +322,7 @@ struct tree_t {
 		this->count = rhs.count;
 
 		// then nodes
-		for (uint32_t i = rhs.nstart; i < count; i++)
+		for (unsigned i = rhs.nstart; i < count; i++)
 			this->N[i] = rhs.N[i];
 
 		// roots last
@@ -356,7 +356,7 @@ struct tree_t {
 	 * @param {number} rhs - entrypoint to right side
 	 * @return {number} `-1` if `lhs<rhs`, `0` if `lhs==rhs` and `+1` if `lhs>rhs`
 	 */
-	int compare(uint32_t lhs, uint32_t rhs) {
+	int compare(unsigned lhs, unsigned rhs) {
 
 		static uint8_t beenThere[NEND];
 
@@ -377,8 +377,8 @@ struct tree_t {
 		do {
 			// pop stack
 			--stackPos;
-			uint32_t L = stackL[stackPos];
-			uint32_t R = stackR[stackPos];
+			unsigned L = stackL[stackPos];
+			unsigned R = stackR[stackPos];
 
 			/*
 			 * compare endpoints/references
@@ -509,7 +509,7 @@ struct tree_t {
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
+	unsigned addNode(unsigned Q, unsigned T, unsigned F) {
 
 		if (true) {
 			assert((Q & ~IBIT) < this->count);
@@ -527,7 +527,7 @@ struct tree_t {
 
 		if (Q & IBIT) {
 			// "~Q?T:F" -> "Q?F:T"
-			uint32_t savT = T;
+			unsigned savT = T;
 			T = F;
 			F = savT;
 			Q ^= IBIT;
@@ -538,7 +538,7 @@ struct tree_t {
 		}
 
 		// ibit indicates the result should be inverted
-		uint32_t ibit = 0;
+		unsigned ibit = 0;
 
 		if (F & IBIT) {
 			// "Q?T:~F" -> "~(Q?~T:F)"
@@ -663,7 +663,7 @@ struct tree_t {
 		// `OR` `Q?~0:F` where Q>F
 		if (T == IBIT && this->compare(Q, F) > 0) {
 			// swap
-			uint32_t savQ = Q;
+			unsigned savQ = Q;
 			Q = F;
 			F = savQ;
 		}
@@ -671,7 +671,7 @@ struct tree_t {
 		// `XOR` `Q?~F:F` where Q>F
 		if ((T ^ IBIT) == F && this->compare(Q, F) > 0) {
 			// swap
-			uint32_t savQ = Q;
+			unsigned savQ = Q;
 			Q = F;
 			F = savQ;
 			T = savQ ^ IBIT;
@@ -680,7 +680,7 @@ struct tree_t {
 		// `AND` `Q?T:0` where Q>T
 		if ((~T & IBIT) && F == 0 && this->compare(Q, T) > 0) {
 			// swap
-			uint32_t savQ = Q;
+			unsigned savQ = Q;
 			Q = T;
 			T = savQ;
 		}
@@ -735,14 +735,14 @@ struct tree_t {
 		 */
 
 		// test if already cached
-		for (uint32_t i = this->nstart; i < this->count; i++) {
+		for (unsigned i = this->nstart; i < this->count; i++) {
 			node_t *pNode = this->N + i;
 			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
 				return i ^ ibit;
 		}
 
 		// create new entry
-		uint32_t nid = this->count++;
+		unsigned nid = this->count++;
 		node_t *pNode = this->N + nid;
 
 		// populate
@@ -763,11 +763,11 @@ struct tree_t {
 	 * @param {number[1]} pNumSkin - return number of skin elements. This might be higher than the number of placeholders
 	 * @param {number[]} pSkin - decoded list skins elements
 	 */
-	void decodeEndpoints(const char *pName, uint32_t *pHighestEndpoint, uint32_t *pNumSkin, uint32_t *pSkin) const {
+	void decodeEndpoints(const char *pName, unsigned *pHighestEndpoint, unsigned *pNumSkin, uint32_t *pSkin) const {
 
-		uint32_t prefix = 0; // current prefix
-		uint32_t highestEndpoint = 0; // highest endpoints
-		uint32_t numSkin = 0; // number of skin elements
+		unsigned prefix = 0; // current prefix
+		unsigned highestEndpoint = 0; // highest endpoints
+		unsigned numSkin = 0; // number of skin elements
 
 		/*
 		 * walk through the notation until end or until placeholder/skin separator
@@ -785,7 +785,7 @@ struct tree_t {
 
 			} else if (islower(*pName)) {
 				// endpoint
-				uint32_t ep = prefix * 26 + *pName - 'a';
+				unsigned ep = prefix * 26 + *pName - 'a';
 
 				// remember highest
 				if (ep > highestEndpoint)
@@ -833,7 +833,7 @@ struct tree_t {
 
 			} else if (islower(*pName)) {
 				// endpoint
-				uint32_t ep = prefix * 26 + *pName - 'a';
+				unsigned ep = prefix * 26 + *pName - 'a';
 
 				// store in binary skin
 				pSkin[numSkin++] = ep;
@@ -869,7 +869,7 @@ struct tree_t {
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 */
-	int decodeSafe(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeSafe(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -881,9 +881,9 @@ struct tree_t {
 		// temporary stack storage for postfix notation
 		static uint32_t stack[NEND];
 		int stackPos = 0;
-		uint32_t prefix = 0;
+		unsigned prefix = 0;
 		uint32_t nestStack[16];
-		uint32_t nestStackPos = 0;
+		unsigned nestStackPos = 0;
 
 
 		// walk through the notation until end or until placeholder/skin separator
@@ -902,7 +902,7 @@ struct tree_t {
 			// test for endpoint
 			if (islower(*pCh)) {
 				// determine endpoint value
-				uint32_t ep = prefix * 26 + *pCh - 'a'; // endpoint
+				unsigned ep = prefix * 26 + *pCh - 'a'; // endpoint
 
 				// test if placeholder
 				if (numSkin != 0) {
@@ -917,7 +917,7 @@ struct tree_t {
 				}
 
 				// get final nodeId
-				uint32_t nid = this->kstart + ep; // nodeId is endpoint relative to kstart
+				unsigned nid = this->kstart + ep; // nodeId is endpoint relative to kstart
 
 				// range check
 				if (nid >= this->nstart) {
@@ -941,7 +941,7 @@ struct tree_t {
 			// test for back-reference
 			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
 			if (isdigit(*pCh)) {
-				uint32_t nid; // node id
+				unsigned nid; // node id
 
 				// determine final value
 				nid = prefix * 10 + *pCh - '0';
@@ -1022,8 +1022,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1031,7 +1031,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(L, R ^ IBIT, 0);
+					unsigned nid = addNode(L, R ^ IBIT, 0);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1049,8 +1049,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1058,7 +1058,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(L, R ^ IBIT, R);
+					unsigned nid = addNode(L, R ^ IBIT, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1076,8 +1076,8 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1085,7 +1085,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(L, 0 ^ IBIT, R);
+					unsigned nid = addNode(L, 0 ^ IBIT, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1103,9 +1103,9 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackPos];
-					uint32_t T = stack[--stackPos];
-					uint32_t Q = stack[--stackPos];
+					unsigned F = stack[--stackPos];
+					unsigned T = stack[--stackPos];
+					unsigned Q = stack[--stackPos];
 
 					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1113,7 +1113,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(Q, T ^ IBIT, F);
+					unsigned nid = addNode(Q, T ^ IBIT, F);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1131,8 +1131,8 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1140,7 +1140,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(L, R, 0);
+					unsigned nid = addNode(L, R, 0);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1158,9 +1158,9 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackPos];
-					uint32_t T = stack[--stackPos];
-					uint32_t Q = stack[--stackPos];
+					unsigned F = stack[--stackPos];
+					unsigned T = stack[--stackPos];
+					unsigned Q = stack[--stackPos];
 
 					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1168,7 +1168,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(Q, T, F);
+					unsigned nid = addNode(Q, T, F);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1199,8 +1199,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
 						printf("[operand out-of-range]\n");
@@ -1208,7 +1208,7 @@ struct tree_t {
 					}
 
 					// create operator
-					uint32_t nid = addNode(L, 0, R);
+					unsigned nid = addNode(L, 0, R);
 
 					// push
 					stack[stackPos++] = nid;
@@ -1247,7 +1247,7 @@ struct tree_t {
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 */
-	int decodeFast(const char *pName, uint32_t numSkin, const uint32_t *pSkin) {
+	int decodeFast(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -1256,7 +1256,7 @@ struct tree_t {
 		// temporary stack storage for postfix notation
 		static uint32_t stack[NEND];
 		int stackPos = 0;
-		uint32_t prefix = 0;
+		unsigned prefix = 0;
 
 		// walk through the notation until end or until placeholder/skin separator
 		for (const char *pCh = pName; *pCh != 0 && *pCh != '/'; pCh++) {
@@ -1274,7 +1274,7 @@ struct tree_t {
 			// test for endpoint
 			if (islower(*pCh)) {
 				// determine endpoint value
-				uint32_t ep = prefix * 26 + *pCh - 'a'; // endpoint
+				unsigned ep = prefix * 26 + *pCh - 'a'; // endpoint
 
 				// test if placeholder
 				if (numSkin != 0) {
@@ -1289,7 +1289,7 @@ struct tree_t {
 				}
 
 				// get final nodeId
-				uint32_t nid = this->kstart + ep; // nodeId is endpoint relative to kstart
+				unsigned nid = this->kstart + ep; // nodeId is endpoint relative to kstart
 
 				// range check
 				if (nid >= this->nstart) {
@@ -1313,7 +1313,7 @@ struct tree_t {
 			// test for back-reference
 			// loading is non-normalised and each opcode symbol populates exactly one node making calculations fairly easy
 			if (isdigit(*pCh)) {
-				uint32_t nid; // node id
+				unsigned nid; // node id
 
 				// determine final value
 				nid = prefix * 10 + *pCh - '0';
@@ -1368,8 +1368,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1398,8 +1398,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1428,8 +1428,8 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1458,9 +1458,9 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackPos];
-					uint32_t T = stack[--stackPos];
-					uint32_t Q = stack[--stackPos];
+					unsigned F = stack[--stackPos];
+					unsigned T = stack[--stackPos];
+					unsigned Q = stack[--stackPos];
 
 					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1489,8 +1489,8 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1519,9 +1519,9 @@ struct tree_t {
 					}
 
 					// pop operands
-					uint32_t F = stack[--stackPos];
-					uint32_t T = stack[--stackPos];
-					uint32_t Q = stack[--stackPos];
+					unsigned F = stack[--stackPos];
+					unsigned T = stack[--stackPos];
+					unsigned Q = stack[--stackPos];
 
 					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1562,8 +1562,8 @@ struct tree_t {
 					}
 
 					//pop operands
-					uint32_t R = stack[--stackPos]; // right hand side
-					uint32_t L = stack[--stackPos]; // left hand side
+					unsigned R = stack[--stackPos]; // right hand side
+					unsigned L = stack[--stackPos]; // left hand side
 
 					if ((L & IBIT) || (R & IBIT)) {
 						printf("[invert not normalised]\n");
@@ -1611,7 +1611,7 @@ struct tree_t {
 	 * @return non-zero when parsing failed
 	 */
 	int decode(const char *pName, bool shrinkwrap) {
-		uint32_t highestEndpoint, numSkin;
+		unsigned highestEndpoint, numSkin;
 
 		// get visual highest nstart
 		this->decodeEndpoints(pName, &highestEndpoint, &numSkin, this->skin);
@@ -1643,9 +1643,9 @@ struct tree_t {
          */
 
 	/// @var {number} First free placeholder, or zero for no placeholder/skin mapping
-	uint32_t nextPlaceholder;
+	unsigned nextPlaceholder;
 	/// @var {number} First free node
-	uint32_t nextNode;
+	unsigned nextNode;
 	/// @var {string} Storage for notation
 	char sbuf[SBUFMAX];
 	/// @var {number} length of notation
@@ -1666,13 +1666,13 @@ struct tree_t {
 	 *
 	 * @param {number} id - index of node to encode
 	 */
-	void encodePlaceholders(uint32_t id) {
+	void encodePlaceholders(unsigned id) {
 
 		// extract all parts of the node
-		uint32_t T = this->N[id].T;
-		uint32_t Tu = T & ~IBIT; // index to `T` operand
-		uint32_t Q = this->N[id].Q;
-		uint32_t F = this->N[id].F;
+		unsigned T = this->N[id].T;
+		unsigned Tu = T & ~IBIT; // index to `T` operand
+		unsigned Q = this->N[id].Q;
+		unsigned F = this->N[id].F;
 
 		// assert node is invert normalised
 		assert((~Q & IBIT) && (~F & IBIT));
@@ -1743,7 +1743,7 @@ struct tree_t {
 	 *
 	 * @param {number} id - index of node to encode
 	 */
-	void encodeOperand(uint32_t id) {
+	void encodeOperand(unsigned id) {
 
 		if (id == 0) {
 			// may happen with non-normalised nodes like `"q?~0:0"`
@@ -1765,7 +1765,7 @@ struct tree_t {
 				beenThere[id] = id;
 
 			// zero-based copy of placeholder
-			uint32_t v = beenThere[id] - this->kstart;
+			unsigned v = beenThere[id] - this->kstart;
 
 			// base26 encoded endpoint
 			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
@@ -1786,7 +1786,7 @@ struct tree_t {
 		} else if (beenThere[id] != 0) {
 
 			// already been there. Calculate the back-reference
-			uint32_t v = nextNode - beenThere[id];
+			unsigned v = nextNode - beenThere[id];
 
 			// back-references are notated as a non-zero digit base26 prefixed by uppercase letters
 			char prefixStack[16];
@@ -1823,14 +1823,14 @@ struct tree_t {
 	 *
 	 * @param {number} id - index of node to encode
 	 */
-	void encodeQTF(uint32_t id) {
+	void encodeQTF(unsigned id) {
 
 		// extract all parts of the node
-		uint32_t T = this->N[id].T;
-		uint32_t Ti = T & IBIT; // non-zero if result of `T` should be inverted
-		uint32_t Tu = T & ~IBIT; // index to `T` operand
-		uint32_t Q = this->N[id].Q;
-		uint32_t F = this->N[id].F;
+		unsigned T = this->N[id].T;
+		unsigned Ti = T & IBIT; // non-zero if result of `T` should be inverted
+		unsigned Tu = T & ~IBIT; // index to `T` operand
+		unsigned Q = this->N[id].Q;
+		unsigned F = this->N[id].F;
 
 		// assert node is invert normalised
 		assert((~Q & IBIT) && (~F & IBIT));
@@ -1909,7 +1909,7 @@ struct tree_t {
 	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
 	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
 	 */
-	const char *encode(uint32_t id, bool withPlaceholders) {
+	const char *encode(unsigned id, bool withPlaceholders) {
 
 		// special case
 		if (id == 0) {
@@ -1982,14 +1982,14 @@ struct tree_t {
 			sbuf[spos++] = '/';
 
 			// append contents of placeholders
-			for (uint32_t ph = this->kstart; ph < nextPlaceholder; ph++) {
+			for (unsigned ph = this->kstart; ph < nextPlaceholder; ph++) {
 
 				// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
 				char prefixStack[16];
 				int prefixStackPos = 0;
 
 				// zero-based copy of placeholder
-				uint32_t v = skin[ph] - this->kstart;
+				unsigned v = skin[ph] - this->kstart;
 
 				// base26 encoded endpoint
 				prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
@@ -2087,7 +2087,7 @@ struct tree_t {
  * @param {footprint_t) kstart - kstart of tree
  * @param {footprint_t) nstart - nstart of tree
  */
-void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart) {
+void initialiseVector(footprint_t *pFootprint, unsigned kstart, unsigned nstart) {
 
 	if (kstart == 1 && nstart <= kstart + MAXSLOTS) {
 
@@ -2099,7 +2099,7 @@ void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart)
 
 		// set footprint for 64bit slice
 		assert(MAXSLOTS == 9);
-		for (uint32_t i = 0; i < (1 << MAXSLOTS); i++) {
+		for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
 			// v[(i/64)+0*4] should be 0
 			if (i & (1 << 0)) v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 			if (i & (1 << 1)) v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
@@ -2120,7 +2120,7 @@ void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart)
 		uint64_t *v = (uint64_t *) pFootprint;
 
 		// craptastic random fill
-		for (uint32_t i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
+		for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
 			v[i] = (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
 			v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -2142,7 +2142,7 @@ void initialiseVector(footprint_t *pFootprint, uint32_t kstart, uint32_t nstart)
  * @param {footprint_t} pEval - evaluation vector
  * @return {number} 0 if something failed, otherwise crc of result
  */
-uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
+unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 
 	/*
 	 * Load shrink-wrapped notation
@@ -2189,7 +2189,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
 
 			// zero-based copy of endpoint
-			uint32_t v = i - pTree->kstart;
+			unsigned v = i - pTree->kstart;
 
 			// base26 encoded endpoint
 			prefixStack[prefixStackPos++] = (char) ('a' + (v % 26));
@@ -2254,7 +2254,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	 * Calculate crc of entry point
 	 */
 
-	uint32_t crc32 = pEval[pTree->root & ~IBIT].crc32();
+	unsigned crc32 = pEval[pTree->root & ~IBIT].crc32();
 	// Inverted `T` is a concept not present in footprints. As a compromise, invert the result.
 	if (pTree->root & IBIT)
 		crc32 ^= 0xffffffff;
@@ -2292,12 +2292,12 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 		/*
 		 * Collect data
 		 */
-		for (uint32_t i = 0; i < pTree->nstart; i++)
+		for (unsigned i = 0; i < pTree->nstart; i++)
 			weight[i] = 0;
-		for (uint32_t i = pTree->nstart; i < pTree->count; i++) {
-			uint32_t Q = pTree->N[i].Q;
-			uint32_t T = pTree->N[i].T & ~IBIT; // IBIT removed
-			uint32_t F = pTree->N[i].F;
+		for (unsigned i = pTree->nstart; i < pTree->count; i++) {
+			unsigned Q = pTree->N[i].Q;
+			unsigned T = pTree->N[i].T & ~IBIT; // IBIT removed
+			unsigned F = pTree->N[i].F;
 
 			// weight = node plus weight of subtrees. Terminals count as 0
 			weight[i] = 1 + weight[Q];
@@ -2313,7 +2313,7 @@ uint32_t mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	}
 
 	printf("\n");
-	return (uint32_t) (crc32 & 0xffffffff);
+	return (crc32 & 0xffffffff);
 }
 
 /**
@@ -2342,7 +2342,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Self-test prefix handling
 	 */
-	for (uint32_t r = pTree->kstart; r < NEND; r++) {
+	for (unsigned r = pTree->kstart; r < NEND; r++) {
 
 		// load tree
 		pTree->nstart = r + 1;
@@ -2373,12 +2373,12 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		 */
 
 		// @formatter:off
-		for (uint32_t Fo = 0; Fo < pTree->kstart + 3; Fo++) // operand of F: 0, a, b, c
-		for (uint32_t Fi = 0; Fi < 2; Fi++)          // inverting of F
-		for (uint32_t To = 0; To < pTree->kstart + 3; To++)
-		for (uint32_t Ti = 0; Ti < 2; Ti++)
-		for (uint32_t Qo = 0; Qo < pTree->kstart + 3; Qo++)
-		for (uint32_t Qi = 0; Qi < 2; Qi++) {
+		for (unsigned Fo = 0; Fo < pTree->kstart + 3; Fo++) // operand of F: 0, a, b, c
+		for (unsigned Fi = 0; Fi < 2; Fi++)          // inverting of F
+		for (unsigned To = 0; To < pTree->kstart + 3; To++)
+		for (unsigned Ti = 0; Ti < 2; Ti++)
+		for (unsigned Qo = 0; Qo < pTree->kstart + 3; Qo++)
+		for (unsigned Qi = 0; Qi < 2; Qi++) {
 		// @formatter:on
 
 			// additional rangecheck
@@ -2432,7 +2432,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				// bump test number
 				testNr++;
 
-				uint32_t q, t, f;
+				unsigned q, t, f;
 
 				assert(pTree->kstart == KSTART); // for switch/case values
 
@@ -2472,8 +2472,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				unsigned expected = q ? t : f;
 
 				// extract encountered from footprint.
-				uint32_t ix = c << 2 | b << 1 | a;
-				uint32_t encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+				unsigned ix = c << 2 | b << 1 | a;
+				unsigned encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
 				if (pTree->root & IBIT)
 					encountered ^= 1; // invert result
 
@@ -2629,7 +2629,7 @@ int main(int argc, char *const *argv) {
 	}
 
 	// storage for testing difference between arguments
-	uint32_t crc32;
+	unsigned crc32;
 	bool differ = false;
 
 	for (int iArg = optind; iArg < argc; iArg++) {

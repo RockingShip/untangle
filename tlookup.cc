@@ -52,7 +52,7 @@ struct tlookupContext_t {
 	 * User specified program arguments and options
 	 */
 
-	/// @var {copntext_t} I/O context
+	/// @var {context_t} I/O context
 	context_t &ctx;
 
 	/// @var {string} name of output database
@@ -77,7 +77,7 @@ struct tlookupContext_t {
 		 * Convert argument into number if possible
 		 */
 		char *endptr;
-		uint32_t tid;
+		unsigned tid;
 
 		errno = 0; // To distinguish success/failure after call
 		tid = strtol(pArg, &endptr, 0);
@@ -100,7 +100,7 @@ struct tlookupContext_t {
 			if (tid >= pDb->numTransform) {
 				printf("tid=%d not found\n", tid);
 			} else {
-				uint32_t rid = pDb->revTransformIds[tid]; // get reverse id
+				unsigned rid = pDb->revTransformIds[tid]; // get reverse id
 				printf("fwd=%d:%s rev=%d:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
 			}
 
@@ -129,7 +129,7 @@ struct tlookupContext_t {
 			if (tid == IBIT) {
 				printf("tid=%d not found\n", tid);
 			} else {
-				uint32_t rid = pDb->revTransformIds[tid]; // get reverse id
+				unsigned rid = pDb->revTransformIds[tid]; // get reverse id
 				printf("fwd=%d:%s rev=%d:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
 			}
 		}

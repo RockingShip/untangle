@@ -267,7 +267,7 @@ struct context_t {
 		if (n % 2 == 0)
 			return false;
 
-		for (uint32_t i = 3; n / i >= i; i++) {
+		for (unsigned i = 3; n / i >= i; i++) {
 			if ((n % i) == 0)
 				return false;
 		}
@@ -281,7 +281,7 @@ struct context_t {
 	 * Raise number to next prime
 	 *
 	 * @param {uint64_t} n - number to test
-	 * @return {unsigned} next highest prime, limited to 2^32-5
+	 * @return {number} next highest prime, limited to 2^32-5
 	 */
 	unsigned nextPrime(uint64_t n) {
 		// limit to highest possible
@@ -309,8 +309,8 @@ struct context_t {
 	 * limit to largest possible prime
 	 *
 	 * @param {uint64_t} n - number to test
-	 * @param {unsigned} percent - percent to increase with
-	 * @return {unsigned} next highest prime, limited to 2^32-5
+	 * @param {number} percent - percent to increase with
+	 * @return {number} next highest prime, limited to 2^32-5
 	 */
 	unsigned raisePercent(uint64_t n, unsigned percent) {
 
@@ -332,7 +332,7 @@ struct context_t {
 	 * @param {string} pBuffer - optional buffer to store result
 	 * @return {string} Textual description of flags.
 	 */
-	char *flagsToText(uint32_t flags, char *pBuffer = NULL) {
+	char *flagsToText(unsigned flags, char *pBuffer = NULL) {
 		static char buffer[128];
 		if (pBuffer == NULL)
 			pBuffer = buffer;
