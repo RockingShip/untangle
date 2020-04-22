@@ -977,8 +977,8 @@ struct generatorTree_t : tinyTree_t {
 					ctx.progress = *this->pRestartData;
 					return;
 				} else {
-					// passed restart point. not +2 but +1. Status on new line
-					ctx.tick++;
+					// passed restart point. Status on new line
+					ctx.restartTick++;
 				}
 
 			} else if (ctx.opt_debug & ctx.DEBUGMASK_GENERATOR_TABS) {

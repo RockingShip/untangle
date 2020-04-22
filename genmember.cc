@@ -749,9 +749,10 @@ struct genmemberContext_t : callable_t {
 				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
-			if (ctx.tick & 1) {
+			if (ctx.restartTick) {
 				// passed a restart point
 				fprintf(stderr, "\n");
+				ctx.restartTick = 0;
 			}
 
 			ctx.tick = 0;
@@ -1461,7 +1462,7 @@ void sigintHandler(int sig) {
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick += 2;
+		ctx.tick++;
 		alarm(ctx.opt_timer);
 	}
 }

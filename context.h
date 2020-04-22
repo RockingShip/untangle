@@ -107,14 +107,16 @@ struct context_t {
 	 */
 
 	/// @var {number} intentionally undocumented
-	uint32_t opt_debug;
+	unsigned opt_debug;
 	/// @var {number} --timer, interval timer for verbose updates
 	unsigned opt_timer;
 	/// @var {number} --verbose, What do you want to know
 	unsigned opt_verbose;
 
 	/// @var {number} - async indication that a timer interrupt occurred. +1 for passing each restart point, +2 on timer event
-	uint32_t tick;
+	unsigned tick;
+        /// @var {number} Indication that a restart point has passed
+        unsigned restartTick;
 	/// @var {uint64_t} - total memory allocated by `myAlloc()`
 	uint64_t totalAllocated;
 
@@ -146,22 +148,23 @@ struct context_t {
 	 * Constructor
 	 */
 	context_t() {
+		cntHash = 0;
+		cntCompare = 0;
 		flags = 0;
 		opt_debug = 0;
 		opt_timer = 1; // default is 1-second intervals
 		opt_verbose = VERBOSE_TICK;
-		tick = 0;
-		totalAllocated = 0;
-		cntHash = 0;
-		cntCompare = 0;
 		progress = 0;
-		progressHi = 0;
 		progressCoef = 0;
-		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
 		progressCoefEnd = 0.10; // dampen speed changes at Training end (low responsive)
 		progressCoefMultiplier = 0.9072878562; //  #seconds as #th root of (end/start). set for 20 second training
+		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
+		progressHi = 0;
 		progressLast = 0;
 		progressSpeed = 0;
+		restartTick = 0;
+		tick = 0;
+		totalAllocated = 0;
 	}
 
 	/**

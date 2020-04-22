@@ -576,7 +576,7 @@ void sigalrmHandler(int sig) {
 	(void) sig; // trick compiler t see parameter is used
 
 	if (ctx.opt_timer) {
-		ctx.tick += 2;
+		ctx.tick++;
 		alarm(ctx.opt_timer);
 	}
 }

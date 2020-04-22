@@ -28,16 +28,14 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
 #include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <string.h>
+#include <errno.h>
 #include <getopt.h>
 #include <signal.h>
-#include <sys/stat.h>
-#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "tinytree.h"
 #include "database.h"
 
@@ -49,7 +47,10 @@
  *
  * @typedef {object}
  */
-struct slookupContext_t : context_t {
+struct slookupContext_t {
+
+	/// @var {copntext_t} I/O context
+	context_t &ctx;
 
 	/// @var {string} name of database
 	const char *opt_database;
@@ -63,7 +64,7 @@ struct slookupContext_t : context_t {
 	/// @var {footprint_t[]} - Evaluator for referse transforms
 	footprint_t *pEvalRev;
 
-	slookupContext_t() {
+	slookupContext_t(context_t &ctx) : ctx(ctx) {
 		opt_database = "untangle.db";
 		opt_imprint = 0;
 		pStore = NULL;
@@ -105,7 +106,7 @@ struct slookupContext_t : context_t {
 				/*
 				 * Find signature using imprint index (slow, required evaluator)
 				 */
-				tinyTree_t tree(*this);
+				tinyTree_t tree(ctx);
 
 				const char *slash = ::strchr(pName, '/');
 				if (slash)
@@ -158,12 +159,21 @@ struct slookupContext_t : context_t {
 };
 
 /*
+ *
+ * I/O context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {context_t} I/O context
+ */
+context_t ctx;
+
+/*
  * I/O and Application context.
  * Needs to be global to be accessible by signal handlers.
  *
  * @global {slookupContext_t} Application
  */
-slookupContext_t app;
+slookupContext_t app(ctx);
 
 /**
  * @date 2020-04-07 16:46:11
@@ -175,9 +185,9 @@ slookupContext_t app;
  * @param {number} sig - signal (ignored)
  */
 void sigalrmHandler(int sig) {
-	if (app.opt_timer) {
-		app.tick += 2;
-		alarm(app.opt_timer);
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
 	}
 }
 
@@ -196,7 +206,7 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", app.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.opt_database);
 		fprintf(stderr, "\t-e --evaluate\n");
 		fprintf(stderr, "\t-i --imprint\n");
@@ -283,7 +293,7 @@ int main(int argc, char *const *argv) {
 				app.opt_database = optarg;
 				break;
 			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
 				usage(argv, true);
@@ -292,25 +302,25 @@ int main(int argc, char *const *argv) {
 				app.opt_imprint++;
 				break;
 			case LO_NOPARANOID:
-				app.flags &= ~context_t::MAGICMASK_PARANOID;
+				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_NOPURE:
-				app.flags &= ~context_t::MAGICMASK_PURE;
+				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
 			case LO_PARANOID:
-				app.flags |= context_t::MAGICMASK_PARANOID;
+				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_PURE:
-				app.flags |= context_t::MAGICMASK_PURE;
+				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -332,9 +342,9 @@ int main(int argc, char *const *argv) {
 	}
 
 	// register timer handler
-	if (app.opt_timer) {
+	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
-		::alarm(app.opt_timer);
+		::alarm(ctx.opt_timer);
 	}
 
 	/*
@@ -342,31 +352,31 @@ int main(int argc, char *const *argv) {
 	 */
 
 	// Open input
-	database_t db(app);
+	database_t db(ctx);
 
 	db.open(app.opt_database, true);
 
 	// display system flags when database was created
-	if (db.creationFlags && app.opt_verbose >= app.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] FLAGS [%s]\n", app.timeAsString(), app.flagsToText(db.creationFlags));
+	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
 #if defined(ENABLE_JANSSON)
-	if (app.opt_verbose >= app.VERBOSE_VERBOSE)
-		fprintf(stderr, "[%s] %s\n", app.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
+	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 #endif
 
 	if (db.numTransform == 0)
-		app.fatal("Missing transform section: %s\n", app.opt_database);
+		ctx.fatal("Missing transform section: %s\n", app.opt_database);
 	if (db.numSignature == 0)
-		app.fatal("Missing signature section: %s\n", app.opt_database);
+		ctx.fatal("Missing signature section: %s\n", app.opt_database);
 	if (db.signatureIndexSize == 0)
-		app.fatal("Incomplete signature section: %s (try with --evaluate)\n", app.opt_database);
+		ctx.fatal("Incomplete signature section: %s (try with --evaluate)\n", app.opt_database);
 	if (db.imprintIndexSize == 0 && app.opt_imprint)
-		app.fatal("Incomplete imprint section: %s\n", app.opt_database);
+		ctx.fatal("Incomplete imprint section: %s\n", app.opt_database);
 
 	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) app.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) app.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	/*
 	 * Statistics
@@ -379,9 +389,9 @@ int main(int argc, char *const *argv) {
 
 	if (app.opt_imprint) {
 		// initialise evaluators
-		tinyTree_t tree(app);
-		tree.initialiseVector(app, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-		tree.initialiseVector(app, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
+		tinyTree_t tree(ctx);
+		tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
+		tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 	} else {
 		// evaluators not present
 		app.pEvalFwd = app.pEvalRev = NULL;

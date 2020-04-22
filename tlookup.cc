@@ -193,7 +193,7 @@ tlookupContext_t app(ctx);
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick += 2;
+		ctx.tick++;
 		alarm(ctx.opt_timer);
 	}
 }

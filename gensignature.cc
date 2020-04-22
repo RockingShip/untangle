@@ -1343,8 +1343,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 			for (ctx.tick = 0; ctx.tick == 0;)
 				generator.decodeFast("ab+"); // waste some time
 
-			// do random lookups for 10 seconds (tick increments twice per second)
-			for (ctx.tick = 0; ctx.tick < 5 * 2;) {
+			// do random lookups for 10 seconds
+			for (ctx.tick = 0; ctx.tick < 5;) {
 				// load random signature with random tree
 				uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 				uint32_t tid = rand() % pStore->numTransform;
@@ -1416,8 +1416,8 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					generator.decodeFast("ab+"); // waste some time
 				}
 
-				// do random lookups for 10 seconds (tick increments twice per second)
-				for (ctx.tick = 0; ctx.tick < 5 * 2;) {
+				// do random lookups for 10 seconds
+				for (ctx.tick = 0; ctx.tick < 5;) {
 					// load random signature with random tree
 					uint32_t sid = (rand() % (pStore->numSignature - 1)) + 1;
 					uint32_t tid = rand() % pStore->numTransform;
@@ -1484,7 +1484,7 @@ void sigintHandler(int sig) {
  */
 void sigalrmHandler(int sig) {
 	if (ctx.opt_timer) {
-		ctx.tick += 2;
+		ctx.tick++;
 		alarm(ctx.opt_timer);
 	}
 }
