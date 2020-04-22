@@ -144,7 +144,7 @@ struct slookupContext_t {
 			return;
 		}
 
-		printf("%d%s:%s%s/%d:%s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u flags=[%x%s%s%s] %s\n",
+		printf("%u%s:%s%s/%u:%s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u flags=[%x%s%s%s] %s\n",
 		       sid & ~IBIT, (sid & IBIT) ? "~" : "",
 		       pSignature->name, (sid & IBIT) ? "~" : "",
 		       tid, pStore->fwdTransformNames[tid],
@@ -206,7 +206,7 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds> [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.opt_database);
 		fprintf(stderr, "\t-e --evaluate\n");
 		fprintf(stderr, "\t-i --imprint\n");

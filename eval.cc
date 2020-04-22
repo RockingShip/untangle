@@ -61,9 +61,9 @@ int main() {
     for (unsigned b=0; b<2; b++)
     for (unsigned c=0; c<2; c++) {
 
-	int bit = ({ unsigned _[] = {0,a,b,c, _[1]?_[2]:!_[3] }; !_[4];});
+	unsigned bit = ({ unsigned _[] = {0,a,b,c, _[1]?_[2]:!_[3] }; !_[4];});
 
-	printf("%d", bit);
+	printf("%u", bit);
     }
 	printf("\n");
 
@@ -137,7 +137,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-h --help       This list\n");
 		fprintf(stderr, "\t   --pure       Output using exclusively  QnTF\n");
 		fprintf(stderr, "\t-q --quiet      Say more\n");
-		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%d]\n", opt_seed);
+		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%u]\n", opt_seed);
 		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
 		fprintf(stderr, "\t   --shrinkwrap Adjust nstart to highest found endpount\n");
 		fprintf(stderr, "\t-s --skin       Display notation with placeholders and skin mapping\n");
@@ -908,7 +908,7 @@ struct tree_t {
 				if (numSkin != 0) {
 					// range check
 					if (ep >= numSkin) {
-						printf("[placeholder out-of-range: %d]\n", ep);
+						printf("[placeholder out-of-range: %u]\n", ep);
 						return 1;
 					}
 
@@ -921,7 +921,7 @@ struct tree_t {
 
 				// range check
 				if (nid >= this->nstart) {
-					printf("[endpoint out-of-range. nid=%d]\n", nid);
+					printf("[endpoint out-of-range. nid=%u]\n", nid);
 					return 1;
 				}
 
@@ -966,7 +966,7 @@ struct tree_t {
 
 				// rangecheck
 				if (nid < this->nstart || nid >= nextNode) {
-					printf("[back reference out-of-range. nid=%d]\n", nid);
+					printf("[back reference out-of-range. nid=%u]\n", nid);
 					return 1;
 				}
 
@@ -1280,7 +1280,7 @@ struct tree_t {
 				if (numSkin != 0) {
 					// range check
 					if (ep >= numSkin) {
-						printf("[placeholder out-of-range: %d]\n", ep);
+						printf("[placeholder out-of-range: %u]\n", ep);
 						return 1;
 					}
 
@@ -1293,7 +1293,7 @@ struct tree_t {
 
 				// range check
 				if (nid >= this->nstart) {
-					printf("[endpoint out-of-range. nid=%d]\n", nid);
+					printf("[endpoint out-of-range. nid=%u]\n", nid);
 					return 1;
 				}
 
@@ -1338,7 +1338,7 @@ struct tree_t {
 
 				// rangecheck
 				if (nid < this->nstart || nid >= this->count) {
-					printf("[back reference out-of-range. nid=%d]\n", nid);
+					printf("[back reference out-of-range. nid=%u]\n", nid);
 					return 1;
 				}
 
@@ -2177,7 +2177,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	 * Emit tree as code
 	 */
 	if (opt_code) {
-		printf("({ unsigned kstart=%d, nstart=%d, _[] = {0,", pTree->kstart, pTree->nstart);
+		printf("({ unsigned kstart=%u, nstart=%u, _[] = {0,", pTree->kstart, pTree->nstart);
 
 		char prefixStack[16];
 		int prefixStackPos = 0;
@@ -2212,18 +2212,18 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 		 */
 		for (unsigned i = pTree->nstart; i < pTree->count; i++) {
 			if (pTree->N[i].T & IBIT)
-				printf("  _[%d]?!_[%d]:_[%d],", pTree->N[i].Q, pTree->N[i].T ^ IBIT, pTree->N[i].F);
+				printf("  _[%u]?!_[%u]:_[%u],", pTree->N[i].Q, pTree->N[i].T ^ IBIT, pTree->N[i].F);
 			else
-				printf("  _[%d]? _[%d]:_[%d],", pTree->N[i].Q, pTree->N[i].T, pTree->N[i].F);
+				printf("  _[%u]? _[%u]:_[%u],", pTree->N[i].Q, pTree->N[i].T, pTree->N[i].F);
 		}
 
 		/*
 		 * Emit root
 		 */
 		if (pTree->root & IBIT)
-			printf("}; !_[%d];}) // ", pTree->root & ~IBIT);
+			printf("}; !_[%u];}) // ", pTree->root & ~IBIT);
 		else
-			printf("};  _[%d];}) // ", pTree->root);
+			printf("};  _[%u];}) // ", pTree->root);
 
 		/*
 		 * Emit notation
@@ -2282,7 +2282,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Output number of nodes and determine how many nodes if tree were flat
 	 */
-	printf(" [NUMEL=%d]", pTree->count - pTree->nstart);
+	printf(" [NUMEL=%u]", pTree->count - pTree->nstart);
 
 	{
 		// sum weights of roots
@@ -2354,7 +2354,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		assert(pTree->decode(treeName, false) == 0);
 
 		if (pTree->root != r) {
-			fprintf(stderr, "prefix fail: expected=%d encountered=%d %s\n", r, pTree->root, treeName);
+			fprintf(stderr, "prefix fail: expected=%u encountered=%u %s\n", r, pTree->root, treeName);
 			exit(1);
 		}
 	}
@@ -2478,7 +2478,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 					encountered ^= 1; // invert result
 
 				if (expected != encountered) {
-					fprintf(stderr, "fail: testNr=%u iFast=%d iPure=%d iSkin=%d expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
+					fprintf(stderr, "fail: testNr=%u iFast=%u iPure=%u iSkin=%u expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
 					        testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
@@ -2487,7 +2487,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		}
 	}
 
-	fprintf(stderr, "%s() passed %d tests\n", __FUNCTION__, numPassed);
+	fprintf(stderr, "%s() passed %u tests\n", __FUNCTION__, numPassed);
 }
 
 /**

@@ -98,10 +98,10 @@ struct tlookupContext_t {
 			 */
 
 			if (tid >= pDb->numTransform) {
-				printf("tid=%d not found\n", tid);
+				printf("tid=%u not found\n", tid);
 			} else {
 				unsigned rid = pDb->revTransformIds[tid]; // get reverse id
-				printf("fwd=%d:%s rev=%d:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
+				printf("fwd=%u:%s rev=%u:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
 			}
 
 		} else {
@@ -127,10 +127,10 @@ struct tlookupContext_t {
 			tid = pDb->lookupFwdTransform(pArg);
 
 			if (tid == IBIT) {
-				printf("tid=%d not found\n", tid);
+				printf("tid=%u not found\n", tid);
 			} else {
 				unsigned rid = pDb->revTransformIds[tid]; // get reverse id
-				printf("fwd=%d:%s rev=%d:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
+				printf("fwd=%u:%s rev=%u:%s\n", tid, pDb->fwdTransformNames[tid], rid, pDb->fwdTransformNames[rid]);
 			}
 		}
 

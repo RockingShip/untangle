@@ -198,7 +198,7 @@ struct genhintContext_t : callable_t {
 			unsigned ix = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0) {
-				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%ld}\n",
+				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
 				       __FUNCTION__, name, ctx.progress);
 				exit(1);
 			}
@@ -428,7 +428,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --sid=[<lo>],<hi>          Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t   --[no-]unsafe                 Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                  Say less\n");
 	}

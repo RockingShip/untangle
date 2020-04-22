@@ -229,7 +229,7 @@ struct context_t {
 
 		void *ret = ::aligned_alloc(32, __size);
 		if (ret == 0)
-			fatal("failed to allocate %ld bytes for \"%s\"\n", __size, name);
+			fatal("failed to allocate %lu bytes for \"%s\"\n", __size, name);
 
 		// clear area
 		::memset(ret, 0, __size);

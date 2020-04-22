@@ -209,7 +209,7 @@ const char *getAllowedInterleaves(unsigned numSlot) {
 				sbuf[spos++] = ',';
 			}
 			// interleave
-			spos += sprintf(sbuf + spos, "%d", pInterleave->numStored);
+			spos += sprintf(sbuf + spos, "%u", pInterleave->numStored);
 		}
 	}
 

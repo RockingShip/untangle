@@ -403,11 +403,11 @@ struct gentransformContext_t {
 		 */
 		if (opt_text) {
 			for (unsigned t = 0; t < pStore->numTransform; t++)
-				printf("%d\t%s\t%s\t%d\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
+				printf("%u\t%s\t%s\t%u\n", t, pStore->fwdTransformNames[t], pStore->revTransformNames[t], pStore->revTransformIds[t]);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Generated %d transforms\n", ctx.timeAsString(), pStore->numTransform);
+			fprintf(stderr, "[%s] Generated %u transforms\n", ctx.timeAsString(), pStore->numTransform);
 	}
 
 };
@@ -720,7 +720,7 @@ struct gentransformSelftest_t : gentransformContext_t {
 
 					// check
 					if (strcmp(cell, pFwdNames[row * numCols + col]) != 0) {
-						printf("{\"error\":\"failed merge\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%d,\"numRows\":%d,\"col\":%d,\"colName\":\"%s\",\"row\":%d,\"rowName\":\"%s\"}\n",
+						printf("{\"error\":\"failed merge\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%u,\"numRows\":%u,\"col\":%u,\"colName\":\"%s\",\"row\":%u,\"rowName\":\"%s\"}\n",
 						       __FUNCTION__, cell, pFwdNames[row * numCols + col], numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
 						exit(1);
 					}
@@ -754,7 +754,7 @@ struct gentransformSelftest_t : gentransformContext_t {
 			}
 		}
 
-		fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+		fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
 };
@@ -827,7 +827,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-q --quiet           Say more\n");
 		fprintf(stderr, "\t   --selftest        Validate prerequisites\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose         Say less\n");
 
 	}

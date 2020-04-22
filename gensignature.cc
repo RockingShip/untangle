@@ -610,13 +610,13 @@ struct gensignatureContext_t : callable_t {
 				fprintf(stderr, "\r\e[K");
 
 			if (ctx.progress != ctx.progressHi) {
-				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
 				       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 			}
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%d pure=%d interleave=%d numNode=%d numCandidate=%ld numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u interleave=%u numNode=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
 			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint);
@@ -768,7 +768,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					} else {
 						int ret = tree.decodeSafe(treeName, skin);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iPure\":%d,\"iSkin\":%d,\"name\":\"%s/%s\",\"ret\":%d}\n",
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
 							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
 							exit(1);
 						}
@@ -780,7 +780,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 					} else {
 						int ret = tree.decodeSafe(treeName);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iPure\":%d,\"iSkin\":%d,\"name\":\"%s\",\"ret\":%d}\n",
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
 							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, ret);
 						}
 					}
@@ -856,7 +856,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 						encountered ^= 1; // invert result
 
 					if (expected != encountered) {
-						printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%d,\"iFast\":%d,\"iQnTF\":%d,\"iSkin\":%d,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
+						printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
 						       __FUNCTION__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 						exit(1);
 					}
@@ -866,7 +866,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
 	/**
@@ -1027,7 +1027,7 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 
 				// test that transform id's match
 				if (iTransform != tid) {
-					printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+					printf("{\"error\":\"tid lookup missmatch\",\"where\":\"%s\",\"encountered\":%u,\"expected\":%u}\n",
 					       __FUNCTION__, tid, iTransform);
 					exit(1);
 				}
@@ -1045,20 +1045,20 @@ struct gensignatureSelftest_t : gensignatureContext_t {
 				seconds = 1;
 
 			// base estimated size on 791647 signatures
-			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlot=*/%d, /*interleave=*/%d, /*numStored=*/%d, /*numRuntime=*/%d, /*speed=*/%d, /*storage=*/%.3f},\n",
+			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlot=*/%u, /*interleave=*/%u, /*numStored=*/%u, /*numRuntime=*/%u, /*speed=*/%u, /*storage=*/%.3f},\n",
 			        ctx.timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
 			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 			// test that number of imprints match
 			if (pInterleave->numStored != pStore->numImprint - 1) {
-				printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%d,\"expected\":%d}\n",
+				printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%u,\"expected\":%u}\n",
 				       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
 				exit(1);
 			}
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
 	/**
@@ -1509,7 +1509,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%d]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);

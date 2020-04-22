@@ -1192,7 +1192,7 @@ struct genmemberContext_t : callable_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (generator.windowLo == 0 && generator.windowHi == 0 && ctx.progress != ctx.progressHi) {
-			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%d}\n",
+			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
 			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 		}
 

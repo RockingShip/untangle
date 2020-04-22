@@ -277,7 +277,7 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	static const char *decodePacked(unsigned packed) {
 		static char name[128];
-		sprintf(name, "newStack=%x newEndpoint=%d newPlaceholder=%d Ti=%d Q=%d To=%d F=%d",
+		sprintf(name, "newStack=%x newEndpoint=%u newPlaceholder=%u Ti=%u Q=%u To=%u F=%u",
 		        (packed >> PACKED_POS_STACK) & ((1 << PACKED_WIDTH_STACK) - 1),
 		        (packed >> PACKED_POS_ENDPOINT) & ((1 << PACKED_WIDTH_ENDPOINT) - 1),
 		        (packed >> PACKED_POS_PLACEHOLDER) & ((1 << PACKED_WIDTH_PLACEHOLDER) - 1),
@@ -574,11 +574,11 @@ struct generatorTree_t : tinyTree_t {
 
 		if (ctx.flags & context_t::MAGICMASK_PURE) {
 			if (numTemplateData != TEMPLATE_MAXDATA_PURE)
-				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
+				fprintf(stderr, "numTemplateData=%u\n", numTemplateData);
 			assert(numTemplateData <= TEMPLATE_MAXDATA_PURE);
 		} else {
 			if (numTemplateData != TEMPLATE_MAXDATA)
-				fprintf(stderr, "numTemplateData=%d\n", numTemplateData);
+				fprintf(stderr, "numTemplateData=%u\n", numTemplateData);
 			assert(numTemplateData <= TEMPLATE_MAXDATA);
 		}
 	}
@@ -962,7 +962,7 @@ struct generatorTree_t : tinyTree_t {
 				 * assert that restart data is in sync with reality
 				 */
 				if (ctx.progress != *this->pRestartData) {
-					ctx.fatal("restartData out of sync. Encountered:%ld, Expected:%ld", ctx.progress, *this->pRestartData);
+					ctx.fatal("restartData out of sync. Encountered:%lu, Expected:%lu", ctx.progress, *this->pRestartData);
 					assert(ctx.progress == *this->pRestartData);
 				}
 

@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
-2020-04-22 13:45:53 Consistent use of `uint32_t`
+2020-04-22 13:45:53 Consistent use of `%u`.
+2020-04-22 13:45:53 Consistent use of `uint32_t`.
 2020-04-21 22:47:41 Sync workflow between `gensignature`, `genmember` and `genhint`.
 2020-04-21 15:38:02 Improved memory usage/detection and database creation.
 2020-04-21 11:46:20 Merged `generatorTree_t::restartTick` into `context_t::tick`. (undone)

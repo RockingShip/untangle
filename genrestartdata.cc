@@ -319,7 +319,7 @@ struct genrestartdataContext_t : callable_t {
 				buildProgressIndex[numArgs][iPure] = this->numRestart;
 
 				// output section header
-				printf("// %d: numNode=%d pure=%d \n", this->numRestart, numArgs, iPure);
+				printf("// %u: numNode=%u pure=%u \n", this->numRestart, numArgs, iPure);
 
 				// apply settings
 				ctx.flags = iPure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
@@ -356,7 +356,7 @@ struct genrestartdataContext_t : callable_t {
 					fprintf(stderr, "\r\e[K");
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-					fprintf(stderr, "[%s] numSlot=%d pure=%d numNode=%d numProgress=%ld\n",
+					fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numProgress=%lu\n",
 					        ctx.timeAsString(), MAXSLOTS, iPure, numArgs, ctx.progress);
 			}
 		}
@@ -367,7 +367,7 @@ struct genrestartdataContext_t : callable_t {
 		 * Output index
 		 */
 
-		printf("const uint32_t restartIndex[%d][2] = {\n", tinyTree_t::TINYTREE_MAXNODES);
+		printf("const uint32_t restartIndex[%u][2] = {\n", tinyTree_t::TINYTREE_MAXNODES);
 
 		for (unsigned numNode = 0; numNode < tinyTree_t::TINYTREE_MAXNODES; numNode++) {
 			printf("\t{ %8d, %8d },\n", buildProgressIndex[numNode][0], buildProgressIndex[numNode][1]);
@@ -440,7 +440,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%d",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%u",
 				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
@@ -451,7 +451,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%d",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%u",
 				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature);
 			}
 
@@ -478,7 +478,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 		// ...and add if not found
 		if (pStore->signatureIndex[ix] == 0) {
 
-			printf("%ld\t%s\t%d\t%d\n", ctx.progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
+			printf("%lu\t%s\t%u\t%u\n", ctx.progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
 
 			pStore->signatureIndex[ix] = pStore->addSignature(pName);
 		}
@@ -526,7 +526,7 @@ struct genrestartdataSelftest_t : genrestartdataContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%d pure=%d numNode=%d numProgress=%ld numCandidate=%d\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numProgress=%lu numCandidate=%u\n",
 			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
 	}
 
@@ -606,7 +606,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>      Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
 }

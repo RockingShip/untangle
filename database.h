@@ -621,17 +621,17 @@ struct database_t {
 		if (fileHeader.magic != FILE_MAGIC)
 			ctx.fatal("db version missmatch. Encountered %08x, Expected %08x, \n", fileHeader.magic, FILE_MAGIC);
 		if (fileHeader.magic_maxSlots != MAXSLOTS)
-			ctx.fatal("db magic_maxslots. Encountered %d, Expected %d\n", fileHeader.magic_maxSlots, MAXSLOTS);
+			ctx.fatal("db magic_maxslots. Encountered %u, Expected %u\n", fileHeader.magic_maxSlots, MAXSLOTS);
 		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
 			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", fileHeader.offEnd, (uint64_t) sbuf.st_size);
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
-			ctx.fatal("db magic_sizeofSignature. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
+			ctx.fatal("db magic_sizeofSignature. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
 		if (fileHeader.magic_sizeofHint != sizeof(hint_t))
-			ctx.fatal("db magic_sizeofHint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofHint, sizeof(hint_t));
+			ctx.fatal("db magic_sizeofHint. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofHint, sizeof(hint_t));
 		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
-			ctx.fatal("db magic_sizeofImprint. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
+			ctx.fatal("db magic_sizeofImprint. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
 		if (fileHeader.magic_sizeofMember != sizeof(member_t))
-			ctx.fatal("db magic_sizeofMember. Encountered %d, Expected %ld\n", fileHeader.magic_sizeofMember, sizeof(member_t));
+			ctx.fatal("db magic_sizeofMember. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofMember, sizeof(member_t));
 
 		creationFlags = fileHeader.magic_flags;
 
@@ -1250,7 +1250,7 @@ struct database_t {
 		signature_t *pSignature = this->signatures + this->numSignature++;
 
 		if (this->numSignature > this->maxSignature)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
+			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
 
 		// clear before use
 		::memset(pSignature, 0, sizeof(*pSignature));
@@ -1318,7 +1318,7 @@ struct database_t {
 		unsigned hintId = this->numHint++;
 
 		if (this->numHint > this->maxHint)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
+			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
 
 		::memcpy(&this->hints[hintId], pHint, sizeof(*pHint));
 
@@ -1406,7 +1406,7 @@ struct database_t {
 		imprint_t *pImprint = this->imprints + this->numImprint++;
 
 		if (this->numImprint > this->maxImprint)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
+			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
 
 		// only populate key fields
 		pImprint->footprint = v;
@@ -1572,7 +1572,7 @@ struct database_t {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
 					if (iCol == 0 || pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
 						       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
 					}
@@ -1610,7 +1610,7 @@ struct database_t {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
 					if (iRow == 0 || pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%d\",\"newtid\":\"%d\",\"oldsid\":\"%d\",\"oldtid\":\"%d\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
 						       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
 					}
@@ -1677,7 +1677,7 @@ struct database_t {
 		member_t *pMember = this->members + this->numMember++;
 
 		if (this->numMember > this->maxMember)
-			ctx.fatal("\n[%s %s:%u storage full %d]\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
+			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
 
 		// clear before use
 		::memset(pMember, 0, sizeof(*pMember));
