@@ -88,8 +88,6 @@ struct gentransformContext_t {
 	unsigned opt_force;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
-	/// @var {number} --selftest, perform a selftest
-	unsigned opt_selftest;
 
 	/**
 	 * Constructor
@@ -98,7 +96,6 @@ struct gentransformContext_t {
 		// arguments and options
 		arg_outputDatabase = NULL;
 		opt_force = 0;
-		opt_selftest = 0;
 		opt_text = 0;
 	}
 
@@ -429,153 +426,6 @@ struct gentransformSelftest_t : gentransformContext_t {
 	}
 
 	/**
-	 * @date 2020-03-12 00:26:06
-	 *
-	 * Perform a selftest.
-	 *
-	 * - Test the index by performing lookups on all `MAXSLOT==9` transforms
-	 * - Lookup of `""` should return the transparent transform
-	 * - Verify that forward/reverse substitution counter each other
-	 *
-	 * @param {gentransformContext_t} app - program context
-	 * @param {database_t} pStore - database just before `main()`
-	 */
-	void performSelfTestMatch(database_t *pStore) {
-
-		unsigned numPassed = 0;
-
-		// generate datasets
-		this->createTransforms(pStore->fwdTransformData, pStore->fwdTransformNames, pStore->fwdTransformNameIndex, true); // forward transform
-		this->createTransforms(pStore->revTransformData, pStore->revTransformNames, pStore->revTransformNameIndex, false); // reverse transform
-
-		/*
-		 * Test empty name
-		 */
-		{
-			uint32_t tid = this->lookupTransform("", pStore->fwdTransformNameIndex);
-
-			// test empty name is transparent skin
-			if (tid != 0) {
-				printf("{\"error\":\"failed empty name lookup\",\"where\":\"%s\",\"tid\":%d}\n",
-				       __FUNCTION__, tid);
-				exit(1);
-			}
-
-			// test transparent transform ([0]) is transparent
-			for (unsigned k = 0; k < MAXSLOTS; k++) {
-				if (pStore->fwdTransformNames[0][k] != (char) ('a' + k)) {
-					printf("{\"error\":\"failed transparent forward\",\"where\":\"%s\",\"name\":\"%s\"}\n",
-					       __FUNCTION__, pStore->fwdTransformNames[0]);
-					exit(1);
-				}
-				if (pStore->revTransformNames[0][k] != (char) ('a' + k)) {
-					printf("{\"error\":\"failed transparent reverse\",\"where\":\"%s\",\"name\":\"%s\"}\n",
-					       __FUNCTION__, pStore->revTransformNames[0]);
-					exit(1);
-				}
-			}
-		}
-
-		/*
-		 * Perform two rounds, first with forward transform, then with reverse transform
-		 */
-		for (unsigned round = 0; round < 2; round++) {
-			// setup data for this round
-			transformName_t *pNames;
-			uint32_t *pIndex;
-
-			if (round == 0) {
-				pNames = pStore->fwdTransformNames;
-				pIndex = pStore->fwdTransformNameIndex;
-			} else {
-				pNames = pStore->revTransformNames;
-				pIndex = pStore->revTransformNameIndex;
-			}
-
-			/*
-			 * Lookup all names with different lengths
-			 */
-			for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
-				for (unsigned iLen = 0; iLen < MAXSLOTS; iLen++) {
-					/*
-					 * Test if substring is a short name
-					 */
-					bool isShort = true;
-					for (unsigned k = iLen; k < MAXSLOTS; k++) {
-						if (pNames[iTransform][k] != (char) ('a' + k)) {
-							isShort = false;
-							break;
-						}
-					}
-
-					// test if name can be truncated
-					if (!isShort)
-						continue;
-
-					// truncate name
-					pNames[iTransform][iLen] = 0;
-
-					// lookup name
-					uint32_t encountered = this->lookupTransform(pNames[iTransform], pIndex);
-
-					// undo truncation
-					pNames[iTransform][iLen] = 'a' + iLen;
-
-					if (iTransform != encountered) {
-						printf("{\"error\":\"failed lookup\",\"where\":\"%s\",\"encountered\":%d,\"round\":%d,\"iTransform\":%d,\"iLen\":%d,\"name\":\"%s\"}\n",
-						       __FUNCTION__, encountered, round, iTransform, iLen, pNames[iTransform]);
-						exit(1);
-					}
-
-					numPassed++;
-				}
-			}
-		}
-
-		/*
-		 * Test that forward/reverse counter each other
-		 */
-		for (uint32_t iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
-			// setup test skin
-
-			char skin[MAXSLOTS + 1];
-
-			for (unsigned k = 0; k < MAXSLOTS; k++)
-				skin[k] = 'a' + k;
-			skin[MAXSLOTS] = 0;
-
-			// apply forward skin
-
-			char forward[MAXSLOTS + 1];
-
-			for (unsigned k = 0; k < MAXSLOTS; k++)
-				forward[k] = pStore->fwdTransformNames[iTransform][skin[k] - 'a'];
-			forward[MAXSLOTS] = 0;
-
-			// apply reserse skin
-
-			char reverse[MAXSLOTS + 1];
-
-			for (unsigned k = 0; k < MAXSLOTS; k++)
-				reverse[k] = pStore->revTransformNames[iTransform][forward[k] - 'a'];
-			reverse[MAXSLOTS] = 0;
-
-			// test both are identical
-			for (unsigned k = 0; k < MAXSLOTS; k++) {
-				if (skin[k] != reverse[k]) {
-					printf("{\"error\":\"failed forward/reverse\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"iTransform\":%d,\"forward\":\"%s\",\"reverse\":\"%s\"}\n",
-					       __FUNCTION__, reverse, skin, iTransform, pStore->fwdTransformNames[iTransform], pStore->revTransformNames[iTransform]);
-					exit(1);
-				}
-			}
-
-			numPassed++;
-		}
-
-		fprintf(stderr, "[%s] %s() passed %d tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
-	}
-
-	/**
 	 * @date 2020-03-15 12:13:13
 	 *
 	 * The list of transform names has repetitive properties which give the enumerated id's modulo properties.
@@ -818,14 +668,12 @@ void sigalrmHandler(int sig) {
  */
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s [<output.db>]  -- Create initial database containing transforms\n", argv[0]);
-	fprintf(stderr, "       %s --selftest   -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help            This list\n");
 		fprintf(stderr, "\t-q --quiet           Say more\n");
-		fprintf(stderr, "\t   --selftest        Validate prerequisites\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose         Say less\n");
@@ -856,7 +704,6 @@ int main(int argc, char *const *argv) {
 			// long-only opts
 			LO_DEBUG = 1,
 			LO_FORCE,
-			LO_SELFTEST,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
@@ -872,7 +719,6 @@ int main(int argc, char *const *argv) {
 			{"force",    0, 0, LO_FORCE},
 			{"help",     0, 0, LO_HELP},
 			{"quiet",    2, 0, LO_QUIET},
-			{"selftest", 0, 0, LO_SELFTEST},
 			{"text",     0, 0, LO_TEXT},
 			{"timer",    1, 0, LO_TIMER},
 			{"verbose",  2, 0, LO_VERBOSE},
@@ -914,9 +760,6 @@ int main(int argc, char *const *argv) {
 				exit(0);
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SELFTEST:
-				app.opt_selftest++;
 				break;
 			case LO_TEXT:
 				app.opt_text++;
@@ -987,15 +830,6 @@ int main(int argc, char *const *argv) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
 
-	/*
-	 * Test prerequisite
-	 */
-	if (app.opt_selftest) {
-		// perform selfcheck
-		app.performSelfTestMatch(&store);
-		app.performSelfTestInterleave(&store);
-		exit(0);
-	}
 
 	/*
 	 * Invoke main entrypoint of application context

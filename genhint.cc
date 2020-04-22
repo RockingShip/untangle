@@ -241,7 +241,7 @@ struct genhintContext_t : callable_t {
 		tinyTree_t tree(ctx);
 
 		// enable versioned memory or imprint index
-		pStore->enabledVersioned();
+		pStore->enableVersioned();
 
 		if (this->opt_sidLo < 1)
 			this->opt_sidLo = 1;

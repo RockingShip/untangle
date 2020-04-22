@@ -1397,28 +1397,6 @@ struct genmemberContext_t : callable_t {
 
 };
 
-/**
- * @date 2020-03-22 00:29:34
- *
- * Selftest wrapper
- *
- * @typedef {object}
- */
-struct genmemberSelftest_t : genmemberContext_t {
-
-	/// @var {number} --selftest, perform a selftest
-	unsigned opt_selftest;
-
-	/**
-	 * Constructor
-	 */
-	genmemberSelftest_t(context_t &ctx) : genmemberContext_t(ctx) {
-		opt_selftest = 0;
-	}
-
-};
-
-
 /*
  * I/O context.
  * Needs to be global to be accessible by signal handlers.
@@ -1433,7 +1411,7 @@ context_t ctx;
  *
  * @global {genmemberSelftest_t} Application context
  */
-genmemberSelftest_t app(ctx);
+genmemberContext_t app(ctx);
 
 /**
  * @date 2020-03-11 23:06:35
@@ -1478,7 +1456,6 @@ void sigalrmHandler(int sig) {
  */
 void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]\n", argv[0]);
-//	fprintf(stderr, "       %s --selftest <input.db>            -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -1496,7 +1473,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]pure                   QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                       Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>              Index/data ratio [default=%.1f]\n", app.opt_ratio);
-		fprintf(stderr, "\t   --selftest                    Validate prerequisites\n");
 		fprintf(stderr, "\t   --sge                         Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --sidhi=<number>              Sid range upper bound [default=%u]\n", app.opt_sidHi);
 		fprintf(stderr, "\t   --sidlo=<number>              Sid range lower bound [default=%u]\n", app.opt_sidLo);
@@ -1548,7 +1524,6 @@ int main(int argc, char *const *argv) {
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
-			LO_SELFTEST,
 			LO_SGE,
 			LO_SIDHI,
 			LO_SIDLO,
@@ -1586,7 +1561,6 @@ int main(int argc, char *const *argv) {
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
-			{"selftest",           0, 0, LO_SELFTEST},
 			{"sge",                0, 0, LO_SGE},
 			{"sidhi",              1, 0, LO_SIDHI},
 			{"sidlo",              1, 0, LO_SIDLO},
@@ -1680,9 +1654,6 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
-				break;
-			case LO_SELFTEST:
-				app.opt_selftest++;
 				break;
 			case LO_SGE: {
 				const char *p;
@@ -1886,120 +1857,110 @@ int main(int argc, char *const *argv) {
 	// flag that members be collected and expanded
 	unsigned collectMembers = (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3);
 
-	if (app.opt_selftest) {
-		/*
-		 * self tests
-		 */
+	/*
+	 * Allocate database section sizes
+	 */
 
-		fprintf(stderr, "no selftest available\n");
-		exit(1);
+	// input database will always have a minimal node size of 4.
+	unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
 
-	} else {
-		/*
-		 * Allocate database section sizes
-		 */
+	// interleave
+	if (app.opt_interleave)
+		store.interleave = app.opt_interleave; // manual
+	else if (db.interleave)
+		store.interleave = db.interleave; // inherit
+	else
+		store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
 
-		// input database will always have a minimal node size of 4.
-		unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
+	// find matching `interleaveStep`
+	{
+		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
+		if (!pMetrics)
+			ctx.fatal("no preset for --interleave\n");
 
-		// interleave
-		if (app.opt_interleave)
-			store.interleave = app.opt_interleave; // manual
-		else if (db.interleave)
-			store.interleave = db.interleave; // inherit
-		else
-			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
-
-		// find matching `interleaveStep`
-		{
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
-			if (!pMetrics)
-				ctx.fatal("no preset for --interleave\n");
-
-			store.interleaveStep = pMetrics->interleaveStep;
-		}
-
-		// signatures
-		store.maxSignature = db.maxSignature;
-		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-		else
-			store.signatureIndexSize = app.opt_signatureIndexSize;
-
-		// optional hints
-		if (db.numHint != 0) {
-			store.maxHint = db.maxHint;
-			store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
-		}
-
-		// imprints
-		if (app.opt_maxImprint == 0) {
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, minNodes);
-			if (!pMetrics)
-				ctx.fatal("no preset for --maximprint\n");
-
-			store.maxImprint = pMetrics->numImprint;
-		} else {
-			store.maxImprint = app.opt_maxImprint;
-		}
-
-		if (app.opt_imprintIndexSize == 0)
-			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-		else
-			store.imprintIndexSize = app.opt_imprintIndexSize;
-
-		// members
-		if (app.opt_maxMember == 0) {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, minNodes);
-			if (!pMetrics)
-				ctx.fatal("no preset for --maxmember\n");
-
-			store.maxMember = pMetrics->numMember;
-		} else {
-			store.maxMember = app.opt_maxMember;
-		}
-
-		if (app.opt_memberIndexSize == 0)
-			store.memberIndexSize = ctx.nextPrime(store.maxMember * app.opt_ratio);
-		else
-			store.memberIndexSize = app.opt_memberIndexSize;
-
-		/*
-		 * section inheriting
-		 */
-
-		// changing interleave needs imprint rebuilding. This also validates imprintIndex
-		if (store.interleave != db.interleave)
-			rebuildSections |= database_t::ALLOCMASK_IMPRINT;
-
-		// signatures
-		if (!collectMembers)
-			inheritSections |= database_t::ALLOCMASK_SIGNATURE; // no output, signatures, imprints and members are read-only
-		if (store.signatureIndexSize != db.signatureIndexSize)
-			rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-
-		// optional hints
-		if (db.numHint > 0) {
-			inheritSections |= database_t::ALLOCMASK_HINT;
-			if (store.hintIndexSize != db.hintIndexSize)
-				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-		}
-
-		// imprints
-		if (!collectMembers)
-			inheritSections |= database_t::ALLOCMASK_IMPRINT; // no output, signatures, imprints and members are read-only
-		if (store.imprintIndexSize != db.imprintIndexSize)
-			rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-
-		// members
-		if (!collectMembers)
-			inheritSections |= database_t::ALLOCMASK_MEMBER; // no output, signatures, imprints and members are read-only
-		if (store.memberIndexSize != db.memberIndexSize)
-			rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
-
-		// rebuilt (rw) sections may not be inherited (ro)
-		inheritSections &= ~rebuildSections;
+		store.interleaveStep = pMetrics->interleaveStep;
 	}
+
+	// signatures
+	store.maxSignature = db.maxSignature;
+	if (app.opt_signatureIndexSize == 0)
+		store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
+	else
+		store.signatureIndexSize = app.opt_signatureIndexSize;
+
+	// optional hints
+	if (db.numHint != 0) {
+		store.maxHint = db.maxHint;
+		store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
+	}
+
+	// imprints
+	if (app.opt_maxImprint == 0) {
+		const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, minNodes);
+		if (!pMetrics)
+			ctx.fatal("no preset for --maximprint\n");
+
+		store.maxImprint = pMetrics->numImprint;
+	} else {
+		store.maxImprint = app.opt_maxImprint;
+	}
+
+	if (app.opt_imprintIndexSize == 0)
+		store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
+	else
+		store.imprintIndexSize = app.opt_imprintIndexSize;
+
+	// members
+	if (app.opt_maxMember == 0) {
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, minNodes);
+		if (!pMetrics)
+			ctx.fatal("no preset for --maxmember\n");
+
+		store.maxMember = pMetrics->numMember;
+	} else {
+		store.maxMember = app.opt_maxMember;
+	}
+
+	if (app.opt_memberIndexSize == 0)
+		store.memberIndexSize = ctx.nextPrime(store.maxMember * app.opt_ratio);
+	else
+		store.memberIndexSize = app.opt_memberIndexSize;
+
+	/*
+	 * section inheriting
+	 */
+
+	// changing interleave needs imprint rebuilding. This also validates imprintIndex
+	if (store.interleave != db.interleave)
+		rebuildSections |= database_t::ALLOCMASK_IMPRINT;
+
+	// signatures
+	if (!collectMembers)
+		inheritSections |= database_t::ALLOCMASK_SIGNATURE; // no output, signatures, imprints and members are read-only
+	if (store.signatureIndexSize != db.signatureIndexSize)
+		rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+
+	// optional hints
+	if (db.numHint > 0) {
+		inheritSections |= database_t::ALLOCMASK_HINT;
+		if (store.hintIndexSize != db.hintIndexSize)
+			rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
+	}
+
+	// imprints
+	if (!collectMembers)
+		inheritSections |= database_t::ALLOCMASK_IMPRINT; // no output, signatures, imprints and members are read-only
+	if (store.imprintIndexSize != db.imprintIndexSize)
+		rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+
+	// members
+	if (!collectMembers)
+		inheritSections |= database_t::ALLOCMASK_MEMBER; // no output, signatures, imprints and members are read-only
+	if (store.memberIndexSize != db.memberIndexSize)
+		rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
+
+	// rebuilt (rw) sections may not be inherited (ro)
+	inheritSections &= ~rebuildSections;
 
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));

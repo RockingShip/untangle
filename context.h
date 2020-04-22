@@ -92,7 +92,7 @@ struct context_t {
 
 		// un-common or internal flags go from high to low
 		DEBUGFLAG_GENERATOR_TABS    = 30,    // Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
-		DEBUGFLAG_METRICS_RATIO     = 31,    // Let `gensignature --metrics` generate ratio metrics
+		DEBUGFLAG_METRICS_RATIO     = 31,    // Let `selftest --metrics` generate ratio metrics
 
 		DEBUGMASK_GENERATOR_TABS    = 1 << DEBUGFLAG_GENERATOR_TABS,
 		DEBUGMASK_METRICS_RATIO     = 1 << DEBUGFLAG_METRICS_RATIO,
@@ -113,7 +113,7 @@ struct context_t {
 	/// @var {number} --verbose, What do you want to know
 	unsigned opt_verbose;
 
-	/// @var {number} - async indication that a timer interrupt occurred. +1 for passing each restart point, +2 on timer event
+	/// @var {number} - async indication that a timer interrupt occurred.
 	unsigned tick;
         /// @var {number} Indication that a restart point has passed
         unsigned restartTick;

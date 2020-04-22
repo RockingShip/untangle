@@ -712,10 +712,8 @@ struct database_t {
 		if (allocFlags & ALLOCMASK_MEMBERINDEX)
 			ctx.myFree("database_t::memberIndex", memberIndex);
 
-		if (signatureVersion)
-			ctx.myFree("database_t::signatureVersion", signatureVersion);
-		if (imprintVersion)
-			ctx.myFree("database_t::imprintVersion", imprintVersion);
+		// release versioned memory
+		disableVersioned();
 
 		/*
 		 * Release resources
@@ -741,7 +739,7 @@ struct database_t {
 	 *
 	 * Enable versioned memory for selected indices
 	 */
-	inline void enabledVersioned(void) {
+	inline void enableVersioned(void) {
 
 		// allocate version indices
 		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
@@ -752,6 +750,23 @@ struct database_t {
 		// clear versioned memory
 		iVersion = 0;
 		InvalidateVersioned();
+	}
+
+	/**
+	 * @date 2020-04-22 15:12:42
+	 *
+	 * Enable versioned memory for selected indices
+	 */
+	inline void disableVersioned(void) {
+
+		if (signatureVersion) {
+			ctx.myFree("database_t::signatureVersion", signatureVersion);
+			signatureVersion = NULL;
+		}
+		if (imprintVersion) {
+			ctx.myFree("database_t::imprintVersion", imprintVersion);
+			imprintVersion = NULL;
+		}
 	}
 
 	/**

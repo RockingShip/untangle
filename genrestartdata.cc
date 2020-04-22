@@ -41,17 +41,15 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <unistd.h>
-#include <time.h>
-#include <signal.h>
 #include <getopt.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 #include "tinytree.h"
 #include "generator.h"
-#include "database.h"
 #include "metrics.h"
 
 /**
@@ -204,7 +202,6 @@ struct genrestartdataContext_t : callable_t {
 
 		generator.clearGenerator();
 		generator.generateTrees(this->arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
-
 
 		printf("called %u times\n", numRestart);
 	}
@@ -383,155 +380,6 @@ struct genrestartdataContext_t : callable_t {
 
 };
 
-/**
- * @date 2020-03-19 20:20:53
- *
- * Selftest wrapper
- *
- * @typedef {object}
- */
-struct genrestartdataSelftest_t : genrestartdataContext_t {
-
-	/*
-	 * User specified program arguments and options
-	 */
-
-	/// @var {number} --selftest, perform a selftest
-	unsigned opt_selftest;
-	/// @var {number} --text, text mode, list candidates
-	unsigned opt_text;
-
-	/// @var {database_t} - Database store to place results
-	database_t *pStore;
-
-	/**
-	 * Constructor
-	 */
-	genrestartdataSelftest_t(context_t &ctx) : genrestartdataContext_t(ctx) {
-		// arguments and options
-		opt_selftest = 0;
-		opt_text = 0;
-		pStore = NULL;
-	}
-
-	/**
-	 * Destructor
-	 */
-	~genrestartdataSelftest_t() {
-	}
-
-	/**
-	 * @date 2020-03-24 13:20:42
-	 *
-	 * Found candidate, count uniques
-	 *
-	 * @param {generatorTree_t} tree - candidate tree
-	 * @param {string} pName - tree notation/name
-	 * @param {number} numPlaceholder - number of unique endpoints/placeholders in tree
-	 * @param {number} numEndpoint - number of non-zero endpoints in tree
-	 * @param {number} numBackRef - number of back-references
-	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
-	 */
-	bool foundTreeCandidate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		/*
-		 * Ticker
-		 */
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			int perSecond = ctx.updateSpeed();
-
-			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) |  numCandidate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond, pStore->numSignature);
-			} else {
-				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
-
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numCandidate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numSignature);
-			}
-
-			ctx.tick = 0;
-		}
-
-		/*
-		 * Test that the tree and name match
-		 */
-		const char *pTestName = tree.encode(tree.root);
-		if (strcmp(pName, pTestName) != 0) {
-			printf("{\"error\":\"tree doesn't match name\",\"where\":\"%s\",\"tree\":\"%s\",\"name\":\"%s\"}\n",
-			       __FUNCTION__, pTestName, pName);
-			exit(1);
-		}
-
-		/*
-		 * Got candidate
-		 */
-
-		// lookup..
-		unsigned ix = pStore->lookupSignature(pName);
-
-		// ...and add if not found
-		if (pStore->signatureIndex[ix] == 0) {
-
-			printf("%lu\t%s\t%u\t%u\n", ctx.progress, pName, tree.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder);
-
-			pStore->signatureIndex[ix] = pStore->addSignature(pName);
-		}
-
-		return true;
-	}
-
-	/**
-	 * @date 2020-03-24 13:22:57
- 	 *
- 	 * Display all candidates as passed to `foundTree()`
- 	 *
- 	 * Candidates with back-references might be found more than once.
- 	 *
- 	 * param {database_t} pStore - database fo store candidate and reject duplicates
- 	 * param {number} numNode - Tree size
- 	 */
-	void performListCandidates(database_t *pStore, unsigned numNode) {
-
-		this->pStore = pStore;
-		pStore->numSignature = 1; // skip reserved entry
-
-		// reset progress
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
-		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-		ctx.tick = 0;
-
-		/*
-		 * Run generator
-		 */
-
-		if (numNode == 0) {
-			generator.root = 0;
-			foundTreeCandidate(generator, "0", 0, 0, 0);
-			generator.root = 1;
-			foundTreeCandidate(generator, "a", 1, 1, 0);
-		} else {
-			unsigned endpointsLeft = numNode * 2 + 1;
-
-			generator.clearGenerator();
-			generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataSelftest_t::foundTreeCandidate));
-		}
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numProgress=%lu numCandidate=%u\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, numNode, ctx.progress, pStore->numSignature);
-	}
-
-};
-
 /*
  * I/O context.
  * Needs to be global to be accessible by signal handlers.
@@ -546,7 +394,7 @@ context_t ctx;
  *
  * @global {genrestartdataSelftest_t} Application context
  */
-genrestartdataSelftest_t app(ctx);
+genrestartdataContext_t app(ctx);
 
 /**
  * @date 2020-03-18 18:08:48
@@ -594,7 +442,6 @@ void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
 	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates with given node size\n", argv[0]);
 	fprintf(stderr, "       %s --task=n,m <numnode> -- display single line for requested task/tab\n", argv[0]);
-//	fprintf(stderr, "       %s --selftest       -- Test prerequisites\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -602,10 +449,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure             Enable QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
-		fprintf(stderr, "\t   --selftest              Validate prerequisites\n");
 		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>      Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
-		fprintf(stderr, "\t   --text                  Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
@@ -636,10 +481,8 @@ int main(int argc, char *const *argv) {
 			LO_NOPURE,
 			LO_PARANOID,
 			LO_PURE,
-			LO_SELFTEST,
 			LO_SGE,
 			LO_TASK,
-			LO_TEXT,
 			LO_TIMER,
 			// short opts
 			LO_HELP = 'h',
@@ -657,10 +500,8 @@ int main(int argc, char *const *argv) {
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"pure",        0, 0, LO_PURE},
 			{"quiet",       2, 0, LO_QUIET},
-			{"selftest",    0, 0, LO_SELFTEST},
 			{"sge",         0, 0, LO_SGE},
 			{"task",        1, 0, LO_TASK},
-			{"text",        0, 0, LO_TEXT},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
 			//
@@ -711,9 +552,6 @@ int main(int argc, char *const *argv) {
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
-			case LO_SELFTEST:
-				app.opt_selftest++;
-				break;
 			case LO_SGE: {
 				const char *p;
 
@@ -752,9 +590,6 @@ int main(int argc, char *const *argv) {
 					exit(1);
 				}
 				break;
-			case LO_TEXT:
-				app.opt_text++;
-				break;
 			case LO_TIMER:
 				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
 				break;
@@ -778,16 +613,11 @@ int main(int argc, char *const *argv) {
 	if (argc - optind >= 1)
 			app.arg_numNodes = (unsigned) strtoul(argv[optind++], NULL, 0);
 
-	if (app.opt_text != 0 || app.opt_taskLast != 0) {
+	if (app.opt_taskLast != 0) {
 		if (app.arg_numNodes == 0) {
 			usage(argv, false);
 			exit(1);
 		}
-	}
-
-	if (app.opt_text && isatty(1)) {
-		fprintf(stderr, "stdout not redirected\n");
-		exit(1);
 	}
 
 	/*
@@ -800,27 +630,6 @@ int main(int argc, char *const *argv) {
 
 
 	/*
-	 * create optional storage for `--text`
-	 */
-	database_t *pStore = NULL;
-
-	if (app.opt_text) {
-		// create database to detect duplicates
-		pStore = new database_t(ctx);
-
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
-		if (!pMetrics) {
-			fprintf(stderr, "preset for numNode not found\n");
-			exit(1);
-		}
-
-		pStore->maxSignature = pMetrics->numCandidate;
-		pStore->signatureIndexSize = ctx.nextPrime(pStore->maxSignature * (METRICS_DEFAULT_RATIO / 10.0));
-
-		pStore->create(0);
-	}
-
-	/*
 	 * Statistics
 	 */
 
@@ -831,30 +640,10 @@ int main(int argc, char *const *argv) {
 	 * Invoke
 	 */
 
-	if (app.opt_selftest) {
-		/*
-		 * self tests
-		 */
+	// output comment here because of `argv[]`
+	printf("// generated by %s on \"%s\"\n\n", argv[0], timeAsString());
 
-		fprintf(stderr, "no selftest available\n");
-		exit(1);
-
-	} else if (app.opt_text) {
-		/*
-		 * list candidates
-		 */
-
-		app.performListCandidates(pStore, app.arg_numNodes);
-	} else {
-		/*
-		 * regular mode
-		 */
-
-		// output comment here because of `argv[]`
-		printf("// generated by %s on \"%s\"\n\n", argv[0], timeAsString());
-
-		app.main();
-	}
+	app.main();
 
 	return 0;
 }

@@ -133,7 +133,7 @@ struct metricsInterleave_t {
 };
 
 /*
- * NOTE: run `gensignature --selftest` after changing this table.
+ * NOTE: run `selftest` after changing this table.
  *
  * @date 2020-04-18 22:46:31
  *
@@ -261,10 +261,10 @@ struct metricsImprint_t {
 	/// @var {number} - Total number of imprints for settings. Provided by `gensignature --metrics`
 	unsigned numImprint;
 
-	/// @var {double} - Estimated `database_t::lookupImprintAssociative()` in M/s. Provided by `gensignature --metrics`
+	/// @var {double} - Estimated `database_t::lookupImprintAssociative()` in M/s. Provided by `selftest --metrics`
 	double speed; // NOTE: based on random collection which changes per run.
 
-	/// @var {double} - Estimated storage in Gb. Provided by `gensignature --metrics`
+	/// @var {double} - Estimated storage in Gb. Provided by `selftest --metrics`
 	double storage;
 
 	/// @var {number} - Ignore when recalculating metrics
@@ -389,7 +389,7 @@ struct metricsGenerator_t {
 	/// @var {number} - Total candidate (unique `foundTrees()` calls). Provided by `genrestartdata --text`
 	uint64_t numCandidate; // (including mandatory zero entry)
 
-	/// @var {number} - Total signatures (unique footprints). Provided by `gensignature --metrics`
+	/// @var {number} - Total signatures (unique footprints). Provided by `selftest --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
 	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space
@@ -457,7 +457,7 @@ const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned pure, u
  * The cache hits influences how often 72 byte large structures get compared.
  *
  * These metrics are a side project and were a pain to get.
- * They were created to get an impression of the effects of settings and are once-only never again. (use `gensignature --metrics --debug=0x80000000`)
+ * They were created to get an impression of the effects of settings and are once-only never again. (use `selftest --metrics=3`)
  *
  * Measurements were performed on random signature lookups with random skins.
  */

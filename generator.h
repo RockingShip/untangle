@@ -878,6 +878,8 @@ struct generatorTree_t : tinyTree_t {
 					unsigned backref = nextNode - beenWhat[curr];
 					assert(backref <= 9);
 					name[nameLen++] = '0' + backref;
+
+					numBackRef++;
 				}
 			}
 
