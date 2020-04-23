@@ -327,7 +327,7 @@ struct genrestartdataContext_t : callable_t {
 
 				// apply settings
 				ctx.flags = iPure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-				generator.initialiseGenerator();
+				generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 
 				ctx.setupSpeed(pMetrics->numProgress);
 				ctx.tick = 0;

@@ -124,7 +124,73 @@ If you are in need for textual lists of candidates (about 1Gbyte):
     ./gensignature 2n9.db       3        --text=2 >3n9-2.txt 
     ./gensignature 3n9.db       4 4n9.db --text=1 >4n9-1.txt
     ./gensignature 3n9.db       4        --text=2 >4n9-2.txt
+
+    ./gentransform 0n9 0 --no-generate --text=3 > 0n9-3.txt
+    ./gentransform 1n9 1 --no-generate --text=3 > 1n9-3.txt
+    ./gentransform 2n9 2 --no-generate --text=3 > 2n9-3.txt
+    ./gentransform 3n9 3 --no-generate --text=3 > 3n9-3.txt
+    ./gentransform 4n9 4 --no-generate --text=3 > 4n9-3.txt
 ```
+
+## Parallel `gensignature`
+
+Perform `4n9` in parallel to test that tasking/slicing works. 
+`genmember` and `genhints` is based on the similar codebase/workflow.
+
+```sh
+    # make temp directories
+    mkdir logs-gensignature
+
+    # submit to SGE
+    qsub -cwd -o logs -e logs -b y -t 1-4 -q 8G.q ./gensignature 3n9.db 4 --task=sge --text
+
+    # check/count all jobs finished properly
+    grep done -r logs/gensignature.e*
+
+    # check/count no stray errors
+    grep error -r logs/gensignature.o*
+
+    # combine all candidates to a single file
+    cat logs/gensignature.o* >tasks.lst
+
+    # count lines so you have an impression how long merging might take
+    wc tasks.lst
+
+    # merge, uniq and sort
+    ./gensignature 3n9.db 4 --load=tasks.lst --no-generate --text=3 >merged.lst
+
+    # compare with single run
+    diff -q -s merged.lst 4n9-3.txt
+```
+
+## `6n9-pure` with `gensignature`
+
+Example of how to tackle large address spaces with incomplete metrics.
+
+First you need a matching `restartData[]` for the given address space.
+Update `metricsGenerator[]` accordingly and run `./genrestartdata`.
+Then guessimate how many tasks would cover the whole address space.
+Run tasks in read-only mode for better memory usage.
+
+As final metrics are unknown and merging all candidates is cpu-intensive.
+Precautions need to be taken that merging does not fail before completeion due to database exhaustion.
+
+```sh
+    # divide and conquer takes about an hour
+    mkdir logs
+    qsub -cwd -o logs -e logs -b y -t 1-999 -q 8G.q ./gensignature 4n9.db 5 --pure --task=sge --text
+
+    # check/count all jobs finished properly
+    grep done -r logs/gensignature.e47632.*  --files-without-match
+
+    #rerun any missing jobs with:
+    qsub -cwd -o logs -e logs -b y -q 8G.q ./gensignature 4n9.db 5 --pure --task=n,999 --text
+
+    # check/count no stray errors
+    grep error -r logs/gensignature.o*
+
+```
+
 
 ## members
 

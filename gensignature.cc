@@ -47,7 +47,71 @@
  *
  * @date 2020-04-21 19:22:40
  *
- * `gensignature` collects signatures and therfore does not support `--unsafe`.
+ * `gensignature` collects signatures and therefore does not support `--unsafe`.
+ *
+ * @date 2020-04-22 21:20:56
+ *
+ * `gensignature` selects candidates not present in the imprint index.
+ * Selected candidates are added to `signatures`.
+ *
+ * @date 2020-04-22 21:37:03
+ *
+ * Text modes:
+ *
+ * `--text[=1]` Concise mode that show selected candidates passed to `foundTreeSignature()`.
+ *              Selected candidates are those that challenge and win the current display name.
+ *              Also intended for transport and merging when broken into multiple tasks.
+ *              Can be used for the `--load=<file>` option.
+ *              Output can be converted to other text modes by `"./gensignature <input.db> <numNode> [<output.db>]--load=<inputList> --no-generate --text=<newMode> '>' <outputList>
+ *
+ *              <name> <numPlaceholder> <numEndpoint> <numBackRef>
+ *
+ * `--test=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
+ *
+ *              <cid> <sid> <cmp> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+ *
+ *              where:
+ *                  <cid> is the candidate id assigned by the generator.
+ *                  <sid> is the signature id assigned by the associative lookup.
+ *                  <cmp> is the result of `comparSignature()` between the candidate and the current display name.
+ *
+ *              <cmp> can be:
+ *                  cmp = '*'; // not compared
+ *                  cmp = '-'; // worse by numbers
+ *                  cmp = '<'; // worse by name compare
+ *                  cmp = '='; // equals
+ *                  cmp = '>'; // better by compare
+ *                  cmp = '+'; // better by numbers
+ *
+ * `--text=3`   Selected and sorted signatures that are written to the output database.
+ *              NOTE: same format as `--text=1`
+ *
+ *              <name> <numPlaceholder> <numEndpoint> <numBackRef>
+ *
+ * `--text=4`   Selected and sorted signatures that are written to the output database
+ *
+ *              <sid> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+ *
+ * @date 2020-04-23 10:50:58
+ *
+ *   Not specifying an output database puts `gensignature` in read-only mode.
+ *   This reduces memory usage for `4n9` from 20G to 5G.
+ *   Read-only mode is slower (for `4n9` 2x) because it disables updating the imprint index making it operates worst-case.
+ *
+ *   Low memory profile is intended for workers when dividing database creation in parallel tasks.
+ *     - Determine how may workers per machine. Using `"/proc/meminfo"` "(<MemFree> + <Cached> - <sizeofDatabase>) / 5G".
+ *     - Higher database interleave gives higher speed at the cost of more storage.
+ *     - Change interleave with `./gensignature <input.db> <numNode> <output.db> --no-generate --interleave=<newInterleave>"
+ *     - Run:
+ *           `"./gensignature <input.db> <numNode> --task=n,m --text '>' <outputList>`"`
+ *       or
+ *           `"mkdir logs-task"`
+ *           `"qsub -cwd -o logs-task -e logs -b y -t 1-<maxTask> -q <queue> ./gensignature <input.db> <numNode> --task=sge --text"`
+ *       when finished and checked all jobs have complete with no error (they display "done" in their stderr logs)
+ *           `"cat logs-task/? <joinedList>"`
+ *           `"./gensignature <input.db> <numNode> <output.db> --load=<joinedList> --no-generate"`
+ *
+ *  ./gensignature is tuned with metrics upto/including `4n9`, see `"metricsImprint[]"`.
  */
 
 /*
@@ -209,7 +273,7 @@ struct gensignatureContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeCandidate(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeSignature(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
 
@@ -245,9 +309,6 @@ struct gensignatureContext_t : callable_t {
 			ctx.tick = 0;
 		}
 
-		if (opt_text == 3)
-			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, 0, '*', pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
-
 		/*
 		 * Lookup/add to data store.
 		 * Consider signature groups `unsafe` (no members yet)
@@ -258,17 +319,15 @@ struct gensignatureContext_t : callable_t {
 
 		pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
 
-		// just display if in scan-mode
-		if (~pStore->allocFlags & database_t::ALLOCFLAG_SIGNATURE) {
-
-			if (opt_text == 1)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '*', pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
-
-			return true;
-		}
-
 		// add to datastore if not found
 		if (sid == 0) {
+			if (opt_text == 1)
+				printf("%s\t%u\t%u\t%u\n", pNameR, numPlaceholder, numEndpoint, numBackRef);
+
+			// only add if signatures are writable
+			if (~pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE)
+				return true;
+
 			// add signature to database
 			sid = pStore->addSignature(pNameR);
 			// add to imprints to index
@@ -281,9 +340,6 @@ struct gensignatureContext_t : callable_t {
 			pSignature->numPlaceholder = numPlaceholder;
 			pSignature->numEndpoint = numEndpoint;
 			pSignature->numBackRef = numBackRef;
-
-			if (opt_text == 1)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '*', pNameR, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 
 			return true;
 		}
@@ -335,24 +391,25 @@ struct gensignatureContext_t : callable_t {
 				cmp = '='; // equals
 		}
 
+		if (opt_text == 2)
+			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
+
 		/*
 		 * Update record if candidate is better
 		 */
 		if (cmp == '>' || cmp == '+') {
+			if (opt_text == 1)
+				printf("%s\t%u\t%u\t%u\n", pNameR, numPlaceholder, numEndpoint, numBackRef);
+
+			// only update if signatures are writable
+			if (~pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE)
+				return true;
+
 			::strcpy(pSignature->name, pNameR);
 			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
 			pSignature->numPlaceholder = numPlaceholder;
 			pSignature->numEndpoint = numEndpoint;
 			pSignature->numBackRef = numBackRef;
-
-			if (opt_text == 1)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
-
-		} else {
-
-			if (opt_text == 1)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
-
 		}
 
 		return true;
@@ -422,11 +479,12 @@ struct gensignatureContext_t : callable_t {
 	void rebuildImprints(void) {
 		// clear signature and imprint index
 		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-		// skip reserved entry
-		pStore->numImprint = 1;
 
 		if (pStore->numSignature < 2)
 			return; //nothing to do
+
+		// skip reserved entry
+		pStore->numImprint = 1;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
@@ -496,12 +554,8 @@ struct gensignatureContext_t : callable_t {
 	 * @date 2020-04-21 18:56:28
 	 *
 	 * Read signatures from file
-	 *
-	 * @param {boolean} withImprints - Also create imprints
 	 */
-	void /*__attribute__((optimize("O0")))*/ signaturesFromFile(bool withImprints) {
-
-		tinyTree_t tree(ctx);
+	void /*__attribute__((optimize("O0")))*/ signaturesFromFile(void) {
 
 		/*
 		 * Load candidates from file.
@@ -520,14 +574,12 @@ struct gensignatureContext_t : callable_t {
 		ctx.tick = 0;
 
 		char name[64];
-		uint64_t cid;
-		unsigned sid, size, numPlaceholder, numEndpoint, numBackRef;
-		char cmp;
+		unsigned numPlaceholder, numEndpoint, numBackRef;
 
 		unsigned skipDuplicate = 0;
 
 		// <cid> <sid> <candidateName> <cmp> <size> <numPlaceholder> <numEndpoint> <numBackRef>
-		while (fscanf(f, "%lu %u %c %s %u %u %u %u\n", &cid, &sid, &cmp, name, &size, &numPlaceholder, &numEndpoint, &numBackRef) == 6) {
+		while (fscanf(f, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef) == 4) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -541,38 +593,15 @@ struct gensignatureContext_t : callable_t {
 			}
 
 			/*
-			 * test  for duplicates
-			 */
-
-			unsigned ix = pStore->lookupSignature(name);
-			if (pStore->signatureIndex[ix] != 0) {
-				// duplicate candidate name
-				skipDuplicate++;
-				ctx.progress++;
-				continue;
-			}
-
-			/*
 			 * construct tree
 			 */
-			tree.decodeFast(name);
+			generator.decodeFast(name);
 
 			/*
-			 * Allocate and populate member
+			 * call `foundTreeSignature()`
 			 */
 
-			signature_t *pSignature = pStore->signatures + pStore->addSignature(name);
-
-			pSignature->size = tree.count - tinyTree_t::TINYTREE_NSTART;
-			pSignature->numPlaceholder = numPlaceholder;
-			pSignature->numEndpoint = numEndpoint;
-			pSignature->numBackRef = numBackRef;
-
-			if (withImprints) {
-				// add imprints
-				sid = pSignature - pStore->signatures;
-				pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, sid);
-			}
+			foundTreeSignature(generator, name, numPlaceholder, numEndpoint, numBackRef);
 
 			ctx.progress++;
 		}
@@ -583,8 +612,9 @@ struct gensignatureContext_t : callable_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read signatures. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f",
+			fprintf(stderr, "[%s] Read %ld candidates. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f\n",
 			        ctx.timeAsString(),
+			        ctx.progress++,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash);
@@ -639,9 +669,6 @@ struct gensignatureContext_t : callable_t {
 		}
 		ctx.tick = 0;
 
-		// clear tree
-		generator.clearGenerator();
-
 		/*
 		 * Generate candidates
 		 */
@@ -650,14 +677,15 @@ struct gensignatureContext_t : callable_t {
 
 		if (arg_numNodes == 0) {
 			generator.root = 0; // "0"
-			foundTreeCandidate(generator, "0", 0, 0, 0);
+			foundTreeSignature(generator, "0", 0, 0, 0);
 			generator.root = 1; // "a"
-			foundTreeCandidate(generator, "a", 1, 1, 0);
+			foundTreeSignature(generator, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
-			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeSignature));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -694,18 +722,25 @@ struct gensignatureContext_t : callable_t {
 		assert(pStore->numSignature >= 1);
 		qsort_r(pStore->signatures + 1, pStore->numSignature - 1, sizeof(*pStore->signatures), this->comparSignature, this);
 
-		// rebuild imprints
-		this->rebuildImprints();
-
 		/*
 		 * List result
 		 */
-		if (opt_text == 2) {
+		if (opt_text == 3) {
+			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+				const signature_t *pSignature = pStore->signatures + iSid;
+				printf("%s\t%u\t%u\t%u\n", pSignature->name, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+			}
+		}
+		if (opt_text == 4) {
 			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 				const signature_t *pSignature = pStore->signatures + iSid;
 				printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 			}
 		}
+
+		// rebuild imprints
+		if (this->arg_outputDatabase)
+			this->rebuildImprints();
 	}
 
 };
@@ -1096,6 +1131,15 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
+	if (app.opt_load) {
+		struct stat sbuf;
+
+		if (stat(app.opt_load, &sbuf)) {
+			fprintf(stderr, "%s does not exist\n", app.opt_load);
+			exit(1);
+		}
+	}
+
 	if (app.opt_text && isatty(1)) {
 		fprintf(stderr, "stdout not redirected\n");
 		exit(1);
@@ -1153,11 +1197,11 @@ int main(int argc, char *const *argv) {
 
 	// sections that need rebuilding
 	unsigned rebuildSections = 0;
-	// sections to inherit from original database
+	// sections to inherit from original database. Can also be interpreted as ReadOnly.
 	unsigned inheritSections = database_t::ALLOCMASK_TRANSFORM;
 
-	// flag that signatures be collected and expanded
-	unsigned collectSignatures = (app.arg_outputDatabase != NULL || app.opt_text == 3);
+	// flag that signatures to be collected or sorted
+	unsigned collectSignatures = (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4);
 
 	/*
 	 * @date 2020-03-17 13:57:25
@@ -1170,14 +1214,15 @@ int main(int argc, char *const *argv) {
 	 */
 
 	// interleave
-	if (app.opt_interleave)
-		store.interleave = app.opt_interleave; // manual
-	else if (db.interleave)
-		store.interleave = db.interleave; // inherit
-	else
-		store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
-	// find matching `interleaveStep`
 	{
+		if (app.opt_interleave)
+			store.interleave = app.opt_interleave; // manual
+		else if (db.interleave)
+			store.interleave = db.interleave; // inherit
+		else
+			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
+
+		// find matching `interleaveStep`
 		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
 		if (!pMetrics)
 			ctx.fatal("no preset for --interleave\n");
@@ -1186,20 +1231,25 @@ int main(int argc, char *const *argv) {
 	}
 
 	// signatures
-	if (app.opt_maxSignature == 0) {
+	if (app.opt_maxSignature != 0) {
+		store.maxSignature = app.opt_maxSignature; // user specified
+	} else if (!collectSignatures) {
+		store.maxSignature = db.maxSignature; // keep section read-only
+		store.signatureIndexSize = db.signatureIndexSize;
+	} else {
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
 		if (!pMetrics)
 			ctx.fatal("no preset for --maxsignature\n");
 
 		store.maxSignature = pMetrics->numSignature;
-	} else {
-		store.maxSignature = app.opt_maxSignature;
 	}
 
-	if (app.opt_signatureIndexSize == 0)
-		store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-	else
-		store.signatureIndexSize = app.opt_signatureIndexSize;
+	if (store.signatureIndexSize == 0) {
+		if (app.opt_signatureIndexSize == 0)
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
+		else
+			store.signatureIndexSize = app.opt_signatureIndexSize;
+	}
 
 	// optional hints
 	if (db.numHint != 0) {
@@ -1208,20 +1258,25 @@ int main(int argc, char *const *argv) {
 	}
 
 	// imprints
-	if (app.opt_maxImprint == 0) {
+	if (app.opt_maxImprint != 0) {
+		store.maxImprint = app.opt_maxImprint; // user specified
+	} else if (!collectSignatures) {
+		store.maxImprint = db.maxImprint; // keep section read-only
+		store.imprintIndexSize = db.imprintIndexSize;
+	} else {
 		const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, app.arg_numNodes);
 		if (!pMetrics)
 			ctx.fatal("no preset for --maximprint\n");
 
 		store.maxImprint = pMetrics->numImprint;
-	} else {
-		store.maxImprint = app.opt_maxImprint;
 	}
 
-	if (app.opt_imprintIndexSize == 0)
-		store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-	else
-		store.imprintIndexSize = app.opt_imprintIndexSize;
+	if (store.imprintIndexSize == 0) {
+		if (app.opt_imprintIndexSize != 0)
+			store.imprintIndexSize = app.opt_imprintIndexSize;
+		else
+			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
+	}
 
 	/*
 	 * section inheriting
@@ -1253,6 +1308,10 @@ int main(int argc, char *const *argv) {
 	// rebuilt (rw) sections may not be inherited (ro)
 	inheritSections &= ~rebuildSections;
 
+	// preloading signatures requires writable signatures and imprints
+	if (app.opt_load)
+		inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
@@ -1274,13 +1333,13 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxImprint=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxImprint);
+		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u signatureIndex=%u maxImprint=%u imprintIndex=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxImprint, store.imprintIndexSize);
 
 	// actual create
 	store.create(inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
 
 	/*
@@ -1288,6 +1347,14 @@ int main(int argc, char *const *argv) {
 	 */
 
 	store.inheritSections(&db, app.arg_inputDatabase, inheritSections);
+
+	// early initialise or the progress ticker will be misunderstood for section copying
+	tinyTree_t tree(ctx);
+	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
+		fprintf(stderr, "[%s] Copying database sections\n", ctx.timeAsString());
 
 	// signatures
 	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
@@ -1327,20 +1394,6 @@ int main(int argc, char *const *argv) {
 	assert(store.numImprint >= 1);
 
 	/*
-	 * initialise evaluators
-	 */
-
-	tinyTree_t tree(ctx);
-	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
-
-	/*
-	 * Load members from file to increase chance signature groups become safe
-	 */
-	if (app.opt_load)
-		app.signaturesFromFile(~rebuildSections & ~inheritSections & database_t::ALLOCMASK_IMPRINT);
-
-	/*
 	 * Rebuild sections
 	 */
 
@@ -1353,9 +1406,11 @@ int main(int argc, char *const *argv) {
 		store.rebuildIndices(rebuildSections);
 
 	/*
-	 * Fire up generator for new candidates
+	 * Where to look for new candidates
 	 */
 
+	if (app.opt_load)
+		app.signaturesFromFile();
 	if (app.opt_generate)
 		app.signaturesFromGenerator();
 
@@ -1379,6 +1434,13 @@ int main(int argc, char *const *argv) {
 
 		store.save(app.arg_outputDatabase);
 	}
+
+	if (app.opt_taskLast)
+		fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
+	else if (app.opt_windowLo || app.opt_windowHi)
+		fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
+	else
+		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {

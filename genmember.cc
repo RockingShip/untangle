@@ -119,6 +119,11 @@
  *   = Members are inherited
  *   = Each candidate member that matches is logged, signature updated and not recorded
  *   = No member-sorting
+ *
+ * @date 2020-04-22 21:20:56
+ *
+ * `genmember` selects candidates already present in the imprint index.
+ * Selected candidates are added to `members`.
  */
 
 /*
@@ -886,18 +891,22 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * @date 2020-04-02 21:52:34
 	 */
-	void rebuildImprints(bool unsafeOnly) {
+	void rebuildImprints(unsigned unsafeOnly) {
+		// clear signature and imprint index
+		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+
+		if (pStore->numSignature < 2)
+			return; //nothing to do
+
+		// skip reserved entry
+		pStore->numImprint = 1;
+
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
 			if (unsafeOnly)
 				fprintf(stderr, "[%s] Rebuilding imprints for empty/unsafe signatures\n", ctx.timeAsString());
 			else
 				fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
 		}
-
-		// clear signature and imprint index
-		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
-		// skip reserved entry
-		pStore->numImprint = 1;
 
 		/*
 		 * Create imprints for signature groups
@@ -1186,6 +1195,7 @@ struct genmemberContext_t : callable_t {
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genmemberContext_t::foundTreeMember));
 		}
@@ -1894,10 +1904,10 @@ int main(int argc, char *const *argv) {
 
 	// sections that need rebuilding
 	unsigned rebuildSections = 0;
-	// sections to inherit from original database
+	// sections to inherit from original database. Can also be interpreted as ReadOnly.
 	unsigned inheritSections = database_t::ALLOCMASK_TRANSFORM;
 
-	// flag that members be collected and expanded
+	// flag that members be collected or sorted
 	unsigned collectMembers = (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3);
 
 	/*
@@ -1908,15 +1918,15 @@ int main(int argc, char *const *argv) {
 	unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
 
 	// interleave
-	if (app.opt_interleave)
-		store.interleave = app.opt_interleave; // manual
-	else if (db.interleave)
-		store.interleave = db.interleave; // inherit
-	else
-		store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
-
-	// find matching `interleaveStep`
 	{
+		if (app.opt_interleave)
+			store.interleave = app.opt_interleave; // manual
+		else if (db.interleave)
+			store.interleave = db.interleave; // inherit
+		else
+			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
+
+		// find matching `interleaveStep`
 		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
 		if (!pMetrics)
 			ctx.fatal("no preset for --interleave\n");
@@ -1926,10 +1936,13 @@ int main(int argc, char *const *argv) {
 
 	// signatures
 	store.maxSignature = db.maxSignature;
-	if (app.opt_signatureIndexSize == 0)
-		store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-	else
-		store.signatureIndexSize = app.opt_signatureIndexSize;
+	store.signatureIndexSize = db.signatureIndexSize;
+	if (store.signatureIndexSize == 0) {
+		if (app.opt_signatureIndexSize == 0)
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
+		else
+			store.signatureIndexSize = app.opt_signatureIndexSize;
+	}
 
 	// optional hints
 	if (db.numHint != 0) {
@@ -1938,36 +1951,46 @@ int main(int argc, char *const *argv) {
 	}
 
 	// imprints
-	if (app.opt_maxImprint == 0) {
+	if (app.opt_maxImprint != 0) {
+		store.maxImprint = app.opt_maxImprint; // user specified
+	} else if (!collectMembers) {
+		store.maxImprint = db.maxImprint; // keep section read-only
+		store.imprintIndexSize = db.imprintIndexSize;
+	} else {
 		const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, minNodes);
 		if (!pMetrics)
 			ctx.fatal("no preset for --maximprint\n");
 
 		store.maxImprint = pMetrics->numImprint;
-	} else {
-		store.maxImprint = app.opt_maxImprint;
 	}
 
-	if (app.opt_imprintIndexSize == 0)
-		store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-	else
-		store.imprintIndexSize = app.opt_imprintIndexSize;
+	if (store.imprintIndexSize == 0) {
+		if (app.opt_imprintIndexSize != 0)
+			store.imprintIndexSize = app.opt_imprintIndexSize;
+		else
+			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
+	}
 
 	// members
-	if (app.opt_maxMember == 0) {
+	if (app.opt_maxMember != 0) {
+		store.maxMember = app.opt_maxMember; // user specified
+	} else if (!collectMembers) {
+		store.maxMember = db.maxMember; // keep section read-only
+		store.memberIndexSize = db.memberIndexSize;
+	} else {
 		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, minNodes);
 		if (!pMetrics)
 			ctx.fatal("no preset for --maxmember\n");
 
 		store.maxMember = pMetrics->numMember;
-	} else {
-		store.maxMember = app.opt_maxMember;
 	}
 
-	if (app.opt_memberIndexSize == 0)
-		store.memberIndexSize = ctx.nextPrime(store.maxMember * app.opt_ratio);
-	else
-		store.memberIndexSize = app.opt_memberIndexSize;
+	if (store.memberIndexSize == 0) {
+		if (app.opt_memberIndexSize == 0)
+			store.memberIndexSize = ctx.nextPrime(store.maxMember * app.opt_ratio);
+		else
+			store.memberIndexSize = app.opt_memberIndexSize;
+	}
 
 	/*
 	 * section inheriting
@@ -2005,6 +2028,10 @@ int main(int argc, char *const *argv) {
 	// rebuilt (rw) sections may not be inherited (ro)
 	inheritSections &= ~rebuildSections;
 
+	// preloading members requires writable members
+	if (app.opt_load)
+		inheritSections &= ~(database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
+
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
 	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
@@ -2032,7 +2059,7 @@ int main(int argc, char *const *argv) {
 	store.create(inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
 		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
 
 	/*
@@ -2040,6 +2067,14 @@ int main(int argc, char *const *argv) {
 	 */
 
 	store.inheritSections(&db, app.arg_inputDatabase, inheritSections);
+
+	// early initialise or the progress ticker will be misunderstood for section copying
+	tinyTree_t tree(ctx);
+	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
+		fprintf(stderr, "[%s] Copying database sections\n", ctx.timeAsString());
 
 	// signatures
 	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
@@ -2053,7 +2088,7 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
-	// hints
+	// optional hints
 	if (db.numHint > 0) {
 		if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_HINT) {
 			assert(store.maxHint >= db.numHint);
@@ -2111,20 +2146,6 @@ int main(int argc, char *const *argv) {
 		        app.numEmpty, app.numUnsafe - app.numEmpty);
 
 	/*
-	 * initialise evaluators
-	 */
-
-	tinyTree_t tree(ctx);
-	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
-
-	/*
-	 * Load members from file to increase chance signature groups become safe
-	 */
-	if (app.opt_load)
-		app.membersFromFile();
-
-	/*
 	 * Rebuild sections
 	 */
 
@@ -2137,9 +2158,11 @@ int main(int argc, char *const *argv) {
 		store.rebuildIndices(rebuildSections);
 
 	/*
-	 * Fire up generator for new candidates
+	 * Where to look for new candidates
 	 */
 
+	if (app.opt_load)
+		app.membersFromFile();
 	if (app.opt_generate)
 		app.membersFromGenerator();
 

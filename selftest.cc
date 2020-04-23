@@ -448,6 +448,7 @@ struct selftestContext_t : callable_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
 		}
@@ -469,6 +470,7 @@ struct selftestContext_t : callable_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
 		}
@@ -1180,6 +1182,7 @@ struct selftestContext_t : callable_t {
 		ctx.tick = 0;
 		ctx.setupSpeed(16033780); // no consequences if value is off
 
+		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 		generator.clearGenerator();
 		unsigned numNodes = 4;
 		unsigned numEndpoints = numNodes * 2 + 1;
@@ -1343,7 +1346,7 @@ struct selftestContext_t : callable_t {
 
 			// prepare generator
 			ctx.flags = pRound->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-			generator.initialiseGenerator(); // let flags take effect
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE); // let flags take effect
 
 			// prepare I/O context
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -1359,6 +1362,7 @@ struct selftestContext_t : callable_t {
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
 
 			// count signatures and imprints
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeMetrics));
 

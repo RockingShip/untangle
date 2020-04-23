@@ -236,8 +236,6 @@ struct generatorTree_t : tinyTree_t {
 		iVersion = 0;
 		clearGenerator();
 
-		initialiseGenerator();
-
 		// call to make compiler actually generator code
 		decodePacked(0);
 	}
@@ -292,8 +290,10 @@ struct generatorTree_t : tinyTree_t {
 	 * @date 2020-03-18 21:05:34
 	 *
 	 * Initialise lookup tables for generator
+	 *
+	 * @param {number} pure - zero for any operator, non-zero for `QnTF` only operator
 	 */
-	void initialiseGenerator(void) {
+	void initialiseGenerator(unsigned pure) {
 		/*
 		 * Create lookup table indexed by packed notation to determine if `Q,T,F` combo is normalised
 		 * Exclude ordered dyadics.
@@ -440,7 +440,7 @@ struct generatorTree_t : tinyTree_t {
 			for (unsigned F = 0; F < TINYTREE_NSTART + numNode; F++) {
 			// @formatter:on
 
-				if (!Ti && (ctx.flags & context_t::MAGICMASK_PURE)) {
+				if (!Ti && pure) {
 					// reject `non-pure` template with `--pure` invocation
 					continue;
 				}
@@ -572,7 +572,7 @@ struct generatorTree_t : tinyTree_t {
 			pTemplateData[numTemplateData++] = 0;
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_PURE) {
+		if (pure) {
 			if (numTemplateData != TEMPLATE_MAXDATA_PURE)
 				fprintf(stderr, "numTemplateData=%u\n", numTemplateData);
 			assert(numTemplateData <= TEMPLATE_MAXDATA_PURE);
