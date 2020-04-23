@@ -263,6 +263,8 @@ struct genmemberContext_t : callable_t {
 		opt_signatureIndexSize = 0;
 		opt_text = 0;
 		opt_unsafe = 0;
+		opt_windowHi = 0;
+		opt_windowLo = 0;
 
 		pStore = NULL;
 		pEvalFwd = NULL;
@@ -743,7 +745,7 @@ struct genmemberContext_t : callable_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (treeR.windowHi - treeR.windowLo), etaH, etaM, etaS,
+				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
 				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
@@ -909,7 +911,7 @@ struct genmemberContext_t : callable_t {
 				fprintf(stderr, "[%s] Sid window: %u-%u\n", ctx.timeAsString(), opt_sidLo, opt_sidHi ? opt_sidHi : pStore->numSignature);
 		}
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(pStore->numSignature);
 		ctx.tick = 0;
 
@@ -1020,7 +1022,7 @@ struct genmemberContext_t : callable_t {
 			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
 			          __FUNCTION__, this->opt_load);
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
 
@@ -1191,7 +1193,7 @@ struct genmemberContext_t : callable_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (generator.windowLo == 0 && generator.windowHi == 0 && ctx.progress != ctx.progressHi) {
+		if (ctx.progress != ctx.progressHi && this->opt_windowLo == 0 && this->opt_windowHi == 0) {
 			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
 			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 		}
@@ -1459,31 +1461,29 @@ void usage(char *const *argv, bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "\t   --force                       Force overwriting of database if already exists\n");
-		fprintf(stderr, "\t   --[no-]generate               Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
-		fprintf(stderr, "\t-h --help                        This list\n");
-		fprintf(stderr, "\t   --imprintindexsize=<number>   Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>         Imprint index interleave [default=%u]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --load=<file>                 Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
-		fprintf(stderr, "\t   --maximprint=<number>         Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --maxmember=<number>          Maximum number of members [default=%u]\n", app.opt_maxMember);
-		fprintf(stderr, "\t   --memberindexsize=<number>    Size of member index [default=%u]\n", app.opt_memberIndexSize);
-		fprintf(stderr, "\t   --[no-]paranoid               Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --prepare                     Prepare dataset for empty/unsafe groups\n");
-		fprintf(stderr, "\t   --[no-]pure                   QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                       Say more\n");
-		fprintf(stderr, "\t   --ratio=<number>              Index/data ratio [default=%.1f]\n", app.opt_ratio);
-		fprintf(stderr, "\t   --sge                         Get SGE task settings from environment\n");
-		fprintf(stderr, "\t   --sidhi=<number>              Sid range upper bound [default=%u]\n", app.opt_sidHi);
-		fprintf(stderr, "\t   --sidlo=<number>              Sid range lower bound [default=%u]\n", app.opt_sidLo);
+		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
+		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
+		fprintf(stderr, "\t-h --help                          This list\n");
+		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
+		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
+		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --prepare                       Prepare dataset for empty/unsafe groups\n");
+		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-q --quiet                         Say more\n");
+		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --sid=[<low>,]<high>            Sid range upper bound  [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
-		fprintf(stderr, "\t   --task=<id>,<last>            Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
-		fprintf(stderr, "\t   --text                        Textual output instead of binary database\n");
-		fprintf(stderr, "\t   --timer=<seconds>             Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --[no-]unsafe                 Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-v --verbose                     Say less\n");
-		fprintf(stderr, "\t   --windowhi=<number>           Upper end restart window [default=%lu]\n", app.opt_windowHi);
-		fprintf(stderr, "\t   --windowlo=<number>           Lower end restart window [default=%lu]\n", app.opt_windowLo);
+		fprintf(stderr, "\t   --task=sge                      Get task settings from SGE environment\n");
+		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
+		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --[no-]unsafe                   Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-v --verbose                       Say less\n");
+		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
 	}
 }
 
@@ -1524,16 +1524,13 @@ int main(int argc, char *const *argv) {
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
-			LO_SGE,
-			LO_SIDHI,
-			LO_SIDLO,
+			LO_SID,
 			LO_SIGNATUREINDEXSIZE,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
 			LO_UNSAFE,
-			LO_WINDOWHI,
-			LO_WINDOWLO,
+			LO_WINDOW,
 			// short opts
 			LO_HELP = 'h',
 			LO_QUIET = 'q',
@@ -1561,17 +1558,14 @@ int main(int argc, char *const *argv) {
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
-			{"sge",                0, 0, LO_SGE},
-			{"sidhi",              1, 0, LO_SIDHI},
-			{"sidlo",              1, 0, LO_SIDLO},
+			{"sid",                1, 0, LO_SID},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
 			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
 			{"unsafe",             0, 0, LO_UNSAFE},
 			{"verbose",            2, 0, LO_VERBOSE},
-			{"windowhi",           1, 0, LO_WINDOWHI},
-			{"windowlo",           1, 0, LO_WINDOWLO},
+			{"window",             1, 0, LO_WINDOW},
 			//
 			{NULL,                 0, 0, 0}
 		};
@@ -1655,51 +1649,63 @@ int main(int argc, char *const *argv) {
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
 				break;
-			case LO_SGE: {
-				const char *p;
+			case LO_SID: {
+				unsigned m, n;
 
-				p = getenv("SGE_TASK_ID");
-				app.opt_taskId = p ? atoi(p) : 0;
-				if (app.opt_taskId < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-					exit(0);
-				}
-
-				p = getenv("SGE_TASK_LAST");
-				app.opt_taskLast = p ? atoi(p) : 0;
-				if (app.opt_taskLast < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-					exit(0);
-				}
-
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "task id exceeds last\n");
+				int ret = sscanf(optarg, "%u,%u", &m, &n);
+				if (ret == 2) {
+					app.opt_sidLo = m;
+					app.opt_sidHi = n;
+				} else if (ret == 1) {
+					app.opt_sidHi = m;
+				} else {
+					usage(argv, true);
 					exit(1);
 				}
 
 				break;
 			}
-			case LO_SIDHI:
-				app.opt_sidHi = strtoull(optarg, NULL, 0);
-				break;
-			case LO_SIDLO:
-				app.opt_sidLo = strtoull(optarg, NULL, 0);
-				break;
 			case LO_SIGNATUREINDEXSIZE:
 				app.opt_signatureIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
 				break;
 			case LO_TASK:
-				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-					usage(argv, true);
-					exit(1);
-				}
-				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-					fprintf(stderr, "Task id/last must be non-zero\n");
-					exit(1);
-				}
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "Task id exceeds last\n");
-					exit(1);
+				if (::strcmp(optarg, "sge") == 0) {
+					const char *p;
+
+					p = getenv("SGE_TASK_ID");
+					app.opt_taskId = p ? atoi(p) : 0;
+					if (app.opt_taskId < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+						exit(0);
+					}
+
+					p = getenv("SGE_TASK_LAST");
+					app.opt_taskLast = p ? atoi(p) : 0;
+					if (app.opt_taskLast < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+						exit(0);
+					}
+
+					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
+						exit(1);
+					}
+
+					// set ticker interval to 60 seconds
+					ctx.opt_timer = 60;
+				} else {
+					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+						usage(argv, true);
+						exit(1);
+					}
+					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+						fprintf(stderr, "Task id/last must be non-zero\n");
+						exit(1);
+					}
+					if (app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "Task id exceeds last\n");
+						exit(1);
+					}
 				}
 				break;
 			case LO_TEXT:
@@ -1714,12 +1720,22 @@ int main(int argc, char *const *argv) {
 			case LO_VERBOSE:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
-			case LO_WINDOWHI:
-				app.opt_windowHi = strtoull(optarg, NULL, 0);
+			case LO_WINDOW: {
+				uint64_t m, n;
+
+				int ret = sscanf(optarg, "%lu,%lu", &m, &n);
+				if (ret == 2) {
+					app.opt_windowLo = m;
+					app.opt_windowHi = n;
+				} else if (ret == 1) {
+					app.opt_windowHi = m;
+				} else {
+					usage(argv, true);
+					exit(1);
+				}
+
 				break;
-			case LO_WINDOWLO:
-				app.opt_windowLo = strtoull(optarg, NULL, 0);
-				break;
+			}
 
 			case '?':
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
@@ -1729,10 +1745,6 @@ int main(int argc, char *const *argv) {
 				exit(1);
 		}
 	}
-
-	/*
-	 * Program arguments
-	 */
 
 	/*
 	 * Program arguments
@@ -1761,6 +1773,37 @@ int main(int argc, char *const *argv) {
 	if (app.arg_inputDatabase == NULL) {
 		usage(argv, false);
 		exit(1);
+	}
+
+	/*
+	 * `--task` post-processing
+	 */
+	if (app.opt_taskId || app.opt_taskLast) {
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
+		if (!pMetrics)
+			ctx.fatal("no preset for --task\n");
+
+		// split progress into chunks
+		uint64_t taskSize = pMetrics->numProgress / app.opt_taskLast;
+		if (taskSize == 0)
+			taskSize = 1;
+		app.opt_windowLo = taskSize * (app.opt_taskId - 1);
+		app.opt_windowHi = taskSize * app.opt_taskId;
+
+		// last task is open ended in case metrics are off
+		if (app.opt_taskId == app.opt_taskLast)
+			app.opt_windowHi = 0;
+	}
+	if (app.opt_windowHi && app.opt_windowLo >= app.opt_windowHi) {
+		fprintf(stderr, "--window low exceeds high\n");
+		exit(1);
+	}
+
+	if (app.opt_windowLo || app.opt_windowHi) {
+		if (app.arg_numNodes > tinyTree_t::TINYTREE_MAXNODES || restartIndex[app.arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0] == 0) {
+			fprintf(stderr, "No restart data for --window\n");
+			exit(1);
+		}
 	}
 
 	/*
@@ -2131,6 +2174,13 @@ int main(int argc, char *const *argv) {
 
 		store.save(app.arg_outputDatabase);
 	}
+
+	if (app.opt_taskLast)
+		fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
+	else if (app.opt_windowLo || app.opt_windowHi)
+		fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
+	else
+		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {

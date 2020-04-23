@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-14 11:09:15
@@ -74,8 +74,8 @@
 #include <getopt.h>
 #include <signal.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
@@ -132,8 +132,16 @@ struct gensignatureContext_t : callable_t {
 	double opt_ratio;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
+	/// @var {number} task Id. First task=1
+	unsigned opt_taskId;
+	/// @var {number} Number of tasks / last task
+	unsigned opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} generator upper bound
+	uint64_t opt_windowHi;
+	/// @var {number} generator lower bound
+	uint64_t opt_windowLo;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -157,12 +165,16 @@ struct gensignatureContext_t : callable_t {
 		opt_generate = 1;
 		opt_imprintIndexSize = 0;
 		opt_interleave = 0;
+		opt_taskId = 0;
+		opt_taskLast = 0;
 		opt_load = NULL;
 		opt_maxImprint = 0;
 		opt_maxSignature = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
 		opt_text = 0;
+		opt_windowHi = 0;
+		opt_windowLo = 0;
 
 		pStore = NULL;
 		pEvalFwd = NULL;
@@ -216,8 +228,15 @@ struct gensignatureContext_t : callable_t {
 				eta %= 60;
 				int etaS = eta;
 
+				/*
+				 * @date 2020-04-23 17:26:04
+				 *
+				 *   ctx.progress is candidateId
+				 *   ctx.progressHi is ticker upper limit
+				 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
+				 */
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
 				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
@@ -411,13 +430,14 @@ struct gensignatureContext_t : callable_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
+
 		/*
 		 * Create imprints for signature groups
 		 */
 
 		generatorTree_t tree(ctx);
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(pStore->numSignature);
 		ctx.tick = 0;
 
@@ -495,7 +515,7 @@ struct gensignatureContext_t : callable_t {
 			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
 			          __FUNCTION__, this->opt_load);
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
 
@@ -579,40 +599,74 @@ struct gensignatureContext_t : callable_t {
 	 */
 	void signaturesFromGenerator(void) {
 
-		{
-			// reset progress
+		/*
+		 * Apply window/task setting on generator
+		 */
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+			if (this->opt_taskId || this->opt_taskLast) {
+				if (this->opt_windowHi)
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%lu-%lu\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_windowLo, this->opt_windowHi);
+				else
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%lu-last\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_windowLo);
+			} else if (this->opt_windowLo || this->opt_windowHi) {
+				if (this->opt_windowHi)
+					fprintf(stderr, "[%s] INFO: window=%lu-%lu\n", ctx.timeAsString(), this->opt_windowLo, this->opt_windowHi);
+				else
+					fprintf(stderr, "[%s] INFO: window=%lu-last\n", ctx.timeAsString(), this->opt_windowLo);
+			}
+		}
+
+		// apply settings for `--window`
+		if (this->opt_windowLo)
+			generator.windowLo = this->opt_windowLo;
+		if (this->opt_windowHi)
+			generator.windowHi = this->opt_windowHi;
+
+		// apply restart data for > `4n9`
+		unsigned ofs = 0;
+		if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
+			ofs = restartIndex[this->arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0];
+		if (ofs)
+			generator.pRestartData = restartData + ofs;
+
+		// reset progress
+		if (generator.windowHi) {
+			ctx.setupSpeed(generator.windowHi);
+		} else {
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
-			ctx.tick = 0;
+		}
+		ctx.tick = 0;
 
-			// clear tree
+		// clear tree
+		generator.clearGenerator();
+
+		/*
+		 * Generate candidates
+		 */
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
+
+		if (arg_numNodes == 0) {
+			generator.root = 0; // "0"
+			foundTreeCandidate(generator, "0", 0, 0, 0);
+			generator.root = 1; // "a"
+			foundTreeCandidate(generator, "a", 1, 1, 0);
+		} else {
+			unsigned endpointsLeft = arg_numNodes * 2 + 1;
+
 			generator.clearGenerator();
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
+		}
 
-			/*
-			 * Generate candidates
-			 */
-			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-				fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
 
-			if (arg_numNodes == 0) {
-				generator.root = 0; // "0"
-				foundTreeCandidate(generator, "0", 0, 0, 0);
-				generator.root = 1; // "a"
-				foundTreeCandidate(generator, "a", 1, 1, 0);
-			} else {
-				unsigned endpointsLeft = arg_numNodes * 2 + 1;
-
-				generator.clearGenerator();
-				generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeCandidate));
-			}
-
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-				fprintf(stderr, "\r\e[K");
-
-			if (ctx.progress != ctx.progressHi) {
-				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
-				       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
-			}
+		if (ctx.progress != ctx.progressHi && this->opt_windowLo == 0 && this->opt_windowHi == 0) {
+			// can only test if windowing is disabled
+			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
+			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
@@ -731,11 +785,14 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-q --quiet                         Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
+		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text[=1]                      Signatures from `foundTree()`\n");
 		fprintf(stderr, "\t   --text=2                        Sorted signatures from output database\n");
 		fprintf(stderr, "\t   --text=3                        Candidates from `foundTree()`\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose                       Say less\n");
+		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
 	}
 }
 
@@ -775,8 +832,10 @@ int main(int argc, char *const *argv) {
 			LO_PURE,
 			LO_RATIO,
 			LO_SIGNATUREINDEXSIZE,
+			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
+			LO_WINDOW,
 			// short opts
 			LO_HELP = 'h',
 			LO_QUIET = 'q',
@@ -803,9 +862,11 @@ int main(int argc, char *const *argv) {
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
+			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
 			{"verbose",            2, 0, LO_VERBOSE},
+			{"window",             1, 0, LO_WINDOW},
 			//
 			{NULL,                 0, 0, 0}
 		};
@@ -839,14 +900,14 @@ int main(int argc, char *const *argv) {
 			case LO_FORCE:
 				app.opt_force++;
 				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
 			case LO_GENERATE:
 				app.opt_generate++;
 				break;
+			case LO_HELP:
+				usage(argv, true);
+				exit(0);
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
 				break;
 			case LO_INTERLEAVE:
 				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
@@ -857,10 +918,10 @@ int main(int argc, char *const *argv) {
 				app.opt_load = optarg;
 				break;
 			case LO_MAXIMPRINT:
-				app.opt_maxImprint = (unsigned) strtoul(optarg, NULL, 0);
+				app.opt_maxImprint = ctx.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = (unsigned) strtoul(optarg, NULL, 0);
+				app.opt_maxSignature = ctx.nextPrime(strtoull(optarg, NULL, 0));
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
@@ -883,19 +944,76 @@ int main(int argc, char *const *argv) {
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
 				break;
+			case LO_TASK: {
+				if (::strcmp(optarg, "sge") == 0) {
+					const char *p;
+
+					p = getenv("SGE_TASK_ID");
+					app.opt_taskId = p ? atoi(p) : 0;
+					if (app.opt_taskId < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+						exit(0);
+					}
+
+					p = getenv("SGE_TASK_LAST");
+					app.opt_taskLast = p ? atoi(p) : 0;
+					if (app.opt_taskLast < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+						exit(0);
+					}
+
+					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
+						exit(1);
+					}
+
+					// set ticker interval to 60 seconds
+					ctx.opt_timer = 60;
+				} else {
+					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+						usage(argv, true);
+						exit(1);
+					}
+					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+						fprintf(stderr, "Task id/last must be non-zero\n");
+						exit(1);
+					}
+					if (app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "Task id exceeds last\n");
+						exit(1);
+					}
+				}
+
+				break;
+			}
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
 				break;
 			case LO_TEXT:
 				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
+			case LO_WINDOW: {
+				uint64_t m, n;
 
+				int ret = sscanf(optarg, "%lu,%lu", &m, &n);
+				if (ret == 2) {
+					app.opt_windowLo = m;
+					app.opt_windowHi = n;
+				} else if (ret == 1) {
+					app.opt_windowHi = m;
+				} else {
+					usage(argv, true);
+					exit(1);
+				}
+
+				break;
+			}
 			case '?':
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
@@ -935,8 +1053,40 @@ int main(int argc, char *const *argv) {
 	}
 
 	/*
+	 * `--task` post-processing
+	 */
+	if (app.opt_taskId || app.opt_taskLast) {
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
+		if (!pMetrics)
+			ctx.fatal("no preset for --task\n");
+
+		// split progress into chunks
+		uint64_t taskSize = pMetrics->numProgress / app.opt_taskLast;
+		if (taskSize == 0)
+			taskSize = 1;
+		app.opt_windowLo = taskSize * (app.opt_taskId - 1);
+		app.opt_windowHi = taskSize * app.opt_taskId;
+
+		// last task is open ended in case metrics are off
+		if (app.opt_taskId == app.opt_taskLast)
+			app.opt_windowHi = 0;
+	}
+	if (app.opt_windowHi && app.opt_windowLo >= app.opt_windowHi) {
+		fprintf(stderr, "--window low exceeds high\n");
+		exit(1);
+	}
+
+	if (app.opt_windowLo || app.opt_windowHi) {
+		if (app.arg_numNodes > tinyTree_t::TINYTREE_MAXNODES || restartIndex[app.arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0] == 0) {
+			fprintf(stderr, "No restart data for --window\n");
+			exit(1);
+		}
+	}
+
+	/*
 	 * None of the outputs may exist
 	 */
+
 	if (app.arg_outputDatabase && !app.opt_force) {
 		struct stat sbuf;
 
@@ -978,7 +1128,6 @@ int main(int argc, char *const *argv) {
 		else if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
 	}
-
 
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)

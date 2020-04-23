@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-23 23:09:36 Sync SGE usage.
 2020-04-22 20:01:21 Added `selftest` and relocated all related code to it.
 2020-04-22 16:54:48 Consistent use of `%u`.
 2020-04-22 13:45:53 Consistent use of `uint32_t`.

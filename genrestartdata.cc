@@ -21,6 +21,13 @@
  *
  * Textual output:
  *   <candidateId> <name> <numNode> <numPlaceholder>
+ *
+ * @date 2020-04-23 20:10:40
+ *
+ * Preparations have been made to handle `--task` but that requires relative restart points (or keep absolute and perform extra post-processing)
+ * The idea is to set `restartTabDepth` one level deeper to get a better resolution.
+ * Then create jobs for the restart points and count the number of candidates until the next/final restart point.
+ * Collect outputs.
  */
 
 /*
@@ -295,13 +302,13 @@ struct genrestartdataContext_t : callable_t {
 		printf("#include <stdint.h>\n");
 		printf("\n");
 
-		uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES][2];
+		uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES + 1][2];
 
 		printf("const uint64_t restartData[] = { 0,\n\n");
 		this->numRestart = 1; // skip first zero
 
 		// @formatter:off
-		for (unsigned numArgs = 0; numArgs < tinyTree_t::TINYTREE_MAXNODES; numArgs++)
+		for (unsigned numArgs = 0; numArgs <= tinyTree_t::TINYTREE_MAXNODES; numArgs++)
 		for (int iPure = 1; iPure >= 0; iPure--) {
 		// @formatter:on
 
@@ -364,9 +371,9 @@ struct genrestartdataContext_t : callable_t {
 		 * Output index
 		 */
 
-		printf("const uint32_t restartIndex[%u][2] = {\n", tinyTree_t::TINYTREE_MAXNODES);
+		printf("const uint32_t restartIndex[%u][2] = {\n", tinyTree_t::TINYTREE_MAXNODES + 1);
 
-		for (unsigned numNode = 0; numNode < tinyTree_t::TINYTREE_MAXNODES; numNode++) {
+		for (unsigned numNode = 0; numNode <= tinyTree_t::TINYTREE_MAXNODES; numNode++) {
 			printf("\t{ %8d, %8d },\n", buildProgressIndex[numNode][0], buildProgressIndex[numNode][1]);
 		}
 
@@ -611,7 +618,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (argc - optind >= 1)
-			app.arg_numNodes = (unsigned) strtoul(argv[optind++], NULL, 0);
+		app.arg_numNodes = (unsigned) strtoul(argv[optind++], NULL, 0);
 
 	if (app.opt_taskLast != 0) {
 		if (app.arg_numNodes == 0) {

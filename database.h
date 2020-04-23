@@ -1714,7 +1714,7 @@ struct database_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding indices\n", ctx.timeAsString());
 
-		// reset progress
+		// reset ticker
 		uint64_t numProgress = 0;
 		if (sections & ALLOCMASK_SIGNATUREINDEX)
 			numProgress += this->numSignature;
@@ -1738,7 +1738,21 @@ struct database_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
 
 					ctx.tick = 0;
 				}
@@ -1766,7 +1780,21 @@ struct database_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
 
 					ctx.tick = 0;
 				}
@@ -1794,7 +1822,21 @@ struct database_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
 
 					ctx.tick = 0;
 				}
@@ -1822,7 +1864,21 @@ struct database_t {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					int perSecond = ctx.updateSpeed();
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
 
 					ctx.tick = 0;
 				}

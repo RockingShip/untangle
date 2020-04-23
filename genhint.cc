@@ -159,7 +159,7 @@ struct genhintContext_t : callable_t {
 			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
 			          __FUNCTION__, this->opt_load);
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
 
@@ -257,7 +257,7 @@ struct genhintContext_t : callable_t {
 			}
 		}
 
-		// reset progress
+		// reset ticker
 		ctx.setupSpeed(opt_sidHi - opt_sidLo);
 		ctx.tick = 0;
 
@@ -425,7 +425,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                    Say more\n");
 		fprintf(stderr, "\t   --sge                      Get SGE task settings from environment\n");
-		fprintf(stderr, "\t   --sid=[<lo>],<hi>          Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
+		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
