@@ -56,7 +56,7 @@ Normalisations:
  1) Algebraic (function grouping)
  2) Dyadic ordering (layout ordering)
  3) Imprints (layout orientation "skins")
- 4) Signature groups (restructuring)
+ 4) Signatures (restructuring)
  
 Features: 
 - Level 1+2 query `eval`

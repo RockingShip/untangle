@@ -149,6 +149,11 @@ struct footprint_t {
  * @date 2020-03-22 17:43:03
  *
  * Footprint belonging to signature/transform
+ *
+ * @date 2020-04-23 09:46:17
+ *
+ * Unsafe signatures/members will trigger level-4 normalisation because one of the components is unsafe.
+ *
  */
 struct signature_t {
 	enum {

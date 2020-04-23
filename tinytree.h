@@ -48,12 +48,24 @@
  *
  * Single unified operator node
  *
+ * @date 2020-04-23 09:22:37
+ *
+ * The `T` component can have its `IBIT` set to differentiate between the `QTF` and `QnTF` operator. (current model)
+ * This model normalises to order because it eliminates the need for inverting as it can be rewritten with level-1 normalisation.
+ *
+ * The `F` component can have its `IBIT` set to differentiate between the `QTF` and `QTnF` operator. (previous and depreciated model)
+ * This model normalises to chaos because it allows trees to have both inverted and non-inverted counterparts that trigger a cascade of tree rewrites when they collide.
+ *
+ * The `Q` component never has its `IBIT` set because of level-1 normalisation.
+ * It is reserved to flag that the node is immune for normalisation when constructing trees.
+ * This is needed when the node is the root of an unsafe signature that will guarantee to level-4 normalise which it can't.
+ *
  * @typedef {object}
  */
 struct tinyNode_t {
 	/// @var {number} - reference to `"question"`
 	uint32_t Q;
-	/// @var {number} - reference to `"when-true"`. May have IBIT set
+	/// @var {number} - reference to `"when-true"`.
 	uint32_t T;
 	/// @var {number} - reference to `"when-false"`
 	uint32_t F;

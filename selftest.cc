@@ -1846,7 +1846,7 @@ int main(int argc, char *const *argv) {
 		if (sysinfo(&info) == 0) {
 			double percent = 100.0 * allocated / info.freeram;
 			if (percent > 80)
-				fprintf(stderr, "WARNING: using %.1f%% of free memory\n", percent);
+				fprintf(stderr, "WARNING: using %.1f%% of free memory minus cache\n", percent);
 		}
 	}
 

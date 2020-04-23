@@ -834,7 +834,7 @@ struct genmemberContext_t : callable_t {
 	 * @param {context_t} arg - I/O context
 	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
 	 */
-	static int /*__attribute__((optimize("O0")))*/ comparMember(const void *lhs, const void *rhs, void *arg) {
+	static int comparMember(const void *lhs, const void *rhs, void *arg) {
 		if (lhs == rhs)
 			return 0;
 
@@ -2048,7 +2048,7 @@ int main(int argc, char *const *argv) {
 		if (sysinfo(&info) == 0) {
 			double percent = 100.0 * allocated / info.freeram;
 			if (percent > 80)
-				fprintf(stderr, "WARNING: using %.1f%% of free memory\n", percent);
+				fprintf(stderr, "WARNING: using %.1f%% of free memory minus cache\n", percent);
 		}
 	}
 
