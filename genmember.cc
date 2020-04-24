@@ -772,7 +772,7 @@ struct genmemberContext_t : callable_t {
 		unsigned sid = 0;
 		unsigned tid = 0;
 
-		if (!pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid))
+		if (!pStore->lookupImprintAssociative(&treeR, this->pEvalFwd, this->pEvalRev, &sid, &tid))
 			return true;
 
 		signature_t *pSignature = pStore->signatures + sid;

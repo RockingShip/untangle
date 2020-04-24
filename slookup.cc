@@ -117,11 +117,11 @@ struct slookupContext_t {
 				if (tree.root & IBIT) {
 					// inverted root
 					tree.root ^= IBIT;
-					pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
+					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
 					sid ^= IBIT;
 				} else {
 					// non-inverted root
-					pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid);
+					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
 				}
 
 			} else {

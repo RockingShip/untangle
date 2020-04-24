@@ -9,7 +9,7 @@
  * `gensignature` can also generate SQL used for signature group analysis.
  *
  * Each footprint can consist of a collection of unique structures called signature group.
- * One member of each signature group, the structure with the most concise notation, is called the representative.
+ * One member of each signature group, the structure with the most fitting notation, is called the representative.
  * The name of the representative is the display name of the signature.
  *
  * For each signature group additional properties are determined.
@@ -58,7 +58,7 @@
  *
  * Text modes:
  *
- * `--text[=1]` Concise mode that show selected candidates passed to `foundTreeSignature()`.
+ * `--text[=1]` Brief mode that show selected candidates passed to `foundTreeSignature()`.
  *              Selected candidates are those that challenge and win the current display name.
  *              Also intended for transport and merging when broken into multiple tasks.
  *              Can be used for the `--load=<file>` option.

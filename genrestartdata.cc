@@ -453,7 +453,7 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t-h --help                  This list\n");
-		fprintf(stderr, "\t-q --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure             Enable QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
 		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
