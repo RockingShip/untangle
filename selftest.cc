@@ -426,13 +426,16 @@ struct selftestContext_t : callable_t {
 
 		// set generator into `3n9-pure` mode
 		ctx.flags &= ~context_t::MAGICMASK_PURE;
-		arg_numNodes = 3;
+		unsigned numNode = 3;
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
 		assert(pMetrics);
 
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
+
+		// create templates
+		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 
 		/*
 		 * Pass 1, slice dataset into single entries
@@ -448,9 +451,9 @@ struct selftestContext_t : callable_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
+			generator.pRestartData = NULL;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -470,9 +473,9 @@ struct selftestContext_t : callable_t {
 			ctx.progress = 0;
 			ctx.tick = 0;
 
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
+			generator.pRestartData = NULL;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -659,7 +662,7 @@ struct selftestContext_t : callable_t {
 	 * Test that versioned memory for databases works as expected
 	 */
 	void performSelfTestVersioned(void) {
-		// enable versioned memory
+		// enable versioned memory. Don't change index size
 		pStore->enableVersioned();
 
 		// temporarily reduce size of index
@@ -669,7 +672,7 @@ struct selftestContext_t : callable_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
 		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
-		pStore->numSignature = 1;
+		pStore->numSignature = 1; // skip reserved first entry
 
 		/*
 		 * add names to signatures until a collision occurs
@@ -703,7 +706,7 @@ struct selftestContext_t : callable_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
 		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
-		pStore->numSignature = 1;
+		pStore->numSignature = 1; // skip reserved first entry
 
 		// add the collision victim
 		ix1 = pStore->lookupSignature(pStore->fwdTransformNames[collision1]);
@@ -741,7 +744,7 @@ struct selftestContext_t : callable_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
 		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
-		pStore->numSignature = 1;
+		pStore->numSignature = 1; // skip reserved first entry
 
 		// add the collisions
 		ctx.cntHash = ctx.cntCompare = 0;
@@ -1000,9 +1003,6 @@ struct selftestContext_t : callable_t {
 		 * Actual storage needs to be tested/runtime decided.
 		 */
 
-		// enable versioned memory for imprint index
-		pStore->enableVersioned();
-
 		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
 			if (pInterleave->noauto)
 				continue; // skip automated handling
@@ -1018,9 +1018,8 @@ struct selftestContext_t : callable_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
-			pStore->InvalidateVersioned();
-			// skip reserved entry
-			pStore->numImprint = 1;
+			::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
+			pStore->numImprint = 1; // skip reserved entry
 
 			/*
 			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
@@ -1049,7 +1048,7 @@ struct selftestContext_t : callable_t {
 				unsigned sid, tid;
 
 				// lookup
-				if (!pStore->lookupImprintAssociative(&generator, pEvalFwd, pEvalRev, &sid, &tid)) {
+				if (!pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &sid, &tid)) {
 					printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"interleave\":%u,\"tid\":\"%s\"}\n",
 					       __FUNCTION__, pStore->interleave, pStore->fwdTransformNames[iTransform]);
 					exit(1);
@@ -1086,9 +1085,6 @@ struct selftestContext_t : callable_t {
 				exit(1);
 			}
 		}
-
-		// disable versioned memory
-		pStore->enableVersioned();
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
@@ -1172,13 +1168,12 @@ struct selftestContext_t : callable_t {
 
 		// reset index
 		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
-		pStore->numSignature = 1;
+		pStore->numSignature = 1; // skip reserved first entry
 
 		// apply settings
 		ctx.flags = 0;
 		generator.windowLo = 0;
 		generator.windowHi = 0;
-		generator.pRestartData = NULL;
 		ctx.tick = 0;
 		ctx.setupSpeed(16033780); // no consequences if value is off
 
@@ -1214,7 +1209,9 @@ struct selftestContext_t : callable_t {
 				}
 			}
 
-			fprintf(stderr, "\r\e[K[%s] sorting %u/%u", ctx.timeAsString(), iRound + 1, maxRound);
+			unsigned r = rand();
+			srand(r);
+			fprintf(stderr, "\r\e[K[%s] sorting %u/%u rand=%u", ctx.timeAsString(), iRound + 1, maxRound, r);
 
 			/*
 			 * Sort signatures.
@@ -1315,9 +1312,6 @@ struct selftestContext_t : callable_t {
 	 */
 	void createMetrics(void) {
 
-		// enable versioned memory or imprint index
-		pStore->enableVersioned();
-
 		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
@@ -1338,7 +1332,8 @@ struct selftestContext_t : callable_t {
 			assert(pInterleave);
 
 			// prepare database
-			pStore->InvalidateVersioned();
+			::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
+			::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
 			pStore->numImprint = 1; // skip reserved first entry
 			pStore->numSignature = 1; // skip reserved first entry
 			pStore->interleave = pInterleave->numStored;
@@ -1362,7 +1357,6 @@ struct selftestContext_t : callable_t {
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
 
 			// count signatures and imprints
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
 			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeMetrics));
 
@@ -1376,23 +1370,25 @@ struct selftestContext_t : callable_t {
 			ctx.cntHash = 0;
 			ctx.cntCompare = 0;
 
-			// wait for a tick
-			for (ctx.tick = 0; ctx.tick == 0;)
-				generator.decodeFast("ab+"); // waste some time
+			if (this->opt_metrics) {
+				// wait for a tick
+				for (ctx.tick = 0; ctx.tick == 0;)
+					generator.decodeFast("ab+"); // waste some time
 
-			// do random lookups for 10 seconds
-			for (ctx.tick = 0; ctx.tick < 5;) {
-				// load random signature with random tree
-				unsigned sid = (rand() % (pStore->numSignature - 1)) + 1;
-				unsigned tid = rand() % pStore->numTransform;
+				// do random lookups for 10 seconds
+				for (ctx.tick = 0; ctx.tick < 5;) {
+					// load random signature with random tree
+					unsigned sid = (rand() % (pStore->numSignature - 1)) + 1;
+					unsigned tid = rand() % pStore->numTransform;
 
-				// load tree
-				generator.decodeFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
+					// load tree
+					generator.decodeFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
 
-				// perform a lookup
-				unsigned s = 0, t = 0;
-				pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &s, &t);
-				assert(sid == s);
+					// perform a lookup
+					unsigned s = 0, t = 0;
+					pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &s, &t);
+					assert(sid == s);
+				}
 			}
 
 			speed = ctx.cntHash / 5.0 / 1e6;
@@ -1420,11 +1416,12 @@ struct selftestContext_t : callable_t {
 				continue; // no point for smaller trees
 
 			for (unsigned iRatio = 20; iRatio <= 60; iRatio += 2) {
+
 				assert(iRatio / 10.0 <= this->opt_ratio);
 				pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
-				pStore->InvalidateVersioned();
+				::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
 				pStore->numImprint = 1; // skip mandatory reserved entry
 				ctx.cntHash = 0;
 				ctx.cntCompare = 0;
@@ -1473,6 +1470,7 @@ struct selftestContext_t : callable_t {
 				        ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
 				        (double) ctx.cntCompare / ctx.cntHash);
 			}
+
 		}
 	}
 
@@ -1520,9 +1518,9 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s <input.db> [<numnode> [<output.db>]]  -- Add signatures of given node size\n", argv[0]);
-	fprintf(stderr, "       %s --metrics=1 <input.db>              -- Collect medium metrics for `metricsImprint[]`\n", argv[0]);
-	fprintf(stderr, "       %s --metrics=2 <input.db>              -- Collect slow metrics for `ratioMetrics[]`\n", argv[0]);
+	fprintf(stderr, "usage: %s <input.db> [<numnode> [<output.db>]]   -- Add signatures of given node size\n", argv[0]);
+	fprintf(stderr, "       %s --metrics=1 <input.db>                 -- Collect medium metrics for `metricsImprint[]`\n", argv[0]);
+	fprintf(stderr, "       %s --metrics=2 <input.db>                 -- Collect slow metrics for `ratioMetrics[]`\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -1530,8 +1528,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
-		fprintf(stderr, "\t   --metrics                       Collect metrics\n");
-		fprintf(stderr, "\t-q --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --metrics=<number>              Collect metrics\n");
+		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say more\n");
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
@@ -1749,13 +1747,13 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
+	// for `createMetrics()`
 	if (app.opt_metrics) {
 		// get worse-case values
 
-		if (app.opt_metrics == 2) {
-			// for metrics: set ratio to sensible maximum because all ratio settings will be probed
+		// `createMetrics()` required ratio of at least 6.0
+		if (app.opt_metrics == 2)
 			app.opt_ratio = 6.0;
-		}
 
 		unsigned highestNumNode = 0; // collect highest `numNode` from `metricsGenerator`
 
@@ -1767,14 +1765,14 @@ int main(int argc, char *const *argv) {
 				if (pMetrics->numSlot != MAXSLOTS)
 					continue; // only process settings that match `MAXSLOTS`
 
-				if (app.opt_maxImprint < pMetrics->numImprint)
-					app.opt_maxImprint = pMetrics->numImprint;
+				if (store.maxImprint < pMetrics->numImprint)
+					store.maxImprint = pMetrics->numImprint;
 				if (highestNumNode < pMetrics->numNode)
 					highestNumNode = pMetrics->numNode;
 			}
 
 			// Give extra 5% expansion space
-			app.opt_maxImprint = ctx.raisePercent(app.opt_maxImprint, 5);
+			store.maxImprint = ctx.raisePercent(store.maxImprint, 5);
 		}
 
 		// get highest `numSignature` but only for the highest `numNode` found above
@@ -1784,36 +1782,20 @@ int main(int argc, char *const *argv) {
 					continue; // skip automated handling
 				if (pMetrics->numSlot != MAXSLOTS)
 					continue; // only process settings that match `MAXSLOTS`
+				if (pMetrics->numNode > highestNumNode)
+					continue; // must match imprints above
 
-				if (app.opt_maxSignature < pMetrics->numSignature)
-					app.opt_maxSignature = pMetrics->numSignature;
+				if (store.maxSignature < pMetrics->numSignature)
+					store.maxSignature = pMetrics->numSignature;
 			}
 
 			// Give extra 5% expansion space
-			app.opt_maxSignature = ctx.raisePercent(app.opt_maxSignature, 5);
+			store.maxSignature = ctx.raisePercent(store.maxSignature, 5);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Set limits to maxImprint=%u maxSignature=%u\n", ctx.timeAsString(), app.opt_maxImprint, app.opt_maxSignature);
+			fprintf(stderr, "[%s] Set limits to maxImprint=%u maxSignature=%u\n", ctx.timeAsString(), store.maxImprint, store.maxSignature);
 	}
-
-#if 0
-	// signatures
-	if (app.opt_maxSignature == 0) {
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
-		if (!pMetrics)
-			ctx.fatal("no preset for --maxsignature\n");
-
-		store.maxSignature = pMetrics->numSignature;
-	} else {
-		store.maxSignature = app.opt_maxSignature;
-	}
-
-	if (app.opt_signatureIndexSize == 0)
-		store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-	else
-		store.signatureIndexSize = app.opt_signatureIndexSize;
-#endif
 
 	// signatures
 	if (store.maxSignature < MAXTRANSFORM)
@@ -1823,12 +1805,16 @@ int main(int argc, char *const *argv) {
 	if (store.maxSignature < 17000000)
 		store.maxSignature = 17000000; // must hold (nearly) candidates for `performSelfTestCompare()`
 
-
-	store.signatureIndexSize = ctx.nextPrime(store.maxSignature * 2.0);
+	store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
 
 	// imprints for `performSelfTestInterleave()`
-	store.maxImprint = MAXTRANSFORM + 10; // = 362880+10
-	store.imprintIndexSize = 362897; // =362880+17 force extreme index overflowing
+	if (store.maxImprint < MAXTRANSFORM + 10) // = 362880+10
+		store.maxImprint = MAXTRANSFORM + 10;
+
+	store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
+
+	if (store.imprintIndexSize < 362897) // =362880+17 force extreme index overflowing
+		store.imprintIndexSize = 362897;
 
 	// allocate evaluators
 	app.pEvalFwd = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
@@ -1852,7 +1838,7 @@ int main(int argc, char *const *argv) {
 
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxImprint=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxImprint);
+		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u signatureIndex=%u maxImprint=%u imprintIndex=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxImprint, store.imprintIndexSize);
 
 	// actual create
 	store.create(0);
@@ -1877,7 +1863,6 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Perform medium/slow metrics
 	 */
-
 	if (app.opt_metrics)
 		app.createMetrics();
 
