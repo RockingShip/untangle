@@ -109,27 +109,23 @@ Update `numMember` in `metricsGenerator[]` accordingly.
 
 If building hits some limit, set `--maxmember` to some higher value and update metrics accordingly.
 
-## candidates
+## textual lists signatures
 
 If you are in need for textual lists of candidates (about 1Gbyte):
 
 ```sh
-    ./gensignature transform.db 0 0n9.db --text=1 >0n9-1.txt
-    ./gensignature transform.db 0        --text=2 >0n9-2.txt
-    ./gensignature 0n9.db       1 1n9.db --text=1 >1n9-1.txt
-    ./gensignature 0n9.db       1        --text=2 >1n9-2.txt
-    ./gensignature 1n9.db       2 2n9.db --text=1 >2n9-1.txt
-    ./gensignature 1n9.db       2        --text=2 >2n9-2.txt
-    ./gensignature 2n9.db       3 3n9.db --text=1 >3n9-1.txt
-    ./gensignature 2n9.db       3        --text=2 >3n9-2.txt 
-    ./gensignature 3n9.db       4 4n9.db --text=1 >4n9-1.txt
-    ./gensignature 3n9.db       4        --text=2 >4n9-2.txt
+    ./gensignature transform.db 0 0n9.db --text=1 >0n9-1.lst
+    ./gensignature 0n9.db       1 1n9.db --text=1 >1n9-1.lst
+    ./gensignature 1n9.db       2 2n9.db --text=1 >2n9-1.lst
+    ./gensignature 2n9.db       3 3n9.db --text=1 >3n9-1.lst
+    ./gensignature 3n9.db       4 4n9.db --text=1 >4n9-1.lst
 
-    ./gentransform 0n9 0 --no-generate --text=3 > 0n9-3.txt
-    ./gentransform 1n9 1 --no-generate --text=3 > 1n9-3.txt
-    ./gentransform 2n9 2 --no-generate --text=3 > 2n9-3.txt
-    ./gentransform 3n9 3 --no-generate --text=3 > 3n9-3.txt
-    ./gentransform 4n9 4 --no-generate --text=3 > 4n9-3.txt
+    # as an alternative, create sorted and unique list by extracting them from the databases
+    ./gensignature 0n9.db 0 --no-generate --text=3 >0n9-3.lst
+    ./gensignature 1n9.db 1 --no-generate --text=3 >1n9-3.lst
+    ./gensignature 2n9.db 2 --no-generate --text=3 >2n9-3.lst
+    ./gensignature 3n9.db 3 --no-generate --text=3 >3n9-3.lst
+    ./gensignature 4n9.db 4 --no-generate --text=3 >4n9-3.lst
 ```
 
 ## Parallel `gensignature`
@@ -160,35 +156,77 @@ Perform `4n9` in parallel to test that tasking/slicing works.
     ./gensignature 3n9.db 4 --load=tasks.lst --no-generate --text=3 >merged.lst
 
     # compare with single run
-    diff -q -s merged.lst 4n9-3.txt
+    diff -q -s merged.lst 4n9-3.lst
 ```
 
-## `6n9-pure` with `gensignature`
+## `5n9-pure` with `gensignature`
 
 Example of how to tackle large address spaces with incomplete metrics.
 
 First you need a matching `restartData[]` for the given address space.
 Update `metricsGenerator[]` accordingly and run `./genrestartdata`.
-Then guessimate how many tasks would cover the whole address space.
-Run tasks in read-only mode for better memory usage.
 
-As final metrics are unknown and merging all candidates is cpu-intensive.
-Precautions need to be taken that merging does not fail before completeion due to database exhaustion.
+The default interleave of 504 is tuned for 4n9 signatures.
+For larger address space 120 would hold about 4x more signatures and 4x slower.
+
 
 ```sh
-    # divide and conquer takes about an hour
+    # Try how much an inital run would hold
+    # Set section sizes to utilize maximum memory.
+    # Use 4n9 database to reject signatures already found in 4n9 space.
+    # Collect best (single) candidate for every signature.
+    # maxsignature/maximprint is roughly 52G Memory and database
+    ./gensignature 4n9.db 5 5n9-pure.1.db --pure --inter=120 --truncate --no-sort --maxsignature=20000000 --maximprint=500000000 --text=3 --truncate >>5n9-pure.1.lst
+
+    # As expected the database overflows and at progress position 442082096 which is 48%.
+    # This is nice as it indicates that another 1-2 invocations are needed.
+    # Using zero for highest `"--window=<low,<high>"` indicates open-ended.
+    ./gensignature 4n9.db 5 5n9-pure.2.db --pure --inter=120 --truncate --no-sort --maxsignature=20000000 --maximprint=500000000 --text=3 --truncate --window=442082096,0 >>5n9-pure.2.lst
+
+    # The previous captured 66%.
+    ./gensignature 4n9.db 5 5n9-pure.3.db --pure --inter=120 --truncate --no-sort --maxsignature=20000000 --maximprint=500000000 --text=3 --truncate --window=604993616,0 >>5n9-pure.3.lst
+
+    # The previous captured 76%.
+    ./gensignature 4n9.db 5 5n9-pure.4.db --pure --inter=120 --truncate --no-sort --maxsignature=20000000 --maximprint=500000000 --text=3 --truncate --window=696177599,0 >>5n9-pure.4.lst
+
+    # The previous captured 80%. (Is it slowing down?)
+    ./gensignature 4n9.db 5 5n9-pure.5.db --pure --inter=120 --truncate --no-sort --maxsignature=20000000 --maximprint=500000000 --text=3 --truncate --window=735633644,0 >>5n9-pure.5.lst
+```
+
+Alternatively:
+
+```sh
+    #divide and conquer takes about an hour
     mkdir logs
-    qsub -cwd -o logs -e logs -b y -t 1-999 -q 8G.q ./gensignature 4n9.db 5 --pure --task=sge --text
-
+    qsub -cwd -o logs -e logs -b y -t 1-499 -q 8G.q ./gensignature 4n9.db 5 --pure --task=sge --text
+     
     # check/count all jobs finished properly
-    grep done -r logs/gensignature.e47632.*  --files-without-match
-
+    grep done -r logs/gensignature.e* --files-without-match
+    grep error -r logs/gensignature.o* --files-with-matches
+     
     #rerun any missing jobs with:
-    qsub -cwd -o logs -e logs -b y -q 8G.q ./gensignature 4n9.db 5 --pure --task=n,999 --text
+    qsub -cwd -o logs -e logs -b y -q 8G.q ./gensignature 4n9.db 5 --pure --task=n,499 --text
+     
+    # merge all collected candidate signatures
+    # file will contain 858805139 lines
+    cat logs/gensignature.o* >signatures-5n9-pure.1.lst
 
-    # check/count no stray errors
-    grep error -r logs/gensignature.o*
+    # sort and unique.
+    # Use ultra-fast add-if-not-found, however be aware of false positives.
+    # There are so no presets available so raise limits that fit four memory model.
+    # Output will contain 57412551 signatures and 57412551 imprints.
+    ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.1.lst --no-generate --no-sort --maxsignature=100000000 --maximprint=500000000 --ainf --interleave=1 --text=3 >signatures-5n9-pure.2.lst
 
+    # rerun with better tuned section sizes and bump interleave to reduce amount of false-positives.
+    # --maximprint is number of imprints last run times 2 because of new interleave factor.
+    # Output will contain 48815521 signatures and 94713089 imprints.
+    ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.2.lst --no-generate --no-sort --maxsignature=57412551 --maximprint=114825102 --ainf --interleave=2 --text=3 >signatures-5n9-pure.3.lst
+
+    # rerun.
+    # --maximprint is number of imprints last run times 6 because of new interleave factor.
+    # note: 568278534 imprints require too much memort. Reduce that to 500000000 and hope that is sufficient when duplicates removed.
+    # Yes, it fits. Output will contain 42862728 signatures and 247029190 imprints.
+    ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.3.lst --no-generate --no-sort --maxsignature=57412551 --maximprint=568278534 --ainf --interleave=6 --text=3 >signatures-5n9-pure.4.lst
 ```
 
 
@@ -197,27 +235,27 @@ Precautions need to be taken that merging does not fail before completeion due t
 If you are in need for textual lists of members:
 
 ```sh
-    ./genmember 4n9.db        0 member-0n9.db --text=1 >member-0n9-1.txt
-    ./genmember member-0n9.db 1 member-1n9.db --text=1 >member-1n9-1.txt
-    ./genmember member-1n9.db 2 member-2n9.db --text=1 >member-2n9-1.txt
-    ./genmember member-2n9.db 3 member-3n9.db --text=1 >member-3n9-1.txt
-    ./genmember member-3n9.db 4 member-4n9.db --text=1 >member-4n9-1.txt
+    ./genmember 4n9.db        0 member-0n9.db --text=1 >member-0n9-1.lst
+    ./genmember member-0n9.db 1 member-1n9.db --text=1 >member-1n9-1.lst
+    ./genmember member-1n9.db 2 member-2n9.db --text=1 >member-2n9-1.lst
+    ./genmember member-2n9.db 3 member-3n9.db --text=1 >member-3n9-1.lst
+    ./genmember member-3n9.db 4 member-4n9.db --text=1 >member-4n9-1.lst
 ```
 
 ```sh
-    ./genmember 4n9.db             0 member-0n9-pure.db --pure --text=1 >member-0n9-pure-1.txt
-    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --text=1 >member-1n9-pure-1.txt
-    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --text=1 >member-2n9-pure-1.txt
-    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --text=1 >member-3n9-pure-1.txt
-    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --text=1 >member-4n9-pure-1.txt
+    ./genmember 4n9.db             0 member-0n9-pure.db --pure --text=1 >member-0n9-pure-1.lst
+    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --text=1 >member-1n9-pure-1.lst
+    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --text=1 >member-2n9-pure-1.lst
+    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --text=1 >member-3n9-pure-1.lst
+    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --text=1 >member-4n9-pure-1.lst
 ```
 
 or use pre-determined member list created with `genmember --text=1` or `genmember text=3`
 
 ```sh
-    ./genmember 4n9.db             0 member-0n9-pure.db --pure --no-generate --load=member-0n9-1.txt
-    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --no-generate --load=member-1n9-pure-1.txt
-    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --no-generate --load=member-2n9-pure-1.txt
-    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --no-generate --load=member-3n9-pure-1.txt
-    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --no-generate --load=member-4n9-pure-1.txt
+    ./genmember 4n9.db             0 member-0n9-pure.db --pure --no-generate --load=member-0n9-1.lst
+    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure --no-generate --load=member-1n9-pure-1.lst
+    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure --no-generate --load=member-2n9-pure-1.lst
+    ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --no-generate --load=member-3n9-pure-1.lst
+    ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --no-generate --load=member-4n9-pure-1.lst
 ```

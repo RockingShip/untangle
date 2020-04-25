@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-25 23:00:00 Added `gensignature --ainf`.
 2020-04-24 22:09:32 Added `gensignature --no-sort --truncate`.
 2020-04-24 21:56:54 Fixed broken `selftest --metrics`.
 2020-04-23 23:09:36 Sync SGE usage.

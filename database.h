@@ -1542,12 +1542,36 @@ struct database_t {
 	 *
 	 * Find any orientation of the footprint and return the matching structure and skin with identical effect
 	 *
+	 * @date 2020-04-24 12:19:15
+	 *
+	 * There are a number of occasion where there are `add if not found` situations.
+	 * This is done to prevent the `pStore->addImprintAssociative()` throwing an unrecoverable error.
+	 *
+	 * Typically code looks like:
+	 * 	```
+	 *	if (!pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid))
+	 * 		pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+	 *      ```
+	 *
+	 * However, in nearly most cases the lookup fails which makes the lookup extremely expensive, especially with low interleaves.
+	 *
+	 * Make addImprintAssociative more robust by assuming add-if-not-found situation.
+	 * Every caller must/check the result.
+	 *
+	 * @date 2020-04-25 21:46:09
+	 *
+	 * WARNING: It turns out that add-if-not-found works partially.
+	 *          detection for found is only performed for tid=0.
+	 *          If an imprint is added for a signature with a different tid, that is not detected.
+	 *          dd-if-not-found is super fast in situations like joining lists but has the side effect of creating false positives
+	 *
 	 * @param {tinyTree_t} pTree - Tree containg expression
 	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)
 	 * @param {footprint_t[]} RevEvaluator - Evaluator with reverse transforms (modified)
 	 * @param {number} sid - structure id to attach to imprints.
+	 * @return {number} - zero for succeed, otherwise tree is already present with sid as return value.
 	 */
-	inline void addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned sid) {
+	inline unsigned addImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned sid) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
@@ -1586,7 +1610,10 @@ struct database_t {
 				} else {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
-					if (iCol == 0 || pImprint->sid != sid) {
+					if (iCol == 0) {
+						// signature already present, return found
+						return pImprint->sid;
+					} else if (pImprint->sid != sid) {
 						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
 						       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
@@ -1624,7 +1651,10 @@ struct database_t {
 				} else {
 					imprint_t *pImprint = this->imprints + this->imprintIndex[ix];
 					// test for similar. First imprint must be unique, others must have matching sid
-					if (iRow == 0 || pImprint->sid != sid) {
+					if (iRow == 0) {
+						// signature already present, return found
+						return pImprint->sid;
+					} else if (pImprint->sid != sid) {
 						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
 						       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 						exit(1);
@@ -1632,6 +1662,9 @@ struct database_t {
 				}
 			}
 		}
+
+		// return succeeded
+		return 0;
 	}
 
 	/*
@@ -1911,13 +1944,13 @@ struct database_t {
 		if (jResult == NULL)
 			jResult = json_object();
 		json_object_set_new_nocheck(jResult, "flags", json_integer(this->creationFlags));
-		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
 		json_object_set_new_nocheck(jResult, "numHint", json_integer(this->numHint));
 		json_object_set_new_nocheck(jResult, "hintIndexSize", json_integer(this->hintIndexSize));
+		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
 		json_object_set_new_nocheck(jResult, "numMember", json_integer(this->numMember));
