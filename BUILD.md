@@ -213,7 +213,8 @@ Alternatively:
 
     # sort and unique.
     # Use ultra-fast add-if-not-found, however be aware of false positives.
-    # There are so no presets available so raise limits that fit four memory model.
+    # There are so no presets available so raise limits that fit your memory model.
+    # use `--text=3` to sort and unique the resulting signatures.
     # Output will contain 57412551 signatures and 57412551 imprints.
     ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.1.lst --no-generate --no-sort --maxsignature=100000000 --maximprint=500000000 --ainf --interleave=1 --text=3 >signatures-5n9-pure.2.lst
 
@@ -224,9 +225,67 @@ Alternatively:
 
     # rerun.
     # --maximprint is number of imprints last run times 6 because of new interleave factor.
-    # note: 568278534 imprints require too much memort. Reduce that to 500000000 and hope that is sufficient when duplicates removed.
+    # note: 568278534 imprints require too much memory. Reduce that to 500000000 and hope that is sufficient when duplicates removed.
     # Yes, it fits. Output will contain 42862728 signatures and 247029190 imprints.
-    ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.3.lst --no-generate --no-sort --maxsignature=57412551 --maximprint=568278534 --ainf --interleave=6 --text=3 >signatures-5n9-pure.4.lst
+    ./gensignature 4n9.db 5 --pure --load=signatures-5n9-pure.3.lst --no-generate --no-sort --maxsignature=48815521 --maximprint=568278534 --ainf --interleave=6 --text=3 >signatures-5n9-pure.4.lst
+
+    # add-when-not-found is depleted.
+    # Split the list into a number of databases.
+    # Use `--interleave=120` as practical lowest interleave that takes about 45 minutes to compute.
+    # prepare a sharable database with pre-calculated interleave.
+    ./gensignature 4n9.db 4 split0.db --no-generate --interleave=120
+
+    # Split the list and compare them individually collecting/cascading only winners of display name challanges.
+    # Effectively, it removes signatures that are found in other lists that score better
+    # this is done by using the truncate option which cafely catches when database sections overlow.
+    # the `--text=3` will sort and uniq removing any false-positives.
+    # keep `--maxsignature=` and `--maximprint` consistent to enable inheriting of database sections
+    ./gensignature split0.db 5 split1.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --text=3 >split1.lst
+    # Truncating at progress=12084611 "faabc!>d1e!ca!!"
+    ./gensignature split0.db 5 split2.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --window=12084611,0 --text=3 >split2.lst
+    # Truncating at progress=19365208 "fgabc!bdae!ac!!!"
+    ./gensignature split0.db 5 split3.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --window=19365208,0 --text=3 >split3.lst
+    # Truncating at progress=25901788 "abc!gaecdef!!!e!"
+    ./gensignature split0.db 5 split4.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --window=25901788,0 --text=3 >split4.lst
+    # Truncating at progress=32084414 "bdabc!c!de!e1+!"
+    ./gensignature split0.db 5 split5.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --window=32084414,0 --text=3 >split5.lst
+    # Truncating at progress=38198459 "abc!de!21^a!f2!"
+    ./gensignature split0.db 5 split6.db --pure --load=signatures-5n9-pure.4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --truncate --window=38198459,0 --text=3 >split6.lst
+
+    # list split in six parts with false-positives removed (--because of --text=3`) 
+    # Their wordcount being  `4703839+4269774+4588180+4536969+4546816+3701209=26346787`
+    # keep database in disk cache for as long as possible
+    # each invocation takes about 30 minutes
+    cp  split1.db /dev/null # load into disk-cache
+    ./gensignature split1.db 5 --pure --load=split2.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split2a.lst
+    ./gensignature split1.db 5 --pure --load=split3.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3a.lst
+    ./gensignature split1.db 5 --pure --load=split4.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split4a.lst
+    ./gensignature split1.db 5 --pure --load=split5.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5a.lst
+    ./gensignature split1.db 5 --pure --load=split6.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6a.lst
+    # wordcount `4703839+3498983+3073191+2924217+3119443+2435255=19754928`
+    cp split2.db /dev/null # load into disk-cache
+    ./gensignature split2.db 5 --pure --load=split1.lst  --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split1b.lst
+    ./gensignature split2.db 5 --pure --load=split3a.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3b.lst
+    ./gensignature split2.db 5 --pure --load=split4a.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split4b.lst
+    ./gensignature split2.db 5 --pure --load=split5a.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5b.lst
+    ./gensignature split2.db 5 --pure --load=split6a.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6b.lst
+    # wordcount `4333533+3498983+2645211+2581264+2806578+2181616=18047185`
+    cp split3.db /dev/null # load into disk-cache
+    ./gensignature split3.db 5 --pure --load=split1b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split1c.lst
+    ./gensignature split3.db 5 --pure --load=split2a.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split2c.lst
+    ./gensignature split3.db 5 --pure --load=split4b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split4c.lst
+    ./gensignature split3.db 5 --pure --load=split5b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5c.lst
+    ./gensignature split3.db 5 --pure --load=split6b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6c.lst
+    # wordcount `4159315+3266717+2645211+2362714+2648730+2068295=17150982`
+    cp split4.db /dev/null # load into disk-cache
+    ./gensignature split4.db 5 --pure --load=split1c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split1d.lst
+    ./gensignature split4.db 5 --pure --load=split2c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split2d.lst
+    ./gensignature split4.db 5 --pure --load=split3b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3d.lst
+    ./gensignature split4.db 5 --pure --load=split5c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5d.lst
+    ./gensignature split4.db 5 --pure --load=split6c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6d.lst
+    # wordcount `4019912+3080922+xx+2362714+xx+xx=17150982`
+
+ 
 ```
 
 

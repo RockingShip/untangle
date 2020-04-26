@@ -1425,33 +1425,36 @@ int main(int argc, char *const *argv) {
 
 	// signatures
 	if (~primarySections & database_t::ALLOCMASK_SIGNATURE)
-		inheritSections |= database_t::ALLOCMASK_SIGNATURE; // no output, signatures and imprints are read-only
+		inheritSections |= database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX; // no output, signatures and imprints are read-only
 	if (store.signatureIndexSize != db.signatureIndexSize)
 		rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
 
 	// optional hints
 	if (db.numHint > 0) {
-		inheritSections |= database_t::ALLOCMASK_HINT;
+		inheritSections |= database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX;
 		if (store.hintIndexSize != db.hintIndexSize)
 			rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
 	}
 
 	// changing interleave needs imprint rebuilding. This also validates imprintIndex
 	if (store.interleave != db.interleave)
-		rebuildSections |= database_t::ALLOCMASK_IMPRINT;
+		rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
 
 	// imprints
 	if (~primarySections & database_t::ALLOCMASK_IMPRINT)
-		inheritSections |= database_t::ALLOCMASK_IMPRINT; // no output, signatures and imprints are read-only
+		inheritSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // no output, signatures and imprints are read-only
 	if (store.imprintIndexSize != db.imprintIndexSize)
 		rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
 
 	// rebuilt (rw) sections may not be inherited (ro)
 	inheritSections &= ~rebuildSections;
 
+#if 0
+	// @date 2020-04-26 11:38:40 -- this makes loading to filter unusable. See if disabling the code makes a difference.
 	// loading signatures from file requires writable signatures and imprints
 	if (app.opt_load)
 		inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+#endif
 
 	/*
 	 * Finalise allocations and create database
@@ -1499,6 +1502,7 @@ int main(int argc, char *const *argv) {
 
 	// signatures
 	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+		fprintf(stderr, "[%s] ..signatures\n", ctx.timeAsString());
 		if (db.numSignature == 0) {
 			// input section empty
 			store.numSignature = 1;
@@ -1511,6 +1515,7 @@ int main(int argc, char *const *argv) {
 
 	// optional hints
 	if (db.numHint > 0) {
+		fprintf(stderr, "[%s] ..hints\n", ctx.timeAsString());
 		if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_HINT) {
 			assert(store.maxHint >= db.numHint);
 			::memcpy(store.hints, db.hints, db.numHint * sizeof(*store.hints));
@@ -1520,6 +1525,7 @@ int main(int argc, char *const *argv) {
 
 	// imprints
 	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_IMPRINT) {
+		fprintf(stderr, "[%s] ..imprints\n", ctx.timeAsString());
 		if (db.numImprint == 0) {
 			// input section empty
 			store.numImprint = 1;
