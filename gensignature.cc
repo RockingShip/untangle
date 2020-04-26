@@ -201,8 +201,6 @@ struct gensignatureContext_t : callable_t {
 	unsigned arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
-	/// @var {number} enable add-if-not-found
-	unsigned opt_ainf;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -260,7 +258,6 @@ struct gensignatureContext_t : callable_t {
 		arg_inputDatabase = NULL;
 		arg_numNodes = 0;
 		arg_outputDatabase = NULL;
-		opt_ainf = 0;
 		opt_force = 0;
 		opt_generate = 1;
 		opt_imprintIndexSize = 0;
@@ -382,7 +379,7 @@ struct gensignatureContext_t : callable_t {
 		unsigned sid = 0;
 		unsigned markSid = pStore->numSignature;
 
-		if (this->opt_ainf) {
+		if (ctx.flags & context_t::MAGICMASK_AINF) {
 			/*
 			 * @date 2020-04-25 22:00:29
 			 *
@@ -411,7 +408,7 @@ struct gensignatureContext_t : callable_t {
 				assert(sid == markSid);
 
 				// add to imprints to index
-				if (!this->opt_ainf) {
+				if (~ctx.flags & context_t::MAGICMASK_AINF) {
 					unsigned newSid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, sid);
 					assert(newSid == 0 || newSid == markSid);
 				}
@@ -618,7 +615,7 @@ struct gensignatureContext_t : callable_t {
 
 			unsigned sid, tid;
 
-			if (this->opt_ainf) {
+			if (ctx.flags & context_t::MAGICMASK_AINF) {
 				// add-if-not-found, but actually it should not have been found
 				unsigned ret = pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
 				assert(ret == 0);
@@ -885,7 +882,7 @@ void usage(char *const *argv, bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "\t   --ainf                          Enable add-if-not-found\n");
+		fprintf(stderr, "\t   --[no-]ainf                     Enable add-if-not-found [default=%s]\n", (ctx.flags & context_t::MAGICMASK_AINF) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
@@ -943,6 +940,7 @@ int main(int argc, char *const *argv) {
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
+			LO_NOAINF,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
@@ -976,6 +974,7 @@ int main(int argc, char *const *argv) {
 			{"load",               1, 0, LO_LOAD},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
+			{"no-ainf",            0, 0, LO_NOAINF},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
@@ -1023,7 +1022,7 @@ int main(int argc, char *const *argv) {
 				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
 				break;
 			case LO_AINF:
-				app.opt_ainf++;
+				ctx.flags |= context_t::MAGICMASK_AINF;
 				break;
 			case LO_FORCE:
 				app.opt_force++;
@@ -1050,6 +1049,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_MAXSIGNATURE:
 				app.opt_maxSignature = ctx.nextPrime(strtoull(optarg, NULL, 0));
+				break;
+			case LO_NOAINF:
+				ctx.flags &= ~context_t::MAGICMASK_AINF;
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
@@ -1254,7 +1256,7 @@ int main(int argc, char *const *argv) {
 	}
 
 	// display system flags when database was created
-	if (app.opt_ainf && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+	if (ctx.flags & context_t::MAGICMASK_AINF && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
 		/*

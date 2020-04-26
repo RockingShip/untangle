@@ -72,12 +72,14 @@ struct context_t {
 	enum {
 		// @formatter:off
 		MAGICFLAG_PARANOID      = 0,    // Force extra asserts
-		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting
-		MAGICFLAG_UNSAFE        = 2,    // Imprints for empty/unsafe groups
+		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting, smaller collection of candidates
+		MAGICFLAG_UNSAFE        = 2,    // Imprints for empty/unsafe groups, imprint index tuned for a subset of signatures
+		MAGICFLAG_AINF          = 3,    // add-if-not-found, signatures/imprints contain false duplicates
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
 		MAGICMASK_UNSAFE        = 1 << MAGICFLAG_UNSAFE,
+		MAGICMASK_AINF          = 1 << MAGICFLAG_AINF,
 		// @formatter:on
 	};
 
@@ -354,6 +356,12 @@ struct context_t {
 		if (flags & MAGICMASK_UNSAFE) {
 			::strcpy(pBuffer, "UNSAFE");
 			flags &= ~MAGICMASK_UNSAFE;
+		}
+		if (flags)
+			::strcpy(pBuffer, "p");
+		if (flags & MAGICMASK_AINF) {
+			::strcpy(pBuffer, "AINF");
+			flags &= ~MAGICMASK_AINF;
 		}
 
 		return pBuffer;
