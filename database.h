@@ -1563,7 +1563,7 @@ struct database_t {
 	 * WARNING: It turns out that add-if-not-found works partially.
 	 *          detection for found is only performed for tid=0.
 	 *          If an imprint is added for a signature with a different tid, that is not detected.
-	 *          dd-if-not-found is super fast in situations like joining lists but has the side effect of creating false positives
+	 *          dd-if-not-found is ultra-fast in situations like joining lists but has the side effect of creating false positives
 	 *
 	 * @param {tinyTree_t} pTree - Tree containg expression
 	 * @param {footprint_t[]} pFwdEvaluator - Evaluator with forward transforms (modified)

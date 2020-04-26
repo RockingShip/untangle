@@ -85,10 +85,12 @@
  *
  * `--text=3`   Selected and sorted signatures that are written to the output database.
  *              NOTE: same format as `--text=1`
+ *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
  *              <name> <numPlaceholder> <numEndpoint> <numBackRef>
  *
  * `--text=4`   Selected and sorted signatures that are written to the output database
+ *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
  *              <sid> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
  *
@@ -217,6 +219,8 @@ struct gensignatureContext_t : callable_t {
 	unsigned opt_maxSignature;
 	/// @var {number} index/data ratio
 	double opt_ratio;
+	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
+	unsigned opt_saveIndex;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 	/// @var {number} sort signatures before saving
@@ -268,6 +272,7 @@ struct gensignatureContext_t : callable_t {
 		opt_maxImprint = 0;
 		opt_maxSignature = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
+		opt_saveIndex = 1;
 		opt_signatureIndexSize = 0;
 		opt_sort = 1;
 		opt_text = 0;
@@ -895,6 +900,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --[no-]sort                     Sort signatures before saving [default=%s]\n", app.opt_sort ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
@@ -944,10 +950,12 @@ int main(int argc, char *const *argv) {
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
+			LO_NOSAVEINDEX,
 			LO_NOSORT,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
+			LO_SAVEINDEX,
 			LO_SIGNATUREINDEXSIZE,
 			LO_SORT,
 			LO_TASK,
@@ -978,11 +986,13 @@ int main(int argc, char *const *argv) {
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
+			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
 			{"no-sort",            0, 0, LO_NOSORT},
 			{"paranoid",           0, 0, LO_PARANOID},
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
+			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
 			{"sort",               0, 0, LO_SORT},
 			{"task",               1, 0, LO_TASK},
@@ -1321,9 +1331,9 @@ int main(int argc, char *const *argv) {
 	 */
 
 	// flag that signatures to be collected or sorted
-	unsigned xollectSignatures = (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4);
+	unsigned collectSignatures = (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4);
 	// primary sections
-	unsigned primarySections = xollectSignatures ? database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_IMPRINT : 0;
+	unsigned primarySections = collectSignatures ? database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_IMPRINT : 0;
 	// sections that need rebuilding
 	unsigned rebuildSections = 0;
 	// sections to inherit from original database. Can also be interpreted as ReadOnly.
@@ -1590,7 +1600,7 @@ int main(int argc, char *const *argv) {
 	 * ... and rebuild imprints
 	 */
 
-	if (primarySections && app.opt_sort && app.arg_outputDatabase)
+	if (primarySections && app.opt_sort && app.arg_outputDatabase && app.opt_saveIndex)
 		app.rebuildImprints();
 
 	/*
@@ -1598,6 +1608,14 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (app.arg_outputDatabase) {
+		// strip indices
+		if (!app.opt_saveIndex) {
+			store.signatureIndexSize = 0;
+			store.hintIndexSize = 0;
+			store.imprintIndexSize = 0;
+			store.numImprint = 0;
+		}
+
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);

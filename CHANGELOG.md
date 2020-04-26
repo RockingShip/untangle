@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-26 22:58:23 Added `gensignature --no-saveindex`.
 2020-04-25 23:00:00 Promoted `--ainf` to system flag.
 2020-04-25 23:00:00 Added `gensignature --ainf`.
 2020-04-24 22:09:32 Added `gensignature --no-sort --truncate`.
