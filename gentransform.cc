@@ -750,7 +750,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_FORCE:
 				app.opt_force++;
@@ -759,16 +759,16 @@ int main(int argc, char *const *argv) {
 				usage(argv, true);
 				exit(0);
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_TEXT:
 				app.opt_text++;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':

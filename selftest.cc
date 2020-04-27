@@ -1614,16 +1614,16 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
 				usage(argv, true);
 				exit(0);
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_METRICS:
-				app.opt_metrics = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_metrics + 1;
+				app.opt_metrics = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_metrics + 1;
 				break;
 			case LO_NOPARANOID:
 				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
@@ -1632,19 +1632,19 @@ int main(int argc, char *const *argv) {
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
 				break;
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime((unsigned) strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_TEXT:
-				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
+				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -1666,7 +1666,7 @@ int main(int argc, char *const *argv) {
 		char *endptr;
 
 		errno = 0; // To distinguish success/failure after call
-		app.arg_numNodes = (unsigned) strtoul(argv[optind++], &endptr, 0);
+		app.arg_numNodes = ::strtoul(argv[optind++], &endptr, 0);
 
 		// strip trailing spaces
 		while (*endptr && isspace(*endptr))

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-27 14:59:18 Scientific notation for program options.
 2020-04-26 22:58:23 Multi-format `gensignature --load=`.
 2020-04-26 22:58:23 Added `gensignature --saveinterleave=`.
 2020-04-26 23:01:18 Better detection rebuild index `gensignature`.

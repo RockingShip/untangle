@@ -531,7 +531,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_FORCE:
 				app.opt_force++;
@@ -543,13 +543,13 @@ int main(int argc, char *const *argv) {
 				usage(argv, true);
 				exit(0);
 			case LO_HINTINDEXSIZE:
-				app.opt_hintIndexSize = ctx.nextPrime(strtoull(optarg, NULL, 0));
+				app.opt_hintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_LOAD:
 				app.opt_load = optarg;
 				break;
 			case LO_MAXHINT:
-				app.opt_maxHint = ctx.nextPrime(strtoull(optarg, NULL, 0));
+				app.opt_maxHint = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
@@ -570,7 +570,7 @@ int main(int argc, char *const *argv) {
 				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_SGE: {
 				const char *p;
@@ -632,16 +632,16 @@ int main(int argc, char *const *argv) {
 				ctx.opt_timer = 60; // set ticker to 1-minute interval.
 				break;
 			case LO_TEXT:
-				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
+				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_UNSAFE:
 				ctx.flags |= context_t::MAGICMASK_UNSAFE;
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':

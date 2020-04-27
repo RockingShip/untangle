@@ -94,7 +94,7 @@ struct slookupContext_t {
 
 		char *endptr;
 		errno = 0;
-		sid = strtoul(pName, &endptr, 0);
+		sid = ::strtoul(pName, &endptr, 0);
 		if (*pName != 0 && *endptr == 0) {
 			/*
 			 * numeric id
@@ -293,7 +293,7 @@ int main(int argc, char *const *argv) {
 				app.opt_database = optarg;
 				break;
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
 				usage(argv, true);
@@ -314,13 +314,13 @@ int main(int argc, char *const *argv) {
 				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':

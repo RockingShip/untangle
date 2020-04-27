@@ -1077,7 +1077,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_AINF:
 				ctx.flags |= context_t::MAGICMASK_AINF;
@@ -1092,10 +1092,10 @@ int main(int argc, char *const *argv) {
 				usage(argv, true);
 				exit(0);
 			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
+				app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_INTERLEAVE:
-				app.opt_interleave = (unsigned) strtoul(optarg, NULL, 0);
+				app.opt_interleave = ::strtoul(optarg, NULL, 0);
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
@@ -1103,10 +1103,10 @@ int main(int argc, char *const *argv) {
 				app.opt_load = optarg;
 				break;
 			case LO_MAXIMPRINT:
-				app.opt_maxImprint = ctx.nextPrime(strtoull(optarg, NULL, 0));
+				app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
 				break;
 			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = ctx.nextPrime(strtoull(optarg, NULL, 0));
+				app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
 				break;
 			case LO_NOAINF:
 				ctx.flags &= ~context_t::MAGICMASK_AINF;
@@ -1127,7 +1127,7 @@ int main(int argc, char *const *argv) {
 				app.opt_sort = 0;
 				break;
 			case LO_SAVEINTERLEAVE:
-				app.opt_saveInterleave = (unsigned) strtoul(optarg, NULL, 0);
+				app.opt_saveInterleave = ::strtoul(optarg, NULL, 0);
 				if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
 					ctx.fatal("--saveinterleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
@@ -1138,19 +1138,19 @@ int main(int argc, char *const *argv) {
 				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
 				break;
 			case LO_SAVEINDEX:
-				app.opt_saveIndex = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
 				break;
 			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
+				app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_SORT:
-				app.opt_sort = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_sort + 1;
+				app.opt_sort = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_sort + 1;
 				break;
 			case LO_TASK: {
 				if (::strcmp(optarg, "sge") == 0) {
@@ -1195,16 +1195,16 @@ int main(int argc, char *const *argv) {
 				break;
 			}
 			case LO_TEXT:
-				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
+				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_TRUNCATE:
-				app.opt_truncate = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
+				app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 			case LO_WINDOW: {
 				uint64_t m, n;
@@ -1241,7 +1241,7 @@ int main(int argc, char *const *argv) {
 		char *endptr;
 
 		errno = 0; // To distinguish success/failure after call
-		app.arg_numNodes = (unsigned) strtoul(argv[optind++], &endptr, 0);
+		app.arg_numNodes = ::strtoul(argv[optind++], &endptr, 0);
 
 		// strip trailing spaces
 		while (*endptr && isspace(*endptr))

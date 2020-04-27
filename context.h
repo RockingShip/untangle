@@ -285,12 +285,14 @@ struct context_t {
 	 * @param {uint64_t} n - number to test
 	 * @return {number} next highest prime, limited to 2^32-5
 	 */
-	unsigned nextPrime(uint64_t n) {
+	unsigned nextPrime(uint64_t d) {
 		// limit to highest possible
-		if (n >= 4294967291)
+		if (d >= 4294967291)
 			return 4294967291;
-		if (n < 3)
+		if (d < 3)
 			return 3;
+
+		uint64_t n = (uint64_t) d;
 
 		// If even then increment
 		if (~n & 1)
@@ -308,13 +310,13 @@ struct context_t {
 	 * @date 2020-04-21 14:41:24
 	 *
 	 * Raise number with given percent.
-	 * limit to largest possible prime
+	 * limit to largest possible unsigned prime
 	 *
 	 * @param {uint64_t} n - number to test
 	 * @param {number} percent - percent to increase with
 	 * @return {number} next highest prime, limited to 2^32-5
 	 */
-	unsigned raisePercent(uint64_t n, unsigned percent) {
+	unsigned raisePercent(double n, unsigned percent) {
 
 		if (n >= 4294967291)
 			return 4294967291; // largest possible prime
@@ -322,9 +324,26 @@ struct context_t {
 			return 4294967291; // overflow
 
 		// increase with given percent
-		return n + (n / 100 * percent);
+		return (unsigned) (n + (n / 100 * percent));
 	}
 
+	/**
+	 * @date 2020-04-27 12:04:08
+	 *
+	 * Double to unsigned and limit to largest signed prime - 1. (2147483647-1)
+	 * This is to allow a prime index size which is larger yet still 31 bits.
+	 * 31 bits is limit because of IBIT.
+	 *
+	 * @param {uint64_t} n - number to test
+	 * @return {number}
+	 */
+	unsigned dToMax(double d) {
+
+		if (d >= 2147483646)
+			return 2147483646; // largest signed prime - 1
+
+		return (unsigned) d;
+	}
 	/**
 	 * @date 2020-04-21 10:42:11
 	 *

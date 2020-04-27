@@ -80,7 +80,7 @@ struct tlookupContext_t {
 		unsigned tid;
 
 		errno = 0; // To distinguish success/failure after call
-		tid = strtol(pArg, &endptr, 0);
+		tid = ::strtoul(pArg, &endptr, 0);
 
 		if (errno != 0) {
 			// in case of error point to start of string
@@ -288,10 +288,10 @@ int main(int argc, char *const *argv) {
 				usage(argv, true);
 				exit(0);
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':

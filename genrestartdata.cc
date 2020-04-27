@@ -539,7 +539,7 @@ int main(int argc, char *const *argv) {
 
 		switch (c) {
 			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_HELP:
 				usage(argv, true);
@@ -557,7 +557,7 @@ int main(int argc, char *const *argv) {
 				ctx.flags |= context_t::MAGICMASK_PURE;
 				break;
 			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
 			case LO_SGE: {
 				const char *p;
@@ -598,10 +598,10 @@ int main(int argc, char *const *argv) {
 				}
 				break;
 			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 0);
+				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 				break;
 			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
 				break;
 
 			case '?':
@@ -618,7 +618,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (argc - optind >= 1)
-		app.arg_numNodes = (unsigned) strtoul(argv[optind++], NULL, 0);
+		app.arg_numNodes = ::strtoul(argv[optind++], NULL, 0);
 
 	if (app.opt_taskLast != 0) {
 		if (app.arg_numNodes == 0) {
