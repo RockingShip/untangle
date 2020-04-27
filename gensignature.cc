@@ -64,7 +64,7 @@
  *              Can be used for the `--load=<file>` option.
  *              Output can be converted to other text modes by `"./gensignature <input.db> <numNode> [<output.db>]--load=<inputList> --no-generate --text=<newMode> '>' <outputList>
  *
- *              <name> <numPlaceholder> <numEndpoint> <numBackRef>
+ *              <name>
  *
  * `--test=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
  *
@@ -87,7 +87,7 @@
  *              NOTE: same format as `--text=1`
  *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
- *              <name> <numPlaceholder> <numEndpoint> <numBackRef>
+ *              <name>
  *
  * `--text=4`   Selected and sorted signatures that are written to the output database
  *              NOTE: requires sorting and will copy (not inherit) imprint section
@@ -406,7 +406,7 @@ struct gensignatureContext_t : callable_t {
 		// add to datastore if not found
 		if (sid == 0) {
 			if (opt_text == 1)
-				printf("%s\t%u\t%u\t%u\n", pNameR, numPlaceholder, numEndpoint, numBackRef);
+				printf("%s\n", pNameR);
 
 			// only add if signatures are writable
 			if (pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE) {
@@ -488,7 +488,7 @@ struct gensignatureContext_t : callable_t {
 		 */
 		if (cmp == '>' || cmp == '+') {
 			if (opt_text == 1)
-				printf("%s\t%u\t%u\t%u\n", pNameR, numPlaceholder, numEndpoint, numBackRef);
+				printf("%s\n", pNameR);
 
 			// only update if signatures are writable
 			if (~pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE)
@@ -690,7 +690,37 @@ struct gensignatureContext_t : callable_t {
 		this->truncated = 0;
 
 		// <cid> <sid> <candidateName> <cmp> <size> <numPlaceholder> <numEndpoint> <numBackRef>
-		while (fscanf(f, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef) == 4) {
+		for (;;) {
+			static char line[512];
+
+			if (::fgets(line, sizeof(line), f) == 0)
+				break; // end-of-input
+
+			name[0] = 0;
+			int ret = ::sscanf(line, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef);
+
+			// calculate values
+			unsigned newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
+			unsigned beenThere = 0;
+			for (const char *p = name; *p; p++) {
+				if (::islower(*p)) {
+					if (~beenThere & (1 << (*p - 'a'))) {
+						newPlaceholder++;
+						beenThere |= 1 << (*p - 'a');
+					}
+					newEndpoint++;
+				} else if (::isdigit(*p) && *p != '0') {
+					newBackRef++;
+				}
+			}
+
+			if (ret < 1) {
+				ctx.fatal("line %lu is empty\n", ctx.progress);
+			}
+			if (ret == 4) {
+				if (numPlaceholder != newPlaceholder || numEndpoint != newEndpoint || numBackRef != newBackRef)
+					ctx.fatal("line %lu has incorrect values\n", ctx.progress);
+			}
 
 			// test if line is within progress range
 			// NOTE: first line has `progress==0`
@@ -720,7 +750,7 @@ struct gensignatureContext_t : callable_t {
 			 * call `foundTreeSignature()`
 			 */
 
-			if (!foundTreeSignature(generator, name, numPlaceholder, numEndpoint, numBackRef))
+			if (!foundTreeSignature(generator, name, newPlaceholder, newEndpoint, newBackRef))
 				break;
 
 			ctx.progress++;
@@ -743,7 +773,7 @@ struct gensignatureContext_t : callable_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read %ld candidates. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f\n",
 			        ctx.timeAsString(),
-			        ctx.progress++,
+			        ctx.progress,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash);
@@ -1623,7 +1653,7 @@ int main(int argc, char *const *argv) {
 	if (app.opt_text == 3) {
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
-			printf("%s\t%u\t%u\t%u\n", pSignature->name, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+			printf("%s\n", pSignature->name);
 		}
 	}
 	if (app.opt_text == 4) {
