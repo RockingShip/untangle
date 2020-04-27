@@ -221,6 +221,8 @@ struct gensignatureContext_t : callable_t {
 	double opt_ratio;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
 	unsigned opt_saveIndex;
+	/// @var {number} save imprints with given interleave
+	unsigned opt_saveInterleave;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 	/// @var {number} sort signatures before saving
@@ -273,6 +275,7 @@ struct gensignatureContext_t : callable_t {
 		opt_maxSignature = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_saveIndex = 1;
+		opt_saveInterleave = 0;
 		opt_signatureIndexSize = 0;
 		opt_sort = 1;
 		opt_text = 0;
@@ -618,6 +621,17 @@ struct gensignatureContext_t : callable_t {
 
 			tree.decodeFast(pSignature->name);
 
+			/*
+			 * @date 2020-04-27 12:32:06
+			 *
+			 * Imprints are being rebuild from stored signatures.
+			 * These signatures are unique and therefore safe to use add-if-not-found
+			 * Keep old code for historics
+			 */
+#if 1
+			unsigned ret = pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+			assert (ret == 0);
+#else
 			unsigned sid, tid;
 
 			if (ctx.flags & context_t::MAGICMASK_AINF) {
@@ -628,6 +642,7 @@ struct gensignatureContext_t : callable_t {
 				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
 					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
 			}
+#endif
 
 			ctx.progress++;
 		}
@@ -901,6 +916,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-q --quiet                         Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --saveinterleave=<number>       Save with interleave [default=%u]\n", app.opt_saveInterleave);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --[no-]sort                     Sort signatures before saving [default=%s]\n", app.opt_sort ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
@@ -951,6 +967,7 @@ int main(int argc, char *const *argv) {
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
+			LO_SAVEINTERLEAVE,
 			LO_NOSORT,
 			LO_PARANOID,
 			LO_PURE,
@@ -993,6 +1010,7 @@ int main(int argc, char *const *argv) {
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
 			{"saveindex",          0, 0, LO_SAVEINDEX},
+			{"saveinterleave",     1, 0, LO_SAVEINTERLEAVE},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
 			{"sort",               0, 0, LO_SORT},
 			{"task",               1, 0, LO_TASK},
@@ -1072,8 +1090,16 @@ int main(int argc, char *const *argv) {
 			case LO_NOPURE:
 				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
+			case LO_NOSAVEINDEX:
+				app.opt_saveIndex = 0;
+				break;
 			case LO_NOSORT:
 				app.opt_sort = 0;
+				break;
+			case LO_SAVEINTERLEAVE:
+				app.opt_saveInterleave = (unsigned) strtoul(optarg, NULL, 0);
+				if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
+					ctx.fatal("--saveinterleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 				break;
 			case LO_PARANOID:
 				ctx.flags |= context_t::MAGICMASK_PARANOID;
@@ -1086,6 +1112,15 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
+				break;
+			case LO_SAVEINDEX:
+				app.opt_saveIndex = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+				break;
+			case LO_SIGNATUREINDEXSIZE:
+				app.opt_signatureIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
+				break;
+			case LO_SORT:
+				app.opt_sort = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_sort + 1;
 				break;
 			case LO_TASK: {
 				if (::strcmp(optarg, "sge") == 0) {
@@ -1129,12 +1164,6 @@ int main(int argc, char *const *argv) {
 
 				break;
 			}
-			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime(strtoul(optarg, NULL, 0));
-				break;
-			case LO_SORT:
-				app.opt_sort = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_sort + 1;
-				break;
 			case LO_TEXT:
 				app.opt_text = optarg ? (unsigned) strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
@@ -1418,6 +1447,8 @@ int main(int argc, char *const *argv) {
 		ctx.fatal("--maxsignature=%u exceeds --signatureIndexSize=%u\n", store.maxSignature, store.signatureIndexSize);
 	if (store.maxImprint  && store.maxImprint > store.imprintIndexSize + 1)
 		ctx.fatal("--maximprint=%u exceeds --imprintIndexSize=%u\n", store.maxImprint, store.imprintIndexSize);
+	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
+		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
 	/*
 	 * section inheriting
@@ -1606,21 +1637,29 @@ int main(int argc, char *const *argv) {
 	 * ... and rebuild imprints
 	 */
 
-	if (primarySections && app.opt_sort && app.arg_outputDatabase && app.opt_saveIndex)
-		app.rebuildImprints();
-
-	/*
-	 * Save the database
-	 */
-
 	if (app.arg_outputDatabase) {
-		// strip indices
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
 			store.hintIndexSize = 0;
 			store.imprintIndexSize = 0;
 			store.numImprint = 0;
+		} else if (primarySections && app.opt_sort) {
+			// adjust interleave for saving
+			if (app.opt_saveInterleave) {
+				// find matching `interleaveStep`
+				const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave);
+				assert(pMetrics);
+
+				store.interleave = pMetrics->numStored;
+				store.interleaveStep = pMetrics->interleaveStep;
+			}
+
+			app.rebuildImprints();
 		}
+
+		/*
+		 * Save the database
+		 */
 
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
