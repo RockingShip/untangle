@@ -283,9 +283,21 @@ Alternatively:
     ./gensignature split4.db 5 --pure --load=split3b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3d.lst
     ./gensignature split4.db 5 --pure --load=split5c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5d.lst
     ./gensignature split4.db 5 --pure --load=split6c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6d.lst
-    # wordcount `4019912+3080922+xx+2362714+xx+xx=17150982`
+    # wordcount `4019912+3080922+2480036+2362714+xx+xx=17150982`
+    cp split5.db /dev/null # load into disk-cache
+    ./gensignature split5.db 5 --pure --load=split1c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split1e.lst
+    ./gensignature split5.db 5 --pure --load=split2c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split2e.lst
+    ./gensignature split5.db 5 --pure --load=split3c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3e.lst
+    ./gensignature split5.db 5 --pure --load=split4b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split4e.lst
+    ./gensignature split5.db 5 --pure --load=split6c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split6e.lst
+    # wordcount `xx+xx+xx+xx+xx+xx=17150982`
+    cp split6.db /dev/null # load into disk-cache
+    ./gensignature split6.db 5 --pure --load=split1c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split1f.lst
+    ./gensignature split6.db 5 --pure --load=split2c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split2f.lst
+    ./gensignature split6.db 5 --pure --load=split3c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split3f.lst
+    ./gensignature split6.db 5 --pure --load=split4c.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split4f.lst
+    ./gensignature split6.db 5 --pure --load=split5b.lst --no-generate --no-sort --maxsignature=42862728 --maximprint=500000000 --text=1 >split5f.lst
 
- 
 ```
 
 
