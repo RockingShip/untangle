@@ -37,6 +37,9 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdint.h>
+#include <stdio.h>
+
 /*
  * @date 2020-03-25 15:06:54
  */
@@ -429,11 +432,12 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 0, 3, 81406,         79835,     5666,     29721,    0},
 	{9, 1, 4, 2969462,       2777493,   96363,    801917,   0},
 	{9, 0, 4, 29990974,      28304991,  791647,   5959653,  0},
-	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours. numMember using 4n9 signature space.
-	{9, 1, 5, 913288021,     809357847, 42862728, 56349342, 0},
+	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
+	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 1}, // NOTE: this is the extension to 4n9
+	{9, 1, 5, 913288021,     809357847, 15490349, 0,        1}, // NOTE: this is full 5n9-pure (placed second and invisible)
 	// below only intended for members
-	{9, 0, 5, 17927026892,   0,         0,        0,        0},
-	{9, 1, 6, 410335296888,  0,         0,        0,        0}, // numProgress takes about 60 minutes
+	{9, 0, 5, 17927026892,   0,         0,        0,        1},
+	{9, 1, 6, 410335296888,  0,         0,        0,        1}, // numProgress takes about 60 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        0,        1}, // from historic metrics
 	//
 	{0}
