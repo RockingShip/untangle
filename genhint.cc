@@ -154,15 +154,26 @@ struct genhintContext_t : dbtool_t {
 
 		// <name> <hint0> <hint1> ...
 		for (;;) {
-			::memset(&hint, 0, sizeof(hint));
+			static char line[512];
 
-			if (fscanf(f, "%s %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
-			           name,
-			           &hint.numStored[0], &hint.numStored[1], &hint.numStored[2], &hint.numStored[3],
-			           &hint.numStored[4], &hint.numStored[5], &hint.numStored[6], &hint.numStored[7],
-			           &hint.numStored[8], &hint.numStored[9], &hint.numStored[10], &hint.numStored[11],
-			           &hint.numStored[12], &hint.numStored[13], &hint.numStored[14], &hint.numStored[15]) != 17)
-				break;
+			if (::fgets(line, sizeof(line), f) == 0)
+				break; // end-of-input
+
+			::memset(&hint, 0, sizeof(hint));
+			name[0] = 0;
+
+			int ret = ::fscanf(f, "%s %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
+			                   name,
+			                   &hint.numStored[0], &hint.numStored[1], &hint.numStored[2], &hint.numStored[3],
+			                   &hint.numStored[4], &hint.numStored[5], &hint.numStored[6], &hint.numStored[7],
+			                   &hint.numStored[8], &hint.numStored[9], &hint.numStored[10], &hint.numStored[11],
+			                   &hint.numStored[12], &hint.numStored[13], &hint.numStored[14], &hint.numStored[15]);
+
+			if (ret < 1) {
+				ctx.fatal("line %lu is empty\n", ctx.progress);
+			}
+			if (ret != 17)
+				ctx.fatal("line %lu has incorrect values\n", ctx.progress);
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
