@@ -1305,9 +1305,9 @@ int main(int argc, char *const *argv) {
 	if (ctx.flags & context_t::MAGICMASK_AINF && ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
-		/*
-		 * Open input and create output database
-		 */
+	/*
+	 * Open input and create output database
+	 */
 
 	// Open input
 	database_t db(ctx);

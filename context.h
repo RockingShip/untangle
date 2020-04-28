@@ -289,6 +289,8 @@ struct context_t {
 		// limit to highest possible
 		if (d >= 4294967291)
 			return 4294967291;
+		if (d == 0)
+			return 0; // zero ois zero
 		if (d < 3)
 			return 3;
 

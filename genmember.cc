@@ -1160,6 +1160,7 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.progress != ctx.progressHi && this->opt_windowLo == 0 && this->opt_windowHi == 0) {
+			// can only test if windowing is disabled
 			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
 			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
 		}
