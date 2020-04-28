@@ -1103,35 +1103,23 @@ struct genmemberContext_t : dbtool_t {
 		 * Apply window/task setting on generator
 		 */
 
-		// get metrics
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
-		assert(pMetrics);
-
-		// apply settings for `--task`
-		if (this->opt_taskLast) {
-			// split progress into chunks
-			uint64_t taskSize = pMetrics->numProgress / this->opt_taskLast;
-			if (taskSize == 0)
-				taskSize = 1;
-			generator.windowLo = taskSize * (this->opt_taskId - 1);
-			generator.windowHi = taskSize * this->opt_taskId;
-
-			// limits
-			if (opt_taskId == opt_taskLast || generator.windowHi > pMetrics->numProgress)
-				generator.windowHi = pMetrics->numProgress;
+		if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+			if (this->opt_taskId || this->opt_taskLast) {
+				if (this->opt_windowHi)
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%lu-%lu\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_windowLo, this->opt_windowHi);
+				else
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%lu-last\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_windowLo);
+			} else if (this->opt_windowLo || this->opt_windowHi) {
+				if (this->opt_windowHi)
+					fprintf(stderr, "[%s] INFO: window=%lu-%lu\n", ctx.timeAsString(), this->opt_windowLo, this->opt_windowHi);
+				else
+					fprintf(stderr, "[%s] INFO: window=%lu-last\n", ctx.timeAsString(), this->opt_windowLo);
+			}
 		}
 
 		// apply settings for `--window`
-		if (this->opt_windowLo)
-			generator.windowLo = this->opt_windowLo;
-		if (this->opt_windowHi)
-			generator.windowHi = this->opt_windowHi;
-
-		// limit window
-		if (this->opt_windowLo != 0 && this->opt_windowHi == 0)
-			generator.windowHi = pMetrics->numProgress;
-		if (this->opt_windowHi > pMetrics->numProgress)
-			generator.windowHi = pMetrics->numProgress;
+		generator.windowLo = this->opt_windowLo;
+		generator.windowHi = this->opt_windowHi;
 
 		// apply restart data for > `4n9`
 		unsigned ofs = 0;
@@ -1140,22 +1128,13 @@ struct genmemberContext_t : dbtool_t {
 		if (ofs)
 			generator.pRestartData = restartData + ofs;
 
-		// show window
-		if (generator.windowLo || generator.windowHi) {
-			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] Task window: %lu-%lu\n", ctx.timeAsString(), generator.windowLo, generator.windowHi);
-		}
-
-		// ticker needs `windowHi`
-		if (generator.windowHi == 0)
-			generator.windowHi = pMetrics->numProgress;
-
-		/*
-		 * create generator and candidate members
-		 */
-
 		// reset progress
-		ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+		if (generator.windowHi) {
+			ctx.setupSpeed(generator.windowHi);
+		} else {
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
+			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
+		}
 		ctx.tick = 0;
 
 		/*

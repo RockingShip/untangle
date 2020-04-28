@@ -227,17 +227,20 @@ struct genhintContext_t : dbtool_t {
 		// enable versioned memory or imprint index
 		pStore->enableVersioned();
 
-		if (this->opt_sidLo < 1)
-			this->opt_sidLo = 1;
-		if (this->opt_sidHi == 0)
-			this->opt_sidHi = pStore->numSignature;
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
-			if (this->opt_sidLo || this->opt_sidHi) {
-				if (this->opt_taskLast)
-					fprintf(stderr, "[%s] Window: task=%u,%u sid=%u-%u\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_sidLo, this->opt_sidHi);
+		/*
+		 * Apply sid/task setting on generator
+		 */
+		if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+			if (this->opt_taskId || this->opt_taskLast) {
+				if (this->opt_sidHi)
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%u-%u\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_sidLo, this->opt_sidHi);
 				else
-					fprintf(stderr, "[%s] Window: Sid window: %u-%u\n", ctx.timeAsString(), this->opt_sidLo, this->opt_sidHi);
+					fprintf(stderr, "[%s] INFO: task=%u,%u window=%u-last\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_sidLo);
+			} else if (this->opt_sidLo || this->opt_sidHi) {
+				if (this->opt_sidHi)
+					fprintf(stderr, "[%s] INFO: window=%u-%u\n", ctx.timeAsString(), this->opt_sidLo, this->opt_sidHi);
+				else
+					fprintf(stderr, "[%s] INFO: window=%u-last\n", ctx.timeAsString(), this->opt_sidLo);
 			}
 		}
 
@@ -246,6 +249,7 @@ struct genhintContext_t : dbtool_t {
 		ctx.tick = 0;
 
 		// create imprints for signature groups
+		ctx.progress++; // skip reserved entry;
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 
 			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi))
@@ -266,11 +270,21 @@ struct genhintContext_t : dbtool_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %u(%7d/s) %.5f%% eta=%d:%02d:%02d",
-					        ctx.timeAsString(), iSid, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+					/*
+					 * @date 2020-04-23 17:26:04
+					 *
+					 *   ctx.progress is candidateId
+					 *   ctx.progressHi is ticker upper limit
+					 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
+					 */
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numHint=%u(%.0f%%) | hash=%.3f %s",
+					        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
+					        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+					        (double) ctx.cntCompare / ctx.cntHash, pStore->signatures[iSid].name);
 				}
 
 				ctx.tick = 0;
+				ctx.progress++;
 			}
 
 			signature_t *pSignature = pStore->signatures + iSid;
@@ -282,13 +296,6 @@ struct genhintContext_t : dbtool_t {
 				printf("%s", pSignature->name);
 
 			for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
-
-#if 0
-				// Writing imprints with lower interleave settings is fast and makes the data complete
-				if (pInterleave->noauto)
-					continue;
-#endif
-
 				// prepare database
 				pStore->InvalidateVersioned();
 				pStore->numImprint = 1; // skip reserved first entry
@@ -402,8 +409,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                    Say more\n");
-		fprintf(stderr, "\t   --sge                      Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
+		fprintf(stderr, "\t   --task=sge                 Get sid task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
@@ -445,7 +452,6 @@ int main(int argc, char *const *argv) {
 			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
-			LO_SGE,
 			LO_SID,
 			LO_TASK,
 			LO_TEXT,
@@ -474,7 +480,6 @@ int main(int argc, char *const *argv) {
 			{"no-pure",       0, 0, LO_NOPURE},
 			{"no-unsafe",     0, 0, LO_NOUNSAFE},
 			{"quiet",         2, 0, LO_QUIET},
-			{"sge",           0, 0, LO_SGE},
 			{"sid",           1, 0, LO_SID},
 			{"task",          1, 0, LO_TASK},
 			{"text",          2, 0, LO_TEXT},
@@ -550,30 +555,6 @@ int main(int argc, char *const *argv) {
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 				break;
-			case LO_SGE: {
-				const char *p;
-
-				p = getenv("SGE_TASK_ID");
-				app.opt_taskId = p ? atoi(p) : 0;
-				if (app.opt_taskId < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-					exit(0);
-				}
-
-				p = getenv("SGE_TASK_LAST");
-				app.opt_taskLast = p ? atoi(p) : 0;
-				if (app.opt_taskLast < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-					exit(0);
-				}
-
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "task id exceeds last\n");
-					exit(1);
-				}
-
-				break;
-			}
 			case LO_SID: {
 				unsigned m, n;
 
@@ -594,21 +575,48 @@ int main(int argc, char *const *argv) {
 				}
 				break;
 			}
-			case LO_TASK:
-				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-					usage(argv, true);
-					exit(1);
+			case LO_TASK: {
+				if (::strcmp(optarg, "sge") == 0) {
+					const char *p;
+
+					p = getenv("SGE_TASK_ID");
+					app.opt_taskId = p ? atoi(p) : 0;
+					if (app.opt_taskId < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+						exit(0);
+					}
+
+					p = getenv("SGE_TASK_LAST");
+					app.opt_taskLast = p ? atoi(p) : 0;
+					if (app.opt_taskLast < 1) {
+						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+						exit(0);
+					}
+
+					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
+						exit(1);
+					}
+
+					// set ticker interval to 60 seconds
+					ctx.opt_timer = 60;
+				} else {
+					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+						usage(argv, true);
+						exit(1);
+					}
+					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+						fprintf(stderr, "Task id/last must be non-zero\n");
+						exit(1);
+					}
+					if (app.opt_taskId > app.opt_taskLast) {
+						fprintf(stderr, "Task id exceeds last\n");
+						exit(1);
+					}
 				}
-				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-					fprintf(stderr, "--task id/last must be non-zero\n");
-					exit(1);
-				}
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "--task id exceeds last\n");
-					exit(1);
-				}
-				ctx.opt_timer = 60; // set ticker to 1-minute interval.
+
 				break;
+			}
 			case LO_TEXT:
 				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
 				break;
@@ -698,7 +706,7 @@ int main(int argc, char *const *argv) {
 	/*
 	 * apply settings for `--task`
 	 */
-	if (app.opt_taskLast) {
+	if (app.opt_taskId || app.opt_taskLast) {
 		// split progress into chunks
 		uint64_t taskSize = db.numSignature / app.opt_taskLast;
 		if (taskSize == 0)
@@ -708,7 +716,7 @@ int main(int argc, char *const *argv) {
 		app.opt_sidHi = taskSize * app.opt_taskId;
 
 		if (app.opt_taskId == app.opt_taskLast)
-			app.opt_sidHi = db.numSignature;
+			app.opt_sidHi = 0;
 	}
 
 #if defined(ENABLE_JANSSON)
