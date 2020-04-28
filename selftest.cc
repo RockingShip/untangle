@@ -37,11 +37,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
-#include "tinytree.h"
 #include "database.h"
+#include "dbtool.h"
 #include "generator.h"
-#include "restartdata.h"
 #include "metrics.h"
+#include "restartdata.h"
+#include "tinytree.h"
 
 #include "config.h"
 
@@ -52,14 +53,12 @@
  *
  * @typedef {object}
  */
-struct selftestContext_t : callable_t {
+struct selftestContext_t : dbtool_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
 
-	/// @var {context_t} I/O context
-	context_t &ctx;
 	/// @var {number} - THE generator
 	generatorTree_t generator;
 
@@ -67,18 +66,10 @@ struct selftestContext_t : callable_t {
 	const char *arg_inputDatabase;
 	/// @var {number} Tree size in nodes to be generated for this invocation;
 	unsigned arg_numNodes;
-	/// @var {number} Maximum number of imprints to be stored database
-	unsigned opt_imprintIndexSize;
-	/// @var {number} interleave for associative imprint index
-	unsigned opt_maxImprint;
-	/// @var {number} Maximum number of signatures to be stored database
-	unsigned opt_maxSignature;
 	/// @var {number} Collect metrics intended for "metrics.h"
 	unsigned opt_metrics;
 	/// @var {number} index/data ratio
 	double opt_ratio;
-	/// @var {number} size of signature index WARNING: must be prime
-	unsigned opt_signatureIndexSize;
 	/// @var {number} textual output instead of binary database
 	unsigned opt_text;
 
@@ -95,11 +86,9 @@ struct selftestContext_t : callable_t {
 	/**
 	 * Constructor
 	 */
-	selftestContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
+	selftestContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		arg_inputDatabase = NULL;
 		arg_numNodes = 0;
-		opt_maxImprint = 0;
-		opt_maxSignature = 0;
 		opt_metrics = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_text = 0;

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-04-28 00:11:00 Added `dbtool_t` and relocated all related code to it.
 2020-04-28 00:07:13 Enabled copy-on-write with `mmap()`.
 2020-04-27 14:59:18 Scientific notation for program options.
 2020-04-26 22:58:23 Multi-format `gensignature --load=`.

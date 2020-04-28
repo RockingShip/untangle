@@ -52,10 +52,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
-#include "tinytree.h"
 #include "database.h"
-#include "generator.h"
+#include "dbtool.h"
 #include "metrics.h"
+#include "tinytree.h"
 
 /**
  * @date 2020-04-18 21:21:22
@@ -65,14 +65,11 @@
  *
  * @typedef {object}
  */
-struct genhintContext_t : callable_t {
+struct genhintContext_t : dbtool_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
-
-	/// @var {context_t} I/O context
-	context_t &ctx;
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
@@ -82,18 +79,8 @@ struct genhintContext_t : callable_t {
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
-	/// @var {number} size of hint index WARNING: must be prime
-	unsigned opt_hintIndexSize;
-	/// @var {number} size of imprint index WARNING: must be prime
-	unsigned opt_imprintIndexSize;
 	/// @var {string} name of file containing interleave hints
 	const char *opt_load;
-	/// @var {number} Maximum number of hints to be stored database
-	unsigned opt_maxHint;
-	/// @var {number} Maximum number of imprints to be stored database
-	unsigned opt_maxImprint;
-	/// @var {number} index/data ratio
-	double opt_ratio;
 	/// @var {number} Sid range upper bound
 	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -115,18 +102,13 @@ struct genhintContext_t : callable_t {
 	/**
 	 * Constructor
 	 */
-	genhintContext_t(context_t &ctx) : ctx(ctx) {
+	genhintContext_t(context_t &ctx) : dbtool_t(ctx) {
 		// arguments and options
 		opt_force = 0;
 		opt_generate = 1;
-		opt_imprintIndexSize = 0;
 		arg_inputDatabase = NULL;
-		opt_hintIndexSize = 0;
 		opt_load = NULL;
-		opt_maxHint = 0;
-		opt_maxImprint = 0;
 		arg_outputDatabase = NULL;
-		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_taskId = 0;
@@ -136,6 +118,8 @@ struct genhintContext_t : callable_t {
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
+
+		opt_maxHint = 255; // for 4n9 there are 250 hints
 	}
 
 	/**
@@ -344,12 +328,6 @@ struct genhintContext_t : callable_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Done\n", ctx.timeAsString());
-
-
-		if (this->opt_taskLast)
-			fprintf(stderr, "{\"done\":\"genhint\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", this->opt_taskId, this->opt_taskLast, this->opt_sidLo, this->opt_sidHi);
-		else
-			fprintf(stderr, "{\"done\":\"genhint\",\"sidLo\":%u,\"sidHi\":%u}\n", this->opt_sidLo, this->opt_sidHi);
 	}
 
 };
@@ -744,51 +722,29 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	/*
-	 * Set defaults
-	 */
-
-	// Signatures are always copied as they need modifiable `firstMember`
-	store.maxSignature = db.maxSignature;
-	store.signatureIndexSize = db.signatureIndexSize;
-
-	if (app.opt_maxHint == 0) {
-		store.maxHint = 255;
-	} else {
-		store.maxHint = app.opt_maxHint;
-	}
-
-	if (app.opt_hintIndexSize == 0)
-		store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
+	// which sections are primary goal and need to be writable to be collect or sort
+	if (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4)
+		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT;
 	else
-		store.hintIndexSize = app.opt_hintIndexSize;
+		app.primarySections = 0;
 
-	if (app.opt_maxImprint == 0) {
-		store.maxImprint = MAXTRANSFORM;
-	} else {
-		store.maxImprint = app.opt_maxImprint;
-	}
+	// assign sizes to output sections
+	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that do not occur
 
-	if (app.opt_imprintIndexSize == 0)
-		store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-	else
-		store.imprintIndexSize = app.opt_imprintIndexSize;
-
-	// create new sections
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: maxImprint=%u maxSignature=%u\n", ctx.timeAsString(), store.maxImprint, store.maxSignature);
-
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	// determine if sections are rebuild, inherited or copied (copy-on-write)
+	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
 	 */
 
+	// allocate evaluators
+	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(0);
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
 
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
@@ -799,56 +755,43 @@ int main(int argc, char *const *argv) {
 	}
 
 	// actual create
-	store.create(0);
+	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+		struct sysinfo info;
+		if (sysinfo(&info) != 0)
+			info.freeram = 0;
 
-	/*
-	 * Copy/inherit sections
-	 */
-
-	// all sections except signatures are always inherited
-	store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_TRANSFORM);
-#if 0
-	// todo: inherit imprints
-	if (db.numImprint)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_IMPRINT);
-#endif
-	if (db.numMember)
-		store.inheritSections(&db, app.arg_inputDatabase, database_t::ALLOCMASK_MEMBER);
-
-	// signatures are always modifiable
-	if (store.allocFlags & database_t::ALLOCMASK_SIGNATURE) {
-		// data
-		assert(store.maxSignature >= db.numSignature);
-		::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
-		store.numSignature = db.numSignature;
-		// index
-		assert (store.signatureIndexSize == db.signatureIndexSize);
-		::memcpy(store.signatureIndex, db.signatureIndex, db.signatureIndexSize * sizeof(*store.signatureIndex));
+		fprintf(stderr, "[%s] Allocated %lu memory. freeMemory=%lu.\n", ctx.timeAsString(), ctx.totalAllocated, info.freeram);
 	}
 
 	/*
-	 * initialise evaluators
+	 * Inherit/copy sections
 	 */
 
+	app.populateDatabaseSections(store, db);
+
+	// initialize evaluator
 	tinyTree_t tree(ctx);
 	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
 	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
-	 * Load members from file to increase chance signature groups become safe
+	 * Rebuild sections
 	 */
-	if (app.opt_load)
-		app.hintsFromFile();
 
+	assert(app.rebuildSections == 0 || (~app.rebuildSections & database_t::ALLOCMASK_IMPRINT));
+
+	if (app.rebuildSections)
+		store.rebuildIndices(app.rebuildSections);
 
 	/*
-	 * Fire up generator for new candidates
+	 * Where to look for new candidates
 	 */
 
+	if (app.opt_load)
+		app.hintsFromFile();
 	if (app.opt_generate)
 		app.hintsFromGenerator();
 
@@ -863,6 +806,13 @@ int main(int argc, char *const *argv) {
 
 		store.save(app.arg_outputDatabase);
 	}
+
+	if (app.opt_taskLast)
+		fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_sidLo, app.opt_sidHi);
+	else if (app.opt_sidLo || app.opt_sidHi)
+		fprintf(stderr, "{\"done\":\"%s\",\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_sidLo, app.opt_sidHi);
+	else
+		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 
 #if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {

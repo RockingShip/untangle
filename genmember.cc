@@ -155,11 +155,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
-#include "tinytree.h"
 #include "database.h"
+#include "dbtool.h"
 #include "generator.h"
-#include "restartdata.h"
 #include "metrics.h"
+#include "restartdata.h"
+#include "tinytree.h"
 
 #include "config.h"
 
@@ -175,14 +176,11 @@
  *
  * @typedef {object}
  */
-struct genmemberContext_t : callable_t {
+struct genmemberContext_t : dbtool_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
-
-	/// @var {context_t} I/O context
-	context_t &ctx;
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
@@ -194,26 +192,12 @@ struct genmemberContext_t : callable_t {
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
-	/// @var {number} size of imprint index WARNING: must be prime
-	unsigned opt_imprintIndexSize;
-	/// @var {number} interleave for associative imprint index
-	unsigned opt_interleave;
 	/// @var {string} name of file containing members
 	const char *opt_load;
-	/// @var {number} Maximum number of imprints to be stored database
-	unsigned opt_maxImprint;
-	/// @var {number} Maximum number of members to be stored database
-	unsigned opt_maxMember;
-	/// @var {number} size of member index WARNING: must be prime
-	unsigned opt_memberIndexSize;
-	/// @var {number} index/data ratio
-	double opt_ratio;
 	/// @var {number} Sid range upper bound
 	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
 	unsigned opt_sidLo;
-	/// @var {number} size of signature index WARNING: must be prime
-	unsigned opt_signatureIndexSize;
 	/// @var {number} task Id. First task=1
 	unsigned opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -247,25 +231,18 @@ struct genmemberContext_t : callable_t {
 	/**
 	 * Constructor
 	 */
-	genmemberContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
+	genmemberContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		// arguments and options
 		arg_inputDatabase = NULL;
 		arg_numNodes = 0;
 		arg_outputDatabase = NULL;
 		opt_force = 0;
 		opt_generate = 1;
-		opt_imprintIndexSize = 0;
-		opt_interleave = 0;
 		opt_taskId = 0;
 		opt_taskLast = 0;
 		opt_load = NULL;
-		opt_maxImprint = 0;
-		opt_maxMember = 0;
-		opt_memberIndexSize = 0;
-		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_sidHi = 0;
 		opt_sidLo = 0;
-		opt_signatureIndexSize = 0;
 		opt_text = 0;
 		opt_unsafe = 0;
 		opt_windowHi = 0;
@@ -1891,158 +1868,32 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	/*
-	 * @date 2020-04-21 19:59:47
-	 *
-	 * if (rebuildSection)
-	 *   rebuild();
-	 * else if (inheritSection)
-	 *   inherit();
-	 * else
-	 *   copy();
-	 */
-
-	// sections that need rebuilding
-	unsigned rebuildSections = 0;
-	// sections to inherit from original database. Can also be interpreted as ReadOnly.
-	unsigned inheritSections = database_t::ALLOCMASK_TRANSFORM;
-
-	// flag that members be collected or sorted
-	unsigned collectMembers = (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3);
-
-	/*
-	 * Allocate database section sizes
-	 */
+	// which sections are primary goal and need to be writable to be collect or sort
+	if (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3)
+		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_MEMBER;
+	else
+		app.primarySections = 0;
 
 	// input database will always have a minimal node size of 4.
 	unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
 
-	// interleave
-	{
-		if (app.opt_interleave)
-			store.interleave = app.opt_interleave; // manual
-		else if (db.interleave)
-			store.interleave = db.interleave; // inherit
-		else
-			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
+	// assign sizes to output sections
+	app.sizeDatabaseSections(store, db, minNodes);
 
-		// find matching `interleaveStep`
-		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
-		if (!pMetrics)
-			ctx.fatal("no preset for --interleave\n");
-
-		store.interleaveStep = pMetrics->interleaveStep;
-	}
-
-	// signatures
-	store.maxSignature = db.maxSignature;
-	store.signatureIndexSize = db.signatureIndexSize;
-	if (store.signatureIndexSize == 0) {
-		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-		else
-			store.signatureIndexSize = app.opt_signatureIndexSize;
-	}
-
-	// optional hints
-	if (db.numHint != 0) {
-		store.maxHint = db.maxHint;
-		store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
-	}
-
-	// imprints
-	if (app.opt_maxImprint != 0) {
-		store.maxImprint = app.opt_maxImprint; // user specified
-	} else if (!collectMembers) {
-		store.maxImprint = db.maxImprint; // keep section read-only
-		store.imprintIndexSize = db.imprintIndexSize;
-	} else {
-		const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, minNodes);
-		if (!pMetrics)
-			ctx.fatal("no preset for --maximprint\n");
-
-		store.maxImprint = pMetrics->numImprint;
-	}
-
-	if (store.imprintIndexSize == 0) {
-		if (app.opt_imprintIndexSize != 0)
-			store.imprintIndexSize = app.opt_imprintIndexSize;
-		else
-			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-	}
-
-	// members
-	if (app.opt_maxMember != 0) {
-		store.maxMember = app.opt_maxMember; // user specified
-	} else if (!collectMembers) {
-		store.maxMember = db.maxMember; // keep section read-only
-		store.memberIndexSize = db.memberIndexSize;
-	} else {
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, minNodes);
-		if (!pMetrics)
-			ctx.fatal("no preset for --maxmember\n");
-
-		store.maxMember = pMetrics->numMember;
-	}
-
-	if (store.memberIndexSize == 0) {
-		if (app.opt_memberIndexSize == 0)
-			store.memberIndexSize = ctx.nextPrime(store.maxMember * app.opt_ratio);
-		else
-			store.memberIndexSize = app.opt_memberIndexSize;
-	}
-
-	/*
-	 * section inheriting
-	 */
-
-	// changing interleave needs imprint rebuilding. This also validates imprintIndex
-	if (store.interleave != db.interleave)
-		rebuildSections |= database_t::ALLOCMASK_IMPRINT;
-
-	// signatures
-	if (!collectMembers)
-		inheritSections |= database_t::ALLOCMASK_SIGNATURE; // no output, signatures, imprints and members are read-only
-	if (store.signatureIndexSize != db.signatureIndexSize)
-		rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-
-	// optional hints
-	if (db.numHint > 0) {
-		inheritSections |= database_t::ALLOCMASK_HINT;
-		if (store.hintIndexSize != db.hintIndexSize)
-			rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-	}
-
-	// imprints
-	if (!collectMembers)
-		inheritSections |= database_t::ALLOCMASK_IMPRINT; // no output, signatures, imprints and members are read-only
-	if (store.imprintIndexSize != db.imprintIndexSize)
-		rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-
-	// members
-	if (!collectMembers)
-		inheritSections |= database_t::ALLOCMASK_MEMBER; // no output, signatures, imprints and members are read-only
-	if (store.memberIndexSize != db.memberIndexSize)
-		rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
-
-	// rebuilt (rw) sections may not be inherited (ro)
-	inheritSections &= ~rebuildSections;
-
-	// preloading members requires writable members
-	if (app.opt_load)
-		inheritSections &= ~(database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
-
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	// determine if sections are rebuild, inherited or copied (copy-on-write)
+	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
 	 */
 
+	// allocate evaluators
+	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(inheritSections);
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
 
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
@@ -2053,78 +1904,30 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxImprint=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxImprint, store.maxMember);
+		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u maxMember=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.maxMember);
 
 	// actual create
-	store.create(inheritSections);
+	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
-		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+		struct sysinfo info;
+		if (sysinfo(&info) != 0)
+			info.freeram = 0;
+
+		fprintf(stderr, "[%s] Allocated %lu memory. freeMemory=%lu.\n", ctx.timeAsString(), ctx.totalAllocated, info.freeram);
+	}
 
 	/*
 	 * Inherit/copy sections
 	 */
 
-	store.inheritSections(&db, app.arg_inputDatabase, inheritSections);
+	app.populateDatabaseSections(store, db);
 
-	// early initialise or the progress ticker will be misunderstood for section copying
+	// initialize evaluator
 	tinyTree_t tree(ctx);
 	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
 	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
-		fprintf(stderr, "[%s] Copying database sections\n", ctx.timeAsString());
-
-	// signatures
-	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
-		if (db.numSignature == 0) {
-			// input section empty
-			store.numSignature = 1;
-		} else {
-			assert(store.maxSignature >= db.numSignature);
-			::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
-			store.numSignature = db.numSignature;
-		}
-	}
-
-	// optional hints
-	if (db.numHint > 0) {
-		if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_HINT) {
-			assert(store.maxHint >= db.numHint);
-			::memcpy(store.hints, db.hints, db.numHint * sizeof(*store.hints));
-			store.numHint = db.numHint;
-		}
-	}
-
-	// imprints
-	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_IMPRINT) {
-		if (db.numImprint == 0) {
-			// input section empty
-			store.numImprint = 1;
-		} else {
-			assert(store.maxImprint >= db.numImprint);
-			::memcpy(store.imprints, db.imprints, db.numImprint * sizeof(*store.imprints));
-			store.numImprint = db.numImprint;
-		}
-	}
-
-	// members
-	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_MEMBER) {
-		if (db.numMember == 0) {
-			// input section empty
-			store.numMember = 1;
-		} else {
-			assert(store.maxMember >= db.numMember);
-			::memcpy(store.members, db.members, db.numMember * sizeof(*store.members));
-			store.numMember = db.numMember;
-		}
-	}
-
-	// skip reserved first entry
-	assert(store.numSignature >= 1);
-	assert(store.numImprint >= 1);
-	assert(store.numMember >= 1);
 
 	/*
 	 * count empty/unsafe
@@ -2149,13 +1952,13 @@ int main(int argc, char *const *argv) {
 	 * Rebuild sections
 	 */
 
-	if (rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 		// rebuild imprints
 		app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
-		rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 	}
-	if (rebuildSections)
-		store.rebuildIndices(rebuildSections);
+	if (app.rebuildSections)
+		store.rebuildIndices(app.rebuildSections);
 
 	/*
 	 * Where to look for new candidates
@@ -2170,7 +1973,7 @@ int main(int argc, char *const *argv) {
 	 * re-order and re-index members
 	 */
 
-	if (collectMembers) {
+	if (app.primarySections) {
 		// compact, sort and reindex members
 		app.finaliseMembers();
 

@@ -168,11 +168,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
-#include "tinytree.h"
 #include "database.h"
+#include "dbtool.h"
 #include "generator.h"
-#include "restartdata.h"
 #include "metrics.h"
+#include "restartdata.h"
+#include "tinytree.h"
 
 #include "config.h"
 
@@ -188,14 +189,11 @@
  *
  * @typedef {object}
  */
-struct gensignatureContext_t : callable_t {
+struct gensignatureContext_t : dbtool_t {
 
 	/*
 	 * User specified program arguments and options
 	 */
-
-	/// @var {context_t} I/O context
-	context_t &ctx;
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
@@ -207,24 +205,12 @@ struct gensignatureContext_t : callable_t {
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned opt_generate;
-	/// @var {number} size of imprint index WARNING: must be prime
-	unsigned opt_imprintIndexSize;
-	/// @var {number} interleave for associative imprint index
-	unsigned opt_interleave;
 	/// @var {string} name of file containing members
 	const char *opt_load;
-	/// @var {number} Maximum number of imprints to be stored database
-	unsigned opt_maxImprint;
-	/// @var {number} Maximum number of signatures to be stored database
-	unsigned opt_maxSignature;
-	/// @var {number} index/data ratio
-	double opt_ratio;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
 	unsigned opt_saveIndex;
 	/// @var {number} save imprints with given interleave
 	unsigned opt_saveInterleave;
-	/// @var {number} size of signature index WARNING: must be prime
-	unsigned opt_signatureIndexSize;
 	/// @var {number} sort signatures before saving
 	unsigned opt_sort;
 	/// @var {number} task Id. First task=1
@@ -251,33 +237,25 @@ struct gensignatureContext_t : callable_t {
 	/// @var {number} Name of signature causing overflow
 	char truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
-
-
 	/// @var {number} - THE generator
 	generatorTree_t generator;
 
 	/**
 	 * Constructor
 	 */
-	gensignatureContext_t(context_t &ctx) : ctx(ctx), generator(ctx) {
+	gensignatureContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		// arguments and options
 		arg_inputDatabase = NULL;
 		arg_numNodes = 0;
 		arg_outputDatabase = NULL;
 		opt_force = 0;
 		opt_generate = 1;
-		opt_imprintIndexSize = 0;
-		opt_interleave = 0;
-		opt_taskId = 0;
-		opt_taskLast = 0;
 		opt_load = NULL;
-		opt_maxImprint = 0;
-		opt_maxSignature = 0;
-		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_saveIndex = 1;
 		opt_saveInterleave = 0;
-		opt_signatureIndexSize = 0;
 		opt_sort = 1;
+		opt_taskId = 0;
+		opt_taskLast = 0;
 		opt_text = 0;
 		opt_truncate = 0;
 		opt_windowHi = 0;
@@ -1191,7 +1169,6 @@ int main(int argc, char *const *argv) {
 						exit(1);
 					}
 				}
-
 				break;
 			}
 			case LO_TEXT:
@@ -1389,14 +1366,11 @@ int main(int argc, char *const *argv) {
 	 *   copy();
 	 */
 
-	// flag that signatures to be collected or sorted
-	unsigned collectSignatures = (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4);
-	// primary sections
-	unsigned primarySections = collectSignatures ? database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_IMPRINT : 0;
-	// sections that need rebuilding
-	unsigned rebuildSections = 0;
-	// sections to inherit from original database. Can also be interpreted as ReadOnly.
-	unsigned inheritSections = database_t::ALLOCMASK_TRANSFORM;
+	// which sections are primary goal and need to be writable to be collect or sort
+	if (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4)
+		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_IMPRINT;
+	else
+		app.primarySections = 0;
 
 	/*
 	 * @date 2020-03-17 13:57:25
@@ -1408,114 +1382,14 @@ int main(int argc, char *const *argv) {
 	 * The ratio between index and data size is called `ratio`.
 	 */
 
-	// signatures
-	if (app.opt_maxSignature != 0) {
-		store.maxSignature = app.opt_maxSignature; // user specified
-	} else if (~primarySections & database_t::ALLOCMASK_SIGNATURE) {
-		store.maxSignature = db.maxSignature; // keep section read-only
-		store.signatureIndexSize = db.signatureIndexSize;
-	} else {
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, app.arg_numNodes);
-		if (!pMetrics)
-			ctx.fatal("no preset for --maxsignature\n");
+	// assign sizes to output sections
+	app.sizeDatabaseSections(store, db, app.arg_numNodes);
 
-		store.maxSignature = pMetrics->numSignature;
-	}
-
-	if (store.signatureIndexSize == 0) {
-		if (app.opt_signatureIndexSize == 0)
-			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * app.opt_ratio);
-		else
-			store.signatureIndexSize = app.opt_signatureIndexSize;
-	}
-
-	// optional hints
-	if (db.numHint != 0) {
-		store.maxHint = db.maxHint;
-		store.hintIndexSize = ctx.nextPrime(store.maxHint * app.opt_ratio);
-	}
-
-	// interleave
-	{
-		if (app.opt_interleave)
-			store.interleave = app.opt_interleave; // manual
-		else if (db.interleave)
-			store.interleave = db.interleave; // inherit
-		else
-			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
-
-		// find matching `interleaveStep`
-		const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
-		if (!pMetrics)
-			ctx.fatal("no preset for --interleave\n");
-
-		store.interleaveStep = pMetrics->interleaveStep;
-	}
-
-	// imprints
-	if (app.opt_maxImprint != 0) {
-		store.maxImprint = app.opt_maxImprint; // user specified
-	} else if ((~primarySections & database_t::ALLOCMASK_IMPRINT) && store.interleave == db.interleave) {
-		store.maxImprint = db.maxImprint; // keep section read-only BUT only with unchanged interleave
-		store.imprintIndexSize = db.imprintIndexSize;
-	} else {
-		const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, app.arg_numNodes);
-		if (!pMetrics)
-			ctx.fatal("no preset for --maximprint\n");
-
-		store.maxImprint = pMetrics->numImprint;
-	}
-
-	if (store.imprintIndexSize == 0) {
-		if (app.opt_imprintIndexSize != 0)
-			store.imprintIndexSize = app.opt_imprintIndexSize;
-		else
-			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * app.opt_ratio);
-	}
-
-	if (store.maxSignature && store.maxSignature > store.signatureIndexSize + 1)
-		ctx.fatal("--maxsignature=%u exceeds --signatureIndexSize=%u\n", store.maxSignature, store.signatureIndexSize);
-	if (store.maxImprint  && store.maxImprint > store.imprintIndexSize + 1)
-		ctx.fatal("--maximprint=%u exceeds --imprintIndexSize=%u\n", store.maxImprint, store.imprintIndexSize);
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
-	/*
-	 * section inheriting
-	 */
-
-	// signatures
-	if (~primarySections & database_t::ALLOCMASK_SIGNATURE)
-		inheritSections |= database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX; // no output, signatures and imprints are read-only
-	if (store.signatureIndexSize != db.signatureIndexSize)
-		rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-
-	// optional hints
-	if (db.numHint > 0) {
-		inheritSections |= database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX;
-		if (store.hintIndexSize != db.hintIndexSize)
-			rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-	}
-
-	// changing interleave needs imprint rebuilding. This also validates imprintIndex
-	if (store.interleave != db.interleave)
-		rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
-
-	// imprints
-	if (~primarySections & database_t::ALLOCMASK_IMPRINT)
-		inheritSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // no output, signatures and imprints are read-only
-	if (store.imprintIndexSize != db.imprintIndexSize)
-		rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-
-	// rebuilt (rw) sections may not be inherited (ro)
-	inheritSections &= ~rebuildSections;
-
-#if 0
-	// @date 2020-04-26 11:38:40 -- this makes loading to filter unusable. See if disabling the code makes a difference.
-	// loading signatures from file requires writable signatures and imprints
-	if (app.opt_load)
-		inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-#endif
+	// determine if sections are rebuild, inherited or copied (copy-on-write)
+	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
@@ -1527,7 +1401,7 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(inheritSections);
+		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
 
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
@@ -1541,10 +1415,10 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u signatureIndex=%u maxImprint=%u imprintIndex=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxImprint, store.imprintIndexSize);
 
 	// actual create
-	store.create(inheritSections);
+	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
@@ -1556,52 +1430,7 @@ int main(int argc, char *const *argv) {
 	 * Inherit/copy sections
 	 */
 
-	store.inheritSections(&db, app.arg_inputDatabase, inheritSections);
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~rebuildSections & ~inheritSections))
-		fprintf(stderr, "[%s] Copying database sections\n", ctx.timeAsString());
-
-	// signatures
-	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
-		fprintf(stderr, "[%s] ..signatures\n", ctx.timeAsString());
-		if (db.numSignature == 0) {
-			// input section empty
-			store.numSignature = 1;
-		} else {
-			assert(store.maxSignature >= db.numSignature);
-			::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*store.signatures));
-			store.numSignature = db.numSignature;
-		}
-	}
-
-	// optional hints
-	if (db.numHint > 0) {
-		fprintf(stderr, "[%s] ..hints\n", ctx.timeAsString());
-		if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_HINT) {
-			assert(store.maxHint >= db.numHint);
-			::memcpy(store.hints, db.hints, db.numHint * sizeof(*store.hints));
-			store.numHint = db.numHint;
-		}
-	}
-
-	// imprints
-	if (~rebuildSections & ~inheritSections & database_t::ALLOCMASK_IMPRINT) {
-		fprintf(stderr, "[%s] ..imprints\n", ctx.timeAsString());
-		if (db.numImprint == 0) {
-			// input section empty
-			store.numImprint = 1;
-		} else {
-			assert(store.maxImprint >= db.numImprint);
-			::memcpy(store.imprints, db.imprints, db.numImprint * sizeof(*store.imprints));
-			store.numImprint = db.numImprint;
-		}
-	}
-
-	// basic checks
-	assert(store.numSignature >= 1);
-	assert(store.numImprint >= 1);
-	assert(store.signatureIndexSize > store.maxSignature + 1);
-	assert(store.imprintIndexSize > store.maxImprint + 1);
+	app.populateDatabaseSections(store, db);
 
 	// initialize evaluator
 	tinyTree_t tree(ctx);
@@ -1612,16 +1441,13 @@ int main(int argc, char *const *argv) {
 	 * Rebuild sections
 	 */
 
-	if (rebuildSections && ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Rebuilding sections\n", ctx.timeAsString());
-
-	if (rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 		// rebuild imprints
 		app.rebuildImprints();
-		rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 	}
-	if (rebuildSections)
-		store.rebuildIndices(rebuildSections);
+	if (app.rebuildSections)
+		store.rebuildIndices(app.rebuildSections);
 
 	/*
 	 * Where to look for new candidates
@@ -1636,7 +1462,7 @@ int main(int argc, char *const *argv) {
 	 * sort signatures and ...
 	 */
 
-	if (primarySections && app.opt_sort) {
+	if (app.primarySections && app.opt_sort) {
 		// Sort signatures. This will invalidate index and imprints
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
@@ -1673,7 +1499,7 @@ int main(int argc, char *const *argv) {
 			store.hintIndexSize = 0;
 			store.imprintIndexSize = 0;
 			store.numImprint = 0;
-		} else if (primarySections && app.opt_sort) {
+		} else if (app.primarySections && app.opt_sort) {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
 				// find matching `interleaveStep`

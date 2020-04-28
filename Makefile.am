@@ -39,7 +39,7 @@ tlookup_SOURCES = tlookup.cc database.h datadef.h context.h tinytree.h
 tlookup_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2020-03-14 11:09:15
-gensignature_SOURCES = gensignature.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+gensignature_SOURCES = gensignature.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 gensignature_LDADD = $(LDADD) $(AM_LDADD)
 gensignature.$(OBJEXT) : restartdata.h
 
@@ -47,24 +47,20 @@ gensignature.$(OBJEXT) : restartdata.h
 genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h datadef.h generator.h metrics.h
 
 # @date 2020-03-30 17:19:24
-genmember_SOURCES = genmember.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+genmember_SOURCES = genmember.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 genmember_LDADD = $(LDADD) $(AM_LDADD)
 genmember.$(OBJEXT) : restartdata.h
 
 # @date 2020-04-07 16:25:18
-slookup_SOURCES = slookup.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+slookup_SOURCES = slookup.cc tinytree.h context.h datadef.h database.h
 slookup_LDADD = $(LDADD) $(AM_LDADD)
 slookup.$(OBJEXT) : restartdata.h
 
 # @date 2020-04-18 20:46:40
-genhint_SOURCES = genhint.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+genhint_SOURCES = genhint.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genhint_LDADD = $(LDADD) $(AM_LDADD)
 genhint.$(OBJEXT) : restartdata.h
 
 # @date 2020-04-21 23:30:30
-selftest_SOURCES = selftest.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
-selftest_LDADD = $(LDADD) $(AM_LDADD)
-
-# @date 2020-04-21 23:30:30
-selftest_SOURCES = selftest.cc tinytree.h context.h datadef.h database.h generator.h restartdata.h metrics.h
+selftest_SOURCES = selftest.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 selftest_LDADD = $(LDADD) $(AM_LDADD)
