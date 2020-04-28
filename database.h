@@ -41,6 +41,10 @@
  * An entry is deleted if `"index[ix] == 0 && version != NULL && version[ix] == iVersion"`
  * An entry is empty(or deleted) if `"index[ix] == 0 || (version != NULL && version[ix] != iVersion)"`
  * An entry is valid if `"index[ix] != 0 && (version == NULL || version[ix] == iVersion)"`
+ *
+ * @date 2020-04-27 19:46:45
+ *
+ * Replace `::memcpy()` when possible with mmap copy-on-write.
  */
 
 /*
@@ -564,10 +568,14 @@ struct database_t {
 	 *
 	 * Create read-only database mmapped onto file
 	 *
+	 * @date 2020-04-27 19:52:27
+	 *
+	 * To reduce need to copy large chunks of data from input to output, make pages writable and enable copy-on-write
+	 *
          * @param {string} fileName - database filename
-         * @param {boolean} shared - `false` to `read()`, `true` to `mmap()`
+         * @param {boolean} useMmap - `false` to `read()`, `true` to `mmap()`
 	 */
-	void open(const char *fileName, bool shared) {
+	void open(const char *fileName, bool useMmap) {
 
 		/*
 		 * Open file
@@ -580,11 +588,11 @@ struct database_t {
 		if (::fstat(hndl, &sbuf))
 			ctx.fatal("fstat(\"%s\") returned: %m\n", fileName);
 
-		if (shared) {
+		if (useMmap) {
 			/*
 			 * Load using mmap()
 			 */
-			void *pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, hndl, 0);
+			void *pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
 			if (pMemory == MAP_FAILED)
 				ctx.fatal("mmap(PROT_READ, MAP_SHARED|MAP_NORESERVE,%s) returned: %m\n", fileName);
 
