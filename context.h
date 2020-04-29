@@ -363,25 +363,25 @@ struct context_t {
 		*pBuffer = 0;
 
 		if (flags & MAGICMASK_PARANOID) {
-			::strcpy(pBuffer, "PARANOID");
+			::strcat(pBuffer, "PARANOID");
 			flags &= ~MAGICMASK_PARANOID;
+			if (flags)
+				::strcat(pBuffer, "|");
 		}
-		if (flags)
-			::strcpy(pBuffer, "p");
 		if (flags & MAGICMASK_PURE) {
-			::strcpy(pBuffer, "PURE");
+			::strcat(pBuffer, "PURE");
 			flags &= ~MAGICMASK_PURE;
+			if (flags)
+				::strcat(pBuffer, "|");
 		}
-		if (flags)
-			::strcpy(pBuffer, "p");
 		if (flags & MAGICMASK_UNSAFE) {
-			::strcpy(pBuffer, "UNSAFE");
+			::strcat(pBuffer, "UNSAFE");
 			flags &= ~MAGICMASK_UNSAFE;
+			if (flags)
+				::strcat(pBuffer, "|");
 		}
-		if (flags)
-			::strcpy(pBuffer, "p");
 		if (flags & MAGICMASK_AINF) {
-			::strcpy(pBuffer, "AINF");
+			::strcat(pBuffer, "AINF");
 			flags &= ~MAGICMASK_AINF;
 		}
 

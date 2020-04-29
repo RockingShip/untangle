@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
-2020-04-29 23:27:58 Database `copy-on-write`.
+2020-04-29 23:33:58 Added `database_t::sectionToText()`.
+2020-04-29 23:27:58 Added database `copy-on-write`.
 2020-04-28 00:24:56 Added `genhint --task=sge`.
 2020-04-28 00:11:00 Added `dbtool_t` and relocated all related code to it.
 2020-04-28 00:07:13 Enabled copy-on-write with `mmap()`.

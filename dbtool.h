@@ -336,6 +336,13 @@ struct dbtool_t : callable_t {
 	 */
 	void populateDatabaseSections(database_t &store, const database_t &db) {
 
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+			static char inheritText[512], rebuildText[512];
+			store.sectionToText(inheritSections, inheritText);
+			store.sectionToText(rebuildSections, rebuildText);
+			fprintf(stderr, "[%s] copyOnWrite=%u inheritSections=[%s] rebuildSections=[%s]\n", ctx.timeAsString(), copyOnWrite, inheritText, rebuildText);
+		}
+
 		// transforms are never invalid or resized
 		if (~rebuildSections & database_t::ALLOCMASK_TRANSFORM) {
 			assert(~store.allocFlags & database_t::ALLOCMASK_TRANSFORM);

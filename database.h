@@ -1949,6 +1949,69 @@ struct database_t {
 			fprintf(stderr, "[%s] Indices built\n", ctx.timeAsString());
 	}
 
+	char *sectionToText(unsigned sections, char *pBuffer = NULL) {
+		static char buffer[512];
+		if (pBuffer == NULL)
+			pBuffer = buffer;
+
+		*pBuffer = 0;
+
+		if (sections & ALLOCMASK_TRANSFORM) {
+			::strcat(pBuffer, "transform");
+			sections &= ~ALLOCMASK_TRANSFORM;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_SIGNATURE) {
+			::strcat(pBuffer, "signature");
+			sections &= ~ALLOCMASK_SIGNATURE;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_SIGNATUREINDEX) {
+			::strcat(pBuffer, "signatureIndex");
+			sections &= ~ALLOCMASK_SIGNATUREINDEX;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_HINT) {
+			::strcat(pBuffer, "hint");
+			sections &= ~ALLOCMASK_HINT;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_HINTINDEX) {
+			::strcat(pBuffer, "hintIndex");
+			sections &= ~ALLOCMASK_HINTINDEX;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_IMPRINT) {
+			::strcat(pBuffer, "imprint");
+			sections &= ~ALLOCMASK_IMPRINT;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_IMPRINTINDEX) {
+			::strcat(pBuffer, "imprintIndex");
+			sections &= ~ALLOCMASK_IMPRINTINDEX;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_MEMBER) {
+			::strcat(pBuffer, "member");
+			sections &= ~ALLOCMASK_MEMBER;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_MEMBERINDEX) {
+			::strcat(pBuffer, "memberIndex");
+			sections &= ~ALLOCMASK_MEMBERINDEX;
+		}
+
+		return pBuffer;
+	}
+
 #if defined(ENABLE_JANSSON)
 
 	/**
