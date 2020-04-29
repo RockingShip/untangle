@@ -685,7 +685,7 @@ struct database_t {
          * @param {string} fileName - database filename
          * @param {boolean} useMmap - `false` to `read()`, `true` to `mmap()`
 	 */
-	void open(const char *fileName, bool useMmap) {
+	void open(const char *fileName, unsigned copyOnWrite) {
 
 		/*
 		 * Open file
@@ -698,42 +698,50 @@ struct database_t {
 		if (::fstat(hndl, &sbuf))
 			ctx.fatal("fstat(\"%s\") returned: %m\n", fileName);
 
-		if (useMmap) {
-			/*
-			 * Load using mmap()
-			 */
-			void *pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
+#if defined(HAVE_MMAP)
+		/*
+		 * Load using mmap()
+		 */
+		void *pMemory;
+
+		if (copyOnWrite) {
+			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
+			if (pMemory == MAP_FAILED)
+				ctx.fatal("mmap(PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_NORESERVE,%s) returned: %m\n", fileName);
+		} else {
+			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, hndl, 0);
 			if (pMemory == MAP_FAILED)
 				ctx.fatal("mmap(PROT_READ, MAP_SHARED|MAP_NORESERVE,%s) returned: %m\n", fileName);
-
-			// set memory usage preferances
-			if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_RANDOM))
-				ctx.fatal("madvise(MADV_RANDOM) returned: %m\n");
-			if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_DONTDUMP))
-				ctx.fatal("madvise(MADV_DONTDUMP) returned: %m\n");
-
-			rawDatabase = (const uint8_t *) pMemory;
-		} else {
-			/*
-			 * Load using read()
-			 */
-
-			/*
-			 * Allocate storage
-			 */
-			rawDatabase = (uint8_t *) ctx.myAlloc("database_t::rawDatabase", 1, (size_t) sbuf.st_size);
-
-			ctx.progressHi = (uint64_t) sbuf.st_size;
-			ctx.progress = 0;
-
-			readData(hndl, (uint8_t *) rawDatabase, (size_t) sbuf.st_size);
-
-			/*
-			 * Close
-			 */
-			::close(hndl);
-			hndl = 0;
 		}
+
+		// set memory usage preferances
+		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_RANDOM))
+			ctx.fatal("madvise(MADV_RANDOM) returned: %m\n");
+		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_DONTDUMP))
+			ctx.fatal("madvise(MADV_DONTDUMP) returned: %m\n");
+
+		rawDatabase = (const uint8_t *) pMemory;
+#else
+		/*
+		 * Load using read()
+		 */
+
+		/*
+		 * Allocate storage
+		 */
+		rawDatabase = (uint8_t *) ctx.myAlloc("database_t::rawDatabase", 1, (size_t) sbuf.st_size);
+
+		ctx.progressHi = (uint64_t) sbuf.st_size;
+		ctx.progress = 0;
+
+		readData(hndl, (uint8_t *) rawDatabase, (size_t) sbuf.st_size);
+
+		/*
+		 * Close
+		 */
+		::close(hndl);
+		hndl = 0;
+#endif
 
 		::memcpy(&fileHeader, rawDatabase, sizeof(fileHeader));
 		if (fileHeader.magic != FILE_MAGIC)

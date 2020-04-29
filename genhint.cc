@@ -699,7 +699,7 @@ int main(int argc, char *const *argv) {
 	// Open input
 	database_t db(ctx);
 
-	db.open(app.arg_inputDatabase, true);
+	db.open(app.arg_inputDatabase, app.copyOnWrite);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {

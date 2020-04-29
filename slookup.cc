@@ -351,10 +351,10 @@ int main(int argc, char *const *argv) {
 	 * Open input and create output database
 	 */
 
-	// Open input
+	// Open database
 	database_t db(ctx);
 
-	db.open(app.opt_database, true);
+	db.open(app.opt_database, 0);
 
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)

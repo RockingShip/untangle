@@ -313,10 +313,10 @@ int main(int argc, char *const *argv) {
 	 * Open database
 	 */
 
+	// open database
 	database_t db(ctx);
 
-	// open database
-	db.open(app.arg_database, true);
+	db.open(app.arg_database, 0);
 
         if (db.maxTransform == 0)
 	        ctx.fatal("Missing transform section: %s\n", app.arg_database);

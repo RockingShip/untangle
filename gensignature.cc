@@ -168,14 +168,13 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
+#include "config.h"
 #include "database.h"
 #include "dbtool.h"
 #include "generator.h"
 #include "metrics.h"
 #include "restartdata.h"
 #include "tinytree.h"
-
-#include "config.h"
 
 #if defined(ENABLE_JANSSON)
 #include "jansson.h"
@@ -1312,7 +1311,7 @@ int main(int argc, char *const *argv) {
 	// Open input
 	database_t db(ctx);
 
-	db.open(app.arg_inputDatabase, true);
+	db.open(app.arg_inputDatabase, app.copyOnWrite);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {

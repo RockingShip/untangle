@@ -80,6 +80,8 @@ struct dbtool_t : callable_t {
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 
+	/// @var {number} "0" assume input is read-only, else input is copy-on-write.
+	unsigned copyOnWrite;
 	// primary sections, ones that get modified and need to be writable
 	unsigned primarySections;
 	// sections that need rebuilding
@@ -103,6 +105,7 @@ struct dbtool_t : callable_t {
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
 
+		copyOnWrite = 0;
 		primarySections = 0;
 		rebuildSections = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM;

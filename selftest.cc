@@ -37,14 +37,13 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
+#include "config.h"
 #include "database.h"
 #include "dbtool.h"
 #include "generator.h"
 #include "metrics.h"
 #include "restartdata.h"
 #include "tinytree.h"
-
-#include "config.h"
 
 /**
  * @date 2020-04-21 23:33:37
@@ -1707,10 +1706,10 @@ int main(int argc, char *const *argv) {
 	 * Open input database
 	 */
 
-	// Open input
+	// Open database
 	database_t db(ctx);
 
-	db.open(app.arg_inputDatabase, true);
+	db.open(app.arg_inputDatabase, 0);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {

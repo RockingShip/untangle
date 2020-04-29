@@ -12,6 +12,8 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_LN_S
 
+AC_CHECK_FUNCS([mmap])
+
 AC_ARG_WITH([jansson], [AS_HELP_STRING([--without-jansson], [disable support for jansson])], [], [with_jansson=test])
 
 AS_IF([test "x$with_jansson" != "xno"], [
