@@ -72,9 +72,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include "config.h"
 #include "datadef.h"
 #include "tinytree.h"
-#include "config.h"
 
 #if defined(ENABLE_JANSSON)
 #include "jansson.h"
@@ -162,6 +162,35 @@ struct fileHeader_t {
  * The *DATABASE*
  */
 struct database_t {
+
+	/**
+	 * @date 2020-03-12 15:19:50
+	 *
+	 * Runtime flags to indicate which sections were allocated. If not then they are read-only mmapped.
+	 */
+	enum {
+		ALLOCFLAG_TRANSFORM = 0,
+		ALLOCFLAG_SIGNATURE,
+		ALLOCFLAG_SIGNATUREINDEX,
+		ALLOCFLAG_HINT,
+		ALLOCFLAG_HINTINDEX,
+		ALLOCFLAG_IMPRINT,
+		ALLOCFLAG_IMPRINTINDEX,
+		ALLOCFLAG_MEMBER,
+		ALLOCFLAG_MEMBERINDEX,
+
+		// @formatter:off
+		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
+		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
+		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
+		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
+		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
+		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
+		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
+		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
+		ALLOCMASK_MEMBERINDEX        = 1 << ALLOCFLAG_MEMBERINDEX,
+		// @formatter:on
+	};
 
 	// I/O context
 	context_t &ctx;
@@ -273,33 +302,244 @@ struct database_t {
 	};
 
 	/**
-	 * @date 2020-03-12 15:19:50
+	 * @date 2020-03-12 15:57:37
 	 *
-	 * Runtime flags to indicate which sections were allocated. If not then they are read-only mmapped.
+	 * Release system resources
 	 */
-	enum {
-		ALLOCFLAG_TRANSFORM = 0,
-		ALLOCFLAG_SIGNATURE,
-		ALLOCFLAG_SIGNATUREINDEX,
-		ALLOCFLAG_HINT,
-		ALLOCFLAG_HINTINDEX,
-		ALLOCFLAG_IMPRINT,
-		ALLOCFLAG_IMPRINTINDEX,
-		ALLOCFLAG_MEMBER,
-		ALLOCFLAG_MEMBERINDEX,
+	~database_t() {
+		/*
+		 * Free explicitly malloced sections
+		 */
+		if (allocFlags & ALLOCMASK_TRANSFORM) {
+			ctx.myFree("database_t::fwdTransformData", fwdTransformData);
+			ctx.myFree("database_t::revTransformData", revTransformData);
+			ctx.myFree("database_t::fwdTransformNames", fwdTransformNames);
+			ctx.myFree("database_t::revTransformNames", revTransformNames);
+			ctx.myFree("database_t::revTransformIds", revTransformIds);
+			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
+			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
+		}
+		if (allocFlags & ALLOCMASK_SIGNATURE)
+			ctx.myFree("database_t::signatures", signatures);
+		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
+			ctx.myFree("database_t::signatureIndex", signatureIndex);
+		if (allocFlags & ALLOCMASK_HINT)
+			ctx.myFree("database_t::hints", hints);
+		if (allocFlags & ALLOCMASK_HINTINDEX)
+			ctx.myFree("database_t::hintIndex", hintIndex);
+		if (allocFlags & ALLOCMASK_IMPRINT)
+			ctx.myFree("database_t::imprints", imprints);
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
+			ctx.myFree("database_t::imprintIndex", imprintIndex);
+		if (allocFlags & ALLOCMASK_MEMBER)
+			ctx.myFree("database_t::members", members);
+		if (allocFlags & ALLOCMASK_MEMBERINDEX)
+			ctx.myFree("database_t::memberIndex", memberIndex);
 
-		// @formatter:off
-		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
-		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
-		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
-		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
-		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
-		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
-		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
-		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
-		ALLOCMASK_MEMBERINDEX        = 1 << ALLOCFLAG_MEMBERINDEX,
-		// @formatter:on
-	};
+		// release versioned memory
+		disableVersioned();
+
+		/*
+		 * Release resources
+		 */
+		if (hndl) {
+			/*
+			 * Database was opened with `mmap()`
+			 */
+			if (::munmap((void *) rawDatabase, fileHeader.offEnd))
+				ctx.fatal("munmap() returned: %m\n");
+			if (::close(hndl))
+				ctx.fatal("close() returned: %m\n");
+		} else if (rawDatabase) {
+			/*
+			 * Database was loaded with `read()`
+			 */
+			ctx.myFree("database_t::rawDatabase", (void *) rawDatabase);
+		}
+	}
+
+	/**
+	 * @date 2020-04-17 00:54:09
+	 *
+	 * Enable versioned memory for selected indices
+	 */
+	inline void enableVersioned(void) {
+
+		// allocate version indices
+		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
+			imprintVersion = (uint32_t *) ctx.myAlloc("database_t::imprintVersion", imprintIndexSize, sizeof(*imprintVersion));
+		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
+			signatureVersion = (uint32_t *) ctx.myAlloc("database_t::signatureVersion", signatureIndexSize, sizeof(*signatureVersion));
+
+		// clear versioned memory
+		iVersion = 0;
+		InvalidateVersioned();
+	}
+
+	/**
+	 * @date 2020-04-22 15:12:42
+	 *
+	 * Enable versioned memory for selected indices
+	 */
+	inline void disableVersioned(void) {
+
+		if (signatureVersion) {
+			ctx.myFree("database_t::signatureVersion", signatureVersion);
+			signatureVersion = NULL;
+		}
+		if (imprintVersion) {
+			ctx.myFree("database_t::imprintVersion", imprintVersion);
+			imprintVersion = NULL;
+		}
+	}
+
+	/**
+	 * @date 2020-04-17 00:54:09
+	 *
+	 * Invalidate versioned memory effectively resetting the indices
+	 */
+	inline void InvalidateVersioned(void) {
+		// clear versioned memory
+		if (iVersion == 0) {
+			if (imprintVersion)
+				::memset(imprintVersion, 0, (sizeof(*imprintVersion) * imprintIndexSize));
+			if (signatureVersion)
+				::memset(signatureVersion, 0, (sizeof(*signatureVersion) * signatureIndexSize));
+		}
+
+		// bump version number.
+		iVersion++;
+	}
+
+	/**
+	 * @date 2020-03-15 22:25:41
+	 *
+	 * Inherit read-only sections from an source database.
+	 *
+	 * NOTE: call after calling `create()`
+	 *
+	 * @param {database_t} pFrom - Database to inherit from
+	 * @param {string} pName - Name of database
+	 * @param {number} inheritSections - set of sections to inherit
+	 */
+	void inheritSections(const database_t *pFrom, const char *pName, unsigned inheritSections) {
+
+		// transform store
+		if (inheritSections & ALLOCMASK_TRANSFORM) {
+			if (pFrom->numTransform == 0) {
+				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			assert(maxTransform == 0);
+			maxTransform = pFrom->maxTransform;
+			numTransform = pFrom->numTransform;
+
+			fwdTransformData = pFrom->fwdTransformData;
+			revTransformData = pFrom->revTransformData;
+			fwdTransformNames = pFrom->fwdTransformNames;
+			revTransformNames = pFrom->revTransformNames;
+			revTransformIds = pFrom->revTransformIds;
+
+			assert(transformIndexSize == 0);
+			transformIndexSize = pFrom->transformIndexSize;
+
+			fwdTransformNameIndex = pFrom->fwdTransformNameIndex;
+			revTransformNameIndex = pFrom->revTransformNameIndex;
+		}
+
+		// signature store
+		if (inheritSections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
+			if (pFrom->numSignature == 0) {
+				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			if (inheritSections & ALLOCMASK_SIGNATURE) {
+				assert(~allocFlags & ALLOCMASK_SIGNATURE);
+				this->maxSignature = pFrom->maxSignature;
+				this->numSignature = pFrom->numSignature;
+				this->signatures = pFrom->signatures;
+			}
+
+			if (inheritSections & ALLOCMASK_SIGNATUREINDEX) {
+				assert(~allocFlags & ALLOCMASK_SIGNATUREINDEX);
+				this->signatureIndexSize = pFrom->signatureIndexSize;
+				this->signatureIndex = pFrom->signatureIndex;
+			}
+		}
+
+		// hint store
+		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
+			if (pFrom->numHint == 0) {
+				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			if (inheritSections & ALLOCMASK_HINT) {
+				assert(~allocFlags & ALLOCMASK_HINT);
+				this->maxHint = pFrom->maxHint;
+				this->numHint = pFrom->numHint;
+				this->hints = pFrom->hints;
+			}
+
+			if (inheritSections & ALLOCMASK_HINTINDEX) {
+				assert(~allocFlags & ALLOCMASK_HINTINDEX);
+				this->hintIndexSize = pFrom->hintIndexSize;
+				this->hintIndex = pFrom->hintIndex;
+			}
+		}
+
+		// imprint store
+		if (inheritSections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
+			if (pFrom->numImprint == 0) {
+				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			this->interleave = pFrom->interleave;
+			this->interleaveStep = pFrom->interleaveStep;
+
+			if (inheritSections & ALLOCMASK_IMPRINT) {
+				assert(~allocFlags & ALLOCMASK_IMPRINT);
+				this->maxImprint = pFrom->maxImprint;
+				this->numImprint = pFrom->numImprint;
+				this->imprints = pFrom->imprints;
+			}
+
+			if (inheritSections & ALLOCMASK_IMPRINTINDEX) {
+				assert(~allocFlags & ALLOCMASK_IMPRINTINDEX);
+				this->imprintIndexSize = pFrom->imprintIndexSize;
+				this->imprintIndex = pFrom->imprintIndex;
+			}
+		}
+
+		// member store
+		if (inheritSections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
+			if (pFrom->numMember == 0) {
+				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			if (inheritSections & ALLOCMASK_MEMBER) {
+				assert(~allocFlags & ALLOCMASK_MEMBER);
+				this->maxMember = pFrom->maxMember;
+				this->numMember = pFrom->numMember;
+				this->members = pFrom->members;
+			}
+
+			if (inheritSections & ALLOCMASK_MEMBERINDEX) {
+				assert(~allocFlags & ALLOCMASK_MEMBERINDEX);
+				this->memberIndexSize = pFrom->memberIndexSize;
+				this->memberIndex = pFrom->memberIndex;
+			}
+		}
+	}
 
 	/**
 	 * @date 2020-04-21 14:31:14
@@ -434,136 +674,6 @@ struct database_t {
 	};
 
 	/**
-	 * @date 2020-03-15 22:25:41
-	 *
-	 * Inherit read-only sections from an source database.
-	 *
-	 * NOTE: call after calling `create()`
-	 *
-	 * @param {database_t} pFrom - Database to inherit from
-	 * @param {string} pName - Name of database
-	 * @param {number} inheritSections - set of sections to inherit
-	 */
-	void inheritSections(const database_t *pFrom, const char *pName, unsigned inheritSections) {
-
-		// transform store
-		if (inheritSections & ALLOCMASK_TRANSFORM) {
-			if (pFrom->numTransform == 0) {
-				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			assert(maxTransform == 0);
-			maxTransform = pFrom->maxTransform;
-			numTransform = pFrom->numTransform;
-
-			fwdTransformData = pFrom->fwdTransformData;
-			revTransformData = pFrom->revTransformData;
-			fwdTransformNames = pFrom->fwdTransformNames;
-			revTransformNames = pFrom->revTransformNames;
-			revTransformIds = pFrom->revTransformIds;
-
-			assert(transformIndexSize == 0);
-			transformIndexSize = pFrom->transformIndexSize;
-
-			fwdTransformNameIndex = pFrom->fwdTransformNameIndex;
-			revTransformNameIndex = pFrom->revTransformNameIndex;
-		}
-
-		// signature store
-		if (inheritSections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
-			if (pFrom->numSignature == 0) {
-				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			if (inheritSections & ALLOCMASK_SIGNATURE) {
-				assert(~allocFlags & ALLOCMASK_SIGNATURE);
-				this->maxSignature = pFrom->maxSignature;
-				this->numSignature = pFrom->numSignature;
-				this->signatures = pFrom->signatures;
-			}
-
-			if (inheritSections & ALLOCMASK_SIGNATUREINDEX) {
-				assert(~allocFlags & ALLOCMASK_SIGNATUREINDEX);
-				this->signatureIndexSize = pFrom->signatureIndexSize;
-				this->signatureIndex = pFrom->signatureIndex;
-			}
-		}
-
-		// hint store
-		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
-			if (pFrom->numHint == 0) {
-				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			if (inheritSections & ALLOCMASK_HINT) {
-				assert(~allocFlags & ALLOCMASK_HINT);
-				this->maxHint = pFrom->maxHint;
-				this->numHint = pFrom->numHint;
-				this->hints = pFrom->hints;
-			}
-
-			if (inheritSections & ALLOCMASK_HINTINDEX) {
-				assert(~allocFlags & ALLOCMASK_HINTINDEX);
-				this->hintIndexSize = pFrom->hintIndexSize;
-				this->hintIndex = pFrom->hintIndex;
-			}
-		}
-
-		// imprint store
-		if (inheritSections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
-			if (pFrom->numImprint == 0) {
-				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			this->interleave = pFrom->interleave;
-			this->interleaveStep = pFrom->interleaveStep;
-
-			if (inheritSections & ALLOCMASK_IMPRINT) {
-				assert(~allocFlags & ALLOCMASK_IMPRINT);
-				this->maxImprint = pFrom->maxImprint;
-				this->numImprint = pFrom->numImprint;
-				this->imprints = pFrom->imprints;
-			}
-
-			if (inheritSections & ALLOCMASK_IMPRINTINDEX) {
-				assert(~allocFlags & ALLOCMASK_IMPRINTINDEX);
-				this->imprintIndexSize = pFrom->imprintIndexSize;
-				this->imprintIndex = pFrom->imprintIndex;
-			}
-		}
-
-		// member store
-		if (inheritSections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
-			if (pFrom->numMember == 0) {
-				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
-
-			if (inheritSections & ALLOCMASK_MEMBER) {
-				assert(~allocFlags & ALLOCMASK_MEMBER);
-				this->maxMember = pFrom->maxMember;
-				this->numMember = pFrom->numMember;
-				this->members = pFrom->members;
-			}
-
-			if (inheritSections & ALLOCMASK_MEMBERINDEX) {
-				assert(~allocFlags & ALLOCMASK_MEMBERINDEX);
-				this->memberIndexSize = pFrom->memberIndexSize;
-				this->memberIndex = pFrom->memberIndex;
-			}
-		}
-	}
-
-	/**
 	 * @date 2020-03-12 16:07:44
 	 *
 	 * Create read-only database mmapped onto file
@@ -684,116 +794,6 @@ struct database_t {
 		memberIndexSize = fileHeader.memberIndexSize;
 		memberIndex = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
 	};
-
-	/**
-	 * @date 2020-03-12 15:57:37
-	 *
-	 * Release system resources
-	 */
-	~database_t() {
-		/*
-		 * Free explicitly malloced sections
-		 */
-		if (allocFlags & ALLOCMASK_TRANSFORM) {
-			ctx.myFree("database_t::fwdTransformData", fwdTransformData);
-			ctx.myFree("database_t::revTransformData", revTransformData);
-			ctx.myFree("database_t::fwdTransformNames", fwdTransformNames);
-			ctx.myFree("database_t::revTransformNames", revTransformNames);
-			ctx.myFree("database_t::revTransformIds", revTransformIds);
-			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
-			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
-		}
-		if (allocFlags & ALLOCMASK_SIGNATURE)
-			ctx.myFree("database_t::signatures", signatures);
-		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
-			ctx.myFree("database_t::signatureIndex", signatureIndex);
-		if (allocFlags & ALLOCMASK_HINT)
-			ctx.myFree("database_t::hints", hints);
-		if (allocFlags & ALLOCMASK_HINTINDEX)
-			ctx.myFree("database_t::hintIndex", hintIndex);
-		if (allocFlags & ALLOCMASK_IMPRINT)
-			ctx.myFree("database_t::imprints", imprints);
-		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
-			ctx.myFree("database_t::imprintIndex", imprintIndex);
-		if (allocFlags & ALLOCMASK_MEMBER)
-			ctx.myFree("database_t::members", members);
-		if (allocFlags & ALLOCMASK_MEMBERINDEX)
-			ctx.myFree("database_t::memberIndex", memberIndex);
-
-		// release versioned memory
-		disableVersioned();
-
-		/*
-		 * Release resources
-		 */
-		if (hndl) {
-			/*
-			 * Database was opened with `mmap()`
-			 */
-			if (::munmap((void *) rawDatabase, fileHeader.offEnd))
-				ctx.fatal("munmap() returned: %m\n");
-			if (::close(hndl))
-				ctx.fatal("close() returned: %m\n");
-		} else if (rawDatabase) {
-			/*
-			 * Database was loaded with `read()`
-			 */
-			ctx.myFree("database_t::rawDatabase", (void *) rawDatabase);
-		}
-	}
-
-	/**
-	 * @date 2020-04-17 00:54:09
-	 *
-	 * Enable versioned memory for selected indices
-	 */
-	inline void enableVersioned(void) {
-
-		// allocate version indices
-		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
-			imprintVersion = (uint32_t *) ctx.myAlloc("database_t::imprintVersion", imprintIndexSize, sizeof(*imprintVersion));
-		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
-			signatureVersion = (uint32_t *) ctx.myAlloc("database_t::signatureVersion", signatureIndexSize, sizeof(*signatureVersion));
-
-		// clear versioned memory
-		iVersion = 0;
-		InvalidateVersioned();
-	}
-
-	/**
-	 * @date 2020-04-22 15:12:42
-	 *
-	 * Enable versioned memory for selected indices
-	 */
-	inline void disableVersioned(void) {
-
-		if (signatureVersion) {
-			ctx.myFree("database_t::signatureVersion", signatureVersion);
-			signatureVersion = NULL;
-		}
-		if (imprintVersion) {
-			ctx.myFree("database_t::imprintVersion", imprintVersion);
-			imprintVersion = NULL;
-		}
-	}
-
-	/**
-	 * @date 2020-04-17 00:54:09
-	 *
-	 * Invalidate versioned memory effectively resetting the indices
-	 */
-	inline void InvalidateVersioned(void) {
-		// clear versioned memory
-		if (iVersion == 0) {
-			if (imprintVersion)
-				::memset(imprintVersion, 0, (sizeof(*imprintVersion) * imprintIndexSize));
-			if (signatureVersion)
-				::memset(signatureVersion, 0, (sizeof(*signatureVersion) * signatureIndexSize));
-		}
-
-		// bump version number.
-		iVersion++;
-	}
 
 	/**
 	 * @date 2020-04-16 20:41:47
@@ -1032,8 +1032,8 @@ struct database_t {
 	 * @date 2020-03-12 15:54:57
 	 *
 	 * Read data from database file
-	 * 
-	 * @param {number} hndl - OS file handle 
+	 *
+	 * @param {number} hndl - OS file handle
 	 * @param {void[]} data - Buffer to read to
 	 * @param {number} dataLength = how much to read
 	 * @return {number} total number of bytes read
@@ -1077,8 +1077,8 @@ struct database_t {
 	 * @date 2020-03-12 15:56:46
 	 *
 	 * Write data to database file
-	 * 
-	 * @param {number} hndl - OS file handle 
+	 *
+	 * @param {number} hndl - OS file handle
 	 * @param {void[]} data - Buffer to read to
 	 * @param {number} dataLength = how much to write
 	 * @return {number} total number of bytes written
