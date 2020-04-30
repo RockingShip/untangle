@@ -82,6 +82,8 @@ struct dbtool_t : callable_t {
 
 	/// @var {number} "0" assume input is read-only, else input is copy-on-write.
 	unsigned copyOnWrite;
+	/// @var {number} may/maynot make changes to database
+	unsigned readOnlyMode;
 	// primary sections, ones that get modified and need to be writable
 	unsigned primarySections;
 	// sections that need rebuilding
@@ -106,9 +108,10 @@ struct dbtool_t : callable_t {
 		opt_signatureIndexSize = 0;
 
 		copyOnWrite = 0;
-		primarySections = 0;
-		rebuildSections = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM;
+		primarySections = 0;
+		readOnlyMode = 0;
+		rebuildSections = 0;
 	}
 
 	/**

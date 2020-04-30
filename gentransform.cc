@@ -787,7 +787,7 @@ int main(int argc, char *const *argv) {
 		app.arg_outputDatabase = argv[optind++];
 	}
 
-	if (0) {
+	if (!app.arg_outputDatabase) {
 		usage(argv, false);
 		exit(1);
 	}

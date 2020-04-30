@@ -231,6 +231,8 @@ struct gensignatureContext_t : dbtool_t {
 	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
+	/// @var {number} `foundTree()` duplicate by name
+	unsigned skipDuplicate;
 	/// @var {number} Where database overflow was caught
 	uint64_t truncated;
 	/// @var {number} Name of signature causing overflow
@@ -263,6 +265,7 @@ struct gensignatureContext_t : dbtool_t {
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
+		skipDuplicate = 0;
 		truncated = 0;
 		truncatedName[0] = 0;
 	}
@@ -304,11 +307,11 @@ struct gensignatureContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
 				        ctx.timeAsString(), ctx.progress,
 				        perSecond, pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
+				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -325,14 +328,34 @@ struct gensignatureContext_t : dbtool_t {
 				 *   ctx.progressHi is ticker upper limit
 				 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
 				 */
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
 				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
 				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        (double) ctx.cntCompare / ctx.cntHash, pNameR);
+				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
 			ctx.tick = 0;
+		}
+
+		/*
+		 * test for duplicates
+		 */
+
+		unsigned six = pStore->lookupSignature(pNameR);
+		if (pStore->signatureIndex[six] != 0) {
+			// duplicate candidate name
+			skipDuplicate++;
+			return true;
+		}
+
+		/*
+		 * Special case for read-only and empty input
+		 */
+		if (!pStore->maxSignature && this->readOnlyMode) {
+			if (opt_text == 1)
+				printf("%s\n", pNameR);
+			return true;
 		}
 
 		/*
@@ -364,7 +387,7 @@ struct gensignatureContext_t : dbtool_t {
 		unsigned sid = 0;
 		unsigned markSid = pStore->numSignature;
 
-		if (ctx.flags & context_t::MAGICMASK_AINF) {
+		if ((ctx.flags & context_t::MAGICMASK_AINF) && !this->readOnlyMode) {
 			/*
 			 * @date 2020-04-25 22:00:29
 			 *
@@ -386,11 +409,14 @@ struct gensignatureContext_t : dbtool_t {
 				printf("%s\n", pNameR);
 
 			// only add if signatures are writable
-			if (pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE) {
+			if (!this->readOnlyMode) {
 
 				// add signature to database
 				sid = pStore->addSignature(pNameR);
 				assert(sid == markSid);
+
+				// add to name index
+				pStore->signatureIndex[six] = sid;
 
 				// add to imprints to index
 				if (~ctx.flags & context_t::MAGICMASK_AINF) {
@@ -468,7 +494,7 @@ struct gensignatureContext_t : dbtool_t {
 				printf("%s\n", pNameR);
 
 			// only update if signatures are writable
-			if (~pStore->allocFlags & database_t::ALLOCMASK_SIGNATURE)
+			if (!this->readOnlyMode)
 				return true;
 
 			::strcpy(pSignature->name, pNameR);
@@ -660,10 +686,10 @@ struct gensignatureContext_t : dbtool_t {
 		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
+		skipDuplicate = 0;
 
 		char name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
-		unsigned skipDuplicate = 0;
 		this->truncated = 0;
 
 		// <cid> <sid> <candidateName> <cmp> <size> <numPlaceholder> <numEndpoint> <numBackRef>
@@ -709,7 +735,7 @@ struct gensignatureContext_t : dbtool_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f",
 				        ctx.timeAsString(), ctx.progress, perSecond,
 				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
@@ -748,7 +774,7 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read %ld candidates. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f\n",
+			fprintf(stderr, "[%s] Read %ld candidates. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f\n",
 			        ctx.timeAsString(),
 			        ctx.progress,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
@@ -802,6 +828,8 @@ struct gensignatureContext_t : dbtool_t {
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		}
 		ctx.tick = 0;
+		skipDuplicate = 0;
+
 
 		/*
 		 * Generate candidates
@@ -1311,6 +1339,13 @@ int main(int argc, char *const *argv) {
 	// Open input
 	database_t db(ctx);
 
+	// test readOnly mode
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != 3 && app.opt_text != 4);
+
+	// allow for copy-on-write
+	if (!app.readOnlyMode)
+		app.copyOnWrite = 1;
+
 	db.open(app.arg_inputDatabase, app.copyOnWrite);
 
 	// display system flags when database was created
@@ -1387,6 +1422,9 @@ int main(int argc, char *const *argv) {
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
+	if (app.rebuildSections && app.readOnlyMode)
+		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
+
 	// determine if sections are rebuild, inherited or copied (copy-on-write)
 	app.modeDatabaseSections(store, db);
 
@@ -1440,17 +1478,28 @@ int main(int argc, char *const *argv) {
 	 * Rebuild sections
 	 */
 
-	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-		// rebuild imprints
-		app.rebuildImprints();
-		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	if (!app.readOnlyMode) {
+		if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+			// rebuild imprints
+			app.rebuildImprints();
+			app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		}
+		if (app.rebuildSections)
+			store.rebuildIndices(app.rebuildSections);
+	} else if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		if (app.rebuildSections)
+			fprintf(stderr, "[%s] WARNING: readOnlyMode and database sections [%s] are missing.", ctx.timeAsString(), store.sectionToText(app.rebuildSections));
 	}
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
 
 	/*
 	 * Where to look for new candidates
 	 */
+
+	// if input is empty, skip reserved entries
+	if (!app.readOnlyMode) {
+		assert(store.numSignature > 0);
+		assert(store.numImprint > 0);
+	}
 
 	if (app.opt_load)
 		app.signaturesFromFile();
@@ -1461,8 +1510,8 @@ int main(int argc, char *const *argv) {
 	 * sort signatures and ...
 	 */
 
-	if (app.primarySections && app.opt_sort) {
-		// Sort signatures. This will invalidate index and imprints
+	if (!app.readOnlyMode && app.opt_sort) {
+		// Sort signatures. This will invalidate index and imprints. hints are safe.
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting signatures\n", ctx.timeAsString());

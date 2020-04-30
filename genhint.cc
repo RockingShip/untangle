@@ -198,14 +198,16 @@ struct genhintContext_t : dbtool_t {
 				exit(1);
 			}
 
-			// lookup/add hintId
-			ix = pStore->lookupHint(&hint);
-			unsigned hintId = pStore->hintIndex[ix];
-			if (hintId == 0)
-				pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
+			if (!this->readOnlyMode) {
+				// lookup/add hintId
+				ix = pStore->lookupHint(&hint);
+				unsigned hintId = pStore->hintIndex[ix];
+				if (hintId == 0)
+					pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
 
-			// add hintId to signature
-			pStore->signatures[sid].hintId = hintId;
+				// add hintId to signature
+				pStore->signatures[sid].hintId = hintId;
+			}
 
 			ctx.progress++;
 		}
@@ -327,7 +329,7 @@ struct genhintContext_t : dbtool_t {
 				printf("\n");
 
 			// add to database
-			if (this->arg_outputDatabase) {
+			if (!this->readOnlyMode) {
 				// lookup/add hintId
 				unsigned ix = pStore->lookupHint(&hint);
 				unsigned hintId = pStore->hintIndex[ix];
@@ -699,6 +701,13 @@ int main(int argc, char *const *argv) {
 	// Open input
 	database_t db(ctx);
 
+	// test for readOnly mode
+	app.readOnlyMode = (app.arg_outputDatabase == NULL);
+
+	// allow for copy-on-write
+	if (!app.readOnlyMode)
+		app.copyOnWrite = 1;
+
 	db.open(app.arg_inputDatabase, app.copyOnWrite);
 
 	// display system flags when database was created
@@ -749,6 +758,9 @@ int main(int argc, char *const *argv) {
 
 	// assign sizes to output sections
 	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that do not occur
+
+	if (app.rebuildSections && app.readOnlyMode)
+		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
 
 	// determine if sections are rebuild, inherited or copied (copy-on-write)
 	app.modeDatabaseSections(store, db);
@@ -802,12 +814,27 @@ int main(int argc, char *const *argv) {
 
 	assert(app.rebuildSections == 0 || (~app.rebuildSections & database_t::ALLOCMASK_IMPRINT));
 
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
+	/*
+	 * Rebuild sections
+	 */
+
+	if (!app.readOnlyMode) {
+		assert (!app.rebuildSections & database_t::ALLOCMASK_IMPRINT);
+		if (app.rebuildSections)
+			store.rebuildIndices(app.rebuildSections);
+	} else if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+		if (app.rebuildSections)
+			fprintf(stderr, "[%s] WARNING: readOnlyMode and database sections [%s] are missing.", ctx.timeAsString(), store.sectionToText(app.rebuildSections));
+	}
 
 	/*
 	 * Where to look for new candidates
 	 */
+
+	// if input is empty, skip reserved entries
+	if (!app.readOnlyMode) {
+		assert(store.numHint > 0);
+	}
 
 	if (app.opt_load)
 		app.hintsFromFile();
