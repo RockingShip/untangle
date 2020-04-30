@@ -193,6 +193,8 @@ struct genmemberContext_t : dbtool_t {
 	unsigned opt_generate;
 	/// @var {string} name of file containing members
 	const char *opt_load;
+	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
+	unsigned opt_saveIndex;
 	/// @var {number} Sid range upper bound
 	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -237,6 +239,7 @@ struct genmemberContext_t : dbtool_t {
 		arg_outputDatabase = NULL;
 		opt_force = 0;
 		opt_generate = 1;
+		opt_saveIndex = 1;
 		opt_taskId = 0;
 		opt_taskLast = 0;
 		opt_load = NULL;
@@ -1442,6 +1445,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say more\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>,]<high>            Sid range upper bound  [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --task=sge                      Get task settings from SGE environment\n");
@@ -1487,10 +1491,12 @@ int main(int argc, char *const *argv) {
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
+			LO_NOSAVEINDEX,
 			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
+			LO_SAVEINDEX,
 			LO_SID,
 			LO_SIGNATUREINDEXSIZE,
 			LO_TASK,
@@ -1520,11 +1526,13 @@ int main(int argc, char *const *argv) {
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
+			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
 			{"no-unsafe",          0, 0, LO_NOUNSAFE},
 			{"paranoid",           0, 0, LO_PARANOID},
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
+			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"sid",                1, 0, LO_SID},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
 			{"task",               1, 0, LO_TASK},
@@ -1615,6 +1623,12 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_RATIO:
 				app.opt_ratio = strtof(optarg, NULL);
+				break;
+			case LO_NOSAVEINDEX:
+				app.opt_saveIndex = 0;
+				break;
+			case LO_SAVEINDEX:
+				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
 				break;
 			case LO_SID: {
 				unsigned m, n;
@@ -1994,6 +2008,15 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (app.arg_outputDatabase) {
+		if (!app.opt_saveIndex) {
+			store.signatureIndexSize = 0;
+			store.hintIndexSize = 0;
+			store.imprintIndexSize = 0;
+			store.numImprint = 0;
+			store.interleave = 0;
+			store.interleaveStep = 0;
+		}
+
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);

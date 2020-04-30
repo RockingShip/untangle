@@ -81,6 +81,8 @@ struct genhintContext_t : dbtool_t {
 	unsigned opt_generate;
 	/// @var {string} name of file containing interleave hints
 	const char *opt_load;
+	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
+	unsigned opt_saveIndex;
 	/// @var {number} Sid range upper bound
 	unsigned opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -109,6 +111,7 @@ struct genhintContext_t : dbtool_t {
 		arg_inputDatabase = NULL;
 		opt_load = NULL;
 		arg_outputDatabase = NULL;
+		opt_saveIndex = 1;
 		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_taskId = 0;
@@ -422,12 +425,13 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                    Say more\n");
+		fprintf(stderr, "\t   --[no-]saveindex           Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=sge                 Get sid task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --[no-]unsafe                 Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]unsafe              Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                  Say less\n");
 	}
 }
@@ -462,9 +466,11 @@ int main(int argc, char *const *argv) {
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
+			LO_NOSAVEINDEX,
 			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
+			LO_SAVEINDEX,
 			LO_SID,
 			LO_TASK,
 			LO_TEXT,
@@ -491,8 +497,10 @@ int main(int argc, char *const *argv) {
 			{"no-generate",   0, 0, LO_NOGENERATE},
 			{"no-paranoid",   0, 0, LO_NOPARANOID},
 			{"no-pure",       0, 0, LO_NOPURE},
+			{"no-saveindex",  0, 0, LO_NOSAVEINDEX},
 			{"no-unsafe",     0, 0, LO_NOUNSAFE},
 			{"quiet",         2, 0, LO_QUIET},
+			{"saveindex",     0, 0, LO_SAVEINDEX},
 			{"sid",           1, 0, LO_SID},
 			{"task",          1, 0, LO_TASK},
 			{"text",          2, 0, LO_TEXT},
@@ -556,6 +564,9 @@ int main(int argc, char *const *argv) {
 			case LO_NOPURE:
 				ctx.flags &= ~context_t::MAGICMASK_PURE;
 				break;
+			case LO_NOSAVEINDEX:
+				app.opt_saveIndex = 0;
+				break;
 			case LO_NOUNSAFE:
 				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
 				break;
@@ -567,6 +578,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				break;
+			case LO_SAVEINDEX:
+				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
 				break;
 			case LO_SID: {
 				unsigned m, n;
@@ -846,6 +860,15 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (app.arg_outputDatabase) {
+		if (!app.opt_saveIndex) {
+			store.signatureIndexSize = 0;
+			store.hintIndexSize = 0;
+			store.imprintIndexSize = 0;
+			store.numImprint = 0;
+			store.interleave = 0;
+			store.interleaveStep = 0;
+		}
+
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);

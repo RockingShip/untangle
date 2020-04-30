@@ -1547,6 +1547,8 @@ int main(int argc, char *const *argv) {
 			store.hintIndexSize = 0;
 			store.imprintIndexSize = 0;
 			store.numImprint = 0;
+			store.interleave = 0;
+			store.interleaveStep = 0;
 		} else if (app.primarySections && app.opt_sort) {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
