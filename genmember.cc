@@ -1869,11 +1869,9 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	// which sections are primary goal and need to be writable to be collect or sort
-	if (app.arg_outputDatabase != NULL || app.opt_text == 2 || app.opt_text == 3)
-		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_MEMBER;
-	else
-		app.primarySections = 0;
+	// need indices (removing from inherit will auto-create)
+	if (!app.readOnlyMode)
+		app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
 
 	// input database will always have a minimal node size of 4.
 	unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
@@ -1881,11 +1879,14 @@ int main(int argc, char *const *argv) {
 	// assign sizes to output sections
 	app.sizeDatabaseSections(store, db, minNodes);
 
+	// no input imprints or interleave changed
+	if (db.numImprint == 0 || db.interleave == store.interleave) {
+		app.rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
+		app.inheritSections &= ~app.rebuildSections;
+	}
+
 	if (app.rebuildSections && app.readOnlyMode)
 		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
-
-	// determine if sections are rebuild, inherited or copied (copy-on-write)
-	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
@@ -1957,6 +1958,10 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (!app.readOnlyMode) {
+		// todo: move this to `populateDatabaseSections()`
+		// data sections cannot be automatically rebuilt
+		assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+
 		if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 			// rebuild imprints
 			app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);

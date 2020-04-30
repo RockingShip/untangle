@@ -84,11 +84,9 @@ struct dbtool_t : callable_t {
 	unsigned copyOnWrite;
 	/// @var {number} may/maynot make changes to database
 	unsigned readOnlyMode;
-	// primary sections, ones that get modified and need to be writable
-	unsigned primarySections;
-	// sections that need rebuilding
+	// allocated sections that need rebuilding
 	unsigned rebuildSections;
-	// sections to inherit from original database. Can also be interpreted as ReadOnly.
+	// mmapped sections that are copy-on-write
 	unsigned inheritSections;
 
 	/**
@@ -108,8 +106,11 @@ struct dbtool_t : callable_t {
 		opt_signatureIndexSize = 0;
 
 		copyOnWrite = 0;
-		inheritSections = database_t::ALLOCMASK_TRANSFORM;
-		primarySections = 0;
+		inheritSections = database_t::ALLOCMASK_TRANSFORM |
+		                  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
+		                  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
+		                  database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
+		                  database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
 		readOnlyMode = 0;
 		rebuildSections = 0;
 	}
@@ -117,7 +118,7 @@ struct dbtool_t : callable_t {
 	/**
 	 * @date 2020-04-25 00:05:32
 	 *
-	 * NOTE: `signatureIndex`, `hintIndex` and `imprintIndex` are first-level indices derived from `signatures`, `hints` and `imprints`
+	 * NOTE: `signatureIndex`, `hintIndex` and `imprintIndex` are first-level indices derived from `signatures`, `hints` and `imprints`.
 	 *       `imprints` is a second-level index derived from `signatures`
 	 *
 	 * workflow:
@@ -157,13 +158,18 @@ struct dbtool_t : callable_t {
 		 * The ratio between index and data size is called `ratio`.
 		 */
 
-		// signatures
-		if (this->opt_maxSignature != 0) {
-			store.maxSignature = this->opt_maxSignature; // user specified
-		} else if (~primarySections & database_t::ALLOCMASK_SIGNATURE) {
-			store.maxSignature = db.maxSignature; // keep section read-only
-			store.signatureIndexSize = db.signatureIndexSize;
+		/*
+		 * signatures
+		 */
+
+		if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+			// inherited. pass-though
+			store.maxSignature = db.numSignature;
+		} else if (this->opt_maxSignature) {
+			// user specified
+			store.maxSignature = this->opt_maxSignature;
 		} else {
+			// metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics)
 				ctx.fatal("no preset for --maxsignature\n");
@@ -171,54 +177,121 @@ struct dbtool_t : callable_t {
 			store.maxSignature = pMetrics->numSignature;
 		}
 
-		if (store.signatureIndexSize == 0) {
-			if (this->opt_signatureIndexSize == 0)
-				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
-			else
-				store.signatureIndexSize = this->opt_signatureIndexSize;
+		if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
+			// inherited. pass-though
+			store.signatureIndexSize = db.signatureIndexSize;
+		} else if (this->opt_signatureIndexSize) {
+			// user specified
+			store.signatureIndexSize = this->opt_signatureIndexSize;
+		} else if (~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+			// data is not inherited, apply fitting indexSize
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+			if (this->copyOnWrite && store.signatureIndexSize == db.signatureIndexSize)
+				inheritSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+		} else if (db.signatureIndexSize) {
+			// inherit input size
+			store.signatureIndexSize = db.signatureIndexSize;
+		} else {
+			// create new index for inherited data
+			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+		}
+		// input index empty or unusable
+		if (db.numSignature && (~inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX)) {
+			if (!db.signatureIndexSize || db.signatureIndexSize != store.signatureIndexSize)
+				rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
 		}
 
-		// hints
-		if (this->opt_maxHint != 0) {
-			store.maxHint = this->opt_maxHint; // user specified
-		} else if (~primarySections & database_t::ALLOCMASK_HINT) {
-			store.maxHint = db.maxHint; // keep section read-only
+		/*
+		 * hints
+		 */
+
+		if (inheritSections & database_t::ALLOCMASK_HINT) {
+			// inherited. pass-though
+			store.maxHint = db.numHint;
+		} else if (this->opt_maxHint) {
+			// user specified
+			store.maxHint = this->opt_maxHint;
+		} else {
+			// metrics
+#if 1
+			store.maxHint = 255; // hardcoded metrics
+#else
+			ctx.fatal("no preset for --maxhint\n");
+#endif
+		}
+
+		if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
+			// inherited. pass-though
+			store.hintIndexSize = db.hintIndexSize;
+		} else if (this->opt_hintIndexSize) {
+			// user specified
+			store.hintIndexSize = this->opt_hintIndexSize;
+		} else if (~inheritSections & database_t::ALLOCMASK_HINT) {
+			// data is not inherited, apply fitting indexSize
+			store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
+			if (this->copyOnWrite && store.hintIndexSize == db.hintIndexSize)
+				inheritSections |= database_t::ALLOCMASK_HINTINDEX;
+		} else if (db.hintIndexSize) {
+			// inherit input size
 			store.hintIndexSize = db.hintIndexSize;
 		} else {
-			ctx.fatal("no preset for --maxhint\n");
+			// create new index for inherited data
+			store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
+		}
+		// input index empty or unusable
+		if (db.numHint && (~inheritSections & database_t::ALLOCMASK_HINTINDEX)) {
+			if (!db.hintIndexSize || db.hintIndexSize != store.hintIndexSize)
+				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
 		}
 
-		if (store.hintIndexSize == 0) {
-			if (this->opt_hintIndexSize == 0)
-				store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
-			else
-				store.hintIndexSize = this->opt_hintIndexSize;
-		}
+		/*
+		 * imprints
+		 */
 
 		// interleave
-		if (this->opt_interleave)
-			store.interleave = this->opt_interleave; // manual
-		else if (db.interleave)
-			store.interleave = db.interleave; // inherit
-		else
-			store.interleave = METRICS_DEFAULT_INTERLEAVE; // default
-
-		// find matching `interleaveStep`
-		{
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
+		if (this->opt_interleave) {
+			// user specified
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
 			if (!pMetrics)
 				ctx.fatal("no preset for --interleave\n");
 
 			store.interleaveStep = pMetrics->interleaveStep;
+			store.interleave = this->opt_interleave;
+		} else if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
+			// inherited. pass-though
+			store.interleave = db.interleave;
+			store.interleaveStep = db.interleaveStep;
+		} else if (this->opt_interleave) {
+			// user specified
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
+			if (!pMetrics)
+				ctx.fatal("no preset for --interleave\n");
+
+			store.interleaveStep = pMetrics->interleaveStep;
+			store.interleave = this->opt_interleave;
+		} else if (db.interleave) {
+			// unspecified, can inherit
+			store.interleave = db.interleave;
+			store.interleaveStep = db.interleaveStep;
+		} else {
+			// set interleave when first time
+			this->opt_interleave = METRICS_DEFAULT_INTERLEAVE;
+
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
+			assert(pMetrics);
+
+			store.interleaveStep = pMetrics->interleaveStep;
+			store.interleave = this->opt_interleave;
 		}
 
-		// imprints
-		if (this->opt_maxImprint != 0) {
-			store.maxImprint = this->opt_maxImprint; // user specified
-		} else if ((~primarySections & database_t::ALLOCMASK_IMPRINT) && store.interleave == db.interleave) {
-			store.maxImprint = db.maxImprint; // keep section read-only BUT only with unchanged interleave
-			store.imprintIndexSize = db.imprintIndexSize;
+		if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
+			// inherited. pass-though
+			store.maxImprint = db.numImprint;
+		} else if (this->opt_maxImprint) {
+			// user specified
+			store.maxImprint = this->opt_maxImprint;
 		} else {
+			// metrics
 			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
 			if (!pMetrics)
 				ctx.fatal("no preset for --maximprint\n");
@@ -226,20 +299,42 @@ struct dbtool_t : callable_t {
 			store.maxImprint = pMetrics->numImprint;
 		}
 
-		if (store.imprintIndexSize == 0) {
-			if (this->opt_imprintIndexSize != 0)
-				store.imprintIndexSize = this->opt_imprintIndexSize;
-			else
-				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+		if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
+			// inherited. pass-though
+			store.imprintIndexSize = db.imprintIndexSize;
+		} else if (this->opt_imprintIndexSize) {
+			// user specified
+			store.imprintIndexSize = this->opt_imprintIndexSize;
+		} else if (~inheritSections & database_t::ALLOCMASK_IMPRINT) {
+			// data is not inherited, apply fitting indexSize
+			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+			if (this->copyOnWrite && store.imprintIndexSize == db.imprintIndexSize)
+				inheritSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+		} else if (db.imprintIndexSize) {
+			// inherit input size
+			store.imprintIndexSize = db.imprintIndexSize;
+		} else {
+			// create new index for inherited data
+			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+		}
+		// input index empty or unusable
+		if (db.numImprint && (~inheritSections & database_t::ALLOCMASK_IMPRINTINDEX)) {
+			if (!db.imprintIndexSize || db.imprintIndexSize != store.imprintIndexSize)
+				rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
 		}
 
-		// members
-		if (this->opt_maxMember != 0) {
+		/*
+		 * members
+		 */
+
+		if (inheritSections & database_t::ALLOCMASK_MEMBER) {
+			// inherited. pass-though
+			store.maxMember = db.numMember;
+		} else if (this->opt_maxMember) {
+			// user specified
 			store.maxMember = this->opt_maxMember; // user specified
-		} else if (~primarySections & database_t::ALLOCMASK_MEMBER) {
-			store.maxMember = db.maxMember; // keep section read-only
-			store.memberIndexSize = db.memberIndexSize;
 		} else {
+			// metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics)
 				ctx.fatal("no preset for --maxmember\n");
@@ -247,92 +342,77 @@ struct dbtool_t : callable_t {
 			store.maxMember = pMetrics->numMember;
 		}
 
-		if (store.memberIndexSize == 0) {
-			if (!(this->opt_memberIndexSize == 0))
-				store.memberIndexSize = this->opt_memberIndexSize;
-			else
-				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+		if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
+			// inherited. pass-though
+			store.memberIndexSize = db.memberIndexSize;
+		} else if (this->opt_memberIndexSize) {
+			// user specified
+			store.memberIndexSize = this->opt_memberIndexSize;
+		} else if (~inheritSections & database_t::ALLOCMASK_MEMBER) {
+			// data is not inherited, apply fitting indexSize
+			store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+			if (this->copyOnWrite && store.memberIndexSize == db.memberIndexSize)
+				inheritSections |= database_t::ALLOCMASK_MEMBERINDEX;
+		} else if (db.memberIndexSize) {
+			// inherit input size
+			store.memberIndexSize = db.memberIndexSize;
+		} else {
+			// create new index for inherited data
+			store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
 		}
-
-		if (store.maxSignature && store.maxSignature > store.signatureIndexSize + 1)
-			ctx.fatal("--maxsignature=%u exceeds --signatureIndexSize=%u\n", store.maxSignature, store.signatureIndexSize);
-		if (store.maxHint && store.maxHint > store.hintIndexSize + 1)
-			ctx.fatal("--maxhint=%u exceeds --hintIndexSize=%u\n", store.maxHint, store.hintIndexSize);
-		if (store.maxImprint && store.maxImprint > store.imprintIndexSize + 1)
-			ctx.fatal("--maximprint=%u exceeds --imprintIndexSize=%u\n", store.maxImprint, store.imprintIndexSize);
-	}
-
-	/**
-	 * @date 2020-04-27 19:39:38
-	 *
-	 * Determine is sections need to be rebuilt, inherited or copied.
-	 *
-	 * @param {database_t} store - writable output database
-	 * @param {database_t} db - read-only input database
-	 * @param {number} numNodes - to find matching metrics
-	 */
-	void modeDatabaseSections(database_t &store, const database_t &db) {
-		// signatures
-		if (db.numSignature > 0) {
-			if ((~primarySections & database_t::ALLOCMASK_SIGNATURE) && store.maxSignature <= db.maxSignature)
-				inheritSections |= database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX;
-			if (store.signatureIndexSize != db.signatureIndexSize)
-				rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-		} else if (store.maxSignature > 0) {
-			// on first create, rebuild
-			rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-		}
-
-		// hints
-		if (db.numHint > 0) {
-			if ((~primarySections & database_t::ALLOCMASK_HINT) && store.maxHint <= db.maxHint)
-				inheritSections |= database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX;
-			if (store.hintIndexSize != db.hintIndexSize)
-				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-		} else if (store.maxHint > 0) {
-			// on first create, rebuild
-			rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-		}
-
-		// changing interleave needs imprint rebuilding. This also invalidates imprintIndex
-		if (store.interleave != db.interleave)
-			rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
-
-		// imprints
-		if (db.numImprint > 0) {
-			if ((~primarySections & database_t::ALLOCMASK_IMPRINT) && store.maxImprint <= db.maxImprint)
-				inheritSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
-			if (store.imprintIndexSize != db.imprintIndexSize || db.numImprint == 0)
-				rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-		} else if (store.maxImprint > 0) {
-			// on first create, rebuild
-			rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-		}
-
-		// imprints are level-2 index. If absent re-create.
-		if (db.numSignature > 0 && db.numImprint == 0)
-			rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
-
-		// members
-		if (db.numMember > 0) {
-			if ((~primarySections & database_t::ALLOCMASK_MEMBER) && store.maxMember <= db.maxMember)
-				inheritSections |= database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
-			if (store.memberIndexSize != db.memberIndexSize || db.numMember == 0)
+		// input index empty or unusable
+		if (db.numMember && (~inheritSections & database_t::ALLOCMASK_MEMBERINDEX)) {
+			if (!db.memberIndexSize || db.memberIndexSize != store.memberIndexSize)
 				rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
-		} else if (store.maxMember > 0) {
-			// on first create, rebuild
-			rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
 		}
 
-		// rebuilt (rw) sections may not be inherited (ro)
+		/*
+		 * rebuilt (writable) sections may not be inherited (read-only)
+		 */
+
 		inheritSections &= ~rebuildSections;
 
+		/*
+		 * validate
+		 */
+
+		if (!readOnlyMode) {
+			// indices must be at least one larger than their data
+			if (store.maxSignature && store.maxSignature > store.signatureIndexSize + 1)
+				ctx.fatal("--maxsignature=%u exceeds --signatureIndexSize=%u\n", store.maxSignature, store.signatureIndexSize);
+			if (store.maxHint && store.maxHint > store.hintIndexSize + 1)
+				ctx.fatal("--maxhint=%u exceeds --hintIndexSize=%u\n", store.maxHint, store.hintIndexSize);
+			if (store.maxImprint && store.maxImprint > store.imprintIndexSize + 1)
+				ctx.fatal("--maximprint=%u exceeds --imprintIndexSize=%u\n", store.maxImprint, store.imprintIndexSize);
+		} else if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+			if (rebuildSections)
+				fprintf(stderr, "[%s] WARNING: readOnlyMode and database sections [%s] require rebuilding", ctx.timeAsString(), store.sectionToText(rebuildSections));
+		}
+
+
+		// output data must be large enough to fit input data
+		if (store.maxSignature < db.numSignature)
+			ctx.fatal("--maxsignature=%u needs to be at least %u\n", store.maxSignature, db.numSignature);
+		if (store.maxHint < db.numHint)
+			ctx.fatal("--maxhint=%u needs to be at least %u\n", store.maxHint, db.numHint);
+		if (store.maxMember < db.numMember)
+			ctx.fatal("--maxmember=%u needs to be at least %u\n", store.maxMember, db.numMember);
 	}
 
 	/**
 	 * @date 2020-04-27 20:08:14
 	 *
 	 * With copy-on-write, only `::memcpy()` when the output section if larger, otherwise inherit
+	 *
+	 * @date 2020-04-29 10:10:18
+	 *
+	 * Depending on the mmap() mode.
+	 *
+	 * It is still undecided to use:
+	 *   `mmap(MAP_PRIVATE)` with advantage of copy-on-write but disadvantage that each process has a private copy of (many) page table entries.
+	 *   `mmap(MAP_SHARED)` with advantage of shared PTE's but slow `::memcpy()` to private memory.
+	 *
+	 * Or it could be hybrid that many workers use `MAP_SHARED` and single process use `MAP_PRIVATE`.
 	 *
 	 * @param {database_t} store - writable output database
 	 * @param {database_t} db - read-only input database
@@ -346,12 +426,15 @@ struct dbtool_t : callable_t {
 			fprintf(stderr, "[%s] copyOnWrite=%u inheritSections=[%s] rebuildSections=[%s]\n", ctx.timeAsString(), copyOnWrite, inheritText, rebuildText);
 		}
 
-		// transforms are never invalid or resized
-		if (~rebuildSections & database_t::ALLOCMASK_TRANSFORM) {
+		/*
+		 * transforms are never invalid or resized
+		 */
+
+		if (inheritSections & database_t::ALLOCMASK_TRANSFORM) {
 			assert(~store.allocFlags & database_t::ALLOCMASK_TRANSFORM);
 
 			assert(db.numTransform == MAXTRANSFORM);
-			store.maxTransform = db.maxTransform;
+			store.maxTransform = db.numTransform;
 			store.numTransform = db.numTransform;
 
 			store.fwdTransformData = db.fwdTransformData;
@@ -365,127 +448,236 @@ struct dbtool_t : callable_t {
 
 			store.fwdTransformNameIndex = db.fwdTransformNameIndex;
 			store.revTransformNameIndex = db.revTransformNameIndex;
+		} else {
+			assert(0);
 		}
 
-		// signatures
-		if (~rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
-			if (store.maxSignature <= db.maxSignature) {
+		/*
+		 * signatures
+		 */
+
+		if (!store.maxSignature) {
+			store.signatures = NULL;
+			store.signatureIndex = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+				// inherited. pass-though
 				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
-				store.maxSignature = db.maxSignature;
-				store.numSignature = db.numSignature;
 				store.signatures = db.signatures;
-			} else if (db.numSignature > 0) {
+				store.numSignature = db.numSignature;
+			} else if (!db.numSignature) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
+				store.numSignature = 1;
+			} else if (store.maxSignature <= db.numSignature && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
+				store.signatures = db.signatures;
+				store.numSignature = db.numSignature;
+			} else {
 				fprintf(stderr, "[%s] Copying signature section\n", ctx.timeAsString());
 
 				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
-				assert(store.maxSignature >= db.numSignature);
 				::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*db.signatures));
 				store.numSignature = db.numSignature;
 			}
 
-			if (store.numSignature == 0 && (primarySections & database_t::ALLOCMASK_SIGNATURE))
-				store.numSignature = 1; // skip reserved entry
+			if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				store.signatureIndexSize = db.signatureIndexSize;
+				store.signatureIndex = db.signatureIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+			} else if (!db.signatureIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				::memset(store.signatureIndex, 0, store.signatureIndexSize);
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.signatureIndexSize == db.signatureIndexSize);
+				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				store.signatureIndex = db.signatureIndex;
+				store.signatureIndexSize = db.signatureIndexSize;
+			} else {
+				// copy
+				assert(store.signatureIndexSize == db.signatureIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				::memcpy(store.signatureIndex, db.signatureIndex, db.signatureIndexSize);
+				store.signatureIndexSize = db.signatureIndexSize;
+			}
 		}
 
-		if (~rebuildSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
-			assert(store.signatureIndexSize == db.signatureIndexSize);
+		/*
+		 * hints
+		 */
 
-			assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
-			store.signatureIndexSize = db.signatureIndexSize;
-			store.signatureIndex = db.signatureIndex;
-
-			assert(store.signatureIndexSize == 0 || store.signatureIndexSize > store.maxSignature + 1);
-		}
-
-		// hints
-		if (~rebuildSections & database_t::ALLOCMASK_HINT) {
-			if (store.maxHint <= db.maxHint) {
+		if (!store.maxHint) {
+			store.hints = NULL;
+			store.hintIndex = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_HINT) {
+				// inherited. pass-though
 				assert(~store.allocFlags & database_t::ALLOCMASK_HINT);
-				store.maxHint = db.maxHint;
-				store.numHint = db.numHint;
 				store.hints = db.hints;
-			} else if (db.numHint > 0) {
+				store.numHint = db.numHint;
+			} else if (!db.numHint) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_HINT);
+				store.numHint = 1;
+			} else if (store.maxHint <= db.numHint && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(~store.allocFlags & database_t::ALLOCMASK_HINT);
+				store.hints = db.hints;
+				store.numHint = db.numHint;
+			} else {
 				fprintf(stderr, "[%s] Copying hint section\n", ctx.timeAsString());
 
 				assert(store.allocFlags & database_t::ALLOCMASK_HINT);
-				assert(store.maxHint >= db.numHint);
 				::memcpy(store.hints, db.hints, db.numHint * sizeof(*db.hints));
 				store.numHint = db.numHint;
 			}
 
-			if (store.numHint == 0 && (primarySections & database_t::ALLOCMASK_HINT))
-				store.numHint = 1; // skip reserved entry
+			if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				store.hintIndexSize = db.hintIndexSize;
+				store.hintIndex = db.hintIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_HINTINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+			} else if (!db.hintIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				::memset(store.hintIndex, 0, store.hintIndexSize);
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.hintIndexSize == db.hintIndexSize);
+				assert(~store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				store.hintIndex = db.hintIndex;
+				store.hintIndexSize = db.hintIndexSize;
+			} else {
+				// copy
+				assert(store.hintIndexSize == db.hintIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				::memcpy(store.hintIndex, db.hintIndex, db.hintIndexSize);
+				store.hintIndexSize = db.hintIndexSize;
+			}
 		}
 
-		if (~rebuildSections & database_t::ALLOCMASK_HINTINDEX) {
-			assert(store.hintIndexSize == db.hintIndexSize);
+		/*
+		 * imprints
+		 */
 
-			assert(~store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-			store.hintIndexSize = db.hintIndexSize;
-			store.hintIndex = db.hintIndex;
-
-			assert(store.hintIndexSize == 0 || store.hintIndexSize > store.maxHint + 1);
-		}
-
-		// imprints
-		if (~rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-			if (store.maxImprint <= db.maxImprint) {
+		if (!store.maxImprint) {
+			store.imprints = NULL;
+			store.imprintIndex = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
+				// inherited. pass-though
 				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINT);
-				store.maxImprint = db.maxImprint;
-				store.numImprint = db.numImprint;
 				store.imprints = db.imprints;
-			} else if (db.numImprint > 0) {
+				store.numImprint = db.numImprint;
+			} else if (!db.numImprint) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINT);
+				store.numImprint = 1;
+			} else if (store.maxImprint <= db.numImprint && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINT);
+				store.imprints = db.imprints;
+				store.numImprint = db.numImprint;
+			} else {
 				fprintf(stderr, "[%s] Copying imprint section\n", ctx.timeAsString());
 
 				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINT);
-				assert(store.maxImprint >= db.numImprint);
 				::memcpy(store.imprints, db.imprints, db.numImprint * sizeof(*db.imprints));
 				store.numImprint = db.numImprint;
 			}
 
-			if (store.numImprint == 0 && (primarySections & database_t::ALLOCMASK_IMPRINT))
-				store.numImprint = 1; // skip reserved entry
+			if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				store.imprintIndexSize = db.imprintIndexSize;
+				store.imprintIndex = db.imprintIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_IMPRINTINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+			} else if (!db.imprintIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				::memset(store.imprintIndex, 0, store.imprintIndexSize);
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.imprintIndexSize == db.imprintIndexSize);
+				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				store.imprintIndex = db.imprintIndex;
+				store.imprintIndexSize = db.imprintIndexSize;
+			} else {
+				// copy
+				assert(store.imprintIndexSize == db.imprintIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				::memcpy(store.imprintIndex, db.imprintIndex, db.imprintIndexSize);
+				store.imprintIndexSize = db.imprintIndexSize;
+			}
 		}
 
-		if (~rebuildSections & database_t::ALLOCMASK_IMPRINTINDEX) {
-			assert(store.imprintIndexSize == db.imprintIndexSize);
+		/*
+		 * members
+		 */
 
-			assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
-			store.imprintIndexSize = db.imprintIndexSize;
-			store.imprintIndex = db.imprintIndex;
-
-			assert(store.imprintIndexSize == 0 || store.imprintIndexSize > store.maxImprint + 1);
-		}
-
-
-		// members
-		if (~rebuildSections & database_t::ALLOCMASK_MEMBER) {
-			if (store.maxMember <= db.maxMember) {
+		if (!store.maxMember) {
+			store.members = NULL;
+			store.memberIndex = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_MEMBER) {
+				// inherited. pass-though
 				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBER);
-				store.maxMember = db.maxMember;
-				store.numMember = db.numMember;
 				store.members = db.members;
-			} else if (db.numMember > 0) {
+				store.numMember = db.numMember;
+			} else if (!db.numMember) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_MEMBER);
+				store.numMember = 1;
+			} else if (store.maxMember <= db.numMember && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBER);
+				store.members = db.members;
+				store.numMember = db.numMember;
+			} else {
 				fprintf(stderr, "[%s] Copying member section\n", ctx.timeAsString());
 
 				assert(store.allocFlags & database_t::ALLOCMASK_MEMBER);
-				assert(store.maxMember >= db.numMember);
 				::memcpy(store.members, db.members, db.numMember * sizeof(*db.members));
 				store.numMember = db.numMember;
 			}
 
-			if (store.numMember == 0 && (primarySections & database_t::ALLOCMASK_MEMBER))
-				store.numMember = 1; // skip reserved entry
-		}
-
-		if (~rebuildSections & database_t::ALLOCMASK_MEMBERINDEX) {
-			assert(store.memberIndexSize == db.memberIndexSize);
-
-			assert(~store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
-			store.memberIndexSize = db.memberIndexSize;
-			store.memberIndex = db.memberIndex;
-
-			assert(store.memberIndexSize == 0 || store.memberIndexSize > store.maxImprint + 1);
+			if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				store.memberIndexSize = db.memberIndexSize;
+				store.memberIndex = db.memberIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_MEMBERINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+			} else if (!db.memberIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				::memset(store.memberIndex, 0, store.memberIndexSize);
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.memberIndexSize == db.memberIndexSize);
+				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				store.memberIndex = db.memberIndex;
+				store.memberIndexSize = db.memberIndexSize;
+			} else {
+				// copy
+				assert(store.memberIndexSize == db.memberIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				::memcpy(store.memberIndex, db.memberIndex, db.memberIndexSize);
+				store.memberIndexSize = db.memberIndexSize;
+			}
 		}
 	}
 };

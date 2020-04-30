@@ -1400,11 +1400,9 @@ int main(int argc, char *const *argv) {
 	 *   copy();
 	 */
 
-	// which sections are primary goal and need to be writable to be collect or sort
-	if (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4)
-		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_IMPRINT;
-	else
-		app.primarySections = 0;
+	// need indices (removing from inherit will auto-create)
+	if (!app.readOnlyMode)
+		app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 
 	/*
 	 * @date 2020-03-17 13:57:25
@@ -1422,11 +1420,14 @@ int main(int argc, char *const *argv) {
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
+	// no input imprints or interleave changed
+	if (db.numImprint == 0 || db.interleave == store.interleave) {
+		app.rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
+		app.inheritSections &= ~app.rebuildSections;
+	}
+
 	if (app.rebuildSections && app.readOnlyMode)
 		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
-
-	// determine if sections are rebuild, inherited or copied (copy-on-write)
-	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
@@ -1479,6 +1480,10 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (!app.readOnlyMode) {
+		// todo: move this to `populateDatabaseSections()`
+		// data sections cannot be automatically rebuilt
+		assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+
 		if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 			// rebuild imprints
 			app.rebuildImprints();
@@ -1549,7 +1554,7 @@ int main(int argc, char *const *argv) {
 			store.numImprint = 0;
 			store.interleave = 0;
 			store.interleaveStep = 0;
-		} else if (app.primarySections && app.opt_sort) {
+		} else if (app.opt_sort) {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
 				// find matching `interleaveStep`

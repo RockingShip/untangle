@@ -764,20 +764,18 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	// which sections are primary goal and need to be writable to be collect or sort
-	if (app.arg_outputDatabase != NULL || app.opt_text == 3 || app.opt_text == 4)
-		app.primarySections = database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT;
-	else
-		app.primarySections = 0;
+	// need indices (removing from inherit will auto-create)
+	if (!app.readOnlyMode)
+		app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX);
+
+	// sync signatures to input
+	app.opt_maxSignature = db.numSignature;
 
 	// assign sizes to output sections
 	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that do not occur
 
 	if (app.rebuildSections && app.readOnlyMode)
 		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
-
-	// determine if sections are rebuild, inherited or copied (copy-on-write)
-	app.modeDatabaseSections(store, db);
 
 	/*
 	 * Finalise allocations and create database
@@ -826,7 +824,10 @@ int main(int argc, char *const *argv) {
 	 * Rebuild sections
 	 */
 
+	// should not rebuild imprints
 	assert(app.rebuildSections == 0 || (~app.rebuildSections & database_t::ALLOCMASK_IMPRINT));
+	// data sections cannot be automatically rebuilt
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	/*
 	 * Rebuild sections
