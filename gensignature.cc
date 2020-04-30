@@ -866,10 +866,11 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u interleave=%u numNode=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u interleave=%u numNode=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u\n",
 			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint);
+			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        skipDuplicate);
 
 	}
 
@@ -1523,6 +1524,25 @@ int main(int argc, char *const *argv) {
 
 		assert(store.numSignature >= 1);
 		qsort_r(store.signatures + 1, store.numSignature - 1, sizeof(*store.signatures), app.comparSignature, &app);
+
+		// clear name index
+		::memset(store.signatureIndex, 0, sizeof(*store.signatureIndex) * store.signatureIndexSize);
+
+		// remove hints
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			signature_t *pSignature = store.signatures + iSid;
+
+			// erase members
+			pSignature->firstMember = 0;
+
+			// re-index name
+			unsigned ix = store.lookupSignature(store.signatures[iSid].name);
+			assert(store.signatureIndex[ix] == 0);
+			store.signatureIndex[ix] = iSid;
+		}
+
+		store.numImprint = 0;
+		store.numMember = 0;
 	}
 
 	/*

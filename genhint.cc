@@ -20,8 +20,19 @@
  * ./genhint next..
  * Throughput is around 150k/h (about 6 hours).
  *
- * To give advice ./genhint <input,db> --load=imprints.lst --maxmem=30G
- * ./genmember --stdin | add to members | create full index
+ * @date 2020-04-22 21:37:03
+ *
+ * Text modes:
+ *
+ * `--text[=1]` Display hints as the generator progresses. There are MAXTRANSFORM*2 hints.
+ *              Can be used for the `--load=<file>` option.
+ *
+ *              <name> <hintForInterleave> <hintForInterleave> ...
+ *
+ * `--test=2`   Display hints when they are written to the database
+ *              NOTE: same format as `--text=1`
+ *
+ *              <name> <hintForInterleave> <hintForInterleave> ...
  */
 
 /*
@@ -141,7 +152,7 @@ struct genhintContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Reading hints from file\n", ctx.timeAsString());
 
-		FILE *f = fopen(this->opt_load, "r");
+		FILE *f = ::fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
 			          __FUNCTION__, this->opt_load);
@@ -165,7 +176,7 @@ struct genhintContext_t : dbtool_t {
 			::memset(&hint, 0, sizeof(hint));
 			name[0] = 0;
 
-			int ret = ::fscanf(f, "%s %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
+			int ret = ::sscanf(line, "%s %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
 			                   name,
 			                   &hint.numStored[0], &hint.numStored[1], &hint.numStored[2], &hint.numStored[3],
 			                   &hint.numStored[4], &hint.numStored[5], &hint.numStored[6], &hint.numStored[7],
@@ -196,7 +207,7 @@ struct genhintContext_t : dbtool_t {
 			unsigned ix = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0) {
-				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
+				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
 				       __FUNCTION__, name, ctx.progress);
 				exit(1);
 			}
@@ -209,7 +220,13 @@ struct genhintContext_t : dbtool_t {
 					pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
 
 				// add hintId to signature
-				pStore->signatures[sid].hintId = hintId;
+				if (pStore->signatures[sid].hintId == 0) {
+					pStore->signatures[sid].hintId = hintId;
+				} else {
+					printf("{\"error\":\"inconsistent hint\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
+					       __FUNCTION__, name, ctx.progress);
+					exit(1);
+				}
 			}
 
 			ctx.progress++;
@@ -235,13 +252,12 @@ struct genhintContext_t : dbtool_t {
 	 * Imprint metrics are non-linear and difficult to predict.
 	 * The only practical solution is to actually count them and store them in a separate table.
 	 * This allows precise memory usage calculations when using windows or high-usage settings.
+	 *
+	 * @param {database_t} tempdb - worker database to count imprints
 	 */
-	void hintsFromGenerator(void) {
+	void hintsFromGenerator(database_t &tempdb) {
 
 		tinyTree_t tree(ctx);
-
-		// enable versioned memory or imprint index
-		pStore->enableVersioned();
 
 		/*
 		 * Apply sid/task setting on generator
@@ -306,29 +322,32 @@ struct genhintContext_t : dbtool_t {
 			signature_t *pSignature = pStore->signatures + iSid;
 			hint_t hint;
 
+			if (pSignature->hintId)
+				continue; // hints already determined
+
 			::memset(&hint, 0, sizeof(hint));
 
-			if (this->opt_text)
+			if (this->opt_text == 1)
 				printf("%s", pSignature->name);
 
 			for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
 				// prepare database
-				pStore->InvalidateVersioned();
-				pStore->numImprint = 1; // skip reserved first entry
-				pStore->interleave = pInterleave->numStored;
-				pStore->interleaveStep = pInterleave->interleaveStep;
+				tempdb.InvalidateVersioned();
+				tempdb.numImprint = 1; // skip reserved first entry
+				tempdb.interleave = pInterleave->numStored;
+				tempdb.interleaveStep = pInterleave->interleaveStep;
 
 				// add imprint
 				tree.decodeFast(pSignature->name);
-				pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				tempdb.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
 
-				// output counte
-				hint.numStored[pInterleave - metricsInterleave] = pStore->numImprint - 1;
+				// output count
+				hint.numStored[pInterleave - metricsInterleave] = tempdb.numImprint - 1;
 
-				if (this->opt_text)
-					printf("\t%u", pStore->numImprint - 1);
+				if (this->opt_text == 1)
+					printf("\t%u", tempdb.numImprint - 1);
 			}
-			if (this->opt_text)
+			if (this->opt_text == 1)
 				printf("\n");
 
 			// add to database
@@ -702,6 +721,11 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
+	if (app.opt_text && isatty(1)) {
+		fprintf(stderr, "stdout not redirected\n");
+		exit(1);
+	}
+
 	// register timer handler
 	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
@@ -853,8 +877,41 @@ int main(int argc, char *const *argv) {
 
 	if (app.opt_load)
 		app.hintsFromFile();
-	if (app.opt_generate)
-		app.hintsFromGenerator();
+	if (app.opt_generate) {
+		/*
+		 * Create worker database to count imprints.
+		 * Use separate db as to not to interfere with real imprints
+		 */
+		database_t tempdb(ctx);
+		tempdb.maxHint = 0;
+		tempdb.hintIndexSize = ctx.nextPrime(tempdb.maxHint * app.opt_ratio);
+		tempdb.maxImprint = MAXTRANSFORM;
+		tempdb.imprintIndexSize = ctx.nextPrime(tempdb.maxImprint * app.opt_ratio);
+		tempdb.create(0);
+		tempdb.enableVersioned();
+
+		app.hintsFromGenerator(tempdb);
+	}
+
+	/*
+	 * List result
+	 */
+
+	if (app.opt_text == 2) {
+		// also output 'empty' hints to easy track what is missing
+
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			const signature_t *pSignature = store.signatures + iSid;
+			const hint_t *pHint = store.hints + pSignature->hintId;
+
+			printf("%s\t", pSignature->name);
+
+			for (unsigned j = 0; j < MAXSLOTS * 2; j++)
+				printf("\t%u", pHint->numStored[j]);
+
+			printf("\n");
+		}
+	}
 
 	/*
 	 * Save the database

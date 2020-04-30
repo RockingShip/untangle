@@ -721,7 +721,7 @@ struct genmemberContext_t : dbtool_t {
 				        numEmpty, numUnsafe - numEmpty,
 				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 			} else {
-				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+				int eta = (int) ((treeR.windowHi - ctx.progress) / perSecond);
 
 				int etaH = eta / 3600;
 				eta %= 3600;
