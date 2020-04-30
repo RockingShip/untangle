@@ -17,7 +17,7 @@
  * Each transforms also has a reverse mapping. This is used to "undo" the effect of an
  * applied transforms. For example `"bca?/bca"` would have the effect `"a->b, b->c, c->a"`
  * resulting in "cab?". The reverse transforms would be `"cab?/cab"`. Determining a reverse
- * transforms is not trivial and therefore pre-determined seperately.
+ * transforms is not trivial and therefore pre-determined separately.
  *
  * Skins are stored as LSB hexadecimal words where each nibble represents an endpoint
  * and a textual string.
@@ -232,7 +232,7 @@ struct gentransformContext_t {
 		}
 
 		// sanity check
-		assert (iTransform == MAXTRANSFORM);
+		assert(iTransform == MAXTRANSFORM);
 
 		/*
 		 * Create a state based index of the transform names for fast text-to-id lookups
@@ -275,7 +275,7 @@ struct gentransformContext_t {
 
 			// transform name
 			const char *pStr = pNames[iTransform];
-			unsigned ix = 0; // active entry
+			unsigned ix; // active entry
 
 			// point to entrypoint
 			unsigned pos = MAXSLOTS + 1;
@@ -302,7 +302,7 @@ struct gentransformContext_t {
 			ix = pos + *pStr - 'a';
 
 			// the entry containing the transform id should be free
-			assert (pIndex[ix] == 0);
+			assert(pIndex[ix] == 0);
 
 			// place transform id into entry with IBIT set to indicate terminated
 			pIndex[ix] = iTransform ^ IBIT;
@@ -409,206 +409,6 @@ struct gentransformContext_t {
 
 };
 
-/**
- * @date 2020-04-15 13:50:53
- *
- * Main program logic as application context
- * It is contained as an independent `struct` so it can be easily included into projects/code
- *
- * @typedef {object}
- */
-struct gentransformSelftest_t : gentransformContext_t {
-
-	/**
-	 * Constructor
-	 */
-	gentransformSelftest_t(context_t &ctx) : gentransformContext_t(ctx) {
-	}
-
-	/**
-	 * @date 2020-03-15 12:13:13
-	 *
-	 * The list of transform names has repetitive properties which give the enumerated id's modulo properties.
-	 *
-	 * A modulo property is that the enumeration can be written as `"(row * numCols) + col"`.
-	 * `"row"` and `"col"` are dimensions of a rectangle large enough to fit the entire collection of id'd.
-	 *
-	 * This can be illustrated by the following example with 5-letter transform names with 5! (=120) permutations.
-	 * The example rectangle has 1*2*3 (=6) columns and 4*5 (=20) rows.
-	 * The names are placed in a left-to-right, top-to-bottom sequence.
-	 *
-	 *     +<--------------COLUMNS------------->
-	 *     ^ abcde bacde acbde cabde bcade cbade
-	 *     | abdce badce adbce dabce bdace dbace
-	 *     | acdbe cadbe adcbe dacbe cdabe dcabe
-	 *     | bcdae cbdae bdcae dbcae cdbae dcbae
-	 *     | abced baced acbed cabed bcaed cbaed
-	 *     | abecd baecd aebcd eabcd beacd ebacd
-	 *     | acebd caebd aecbd eacbd ceabd ecabd
-	 *     | bcead cbead becad ebcad cebad ecbad
-	 *     R abdec badec adbec dabec bdaec dbaec
-	 *     O abedc baedc aebdc eabdc beadc ebadc
-	 *     W adebc daebc aedbc eadbc deabc edabc
-	 *     S bdeac dbeac bedac ebdac debac edbac
-	 *     | acdeb cadeb adceb daceb cdaeb dcaeb
-	 *     | acedb caedb aecdb eacdb ceadb ecadb
-	 *     | adecb daecb aedcb eadcb deacb edacb
-	 *     | cdeab dceab cedab ecdab decab edcab
-	 *     | bcdea cbdea bdcea dbcea cdbea dcbea
-	 *     | bceda cbeda becda ebcda cebda ecbda
-	 *     | bdeca dbeca bedca ebdca debca edbca
-	 *     v cdeba dceba cedba ecdba decba edcba
-	 *
-	 * Examining the lower-right cell the following `"placeholder/skin"` property applies:
-	 *
-	 *      `"cbade/cdeba -> edcba"`
-	 *          ^     ^        ^
-	 *          |     |        +- cell
-	 *          |     +- first cell of grid row
-	 *          +- first cell of grid column
-	 *
-	 * Rewriting all the names in `"placeholder/skin"` notation
-	 *
-	 *     +<--------------------------------COLUMNS------------------------------->
-	 *     ^ abcde/abcde bacde/abcde acbde/abcde cabde/abcde bcade/abcde cbade/abcde
-	 *     | abcde/abdce bacde/abdce acbde/abdce cabde/abdce bcade/abdce cbade/abdce
-	 *     | abcde/acdbe bacde/acdbe acbde/acdbe cabde/acdbe bcade/acdbe cbade/acdbe
-	 *     | abcde/bcdae bacde/bcdae acbde/bcdae cabde/bcdae bcade/bcdae cbade/bcdae
-	 *     | abcde/abced bacde/abced acbde/abced cabde/abced bcade/abced cbade/abced
-	 *     | abcde/abecd bacde/abecd acbde/abecd cabde/abecd bcade/abecd cbade/abecd
-	 *     | abcde/acebd bacde/acebd acbde/acebd cabde/acebd bcade/acebd cbade/acebd
-	 *     | abcde/bcead bacde/bcead acbde/bcead cabde/bcead bcade/bcead cbade/bcead
-	 *     R abcde/abdec bacde/abdec acbde/abdec cabde/abdec bcade/abdec cbade/abdec
-	 *     O abcde/abedc bacde/abedc acbde/abedc cabde/abedc bcade/abedc cbade/abedc
-	 *     W abcde/adebc bacde/adebc acbde/adebc cabde/adebc bcade/adebc cbade/adebc
-	 *     S abcde/bdeac bacde/bdeac acbde/bdeac cabde/bdeac bcade/bdeac cbade/bdeac
-	 *     | abcde/acdeb bacde/acdeb acbde/acdeb cabde/acdeb bcade/acdeb cbade/acdeb
-	 *     | abcde/acedb bacde/acedb acbde/acedb cabde/acedb bcade/acedb cbade/acedb
-	 *     | abcde/adecb bacde/adecb acbde/adecb cabde/adecb bcade/adecb cbade/adecb
-	 *     | abcde/cdeab bacde/cdeab acbde/cdeab cabde/cdeab bcade/cdeab cbade/cdeab
-	 *     | abcde/bcdea bacde/bcdea acbde/bcdea cabde/bcdea bcade/bcdea cbade/bcdea
-	 *     | abcde/bceda bacde/bceda acbde/bceda cabde/bceda bcade/bceda cbade/bceda
-	 *     | abcde/bdeca bacde/bdeca acbde/bdeca cabde/bdeca bcade/bdeca cbade/bdeca
-	 *     v abcde/cdeba bacde/cdeba acbde/cdeba cabde/cdeba bcade/cdeba cbade/cdeba
-	 *
-	 * To make the patterns more obvious, replace names by their enumerated id's
-	 *
-	 *     +<-----------------------COLUMNS---------------------->
-	 *     | 0/(6* 0) 1/(6* 0) 2/(6* 0) 3/(6* 0) 4/(6* 0) 5/(6* 0)
-	 *     | 0/(6* 1) 1/(6* 1) 2/(6* 1) 3/(6* 1) 4/(6* 1) 5/(6* 1)
-	 *     | 0/(6* 2) 1/(6* 2) 2/(6* 2) 3/(6* 2) 4/(6* 2) 5/(6* 2)
-	 *     | 0/(6* 3) 1/(6* 3) 2/(6* 3) 3/(6* 3) 4/(6* 3) 5/(6* 3)
-	 *     | 0/(6* 4) 1/(6* 4) 2/(6* 4) 3/(6* 4) 4/(6* 4) 5/(6* 4)
-	 *     | 0/(6* 5) 1/(6* 5) 2/(6* 5) 3/(6* 5) 4/(6* 5) 5/(6* 5)
-	 *     | 0/(6* 6) 1/(6* 6) 2/(6* 6) 3/(6* 6) 4/(6* 6) 5/(6* 6)
-	 *     | 0/(6* 7) 1/(6* 7) 2/(6* 7) 3/(6* 7) 4/(6* 7) 5/(6* 7)
-	 *     R 0/(6* 8) 1/(6* 8) 2/(6* 8) 3/(6* 8) 4/(6* 8) 5/(6* 8)
-	 *     O 0/(6* 9) 1/(6* 9) 2/(6* 9) 3/(6* 9) 4/(6* 9) 5/(6* 9)
-	 *     W 0/(6*10) 1/(6*10) 2/(6*10) 3/(6*10) 4/(6*10) 5/(6*10)
-	 *     S 0/(6*11) 1/(6*11) 2/(6*11) 3/(6*11) 4/(6*11) 5/(6*11)
-	 *     | 0/(6*12) 1/(6*12) 2/(6*12) 3/(6*12) 4/(6*12) 5/(6*12)
-	 *     | 0/(6*13) 1/(6*13) 2/(6*13) 3/(6*13) 4/(6*13) 5/(6*13)
-	 *     | 0/(6*14) 1/(6*14) 2/(6*14) 3/(6*14) 4/(6*14) 5/(6*14)
-	 *     | 0/(6*15) 1/(6*15) 2/(6*15) 3/(6*15) 4/(6*15) 5/(6*15)
-	 *     | 0/(6*16) 1/(6*16) 2/(6*16) 3/(6*16) 4/(6*16) 5/(6*16)
-	 *     | 0/(6*17) 1/(6*17) 2/(6*17) 3/(6*17) 4/(6*17) 5/(6*17)
-	 *     | 0/(6*18) 1/(6*18) 2/(6*18) 3/(6*18) 4/(6*18) 5/(6*18)
-	 *     v 0/(6*19) 1/(6*19) 2/(6*19) 3/(6*19) 4/(6*19) 5/(6*19)
-	 *
-	 * This implies that only knowledge of the first cell of each row and column are needed to reconstruct any cell name.
-	 * The mechanism is called `"interleaving"`.
-	 *
-	 * @param {gentransformContext_t} pApp - program context
-	 * @param {database_t} pStore - database just before `main()`
-	 */
-	void performSelfTestInterleave(database_t *pStore) {
-
-		// shortcuts
-		transformName_t *pFwdNames = pStore->fwdTransformNames;
-		transformName_t *pRevNames = pStore->revTransformNames;
-
-		unsigned numPassed = 0;
-
-		// generate datasets
-		this->createTransforms(pStore->fwdTransformData, pFwdNames, pStore->fwdTransformNameIndex, true); // forward transform
-		this->createTransforms(pStore->revTransformData, pRevNames, pStore->revTransformNameIndex, false); // reverse transform
-
-		unsigned numRows, numCols = 1;
-
-		/*
-		 * Apply test to eash possible grid layout
-		 */
-		for (unsigned iInterleave = 1; iInterleave <= MAXSLOTS; iInterleave++) {
-			// number of columns must be iInterleave!
-			numCols *= iInterleave;
-			numRows = MAXTRANSFORM / numCols;
-			assert(numCols * numRows == MAXTRANSFORM);
-
-			/*
-			 * walk through cells.
-			 */
-			for (unsigned row = 0; row < numRows; row++) {
-				for (unsigned col = 0; col < numCols; col++) {
-
-					/*
-					 * Validate "<first cell of grid column>/<first cell of grid row>" == "<cell>"
-					 */
-
-					char cell[10];
-
-					// construct cell name
-					cell[0] = pFwdNames[row * numCols][pFwdNames[col][0] - 'a'];
-					cell[1] = pFwdNames[row * numCols][pFwdNames[col][1] - 'a'];
-					cell[2] = pFwdNames[row * numCols][pFwdNames[col][2] - 'a'];
-					cell[3] = pFwdNames[row * numCols][pFwdNames[col][3] - 'a'];
-					cell[4] = pFwdNames[row * numCols][pFwdNames[col][4] - 'a'];
-					cell[5] = pFwdNames[row * numCols][pFwdNames[col][5] - 'a'];
-					cell[6] = pFwdNames[row * numCols][pFwdNames[col][6] - 'a'];
-					cell[7] = pFwdNames[row * numCols][pFwdNames[col][7] - 'a'];
-					cell[8] = pFwdNames[row * numCols][pFwdNames[col][8] - 'a'];
-					cell[9] = 0;
-
-					// check
-					if (strcmp(cell, pFwdNames[row * numCols + col]) != 0) {
-						printf("{\"error\":\"failed merge\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%u,\"numRows\":%u,\"col\":%u,\"colName\":\"%s\",\"row\":%u,\"rowName\":\"%s\"}\n",
-						       __FUNCTION__, cell, pFwdNames[row * numCols + col], numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
-						exit(1);
-					}
-
-					numPassed++;
-
-					/*
-					 * If the above applies, then the following should be valid
-					 */
-
-					assert(pFwdNames[(row * numCols) + col][0] == pFwdNames[(row * numCols)][pFwdNames[col][0] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][1] == pFwdNames[(row * numCols)][pFwdNames[col][1] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][2] == pFwdNames[(row * numCols)][pFwdNames[col][2] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][3] == pFwdNames[(row * numCols)][pFwdNames[col][3] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][4] == pFwdNames[(row * numCols)][pFwdNames[col][4] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][5] == pFwdNames[(row * numCols)][pFwdNames[col][5] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][6] == pFwdNames[(row * numCols)][pFwdNames[col][6] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][7] == pFwdNames[(row * numCols)][pFwdNames[col][7] - 'a']);
-					assert(pFwdNames[(row * numCols) + col][8] == pFwdNames[(row * numCols)][pFwdNames[col][8] - 'a']);
-
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][0] - 'a'] == pFwdNames[col][0]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][1] - 'a'] == pFwdNames[col][1]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][2] - 'a'] == pFwdNames[col][2]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][3] - 'a'] == pFwdNames[col][3]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][4] - 'a'] == pFwdNames[col][4]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][5] - 'a'] == pFwdNames[col][5]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][6] - 'a'] == pFwdNames[col][6]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][7] - 'a'] == pFwdNames[col][7]);
-					assert(pRevNames[(row * numCols)][pFwdNames[(row * numCols) + col][8] - 'a'] == pFwdNames[col][8]);
-				}
-			}
-		}
-
-		fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
-	}
-
-};
-
 /*
  * I/O context.
  * Needs to be global to be accessible by signal handlers.
@@ -623,7 +423,7 @@ context_t ctx;
  *
  * @global {gentransformContext_t} Application context
  */
-gentransformSelftest_t app(ctx);
+gentransformContext_t app(ctx);
 
 /**
  * @date 2020-03-11 23:06:35
@@ -634,7 +434,7 @@ gentransformSelftest_t app(ctx);
  *
  * @param {number} sig - signal (ignored)
  */
-void sigintHandler(int sig) {
+void sigintHandler(int __attribute__ ((unused)) sig) {
 	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
@@ -650,7 +450,7 @@ void sigintHandler(int sig) {
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	if (ctx.opt_timer) {
 		ctx.tick++;
 		alarm(ctx.opt_timer);
@@ -667,7 +467,7 @@ void sigalrmHandler(int sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s [<output.db>]  -- Create initial database containing transforms\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.db>  -- Create initial database containing transforms\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");
@@ -775,7 +575,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -828,7 +628,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+		fprintf(stderr, "[%s] Allocated %.3fG memory\n", ctx.timeAsString(), ctx.totalAllocated / 1e9);
 
 
 	/*

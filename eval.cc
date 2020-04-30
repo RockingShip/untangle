@@ -2617,7 +2617,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}

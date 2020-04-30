@@ -934,8 +934,8 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned nodesLeft, unsigned endpointsLeft, unsigned numPlaceholder, unsigned stack, callable_t *cbObject, generateTreeCallback_t cbMember) {
 
-		assert (numPlaceholder <= MAXSLOTS);
-		assert (endpointsLeft <= TINYTREE_MAXNODES * 2 + 1);
+		assert(numPlaceholder <= MAXSLOTS);
+		assert(endpointsLeft <= TINYTREE_MAXNODES * 2 + 1);
 
 		/*
 		 * Test progress end-condition

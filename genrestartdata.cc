@@ -317,7 +317,7 @@ struct genrestartdataContext_t : callable_t {
 
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iPure, numArgs);
 			if (pMetrics) {
-				if (pMetrics->noauto)
+				if (pMetrics->noauto & 1)
 					continue; // skip automated handling
 
 				buildProgressIndex[numArgs][iPure] = this->numRestart;
@@ -399,7 +399,7 @@ context_t ctx;
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {genrestartdataSelftest_t} Application context
+ * @global {genrestartdataContext_t} Application context
  */
 genrestartdataContext_t app(ctx);
 
@@ -427,7 +427,7 @@ const char *timeAsString(void) {
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	(void) sig; // trick compiler t see parameter is used
 
 	if (ctx.opt_timer) {
@@ -608,7 +608,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -641,7 +641,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+		fprintf(stderr, "[%s] Allocated %.3fG memory\n", ctx.timeAsString(), ctx.totalAllocated / 1e9);
 
 	/*
 	 * Invoke

@@ -992,7 +992,7 @@ struct selftestContext_t : dbtool_t {
 		 */
 
 		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
-			if (pInterleave->noauto)
+			if (pInterleave->noauto & 2)
 				continue; // skip automated handling
 			if (pInterleave->numSlot != MAXSLOTS)
 				continue; // only process settings that match `MAXSLOTS`
@@ -1305,7 +1305,7 @@ struct selftestContext_t : dbtool_t {
 		 */
 		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlot; pRound++) {
 
-			if (pRound->noauto)
+			if (pRound->noauto & 2)
 				continue; // skip automated handling
 			if (pRound->numSlot != MAXSLOTS)
 				continue; // only process settings that match `MAXSLOTS`
@@ -1476,7 +1476,7 @@ context_t ctx;
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {gensignatureSelftest_t} Application context
+ * @global {selftestContext_t} Application context
  */
 selftestContext_t app(ctx);
 
@@ -1489,7 +1489,7 @@ selftestContext_t app(ctx);
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	if (ctx.opt_timer) {
 		ctx.tick++;
 		alarm(ctx.opt_timer);
@@ -1639,7 +1639,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -1748,7 +1748,7 @@ int main(int argc, char *const *argv) {
 		// get highest `numNode` and `numImprint`
 		if (app.opt_maxImprint == 0) {
 			for (const metricsImprint_t *pMetrics = metricsImprint; pMetrics->numSlot; pMetrics++) {
-				if (pMetrics->noauto)
+				if (pMetrics->noauto & 2)
 					continue; // skip automated handling
 				if (pMetrics->numSlot != MAXSLOTS)
 					continue; // only process settings that match `MAXSLOTS`
@@ -1766,7 +1766,7 @@ int main(int argc, char *const *argv) {
 		// get highest `numSignature` but only for the highest `numNode` found above
 		if (app.opt_maxSignature == 0) {
 			for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
-				if (pMetrics->noauto)
+				if (pMetrics->noauto & 2)
 					continue; // skip automated handling
 				if (pMetrics->numSlot != MAXSLOTS)
 					continue; // only process settings that match `MAXSLOTS`
@@ -1833,7 +1833,7 @@ int main(int argc, char *const *argv) {
 	app.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", ctx.timeAsString(), ctx.totalAllocated);
+		fprintf(stderr, "[%s] Allocated %.3fG memory\n", ctx.timeAsString(), ctx.totalAllocated / 1e9);
 
 	/*
 	 * Inherit/copy sections

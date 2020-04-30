@@ -40,7 +40,7 @@
  * Invocations are made with increasing nodeSize to find new members or safe replacements.
  * Once a group is safe (after invocation) new members will be rejected, this makes that only unsafe groups need detection.
  * Multi-pass is possible by focusing on a a smaller number of signature groups. This allows for extreme high speeds (interleave) at a cost of storage.
- * `genmember` actually needs two modes: preperation of an imprint index (done by master) and collecting (done by workers).
+ * `genmember` actually needs two modes: preparation of an imprint index (done by master) and collecting (done by workers).
  * Workers can take advantage of the read-only imprint index in shared memory (`mmap`)
  *
  * Basically, `genmember` collects constructing components.
@@ -80,10 +80,10 @@
  * pure dataset looks promising:
  * share the same `4n9` address space, which holds 791646 signature groups.
  * `3n9-pure` has 790336 empty and 0 unsafe groups
- * `4n9-pure` has 695291 ampty and 499 unsafe groups
+ * `4n9-pure` has 695291 empty and 499 unsafe groups
  * `5n9-pure` has .. empty and .. unsafe groups
  * now scanning `6n9-pure` for the last 46844.
- * thats needs to get as low as possible, searching `7n9` is far above my resources.
+ * that is needs to get as low as possible, searching `7n9` is far above my resources.
  * Speed is about 1590999 candidates/s
  *
  * The pure dataset achieves the same using only `"Q?!T:F"` / `"abc!"` nodes/operators.
@@ -94,7 +94,7 @@
  * safe members avoid being normalised when their notation is being constructed.
  * From the constructor point of view:
  *   unsafe members have smaller nodeSize but their notation is written un a language not understood
- *   it can be translated with a penality (extra nodes)
+ *   it can be translated with penalty (extra nodes)
  *
  * @date 2020-04-07 20:57:08
  *
@@ -205,8 +205,6 @@ struct genmemberContext_t : dbtool_t {
 	unsigned opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
-	/// @var {number} reindex imprints based on empty/unsafe signature groups
-	unsigned opt_unsafe;
 	/// @var {number} generator upper bound
 	uint64_t opt_windowHi;
 	/// @var {number} generator lower bound
@@ -216,7 +214,7 @@ struct genmemberContext_t : dbtool_t {
 	database_t *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for referse transforms
+	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 
 	/// @var {number} - THE generator
@@ -246,7 +244,6 @@ struct genmemberContext_t : dbtool_t {
 		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_text = 0;
-		opt_unsafe = 0;
 		opt_windowHi = 0;
 		opt_windowLo = 0;
 
@@ -1381,7 +1378,7 @@ context_t ctx;
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {genmemberSelftest_t} Application context
+ * @global {genmemberContext_t} Application context
  */
 genmemberContext_t app(ctx);
 
@@ -1394,7 +1391,7 @@ genmemberContext_t app(ctx);
  *
  * @param {number} sig - signal (ignored)
  */
-void sigintHandler(int sig) {
+void sigintHandler(int __attribute__ ((unused)) sig) {
 	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
@@ -1410,7 +1407,7 @@ void sigintHandler(int sig) {
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	if (ctx.opt_timer) {
 		ctx.tick++;
 		alarm(ctx.opt_timer);
@@ -1452,7 +1449,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --[no-]unsafe                   Reindex imprints based onempty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]unsafe                   Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                       Say less\n");
 		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
 	}
@@ -1722,7 +1719,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -1920,7 +1917,7 @@ int main(int argc, char *const *argv) {
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
 
-		fprintf(stderr, "[%s] Allocated %lu memory. freeMemory=%lu.\n", ctx.timeAsString(), ctx.totalAllocated, info.freeram);
+		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
 
 	/*

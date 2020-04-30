@@ -109,7 +109,7 @@ struct metricsInterleave_t {
 	/// @var {number} - Some indication of runtime index storage in G bytes. (worse case)
 	float storage;
 
-	/// @var {number} - Ignore when recalculating metrics
+	/// @var {number} - Ignore when recalculating metrics. OR'd 2=selftest
 	int noauto;
 };
 
@@ -138,12 +138,12 @@ static const metricsInterleave_t metricsInterleave[] = {
 	{9, 504,           720/*6!*/,    720,    51840,  28.78,    0},
 	{9, 120 /*5!*/,    3024,         120,    8850,   6.896,    0},
 	// the following are too slow at reading to be practical
-	{9, 72,            5040/*7!*/,   5040,   51840,  28.78,    1},
-	{9, 24 /*4!*/,     15120,        24,     8850,   6.896,    1},
-	{9, 9,             40320/*8!*/,  40320,  51840,  28.78,    1},
-	{9, 6 /*3!*/,      60480,        6,      8850,   6.896,    1},
-	{9, 2 /*2!*/,      181440,       2,      8850,   6.896,    1},
-	{9, 1,             362880/*9!*/, 362880, 8850,   6.896,    1}, // slowest R fastest W
+	{9, 72,            5040/*7!*/,   5040,   51840,  28.78,    2},
+	{9, 24 /*4!*/,     15120,        24,     8850,   6.896,    2},
+	{9, 9,             40320/*8!*/,  40320,  51840,  28.78,    2},
+	{9, 6 /*3!*/,      60480,        6,      8850,   6.896,    2},
+	{9, 2 /*2!*/,      181440,       2,      8850,   6.896,    2},
+	{9, 1,             362880/*9!*/, 362880, 8850,   6.896,    2}, // slowest R fastest W
 	//
 	{0}
 };
@@ -391,7 +391,7 @@ struct metricsGenerator_t {
 	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space
 	uint64_t numMember; // (including mandatory zero entry)
 
-	/// @var {number} - Ignore when recalculating metrics
+	/// @var {number} - Ignore when recalculating metrics. OR'd 1=genrestartdata 2=selftest
 	int noauto;
 };
 
@@ -411,12 +411,12 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 4, 2969462,       2777493,   96363,    801917,   0},
 	{9, 0, 4, 29990974,      28304991,  791647,   5959653,  0},
 	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
-	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 1}, // NOTE: this is the extension to 4n9
-	{9, 1, 5, 913288021,     809357847, 15490349, 0,        1}, // NOTE: this is full 5n9-pure (placed second and invisible)
+	{9, 1, 5, 913288021,     809357847, 10233318, 56349342, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 5, 913288021,     809357847, 15490349, 0,        2}, // NOTE: this is full 5n9-pure (placed second and invisible)
 	// below only intended for members
-	{9, 0, 5, 17927026892,   0,         0,        0,        1},
-	{9, 1, 6, 410335296888,  0,         0,        0,        1}, // numProgress takes about 60 minutes
-	{9, 0, 6, 1556055783374, 0,         0,        0,        1}, // from historic metrics
+	{9, 0, 5, 17927026892,   0,         0,        0,        2},
+	{9, 1, 6, 410335296888,  0,         0,        0,        2}, // numProgress takes about 60 minutes
+	{9, 0, 6, 1556055783374, 0,         0,        0,        3}, // from historic metrics
 	//
 	{0}
 };

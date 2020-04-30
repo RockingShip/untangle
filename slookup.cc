@@ -184,7 +184,7 @@ slookupContext_t app(ctx);
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	if (ctx.opt_timer) {
 		ctx.tick++;
 		alarm(ctx.opt_timer);
@@ -327,7 +327,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -384,7 +384,7 @@ int main(int argc, char *const *argv) {
 
 #if 0
 	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
-		fprintf(stderr, "[%s] Allocated %lu memory\n", app.timeAsString(), app.totalAllocated);
+		fprintf(stderr, "[%s] Allocated %.3fG memory\n", app.timeAsString(), app.totalAllocated / 1e9);
 #endif
 
 	if (app.opt_imprint) {

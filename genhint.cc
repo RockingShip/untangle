@@ -109,7 +109,7 @@ struct genhintContext_t : dbtool_t {
 	database_t *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for referse transforms
+	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 
 	/**
@@ -132,8 +132,6 @@ struct genhintContext_t : dbtool_t {
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
-
-		opt_maxHint = 255; // for 4n9 there are 250 hints
 	}
 
 	/**
@@ -386,7 +384,7 @@ context_t ctx;
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {gensignatureSelftest_t} Application context
+ * @global {genhintContext_t} Application context
  */
 genhintContext_t app(ctx);
 
@@ -399,7 +397,7 @@ genhintContext_t app(ctx);
  *
  * @param {number} sig - signal (ignored)
  */
-void sigintHandler(int sig) {
+void sigintHandler(int __attribute__ ((unused)) sig) {
 	if (app.arg_outputDatabase) {
 		remove(app.arg_outputDatabase);
 	}
@@ -415,7 +413,7 @@ void sigintHandler(int sig) {
  *
  * @param {number} sig - signal (ignored)
  */
-void sigalrmHandler(int sig) {
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
 	if (ctx.opt_timer) {
 		ctx.tick++;
 		alarm(ctx.opt_timer);
@@ -605,7 +603,6 @@ int main(int argc, char *const *argv) {
 				unsigned m, n;
 
 				int ret = sscanf(optarg, "%u,%u", &m, &n);
-				printf("ret=%d\n", ret);
 				if (ret == 2) {
 					app.opt_sidLo = m;
 					app.opt_sidHi = n;
@@ -680,7 +677,7 @@ int main(int argc, char *const *argv) {
 				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
 				exit(1);
 			default:
-				fprintf(stderr, "getopt returned character code %d\n", c);
+				fprintf(stderr, "getopt_long() returned character code %d\n", c);
 				exit(1);
 		}
 	}
@@ -830,7 +827,7 @@ int main(int argc, char *const *argv) {
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
 
-		fprintf(stderr, "[%s] Allocated %lu memory. freeMemory=%lu.\n", ctx.timeAsString(), ctx.totalAllocated, info.freeram);
+		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
 
 	/*

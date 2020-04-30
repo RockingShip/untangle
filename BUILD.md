@@ -29,6 +29,9 @@ Building `untangle`
     
 # Building database
 
+"The database" contains all information to detect, construct and rewrite fractal based structures.
+It has a number of sections containing and used for different topics.
+
 The database is create in steps.
 With each step generator tools adds sections and content to the database.
 
@@ -51,7 +54,58 @@ Then create database
 
 ## create signatures
 
-Signatures are basically the uniqueness of a given address space.   
+Signatures searches for uniqueness in a given address space.
+The target signature address space for this vesion of the project is 4-node and 9-endpoint/variables.
+
+- The intermediate databases can be kept small by omitting the index.
+  They will be automatically rebuilt on load.
+- The last database has lowest interleave is great for storage but slow when using.
+
+```sh
+    ./gensignature transform.db 0 0n9.db --no-saveindex
+    ./gensignature 0n9.db       1 1n9.db --no-saveindex
+    ./gensignature 1n9.db       2 2n9.db --no-saveindex
+    ./gensignature 2n9.db       3 3n9.db --no-saveindex
+    ./gensignature 3n9.db       4 4n9.db --saveinterleave=1
+``
+
+## create hints
+
+Hints measure the symmtery of signatures.
+Higher symmetry has less load on the assosiative index.
+Hints are used to tune the assosiative index giving faster database construction times.
+
+Creating hints takes about 17 hours.
+
+```sh
+    ./genhint 4n9.db hints-4n9.db
+```
+
+Alternatively use with SunGridEngine which requires multiple machines.
+
+```sh
+    # make temp directories
+    mkdir log-hints
+
+    # submit to SGE. Each invocation needs about 1G memory
+    qsub -cwd -o log-hints -e log-hints -b y -t 1-499 -q 4G.q ./genhint 4n9.db --task=sge --text
+
+    # check/count all jobs finished properly
+    grep done -r log-hints/genhint.e* --files-without-match
+    grep done -r log-hints/genhint.e* --files-with-match | wc
+    grep error -r log-hints/genhint.o* --files-with-match
+     
+    #rerun any missing jobs with:
+    qsub -cwd -o log-hints -e logs-hint -b y -t 1-499 -q 4G.q ./genhint 4n9.db --task=n,499 --text
+     
+    # merge all collected hints
+    # file will contain 858805139 lines
+    cat log-hints/genhint.o*.? log-hints/genhint.o*.?? log-hints/genhint.o*.??? >hints.lst
+
+    # load
+    ./genhint 4n9.db hints-4n9.db --load=h.lst --no-generate
+```
+
 # Developer instructions
  
 ## `restartData[]`
