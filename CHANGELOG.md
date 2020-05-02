@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-05-02 22:28:30 Added `slookup --member`.
 2020-05-02 00:46:30 Synced workflow `genhint`,`genmember`,`gensignature`.
 2020-05-02 00:42:48 Improved `--text=`.
 2020-05-02 00:22:13 Fixed `dbtool_t::sizeDatabaseSections()`.

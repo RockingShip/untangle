@@ -56,6 +56,8 @@ struct slookupContext_t {
 	const char *opt_database;
 	/// @var {number} search by imprints
 	unsigned opt_imprint;
+	/// @var {number} show signature members
+	unsigned opt_member;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -67,6 +69,7 @@ struct slookupContext_t {
 	slookupContext_t(context_t &ctx) : ctx(ctx) {
 		opt_database = "untangle.db";
 		opt_imprint = 0;
+		opt_member = 0;
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
@@ -144,16 +147,114 @@ struct slookupContext_t {
 			return;
 		}
 
-		printf("%u%s:%s%s/%u:%s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u flags=[%x%s%s%s] %s\n",
+		printf("%u%s:%s%s/%u:%.*s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u flags=[%x%s%s%s] %s\n",
 		       sid & ~IBIT, (sid & IBIT) ? "~" : "",
 		       pSignature->name, (sid & IBIT) ? "~" : "",
-		       tid, pStore->fwdTransformNames[tid],
+		       tid, pSignature->numPlaceholder, pStore->fwdTransformNames[tid],
 		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef,
 		       pSignature->flags,
 		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
 		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "",
 		       pName);
+
+		if (opt_member) {
+			unsigned lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;
+			static char txt[256];
+			tinyTree_t tree(ctx);
+
+			/*
+			 * Determine column widths
+			 */
+			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+				member_t *pMember = pStore->members + iMid;
+
+				// find tid
+				tree.decodeSafe(pMember->name);
+				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+
+				len = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
+				if (lenName < len)
+					lenName = len;
+
+				if (this->opt_member > 1) {
+					len = sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
+					if (lenQ < len)
+						lenQ = len;
+
+					if (pMember->Tsid & IBIT)
+						len = sprintf(txt, "-%u:%u:%s", pMember->Tsid & ~IBIT, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					else
+						len = sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					if (lenT < len)
+						lenT = len;
+
+					len = sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
+					if (lenF < len)
+						lenF = len;
+
+					len = 0;
+					for (unsigned i = 0; i < member_t::MAXHEAD; i++) {
+						if (pMember->heads[i]) {
+							if (i)
+								txt[len++] = ',';
+							len += sprintf(txt + len, "%u:%u:%s", pMember->heads[i], pStore->members[pMember->heads[i]].sid, pStore->members[pMember->heads[i]].name);
+						}
+					}
+					if (lenHead < len)
+						lenHead = len;
+				}
+			}
+
+			/*
+			 * Show columns
+			 */
+			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+				member_t *pMember = pStore->members + iMid;
+
+				// find tid
+				tree.decodeSafe(pMember->name);
+				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+
+				sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
+				printf("\t%-*s", lenName, txt);
+
+				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+
+				if (this->opt_member > 1) {
+					sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
+					printf(" Q=%-*s", lenQ, txt);
+
+					if (pMember->Tsid & IBIT)
+						sprintf(txt, "-%u:%u:%s", pMember->Tsid & ~IBIT, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					else
+						sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					printf(" T=%-*s", lenT, txt);
+
+					sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
+					printf(" F=%-*s", lenF, txt);
+
+					len = 0;
+					for (unsigned i = 0; i < member_t::MAXHEAD; i++) {
+						if (pMember->heads[i]) {
+							if (i)
+								txt[len++] = ',';
+							len += sprintf(txt + len, "%u:%u:%s", pMember->heads[i], pStore->members[pMember->heads[i]].sid, pStore->members[pMember->heads[i]].name);
+						}
+					}
+					printf(" heads=%-*s", lenHead, txt);
+				}
+
+				printf(" flags=[%x%s%s%s]",
+				       pMember->flags,
+				       (pMember->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
+				       (pMember->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
+				       (pMember->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "");
+
+				printf("\n");
+			}
+
+		}
 	}
 
 };
@@ -204,12 +305,12 @@ void usage(char *const *argv, bool verbose) {
 	fprintf(stderr, "usage: %s name [...]\n", argv[0]);
 
 	if (verbose) {
-		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.opt_database);
-		fprintf(stderr, "\t-e --evaluate\n");
-		fprintf(stderr, "\t-i --imprint\n");
+		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_database);
+		fprintf(stderr, "\t-i --imprint               Use imprint index\n");
+		fprintf(stderr, "\t-m --members[=1]           Show members brief\n");
+		fprintf(stderr, "\t-m --members=2             Show members verbose\n");
+		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
 }
 
@@ -244,6 +345,7 @@ int main(int argc, char *const *argv) {
 			LO_DATABASE = 'D',
 			LO_HELP = 'h',
 			LO_IMPRINT = 'i',
+			LO_MEMBER = 'm',
 			LO_QUIET = 'q',
 			LO_VERBOSE = 'v',
 		};
@@ -255,6 +357,7 @@ int main(int argc, char *const *argv) {
 			{"debug",       1, 0, LO_DEBUG},
 			{"help",        0, 0, LO_HELP},
 			{"imprint",     0, 0, LO_IMPRINT},
+			{"member",      2, 0, LO_MEMBER},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
 			{"no-pure",     0, 0, LO_NOPURE},
 			{"paranoid",    0, 0, LO_PARANOID},
@@ -300,6 +403,9 @@ int main(int argc, char *const *argv) {
 				exit(0);
 			case LO_IMPRINT:
 				app.opt_imprint++;
+				break;
+			case LO_MEMBER:
+				app.opt_member = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_member + 1;
 				break;
 			case LO_NOPARANOID:
 				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
@@ -387,7 +493,7 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Allocated %.3fG memory\n", app.timeAsString(), app.totalAllocated / 1e9);
 #endif
 
-	if (app.opt_imprint) {
+	if (app.opt_imprint || app.opt_member) {
 		// initialise evaluators
 		tinyTree_t tree(ctx);
 		tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
