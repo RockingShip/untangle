@@ -658,8 +658,8 @@ struct selftestContext_t : dbtool_t {
 		pStore->signatureIndexSize = 99;
 
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
-		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
-		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
+		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
+		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
 		pStore->numSignature = 1; // skip reserved first entry
 
 		/*
@@ -692,8 +692,8 @@ struct selftestContext_t : dbtool_t {
 		 */
 
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
-		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
-		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
+		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
+		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
 		pStore->numSignature = 1; // skip reserved first entry
 
 		// add the collision victim
@@ -730,8 +730,8 @@ struct selftestContext_t : dbtool_t {
 		 */
 
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
-		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
-		::memset(pStore->signatureVersion, 0, (sizeof(*pStore->signatureVersion) * pStore->signatureIndexSize));
+		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
+		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
 		pStore->numSignature = 1; // skip reserved first entry
 
 		// add the collisions
@@ -1006,7 +1006,7 @@ struct selftestContext_t : dbtool_t {
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
-			::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
+			::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 			pStore->numImprint = 1; // skip reserved entry
 
 			/*
@@ -1155,7 +1155,7 @@ struct selftestContext_t : dbtool_t {
 		unsigned numPassed = 0;
 
 		// reset index
-		::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
+		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 		pStore->numSignature = 1; // skip reserved first entry
 
 		// apply settings
@@ -1320,8 +1320,8 @@ struct selftestContext_t : dbtool_t {
 			assert(pInterleave);
 
 			// prepare database
-			::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
-			::memset(pStore->signatureIndex, 0, (sizeof(*pStore->signatureIndex) * pStore->signatureIndexSize));
+			::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
+			::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 			pStore->numImprint = 1; // skip reserved first entry
 			pStore->numSignature = 1; // skip reserved first entry
 			pStore->interleave = pInterleave->numStored;
@@ -1409,7 +1409,7 @@ struct selftestContext_t : dbtool_t {
 				pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (iRatio / 10.0));
 
 				// clear imprint index
-				::memset(pStore->imprintIndex, 0, (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize));
+				::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 				pStore->numImprint = 1; // skip mandatory reserved entry
 				ctx.cntHash = 0;
 				ctx.cntCompare = 0;
@@ -1760,7 +1760,7 @@ int main(int argc, char *const *argv) {
 			}
 
 			// Give extra 5% expansion space
-			store.maxImprint = ctx.raisePercent(store.maxImprint, 5);
+			store.maxImprint = store.maxImprint;
 		}
 
 		// get highest `numSignature` but only for the highest `numNode` found above
@@ -1778,7 +1778,7 @@ int main(int argc, char *const *argv) {
 			}
 
 			// Give extra 5% expansion space
-			store.maxSignature = ctx.raisePercent(store.maxSignature, 5);
+			store.maxSignature = store.maxSignature;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)

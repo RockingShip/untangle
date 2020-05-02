@@ -372,7 +372,7 @@ struct tree_t {
 		stackPos++;
 
 		// erase where been
-		::memset(beenThere, 0, sizeof(*beenThere) * this->count);
+		::memset(beenThere, 0, this->count * sizeof(*beenThere));
 
 		do {
 			// pop stack
@@ -1928,7 +1928,7 @@ struct tree_t {
 		nextPlaceholder = withPlaceholders ? this->kstart : 0;
 		nextNode = this->nstart;
 		spos = 0;
-		::memset(beenThere, 0, sizeof(beenThere[0]) * this->count);
+		::memset(beenThere, 0, this->count * sizeof(beenThere[0]));
 		// `skin[]` is a list sized by nextPlaceholder
 		placeholdersInSync = true; // assume placeholders are in sync. Implying that no explicit skin is needed
 
@@ -1962,7 +1962,7 @@ struct tree_t {
 				encodePlaceholders(id & ~IBIT);
 
 				// erase used part of `beenThere[]`
-				::memset(beenThere + this->nstart, 0, sizeof(beenThere[0]) * (nextNode + this->nstart));
+				::memset(beenThere + this->nstart, 0, (nextNode + this->nstart) * sizeof(beenThere[0]));
 
 				// pass-2 - encode node
 				encodeQTF(id & ~IBIT);

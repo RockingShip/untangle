@@ -1553,7 +1553,7 @@ struct tinyTree_t {
 		uint64_t *v = (uint64_t *) pFootprint;
 
 		// zero everything
-		::memset(pFootprint, 0, sizeof(*pFootprint) * TINYTREE_NEND * numTransform);
+		::memset(pFootprint, 0, TINYTREE_NEND * numTransform * sizeof(*pFootprint));
 
 		/*
 		 * Initialize the data structures

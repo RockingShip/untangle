@@ -261,7 +261,7 @@ struct generatorTree_t : tinyTree_t {
 		// bump incarnation.
 		if (iVersion == 0) {
 			// clear versioned memory
-			::memset(pCacheVersion, 0, (sizeof(*pCacheVersion) * (1 << PACKED_SIZE)));
+			::memset(pCacheVersion, 0, (1 << PACKED_SIZE) * sizeof(*pCacheVersion));
 		}
 		iVersion++; // when overflows, next call will clear
 

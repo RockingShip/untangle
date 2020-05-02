@@ -938,7 +938,7 @@ struct genmemberContext_t : dbtool_t {
 	 */
 	void rebuildImprints(unsigned unsafeOnly) {
 		// clear signature and imprint index
-		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+		::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 
 		if (pStore->numSignature < 2)
 			return; //nothing to do

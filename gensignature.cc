@@ -382,7 +382,7 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		/*
-		 * Lookup/add to data store.
+		 * Lookup/add data store.
 		 * Consider signature groups `unsafe` (no members yet)
 		 */
 
@@ -579,7 +579,7 @@ struct gensignatureContext_t : dbtool_t {
 	 */
 	void rebuildImprints(void) {
 		// clear signature and imprint index
-		::memset(pStore->imprintIndex, 0, sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize);
+		::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 
 		if (pStore->numSignature < 2)
 			return; //nothing to do
@@ -1481,7 +1481,7 @@ int main(int argc, char *const *argv) {
 		qsort_r(store.signatures + 1, store.numSignature - 1, sizeof(*store.signatures), app.comparSignature, &app);
 
 		// clear name index
-		::memset(store.signatureIndex, 0, sizeof(*store.signatureIndex) * store.signatureIndexSize);
+		::memset(store.signatureIndex, 0, store.signatureIndexSize * sizeof(*store.signatureIndex));
 
 		// remove hints
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {

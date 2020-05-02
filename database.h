@@ -402,9 +402,9 @@ struct database_t {
 		// clear versioned memory
 		if (iVersion == 0) {
 			if (imprintVersion)
-				::memset(imprintVersion, 0, (sizeof(*imprintVersion) * imprintIndexSize));
+				::memset(imprintVersion, 0, imprintIndexSize * sizeof(*imprintVersion));
 			if (signatureVersion)
-				::memset(signatureVersion, 0, (sizeof(*signatureVersion) * signatureIndexSize));
+				::memset(signatureVersion, 0, signatureIndexSize * sizeof(*signatureVersion));
 		}
 
 		// bump version number.
@@ -566,25 +566,25 @@ struct database_t {
 
 		// signature store
 		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE))
-			memUsage += ctx.raisePercent(maxSignature, 5) * sizeof(*signatures); // increase with 5%
+			memUsage += maxSignature * sizeof(*signatures); // increase with 5%
 		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX))
 			memUsage += signatureIndexSize * sizeof(*signatureIndex);
 
 		// hint store
 		if (maxHint && (~excludeSections & ALLOCMASK_HINT))
-			memUsage += ctx.raisePercent(maxHint, 5) * sizeof(*hints); // increase with 5%
+			memUsage += maxHint * sizeof(*hints); // increase with 5%
 		if (hintIndexSize && (~excludeSections & ALLOCMASK_HINTINDEX))
 			memUsage += hintIndexSize * sizeof(*hintIndex);
 
 		// imprint store
 		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT))
-			memUsage += ctx.raisePercent(maxImprint, 5) * sizeof(*imprints); // increase with 5%
+			memUsage += maxImprint * sizeof(*imprints); // increase with 5%
 		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX))
 			memUsage += imprintIndexSize * sizeof(*imprintIndex);
 
 		// member store
 		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER))
-			memUsage += ctx.raisePercent(maxMember, 5) * sizeof(*members); // increase with 5%
+			memUsage += maxMember * sizeof(*members); // increase with 5%
 		if (memberIndexSize && (~excludeSections & ALLOCMASK_MEMBERINDEX))
 			memUsage += memberIndexSize * sizeof(*memberIndex);
 
@@ -616,7 +616,7 @@ struct database_t {
 		// signature store
 		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
-			maxSignature = ctx.raisePercent(maxSignature, 5);
+			maxSignature = maxSignature;
 			numSignature = 1; // do not start at 1
 			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
 			allocFlags |= ALLOCMASK_SIGNATURE;
@@ -630,7 +630,7 @@ struct database_t {
 		// hint store
 		if (maxHint && (~excludeSections & ALLOCMASK_HINT)) {
 			// increase with 5%
-			maxHint = ctx.raisePercent(maxHint, 5);
+			maxHint = maxHint;
 			numHint = 1; // do not start at 1
 			hints = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
 			allocFlags |= ALLOCMASK_HINT;
@@ -645,13 +645,12 @@ struct database_t {
 		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT)) {
 			assert(interleave && interleaveStep);
 			// increase with 5%
-			maxImprint = ctx.raisePercent(maxImprint, 5);
+			maxImprint = maxImprint;
 			numImprint = 1; // do not start at 1
 			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
 		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX)) {
-			assert(interleave && interleaveStep);
 			assert(ctx.isPrime(imprintIndexSize));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINTINDEX;
@@ -660,7 +659,7 @@ struct database_t {
 		// member store
 		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
-			maxMember = ctx.raisePercent(maxMember, 5);
+			maxMember = maxMember;
 			numMember = 1; // do not start at 1
 			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
 			allocFlags |= ALLOCMASK_MEMBER;
@@ -1864,7 +1863,7 @@ struct database_t {
 
 		if (sections & ALLOCMASK_IMPRINTINDEX) {
 			// clear
-			::memset(this->imprintIndex, 0, sizeof(*this->imprintIndex) * this->imprintIndexSize);
+			::memset(this->imprintIndex, 0, this->imprintIndexSize * sizeof(*this->imprintIndex));
 
 			// rebuild
 			for (unsigned iImprint = 1; iImprint < this->numImprint; iImprint++) {
@@ -1906,7 +1905,7 @@ struct database_t {
 
 		if (sections & ALLOCMASK_MEMBERINDEX) {
 			// clear
-			::memset(this->memberIndex, 0, sizeof(*this->memberIndex) * this->memberIndexSize);
+			::memset(this->memberIndex, 0, this->memberIndexSize * sizeof(*this->memberIndex));
 
 			// rebuild
 			for (unsigned iMember = 1; iMember < this->numMember; iMember++) {

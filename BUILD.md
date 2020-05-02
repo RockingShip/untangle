@@ -62,11 +62,14 @@ The target signature address space for this vesion of the project is 4-node and 
 - The last database has lowest interleave is great for storage but slow when using.
 
 ```sh
-    ./gensignature transform.db 0 0n9.db --no-saveindex
-    ./gensignature 0n9.db       1 1n9.db --no-saveindex
-    ./gensignature 1n9.db       2 2n9.db --no-saveindex
-    ./gensignature 2n9.db       3 3n9.db --no-saveindex
-    ./gensignature 3n9.db       4 4n9.db --saveinterleave=1
+    ./gensignature transform.db 0 0n9.db
+    ./gensignature 0n9.db       1 1n9.db
+    ./gensignature 1n9.db       2 2n9.db
+    ./gensignature 2n9.db       3 3n9.db
+    ./gensignature 3n9.db       4 4n9.db
+
+    # remove intermediates
+    rm 0n9.db 1n9.db 2n9.db 3n9.db 4n9.db
 ``
 
 ## create hints
@@ -105,6 +108,42 @@ Alternatively use with SunGridEngine which requires multiple machines.
     # load
     ./genhint 4n9.db hints-4n9.db --load=h.lst --no-generate
 ```
+
+## create members.
+
+For regular 4n9 space:
+
+```
+    ./genmember 4n9.db        0 member-0n9.db
+    ./genmember member-0n9.db 1 member-1n9.db
+    ./genmember member-1n9.db 2 member-2n9.db
+    ./genmember member-2n9.db 3 member-3n9.db
+    ./genmember member-3n9.db 4 member-4n9.db
+
+    # this is the single task, below the SGE variant
+    # ./genmember member-4n9.db 5 member-5n9.db
+
+    # prepare shared database for workers
+    ./genmember member-4n9.db 5 member-5n9-unsafe.db --unsafe --no-generate --maximprint=150e6 --maxmember=6e6 --interleave=362880
+
+    # submit workers
+    mkdir log-members
+    qsub -cwd -o log-members -e log-members -b y -t 1-99 -q 4G.q ./genmember member-5n9-unsafe.db 5 --task=sge --text=1
+
+    # check all ok
+    grep done -r log-members/genmember.e* --files-without-match
+    grep done -r log-members/genmember.e* --files-with-match | wc
+    grep error -r log-members/genmember.o* --files-with-match
+
+    # collect findings
+    cat log-members/genmember.o*.? log-members/genmember.o*.?? >tmp.lst
+
+    # sort/uniq/reindex
+    ./genmember  member-4n9.db 4  member-5n9.db --load=tmp.lst --no-generate --maxmember=6510354 --text=3 >member-5n9.3.db
+
+    # cleanup 
+    rm -rf log-members tmp.lst member-5n9-unsafe.db
+````
 
 # Developer instructions
  
@@ -172,7 +211,7 @@ If you are in need for textual lists of candidates (about 1Gbyte):
     ./gensignature 0n9.db       1 1n9.db --text=1 >1n9-1.lst
     ./gensignature 1n9.db       2 2n9.db --text=1 >2n9-1.lst
     ./gensignature 2n9.db       3 3n9.db --text=1 >3n9-1.lst
-    ./gensignature 3n9.db       4 4n9.db --text=1 >4n9-1.lst
+    ./gensignature 3n9.db       4 4n9.db --interleave=120 --text=1 >4n9-1.lst
 
     # as an alternative, create sorted and unique list by extracting them from the databases
     ./gensignature 0n9.db 0 --no-generate --text=3 >0n9-3.lst
@@ -370,7 +409,7 @@ vv--------- obsoleted
     # clean-up
     rm 5n9-pure.[1-5].lst
     rm split[0-6].db split[1-6].lst split[1-6][a-f].lst
-``` 5n9-pure.1.lst
+```
 
 
 ## members

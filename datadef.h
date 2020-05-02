@@ -269,7 +269,7 @@ struct imprint_t {
 struct member_t {
 
 	enum {
-		/// @constant {number} Maximum number of heads
+		/// @constant {number} Maximum number of heads. bump when assertion indicates.
 		MAXHEAD = 6,
 	};
 
