@@ -95,6 +95,8 @@ struct genhintContext_t : dbtool_t {
 	const char *arg_inputDatabase;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
+	/// @var {number} Analyse input database
+	unsigned opt_analyse;
 	/// @var {number} force overwriting of database if already exists
 	unsigned opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -121,11 +123,15 @@ struct genhintContext_t : dbtool_t {
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 
+	/// @var {unsigned} - active index for `hints[]`
+	unsigned activeHintIndex;
+
 	/**
 	 * Constructor
 	 */
 	genhintContext_t(context_t &ctx) : dbtool_t(ctx) {
 		// arguments and options
+		opt_analyse = 0;
 		opt_force = 0;
 		opt_generate = 1;
 		arg_inputDatabase = NULL;
@@ -141,6 +147,8 @@ struct genhintContext_t : dbtool_t {
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
+
+		activeHintIndex = 0;
 	}
 
 	/**
@@ -229,7 +237,7 @@ struct genhintContext_t : dbtool_t {
 				// add hintId to signature
 				if (pStore->signatures[sid].hintId == 0) {
 					pStore->signatures[sid].hintId = hintId;
-				} else {
+				} else if (pStore->signatures[sid].hintId != hintId) {
 					printf("{\"error\":\"inconsistent hint\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
 					       __FUNCTION__, name, ctx.progress);
 					exit(1);
@@ -282,6 +290,9 @@ struct genhintContext_t : dbtool_t {
 					fprintf(stderr, "[%s] INFO: window=%u-last\n", ctx.timeAsString(), this->opt_sidLo);
 			}
 		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Generating hints.\n", ctx.timeAsString());
 
 		// reset ticker
 		ctx.setupSpeed(opt_sidHi - opt_sidLo);
@@ -379,6 +390,144 @@ struct genhintContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Done\n", ctx.timeAsString());
 	}
 
+	/**
+	 * @date 2020-04-20 19:57:08
+	 *
+	 * Compare function for `qsort_r`
+	 *
+	 * Compare two hints.
+	 * Do not compare them directly, but use the arguments as index to `database_t::hints[]`.
+	 *
+	 * @param {signature_t} lhs - left hand side hint index
+	 * @param {signature_t} rhs - right hand side hint index
+	 * @param {genhintContext_t} arg - Application context
+	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
+	 */
+	static int comparHint(const void *lhs, const void *rhs, void *arg) {
+		if (lhs == rhs)
+			return 0;
+
+		genhintContext_t *pApp = static_cast<genhintContext_t *>(arg);
+		// Arguments are signature offsets
+		const signature_t *pSignatureL = pApp->pStore->signatures + *(unsigned *) lhs;
+		const signature_t *pSignatureR = pApp->pStore->signatures + *(unsigned *) rhs;
+		const hint_t *pHintL = pApp->pStore->hints + pSignatureL->hintId;
+		const hint_t *pHintR = pApp->pStore->hints + pSignatureR->hintId;
+
+		int cmp;
+
+		// first compare active index (lowest first)
+		cmp = pHintL->numStored[pApp->activeHintIndex] - pHintR->numStored[pApp->activeHintIndex];
+		if (cmp)
+			return cmp;
+
+		// then compare inactive indices (highest first)
+		for (unsigned j = 0; j < MAXSLOTS * 2; j++) {
+			if (j != pApp->activeHintIndex) {
+				cmp = pHintR->numStored[j] - pHintL->numStored[j];
+				if (cmp)
+					return cmp;
+			}
+		}
+
+		// identical
+		return 0;
+	}
+
+	/**
+	 * @date 2020-04-20 15:53:35
+	 *
+	 * Collect metrics for optimal `--interleave` usage.
+	 * Intended for optimizing the imprint index when running jobs in parallel.
+	 *
+	 * Basically, Which interleave and imprint setting to use.
+	 *
+	 * An interleave setting has effect on reading and writing.
+	 * Large datasets can be sliced into rows and columns.
+	 * Rows are ranges of signature.
+	 * Each row can be sliced into columns based on generator progress.
+	 *
+	 * Imprint index is a speed/storage tradeoff.
+	 * Not all signatures have the same number of imprints,
+	 * depends on the collisions that occur with the row/column algorithm for the assosiative index lookups.
+	 *
+	 * Instead of dividing the signatures into equally sized collection of rows for parallelism,
+	 * For a given interleave:
+	 *   - Re-sort the signatures with high collisions rate
+	 *   - Select as many signatures that fit in available memory
+	 *   - Process the collection in parallel
+	 *   - Rebuild the imprint index based on empty or unsafe signatures
+	 *   - Decide which interleave has highest speed advantage
+	 *   - Jump to first step until all signatures have been processed.
+	 *
+	 * Interleave efficiency is expressed in the number of footprint compares.
+	 * The overwhelming majority of associative lookups will result in a miss.
+	 * The footprint lookups are the main bottleneck and it also kills the CPU cache.
+	 *
+	 * For imprint index writing/creation: The number of indexed signatures is `"memAvail / sizeof(imprint_t) / numStored"`.
+	 * `"memAvail / sizeof(imprint_t)"` is the number of imprints that can fit in memory.
+	 * `"numStored"` is the cumulative sum of imprints belonging to the selected and re-ordered signatures.
+	 * If an interleave setting can only store 25% of the signatures in memory, then 4 rounds are needed to process all signatures.
+	 * The above is not entirely true as the second round has different metric properties.
+	 *
+	 * For imprint index reading: The total number of compares is `"numRuntime * numRound"`.
+	 * `"numRuntime"` is the worst-case number of compares per associative lookup and can be found in `"metricsInterleave[]"`.
+	 *
+	 * Interleave efficiency is the total number of compares per generator candidate.
+	 */
+
+	void analyseHints(void) {
+		if (pStore->numHint < 2) {
+			fprintf(stderr, "missing `hint` section\n");
+			exit(1);
+		}
+
+		unsigned *pHintMap = (unsigned *) ctx.myAlloc("pHintMap", pStore->maxSignature, sizeof(*pHintMap));
+
+		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+
+			// set active index for this round
+			this->activeHintIndex = pInterleave - metricsInterleave;
+
+			// fill map with offsets to signatures
+			unsigned numHint = 0;
+			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+				const signature_t *pSignature = pStore->signatures + iSid;
+
+				if (~pSignature->flags & signature_t::SIGMASK_SAFE)
+					pHintMap[numHint++] = iSid;
+
+			}
+
+			// sort entries.
+			qsort_r(pHintMap, numHint, sizeof(*pHintMap), comparHint, this);
+
+			// count how many signatures fit in memory
+			uint64_t memLeft = this->opt_analyse;
+			unsigned numSelect = 0;
+			for (unsigned iHint = 0; iHint < numHint; iHint++) {
+				const signature_t *pSignature = pStore->signatures + pHintMap[iHint];
+				const hint_t *pHint = pStore->hints + pSignature->hintId;
+
+				// size imprints will use for signature
+				unsigned sz = sizeof(imprint_t) * pHint->numStored[this->activeHintIndex];
+
+				// will signature fit
+				if (memLeft < sz)
+					break;
+
+				numSelect++;
+				memLeft -= sz;
+			}
+
+			double numRound = (double) numHint / numSelect;
+			unsigned numCompare = __builtin_ceil(numRound) * pInterleave->numRuntime;
+			printf("ix=%u numHint=%u interleave=%u numSelect=%u numRound=%.1f numCompare=%u\n", this->activeHintIndex, numHint, metricsInterleave[this->activeHintIndex].numStored, numSelect, numRound, numCompare);
+		}
+
+		ctx.myFree("pSignatureIndex", pHintMap);
+	}
+
 };
 
 /*
@@ -443,6 +592,7 @@ void usage(char *const *argv, bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
+		fprintf(stderr, "\t   --analyse=<number>         Analyise input database for given amount of memory\n");
 		fprintf(stderr, "\t   --force                    Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate            Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                     This list\n");
@@ -483,7 +633,8 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_ANALYSE = 1,
+			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
 			LO_HINTINDEXSIZE,
@@ -511,6 +662,7 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
+			{"analyse",       1, 0, LO_ANALYSE},
 			{"debug",         1, 0, LO_DEBUG},
 			{"force",         0, 0, LO_FORCE},
 			{"generate",      0, 0, LO_GENERATE},
@@ -560,6 +712,9 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
+			case LO_ANALYSE:
+				app.opt_analyse = ctx.dToMax(::strtod(optarg, NULL));
+				break;
 			case LO_DEBUG:
 				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 				break;
@@ -877,6 +1032,11 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Where to look for new candidates
 	 */
+
+	if (app.opt_analyse) {
+		app.analyseHints();
+		exit(0);
+	}
 
 	// if input is empty, skip reserved entries
 	if (!app.readOnlyMode) {
