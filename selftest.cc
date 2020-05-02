@@ -1824,10 +1824,6 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u signatureIndex=%u maxImprint=%u imprintIndex=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxImprint, store.imprintIndexSize);
-
 	// actual create
 	store.create(0);
 	app.pStore = &store;

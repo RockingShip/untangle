@@ -26,6 +26,14 @@
  * - Given a structure and skin, how would the result look like?
  * - How would a structure look like before a given skin was applied?
  * - Which skin should be put around a structure so that the structure looks ordered?
+ *
+ * @date 2020-05-01 19:18:15
+ *
+ * Text modes:
+ *
+ * `--test`   Verbose
+ *
+ *              <tid> <forwardName> <reverseName> <reverseId>
  */
 
 /*

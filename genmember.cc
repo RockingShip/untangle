@@ -124,6 +124,46 @@
  *
  * `genmember` selects candidates already present in the imprint index.
  * Selected candidates are added to `members`.
+ *
+ * @date 2020-04-22 21:37:03
+ *
+ * Text modes:
+ *
+ * `--text[=1]` Brief mode that show selected candidates passed to `foundTreeSignature()`.
+ *              Selected candidates are those that challenge and win the current display name.
+ *              Also intended for transport and merging when broken into multiple tasks.
+ *              Can be used for the `--load=<file>` option.
+ *              Output can be converted to other text modes by `"./gensignature <input.db> <numNode> [<output.db>]--load=<inputList> --no-generate --text=<newMode> '>' <outputList>
+ *
+ *              <name>
+ *
+ * `--test=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
+ *
+ *              <cid> <sid> <cmp> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+
+ *              where:
+ *                  <cid> is the candidate id assigned by the generator.
+ *                  <sid> is the signature id assigned by the associative lookup.
+ *                  <cmp> is the result of `comparSignature()` between the candidate and the current display name.
+ *
+ *              <cmp> can be:
+ *                  cmp = '<'; // worse, group safe, candidate unsafe
+ *                  cmp = '-'; // worse, candidate too large for group
+ *                  cmp = '='; // equal, group unsafe, candidate unsafe
+ *                  cmp = '+'; // equal, group safe, candidate safe
+ *                  cmp = '>'; // better, group unsafe, candidate safe
+ *
+ * `--text=3`   Selected and sorted signatures that are written to the output database.
+ *              NOTE: same format as `--text=1`
+ *              NOTE: requires sorting and will copy (not inherit) imprint section
+ *
+ *              <name>
+ *
+ * `--text=4`   Selected and sorted signatures that are written to the output database
+ *              NOTE: requires sorting and will copy (not inherit) imprint section
+ *
+ *              <sid> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+ *
  */
 
 /*
@@ -176,6 +216,15 @@
  * @typedef {object}
  */
 struct genmemberContext_t : dbtool_t {
+
+	enum {
+		/// @constant {number} - `--text` modes
+		TEXT_WON = 1,
+		TEXT_COMPARE = 2,
+		TEXT_BRIEF = 3,
+		TEXT_VERBOSE = 4,
+
+	};
 
 	/*
 	 * User specified program arguments and options
@@ -1080,9 +1129,10 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read members. numImprint=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 			        ctx.timeAsString(),
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+			        ctx.progress,
+			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 			        numEmpty, numUnsafe - numEmpty,
 			        skipDuplicate, skipSize, skipUnsafe);
@@ -1136,6 +1186,7 @@ struct genmemberContext_t : dbtool_t {
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		}
 		ctx.tick = 0;
+		skipDuplicate = skipSize = skipUnsafe = 0;
 
 		/*
 		 * Generate candidates
@@ -1166,8 +1217,8 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
-			        ctx.timeAsString(),
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 			        numEmpty, numUnsafe - numEmpty,
 			        skipDuplicate, skipSize, skipUnsafe);
@@ -1311,48 +1362,6 @@ struct genmemberContext_t : dbtool_t {
 		if (numEmpty || numUnsafe) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
-		}
-
-		if (opt_text == 2) {
-			/*
-			 * Display members of complete dataset
-			 *
-			 * <memberName> <numPlaceholder>
-			 */
-			for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
-				member_t *pMember = pStore->members + iMid;
-
-				tree.decodeFast(pMember->name);
-				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
-			}
-		}
-
-		if (opt_text == 3) {
-			/*
-			 * Display full members, grouped by signature
-			 */
-			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
-				for (unsigned iMid = pStore->signatures[iSid].firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
-					member_t *pMember = pStore->members + iMid;
-
-					printf("%u:%s\t", iMid, pMember->name);
-					printf("%u\t", pMember->sid);
-
-					printf("%u:%s\t%u\t", pMember->Qmid, pStore->members[pMember->Qmid].name, pMember->Qsid);
-					if (pMember->Tsid & IBIT)
-						printf("%u:%s\t-%u\t", pMember->Tmid, pStore->members[pMember->Tmid].name, pMember->Tsid & ~IBIT);
-					else
-						printf("%u:%s\t%u\t", pMember->Tmid, pStore->members[pMember->Tmid].name, pMember->Tsid);
-					printf("%u:%s\t%u\t", pMember->Fmid, pStore->members[pMember->Fmid].name, pMember->Fsid);
-
-					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
-						printf("%u:%s\t", pMember->heads[i], pStore->members[pMember->heads[i]].name);
-
-					if (pMember->flags & signature_t::SIGMASK_UNSAFE)
-						printf("U");
-					printf("\n");
-				}
-			}
 		}
 
 		/*
@@ -1825,7 +1834,7 @@ int main(int argc, char *const *argv) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != 3 && app.opt_text != 4);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.TEXT_BRIEF && app.opt_text != app.TEXT_VERBOSE);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -1990,6 +1999,48 @@ int main(int argc, char *const *argv) {
 	if (!app.readOnlyMode) {
 		// compact, sort and reindex members
 		app.finaliseMembers();
+
+		if (app.opt_text == app.TEXT_BRIEF) {
+			/*
+			 * Display members of complete dataset
+			 *
+			 * <memberName> <numPlaceholder>
+			 */
+			for (unsigned iMid = 1; iMid < store.numMember; iMid++) {
+				member_t *pMember = store.members + iMid;
+
+				tree.decodeFast(pMember->name);
+				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+			}
+		}
+
+		if (app.opt_text == app.TEXT_VERBOSE) {
+			/*
+			 * Display full members, grouped by signature
+			 */
+			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+					member_t *pMember = store.members + iMid;
+
+					printf("%u:%s\t", iMid, pMember->name);
+					printf("%u\t", pMember->sid);
+
+					printf("%u:%s\t%u\t", pMember->Qmid, store.members[pMember->Qmid].name, pMember->Qsid);
+					if (pMember->Tsid & IBIT)
+						printf("%u:%s\t-%u\t", pMember->Tmid, store.members[pMember->Tmid].name, pMember->Tsid & ~IBIT);
+					else
+						printf("%u:%s\t%u\t", pMember->Tmid, store.members[pMember->Tmid].name, pMember->Tsid);
+					printf("%u:%s\t%u\t", pMember->Fmid, store.members[pMember->Fmid].name, pMember->Fsid);
+
+					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
+						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
+
+					if (pMember->flags & signature_t::SIGMASK_UNSAFE)
+						printf("U");
+					printf("\n");
+				}
+			}
+		}
 
 		/*
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)

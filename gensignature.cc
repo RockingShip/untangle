@@ -54,7 +54,7 @@
  * `gensignature` selects candidates not present in the imprint index.
  * Selected candidates are added to `signatures`.
  *
- * @date 2020-04-22 21:37:03
+ * @date 2020-05-01 17:17:32
  *
  * Text modes:
  *
@@ -190,6 +190,15 @@
  */
 struct gensignatureContext_t : dbtool_t {
 
+	enum {
+		/// @constant {number} - `--text` modes
+		TEXT_WON = 1,
+		TEXT_COMPARE = 2,
+		TEXT_BRIEF = 3,
+		TEXT_VERBOSE = 4,
+
+	};
+
 	/*
 	 * User specified program arguments and options
 	 */
@@ -308,8 +317,8 @@ struct gensignatureContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress,
-				        perSecond, pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
@@ -334,6 +343,14 @@ struct gensignatureContext_t : dbtool_t {
 				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
+
+#if 0
+			if (ctx.restartTick) {
+				// passed a restart point
+				fprintf(stderr, "\n");
+				ctx.restartTick = 0;
+			}
+#endif
 
 			ctx.tick = 0;
 		}
@@ -405,7 +422,8 @@ struct gensignatureContext_t : dbtool_t {
 
 		// add to datastore if not found
 		if (sid == 0) {
-			if (opt_text == 1)
+			// won challenge
+			if (opt_text == TEXT_WON)
 				printf("%s\n", pNameR);
 
 			// only add if signatures are writable
@@ -483,14 +501,15 @@ struct gensignatureContext_t : dbtool_t {
 				cmp = '='; // equals
 		}
 
-		if (opt_text == 2)
+		if (opt_text == TEXT_COMPARE)
 			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
 
 		/*
 		 * Update record if candidate is better
 		 */
 		if (cmp == '>' || cmp == '+') {
-			if (opt_text == 1)
+			// won challenge
+			if (opt_text == TEXT_WON)
 				printf("%s\n", pNameR);
 
 			// only update if signatures are writable
@@ -692,7 +711,7 @@ struct gensignatureContext_t : dbtool_t {
 		unsigned numPlaceholder, numEndpoint, numBackRef;
 		this->truncated = 0;
 
-		// <cid> <sid> <candidateName> <cmp> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+		// <name> [ <numPlaceholder> <numEndpoint> <numBackRef> ]
 		for (;;) {
 			static char line[512];
 
@@ -718,7 +737,7 @@ struct gensignatureContext_t : dbtool_t {
 			}
 
 			if (ret < 1) {
-				ctx.fatal("line %lu is empty\n", ctx.progress);
+				ctx.fatal("line %lu is bad/empty\n", ctx.progress);
 			}
 			if (ret == 4) {
 				if (numPlaceholder != newPlaceholder || numEndpoint != newEndpoint || numBackRef != newBackRef)
@@ -730,18 +749,6 @@ struct gensignatureContext_t : dbtool_t {
 			if ((generator.windowLo && ctx.progress < generator.windowLo) || (generator.windowHi && ctx.progress >= generator.windowHi)) {
 				ctx.progress++;
 				continue;
-			}
-
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				int perSecond = ctx.updateSpeed();
-
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash);
-
-				ctx.tick = 0;
 			}
 
 			/*
@@ -866,8 +873,8 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u interleave=%u numNode=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, ctx.progress,
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u interleave=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u\n",
+			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, pStore->interleave, ctx.progress,
 			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 			        skipDuplicate);
@@ -1341,7 +1348,7 @@ int main(int argc, char *const *argv) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != 3 && app.opt_text != 4);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.TEXT_BRIEF && app.opt_text != app.TEXT_VERBOSE);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -1507,13 +1514,13 @@ int main(int argc, char *const *argv) {
 	 * List result
 	 */
 
-	if (app.opt_text == 3) {
+	if (app.opt_text == app.TEXT_BRIEF) {
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%s\n", pSignature->name);
 		}
 	}
-	if (app.opt_text == 4) {
+	if (app.opt_text == app.TEXT_VERBOSE) {
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
