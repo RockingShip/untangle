@@ -27,6 +27,22 @@ Building `untangle`
     make
     ```
     
+# Database from data lists
+
+```sh
+    # initial database 
+    ./gentransform transform.db
+
+    # load signatures
+    ./gensignature transform.db 4 4n9.db --load=4n9.lst --no-generate
+
+    # load hints
+    ./genhint 4n9.db hint-4n9.db --load=hint-4n9.lst --no-generate
+
+    # load members
+    ./genmember hint-4n9.db 5 member-5n9.db --load=member-5n9.lst --no-generate
+```
+    
 # Building database
 
 "The database" contains all information to detect, construct and rewrite fractal based structures.
@@ -81,16 +97,14 @@ Hints are used to tune the assosiative index giving faster database construction
 Creating hints takes about 17 hours.
 
 ```sh
-    ./genhint 4n9.db hints-4n9.db
+    ./genhint 4n9.db hint-4n9.db
 ```
 
 Alternatively use with SunGridEngine which requires multiple machines.
 
 ```sh
-    # make temp directories
-    mkdir log-hints
-
     # submit to SGE. Each invocation needs about 1G memory
+    mkdir log-hints
     qsub -cwd -o log-hints -e log-hints -b y -t 1-499 -q 4G.q ./genhint 4n9.db --task=sge --text
 
     # check/count all jobs finished properly
@@ -98,15 +112,17 @@ Alternatively use with SunGridEngine which requires multiple machines.
     grep done -r log-hints/genhint.e* --files-with-match | wc
     grep error -r log-hints/genhint.o* --files-with-match
      
-    #rerun any missing jobs with:
-    qsub -cwd -o log-hints -e logs-hint -b y -t 1-499 -q 4G.q ./genhint 4n9.db --task=n,499 --text
+    # rerun any missing jobs with:
+    # qsub -cwd -o log-hints -e logs-hint -b y -t 1-499 -q 4G.q ./genhint 4n9.db --task=n,499 --text
      
-    # merge all collected hints
-    # file will contain 858805139 lines
-    cat log-hints/genhint.o*.? log-hints/genhint.o*.?? log-hints/genhint.o*.??? >hints.lst
+    # collect findings
+    cat log-hints/genhint.o* >tmp.lst
 
-    # load
-    ./genhint 4n9.db hints-4n9.db --load=h.lst --no-generate
+    # sort/uniq/reindex
+    ./genhint 4n9.db hint-4n9.db --load=tmp.lst --no-generate --text=3 >hint-4n9.3.lst
+
+   # cleanup 
+    rm -rf log-hints tmp.lst
 ```
 
 ## create members.
@@ -136,14 +152,61 @@ For regular 4n9 space:
     grep error -r log-members/genmember.o* --files-with-match
 
     # collect findings
-    cat log-members/genmember.o*.? log-members/genmember.o*.?? >tmp.lst
+    cat log-members/genmember.o* >tmp.lst
 
     # sort/uniq/reindex
-    ./genmember  member-4n9.db 4  member-5n9.db --load=tmp.lst --no-generate --maxmember=6510354 --text=3 >member-5n9.3.db
+    ./genmember  member-4n9.db 5  member-5n9.db --load=tmp.lst --no-generate --text=3 >member-5n9.3.lst
 
     # cleanup 
     rm -rf log-members tmp.lst member-5n9-unsafe.db
 ````
+
+
+## create pure member dataset
+
+```sh
+    ./genmember 4n9.db             0 member-0n9-pure.db --pure
+    ./genmember member-0n9-pure.db 1 member-1n9-pure.db --pure
+    ./genmember member-1n9-pure.db 2 member-2n9-pure.db --pure
+    ./genmember member-2n9-pure.db 2 member-3n9-pure.db --pure
+    ./genmember member-3n9-pure.db 2 member-4n9-pure.db --pure
+```
+
+for member-5n9-pure.db
+
+```sh
+    # submit workers
+    mkdir log-pure
+    qsub -cwd -o log-pure -e log-pure -b y -t 1-99 -q 4G.q ./genmember member-4n9-pure.db 5 --pure --task=sge --text=1
+
+    # check all ok
+    grep done -r log-pure/genmember.e* --files-without-match
+    grep done -r log-pure/genmember.e* --files-with-match | wc
+    grep error -r log-pure/genmember.o* --files-with-match
+    
+    # collect findings
+    cat log-pure/genmember.o* >tmp.lst
+
+    # sort/uniq/reindex
+    ./genmember  member-4n9-pure.db 5  member-5n9-pure.db --load=tmp.lst --no-generate --text=3 >member-5n9-pure.3.lst
+
+    # cleanup 
+    rm -rf log-pure tmp.lst
+```
+
+for member-6n9-pure.db
+
+```sh
+    # create shared database
+    ./genmember member-5n9-pure.db 5 work-5n9-pure.db --pure --maximprint=100e6 --maxmember=80e6  -v --interleave=60480 --truncate --no-generate
+    
+    # submit workers
+    mkdir log-6n9-pure
+    qsub -cwd -o log-6n9-pure -e log-6n9-pure -b y -t 1-999 -q 8G.q ./genmember  work-5n9-pure.db 6 --pure --maxmember=80e6 --text=1 --task=sge
+
+
+```
+
 
 # Developer instructions
  
@@ -301,8 +364,8 @@ vv--------- obsoleted
     grep done -r logs/gensignature.e* --files-without-match
     grep error -r logs/gensignature.o* --files-with-matches
      
-    #rerun any missing jobs with:
-    qsub -cwd -o logs -e logs -b y -q 8G.q ./gensignature 4n9.db 5 --pure --task=n,499 --text
+    # rerun any missing jobs with:
+    # qsub -cwd -o logs -e logs -b y -q 8G.q ./gensignature 4n9.db 5 --pure --task=n,499 --text
      
     # merge all collected candidate signatures
     # file will contain 858805139 lines
