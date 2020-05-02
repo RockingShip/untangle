@@ -236,19 +236,19 @@ struct gensignatureContext_t : dbtool_t {
 
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for referse transforms
+	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
+
+	/// @var {number} - THE generator
+	generatorTree_t generator;
 	/// @var {number} `foundTree()` duplicate by name
 	unsigned skipDuplicate;
 	/// @var {number} Where database overflow was caught
 	uint64_t truncated;
 	/// @var {number} Name of signature causing overflow
 	char truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
-
-	/// @var {number} - THE generator
-	generatorTree_t generator;
 
 	/**
 	 * Constructor

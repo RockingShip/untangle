@@ -152,6 +152,82 @@ struct genhintContext_t : dbtool_t {
 	}
 
 	/**
+	 * @date 2020-05-02 11:25:24
+	 *
+	 * Determine hints for signature
+	 *
+	 * @param {signature_t} pName - signature requiring hits
+	 * @param {database_t} tempdb - temporary database to generate imprints with
+	 * @return {number} hintId
+	 */
+	unsigned foundSidHints(const char *pName, database_t &tempdb) {
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			int perSecond = ctx.updateSpeed();
+
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
+				        ctx.timeAsString(), ctx.progress, perSecond);
+			} else {
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
+				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS);
+			}
+
+			ctx.tick = 0;
+		}
+
+		hint_t hint;
+		tinyTree_t tree(ctx);
+
+		::memset(&hint, 0, sizeof(hint));
+
+		if (this->opt_text == OPTTEXT_WON)
+			printf("%s", pName);
+
+		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
+			// prepare database
+			tempdb.InvalidateVersioned();
+			tempdb.numImprint = 1; // skip reserved first entry
+			tempdb.interleave = pInterleave->numStored;
+			tempdb.interleaveStep = pInterleave->interleaveStep;
+
+			// add imprint
+			tree.decodeFast(pName);
+			tempdb.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, 1 /* dummy sid */);
+
+			// output count
+			hint.numStored[pInterleave - metricsInterleave] = tempdb.numImprint - 1;
+
+			if (this->opt_text == 1)
+				printf("\t%u", tempdb.numImprint - 1);
+		}
+		if (this->opt_text == OPTTEXT_WON)
+			printf("\n");
+
+		// add to database
+		if (!this->readOnlyMode) {
+			// lookup/add hintId
+			unsigned ix = pStore->lookupHint(&hint);
+			unsigned hintId = pStore->hintIndex[ix];
+			if (hintId == 0)
+				pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
+
+			// add hintId to signature
+			return hintId;
+		}
+
+		return 0;
+	}
+
+	/**
 	 * @date 2020-04-19 22:03:49
 	 *
 	 * Read and add hints from file
@@ -285,9 +361,9 @@ struct genhintContext_t : dbtool_t {
 					fprintf(stderr, "[%s] INFO: task=%u,%u window=%u-last\n", ctx.timeAsString(), this->opt_taskId, this->opt_taskLast, this->opt_sidLo);
 			} else if (this->opt_sidLo || this->opt_sidHi) {
 				if (this->opt_sidHi)
-					fprintf(stderr, "[%s] INFO: window=%u-%u\n", ctx.timeAsString(), this->opt_sidLo, this->opt_sidHi);
+					fprintf(stderr, "[%s] INFO: sid=%u-%u\n", ctx.timeAsString(), this->opt_sidLo, this->opt_sidHi);
 				else
-					fprintf(stderr, "[%s] INFO: window=%u-last\n", ctx.timeAsString(), this->opt_sidLo);
+					fprintf(stderr, "[%s] INFO: sid=%u-last\n", ctx.timeAsString(), this->opt_sidLo);
 			}
 		}
 
@@ -295,88 +371,21 @@ struct genhintContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Generating hints.\n", ctx.timeAsString());
 
 		// reset ticker
-		ctx.setupSpeed(opt_sidHi - opt_sidLo);
+		ctx.setupSpeed(this->opt_sidHi ? this->opt_sidHi : pStore->numSignature);
 		ctx.tick = 0;
 
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved entry;
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 
-			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi))
-				continue;
-
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				int perSecond = ctx.updateSpeed();
-
-				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
-					        ctx.timeAsString(), ctx.progress, perSecond);
-				} else {
-					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-
-					int etaH = eta / 3600;
-					eta %= 3600;
-					int etaM = eta / 60;
-					eta %= 60;
-					int etaS = eta;
-
-					/*
-					 * @date 2020-04-23 17:26:04
-					 *
-					 *   ctx.progress is candidateId
-					 *   ctx.progressHi is ticker upper limit
-					 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
-					 */
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numHint=%u(%.0f%%) | hash=%.3f %s",
-					        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
-					        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-					        (double) ctx.cntCompare / ctx.cntHash, pStore->signatures[iSid].name);
-				}
-
-				ctx.tick = 0;
+			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi)) {
 				ctx.progress++;
+				continue;
 			}
 
 			signature_t *pSignature = pStore->signatures + iSid;
-			hint_t hint;
-
-			if (pSignature->hintId)
-				continue; // hints already determined
-
-			::memset(&hint, 0, sizeof(hint));
-
-			if (this->opt_text == 1)
-				printf("%s", pSignature->name);
-
-			for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
-				// prepare database
-				tempdb.InvalidateVersioned();
-				tempdb.numImprint = 1; // skip reserved first entry
-				tempdb.interleave = pInterleave->numStored;
-				tempdb.interleaveStep = pInterleave->interleaveStep;
-
-				// add imprint
-				tree.decodeFast(pSignature->name);
-				tempdb.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
-
-				// output count
-				hint.numStored[pInterleave - metricsInterleave] = tempdb.numImprint - 1;
-
-				if (this->opt_text == 1)
-					printf("\t%u", tempdb.numImprint - 1);
-			}
-			if (this->opt_text == 1)
-				printf("\n");
-
-			// add to database
-			if (!this->readOnlyMode) {
-				// lookup/add hintId
-				unsigned ix = pStore->lookupHint(&hint);
-				unsigned hintId = pStore->hintIndex[ix];
-				if (hintId == 0)
-					pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
-
-				// add hintId to signature
+			if (!pSignature->hintId) {
+				uint32_t hintId = foundSidHints(pSignature->name, tempdb);
 				pSignature->hintId = hintId;
 			}
 
@@ -945,15 +954,7 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	// will be using `lookupSignature()`, `lookupImprintAssociative()` and `lookupMember()`
 	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX);
-	// signature indices are used read-only, remove from inherit if sections are empty
-	if (!db.signatureIndexSize)
-		app.inheritSections &= ~database_t::ALLOCMASK_SIGNATUREINDEX;
-	if (!db.numImprint)
-		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINT;
-	if (!db.imprintIndexSize)
-		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINTINDEX;
 	// will require local copy of signatures
 	app.rebuildSections |= database_t::ALLOCMASK_SIGNATURE;
 
@@ -1010,22 +1011,14 @@ int main(int argc, char *const *argv) {
 	 * Rebuild sections
 	 */
 
-	// should not rebuild imprints
-	assert(app.rebuildSections == 0 || (~app.rebuildSections & database_t::ALLOCMASK_IMPRINT));
+	// todo: move this to `populateDatabaseSections()`
 	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
-
-	/*
-	 * Rebuild sections
-	 */
-
-	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
 		store.numSignature = db.numSignature;
 		::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
 	}
-	assert (!app.rebuildSections & database_t::ALLOCMASK_IMPRINT); // rebuild imprints not expected/supported
 	if (app.rebuildSections)
 		store.rebuildIndices(app.rebuildSections);
 
@@ -1053,7 +1046,7 @@ int main(int argc, char *const *argv) {
 		database_t tempdb(ctx);
 		tempdb.maxHint = 0;
 		tempdb.hintIndexSize = ctx.nextPrime(tempdb.maxHint * app.opt_ratio);
-		tempdb.maxImprint = MAXTRANSFORM;
+		tempdb.maxImprint = MAXTRANSFORM + 1;
 		tempdb.imprintIndexSize = ctx.nextPrime(tempdb.maxImprint * app.opt_ratio);
 		tempdb.create(0);
 		tempdb.enableVersioned();

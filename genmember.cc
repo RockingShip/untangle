@@ -254,29 +254,40 @@ struct genmemberContext_t : dbtool_t {
 	unsigned opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
+	/// @var {number} truncate on database overflow
+	double opt_truncate;
 	/// @var {number} generator upper bound
 	uint64_t opt_windowHi;
 	/// @var {number} generator lower bound
 	uint64_t opt_windowLo;
 
-	/// @var {database_t} - Database store to place results
-	database_t *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
+	/// @var {database_t} - Database store to place results
+	database_t *pStore;
 
 	/// @var {unsigned} - active index for `hints[]`
 	unsigned activeHintIndex;
+	/// @var {number} - Head of list of free members to allocate
+	unsigned freeMemberRoot;
 	/// @var {number} - THE generator
 	generatorTree_t generator;
-
-	unsigned skipDuplicate;
-	unsigned skipSize;
-	unsigned skipUnsafe;
-	unsigned numUnsafe;
+	/// @var {number} - Number of empty signatures left
 	unsigned numEmpty;
-	unsigned freeMemberRoot;
+	/// @var {number} - Number of unsafe signatures left
+	unsigned numUnsafe;
+	/// @var {number} `foundTree()` duplicate by name
+	unsigned skipDuplicate;
+	/// @var {number} `foundTree()` too large for signature
+	unsigned skipSize;
+	/// @var {number} `foundTree()` unsafe abumdance
+	unsigned skipUnsafe;
+	/// @var {number} Where database overflow was caught
+	uint64_t truncated;
+	/// @var {number} Name of signature causing overflow
+	char truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
 	/**
 	 * Constructor
@@ -295,6 +306,7 @@ struct genmemberContext_t : dbtool_t {
 		opt_sidHi = 0;
 		opt_sidLo = 0;
 		opt_text = 0;
+		opt_truncate = 0;
 		opt_windowHi = 0;
 		opt_windowLo = 0;
 
@@ -303,11 +315,13 @@ struct genmemberContext_t : dbtool_t {
 		pEvalRev = NULL;
 
 		activeHintIndex = 0;
+		freeMemberRoot = 0;
+		numUnsafe = 0;
 		skipDuplicate = 0;
 		skipSize = 0;
 		skipUnsafe = 0;
-		numUnsafe = 0;
-		freeMemberRoot = 0;
+		truncated = 0;
+		truncatedName[0] = 0;
 	}
 
 	/**
@@ -643,6 +657,9 @@ struct genmemberContext_t : dbtool_t {
 	 */
 	bool foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
+		if (this->truncated)
+			return false; // quit as fast as possible
+
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
 
@@ -689,6 +706,21 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		/*
+		 * Test for database overflow
+		 */
+		if (this->opt_truncate) {
+			// avoid `"storage full"`. Give warning later
+			if (pStore->maxImprint - pStore->numImprint <= pStore->interleave || pStore->maxSignature - pStore->numSignature <= 1) {
+				// break now, display text later/ Leave progress untouched
+				this->truncated = ctx.progress;
+				::strcpy(this->truncatedName, pNameR);
+
+				// quit as fast as possible
+				return false;
+			}
+		}
+
+		/*
 		 * Find the matching signature group. It's layout only so ignore transformId.
 		 */
 
@@ -731,6 +763,7 @@ struct genmemberContext_t : dbtool_t {
 		 */
 
 		member_t tmpMember;
+		::memset(&tmpMember, 0, sizeof(tmpMember));
 
 		::strcpy(tmpMember.name, pNameR);
 		tmpMember.sid = sid;
@@ -782,30 +815,41 @@ struct genmemberContext_t : dbtool_t {
 			printf("%s\n", pNameR);
 
 		/*
-		 * If group changed from unsafe to save, remove all (unsafe) members
-		 */
-
-		if (cmp == '>') {
-			/*
+		 * group changed from unsafe to save, remove all (unsafe) members
 			 * If candidate is same size then drop all existing unsafe group members
 			 * If candidate is larger then keep all smaller unsafe members for later optimisations
 			 */
-			if (pSignature->firstMember && tmpMember.size == pSignature->size && !this->readOnlyMode) {
-				/*
-				 * Group contains unsafe members of same size.
-				 * empty group
-				 *
-				 * @date 2020-04-05 02:21:42
-				 *
-				 * For `5n9-pure` it turns out that the chance of finding safe replacements is rare.
-				 * And you need to collect all non-safe members if the group is unsafe.
-				 * Orphaning them depletes resources too fast.
-				 *
-				 * Reuse `members[]`.
-				 * Field `nextMember` is perfect for that.
-				 */
+
+		if (cmp == '>') {
+			/*
+			 * promote signature to safe
+			 */
+
+			if (pSignature->firstMember) {
+				if (tmpMember.size == pSignature->size) {
+					// remove all same-sized unsafe members
+
+					if (this->readOnlyMode) {
+						// memberchain cannot be broken
+						// pretend signature becomes safe or keeps unsafe members
+						pSignature->firstMember = 0;
+					} else {
+
+						/*
+						 * Group contains unsafe members of same size.
+						 * empty group
+						 *
+						 * @date 2020-04-05 02:21:42
+						 *
+						 * For `5n9-pure` it turns out that the chance of finding safe replacements is rare.
+						 * And you need to collect all non-safe members if the group is unsafe.
+						 * Orphaning them depletes resources too fast.
+						 *
+						 * Reuse `members[]`.
+						 * Field `nextMember` is perfect for that.
+						 */
 				while (pSignature->firstMember) {
-					// remove all references to
+					// remove all references to the deleted
 					for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 						member_t *p = pStore->members + iMid;
 
@@ -823,17 +867,19 @@ struct genmemberContext_t : dbtool_t {
 						}
 					}
 
-					// release first of chain
+					// release head of chain
 					member_t *p = pStore->members + pSignature->firstMember;
 
 					pSignature->firstMember = p->nextMember;
 
 					this->memberFree(p);
-
+				}
+					}
 				}
 
-				// group has become empty
-				numEmpty++;
+				// test group has become empty
+				if (pSignature->firstMember == 0)
+					numEmpty++;
 			}
 
 			// mark group as safe
@@ -842,16 +888,20 @@ struct genmemberContext_t : dbtool_t {
 
 			// group has become safe
 			numUnsafe--;
-		} else {
-			if (pSignature->firstMember == 0)
-				numEmpty--; // group now has first member
 		}
+
+		// test group now has first member
+		if (pSignature->firstMember == 0)
+			numEmpty--;
 
 		/*
 		 * promote candidate to member
 		 */
 
-		if (!this->readOnlyMode) {
+		if (this->readOnlyMode != 0) {
+			// link a fake member to mark non-empty
+			pSignature->firstMember = 1;
+		} else {
 			// allocate
 			member_t *pMember = this->memberAlloc(pNameR);
 
@@ -864,9 +914,6 @@ struct genmemberContext_t : dbtool_t {
 
 			// index
 			pStore->memberIndex[mix] = pMember - pStore->members;
-		} else {
-			// link a fake member to mark non-empty
-			pSignature->firstMember = 1;
 		}
 
 		return true;
@@ -1017,7 +1064,7 @@ struct genmemberContext_t : dbtool_t {
 
 			if (!unsafeOnly || (~pSignature->flags & signature_t::SIGMASK_SAFE)) {
 				// avoid `"storage full"`. Give warning later
-				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0) {
+				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0 && this->opt_truncate) {
 					// break now, display text later/ Leave progress untouched
 					assert(iSid == ctx.progress);
 					break;
@@ -1269,6 +1316,7 @@ struct genmemberContext_t : dbtool_t {
 
 		char name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
+		this->truncated = 0;
 
 		// <name> [ <numPlaceholder> <numEndpoint> <numBackRef> ]
 		for (;;) {
@@ -1326,6 +1374,15 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
+
+		if (truncated) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
+				        ctx.timeAsString(), this->truncated, this->truncatedName);
+
+			// save position for final status
+			this->opt_windowHi = this->truncated;
+		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
@@ -1413,6 +1470,12 @@ struct genmemberContext_t : dbtool_t {
 			// can only test if windowing is disabled
 			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
 			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
+		}
+
+		if (truncated) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
+				        ctx.timeAsString(), this->truncated, this->truncatedName);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
@@ -1657,6 +1720,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t   --[no-]unsafe                   Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t-v --truncate                      Truncate on database overflow\n");
 		fprintf(stderr, "\t-v --verbose                       Say less\n");
 		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
 	}
@@ -1706,6 +1770,7 @@ int main(int argc, char *const *argv) {
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
+			LO_TRUNCATE,
 			LO_UNSAFE,
 			LO_WINDOW,
 			// short opts
@@ -1742,6 +1807,7 @@ int main(int argc, char *const *argv) {
 			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
+			{"truncate",           0, 0, LO_TRUNCATE},
 			{"unsafe",             0, 0, LO_UNSAFE},
 			{"verbose",            2, 0, LO_VERBOSE},
 			{"window",             1, 0, LO_WINDOW},
@@ -1898,6 +1964,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_TIMER:
 				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+				break;
+			case LO_TRUNCATE:
+				app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
 				break;
 			case LO_UNSAFE:
 				ctx.flags |= context_t::MAGICMASK_UNSAFE;
@@ -2138,6 +2207,35 @@ int main(int argc, char *const *argv) {
 	app.populateDatabaseSections(store, db);
 
 	/*
+	 * Rebuild sections
+	 */
+
+	// todo: move this to `populateDatabaseSections()`
+	// data sections cannot be automatically rebuilt
+	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+
+	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
+		store.numSignature = db.numSignature;
+		::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
+	}
+	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+		// rebuild imprints
+		if (!(ctx.flags & context_t::MAGICMASK_UNSAFE)) {
+			// regular rebuild
+			app.rebuildImprints(0);
+		} else if (store.numHint > 1) {
+			// rebuild unsafe with hints
+			app.rebuildImprintsWithHints();
+		} else {
+			// rebuild unsage with sid bounds
+			app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
+		}
+		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+	if (app.rebuildSections)
+		store.rebuildIndices(app.rebuildSections);
+
+	/*
 	 * count empty/unsafe
 	 */
 
@@ -2155,31 +2253,6 @@ int main(int argc, char *const *argv) {
 		        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 		        store.numMember, store.numMember * 100.0 / store.maxMember,
 		        app.numEmpty, app.numUnsafe - app.numEmpty);
-
-	/*
-	 * Rebuild sections
-	 */
-
-	// todo: move this to `populateDatabaseSections()`
-	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
-
-	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
-		store.numSignature = db.numSignature;
-		::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
-	}
-	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-		// rebuild imprints
-		if (ctx.flags & context_t::MAGICMASK_UNSAFE) {
-			app.rebuildImprintsWithHints();
-//			app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
-		} else {
-			app.rebuildImprints(0);
-		}
-		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-	}
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
 
 	/*
 	 * Where to look for new candidates
@@ -2209,12 +2282,8 @@ int main(int argc, char *const *argv) {
 			 *
 			 * <memberName> <numPlaceholder>
 			 */
-			for (unsigned iMid = 1; iMid < store.numMember; iMid++) {
-				member_t *pMember = store.members + iMid;
-
-				tree.decodeFast(pMember->name);
-				printf("%u\t%s\t%u\t%u\t%u\t%u\n", pMember->sid, pMember->name, tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
-			}
+			for (unsigned iMid = 1; iMid < store.numMember; iMid++)
+				printf("%s\n", store.members[iMid].name);
 		}
 
 		if (app.opt_text == app.OPTTEXT_VERBOSE) {

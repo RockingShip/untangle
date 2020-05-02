@@ -417,7 +417,7 @@ static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 5, 913288021,     809357847, 10233318, 0,   56349342, 2}, // NOTE: this is the extension to 4n9
 	{9, 1, 5, 913288021,     809357847, 15490349, 0,   0,        2}, // NOTE: this is full 5n9-pure (placed second and hidden)
 	// below only intended for members
-	{9, 0, 5, 17927026892,   0,         0,        0,   0,        2},
+	{9, 0, 5, 17927026892,   0,         0,        0,   65103540, 2}, // NOTE: this is the extension to 4n9
 	{9, 1, 6, 410335296888,  0,         0,        0,   0,        2}, // numProgress takes about 60 minutes
 	{9, 0, 6, 1556055783374, 0,         0,        0,   0,        3}, // from historic metrics
 	//
