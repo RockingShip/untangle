@@ -82,7 +82,7 @@ struct slookupContext_t {
 	 * @param {database_t} pStore - memory based database
 	 * @param {string} pName - name/notation of signature
 	 */
-	void main(const char *pName) {
+	void lookup(const char *pName) {
 		// Create worker tree
 
 		signature_t *pSignature = NULL;
@@ -150,7 +150,7 @@ struct slookupContext_t {
 		       tid, pStore->fwdTransformNames[tid],
 		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef,
 		       pSignature->flags,
-		       (pSignature->flags & signature_t::SIGMASK_UNSAFE) ? " UNSAFE" : "",
+		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
 		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "",
 		       pName);
@@ -405,7 +405,7 @@ int main(int argc, char *const *argv) {
 	while (argc - optind > 0) {
 		const char *pName = argv[optind++];
 
-		app.main(pName);
+		app.lookup(pName);
 	}
 
 	return 0;

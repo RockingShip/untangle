@@ -192,10 +192,10 @@ struct gensignatureContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		TEXT_WON = 1,
-		TEXT_COMPARE = 2,
-		TEXT_BRIEF = 3,
-		TEXT_VERBOSE = 4,
+		OPTTEXT_WON = 1,
+		OPTTEXT_COMPARE = 2,
+		OPTTEXT_BRIEF = 3,
+		OPTTEXT_VERBOSE = 4,
 
 	};
 
@@ -414,7 +414,7 @@ struct gensignatureContext_t : dbtool_t {
 		// add to datastore if not found
 		if (sid == 0) {
 			// won challenge
-			if (opt_text == TEXT_WON)
+			if (opt_text == OPTTEXT_WON)
 				printf("%s\n", pNameR);
 
 			// only add if signatures are writable
@@ -434,7 +434,7 @@ struct gensignatureContext_t : dbtool_t {
 				}
 
 				signature_t *pSignature = pStore->signatures + sid;
-				pSignature->flags = signature_t::SIGMASK_UNSAFE;
+				pSignature->flags = 0;
 				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
@@ -492,7 +492,7 @@ struct gensignatureContext_t : dbtool_t {
 				cmp = '='; // equals
 		}
 
-		if (opt_text == TEXT_COMPARE)
+		if (opt_text == OPTTEXT_COMPARE)
 			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
 
 		/*
@@ -500,7 +500,7 @@ struct gensignatureContext_t : dbtool_t {
 		 */
 		if (cmp == '>' || cmp == '+') {
 			// won challenge
-			if (opt_text == TEXT_WON)
+			if (opt_text == OPTTEXT_WON)
 				printf("%s\n", pNameR);
 
 			// only add if signatures are writable
@@ -1338,7 +1338,7 @@ int main(int argc, char *const *argv) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.TEXT_BRIEF && app.opt_text != app.TEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -1504,13 +1504,13 @@ int main(int argc, char *const *argv) {
 	 * List result
 	 */
 
-	if (app.opt_text == app.TEXT_BRIEF) {
+	if (app.opt_text == app.OPTTEXT_BRIEF) {
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%s\n", pSignature->name);
 		}
 	}
-	if (app.opt_text == app.TEXT_VERBOSE) {
+	if (app.opt_text == app.OPTTEXT_VERBOSE) {
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);

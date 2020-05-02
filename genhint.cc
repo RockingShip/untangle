@@ -29,7 +29,7 @@
  *
  *              <name> <hintForInterleave> <hintForInterleave> ...
  *
- * `--test=2`   Display hints when they are written to the database
+ * `--test=3`   Display hints when they are written to the database
  *              NOTE: same format as `--text=1`
  *
  *              <name> <hintForInterleave> <hintForInterleave> ...
@@ -77,6 +77,15 @@
  * @typedef {object}
  */
 struct genhintContext_t : dbtool_t {
+
+	enum {
+		/// @constant {number} - `--text` modes
+		OPTTEXT_WON = 1,
+		OPTTEXT_COMPARE = 2,
+		OPTTEXT_BRIEF = 3,
+		OPTTEXT_VERBOSE = 4,
+
+	};
 
 	/*
 	 * User specified program arguments and options
@@ -896,7 +905,7 @@ int main(int argc, char *const *argv) {
 	 * List result
 	 */
 
-	if (app.opt_text == 2) {
+	if (app.opt_text == app.OPTTEXT_BRIEF) {
 		// also output 'empty' hints to easy track what is missing
 
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {

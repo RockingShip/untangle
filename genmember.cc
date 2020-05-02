@@ -219,10 +219,10 @@ struct genmemberContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		TEXT_WON = 1,
-		TEXT_COMPARE = 2,
-		TEXT_BRIEF = 3,
-		TEXT_VERBOSE = 4,
+		OPTTEXT_WON = 1,
+		OPTTEXT_COMPARE = 2,
+		OPTTEXT_BRIEF = 3,
+		OPTTEXT_VERBOSE = 4,
 
 	};
 
@@ -333,7 +333,7 @@ struct genmemberContext_t : dbtool_t {
 		assert(~treeR.root & IBIT);
 
 		// safe until proven otherwise
-		pMember->flags &= ~signature_t::SIGMASK_UNSAFE;
+		pMember->flags |= signature_t::SIGMASK_SAFE;
 
 		/*
 		 * @date 2020-03-29 23:16:43
@@ -400,8 +400,8 @@ struct genmemberContext_t : dbtool_t {
 				pMember->Qsid = pStore->members[pMember->Qmid].sid;
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Qmid == 0 || pMember->Qsid == 0 || (pStore->members[pMember->Qmid].flags & signature_t::SIGMASK_UNSAFE))
-					pMember->flags |= signature_t::SIGMASK_UNSAFE;
+				if (pMember->Qmid == 0 || pMember->Qsid == 0 || (~pStore->members[pMember->Qmid].flags & signature_t::SIGMASK_SAFE))
+					pMember->flags &= ~signature_t::SIGMASK_SAFE;
 			}
 
 			unsigned To = treeR.N[treeR.root].T & ~IBIT;
@@ -413,8 +413,8 @@ struct genmemberContext_t : dbtool_t {
 				pMember->Tsid = pStore->members[pMember->Tmid].sid ^ (treeR.N[treeR.root].T & IBIT);
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Tmid == 0 || (pMember->Tsid & ~IBIT) == 0 || (pStore->members[pMember->Tmid].flags & signature_t::SIGMASK_UNSAFE))
-					pMember->flags |= signature_t::SIGMASK_UNSAFE;
+				if (pMember->Tmid == 0 || (pMember->Tsid & ~IBIT) == 0 || (~pStore->members[pMember->Tmid].flags & signature_t::SIGMASK_SAFE))
+					pMember->flags &= ~signature_t::SIGMASK_SAFE;
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
@@ -426,8 +426,8 @@ struct genmemberContext_t : dbtool_t {
 				pMember->Fsid = pStore->members[pMember->Fmid].sid;
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Fmid == 0 || pMember->Fsid == 0 || (pStore->members[pMember->Fmid].flags & signature_t::SIGMASK_UNSAFE))
-					pMember->flags |= signature_t::SIGMASK_UNSAFE;
+				if (pMember->Fmid == 0 || pMember->Fsid == 0 || (~pStore->members[pMember->Fmid].flags & signature_t::SIGMASK_SAFE))
+					pMember->flags &= ~signature_t::SIGMASK_SAFE;
 			}
 		}
 
@@ -554,7 +554,7 @@ struct genmemberContext_t : dbtool_t {
 				unsigned midHead = pStore->memberIndex[ix];
 				if (midHead == 0) {
 					// unsafe
-					pMember->flags |= signature_t::SIGMASK_UNSAFE;
+					pMember->flags &= ~signature_t::SIGMASK_SAFE;
 				} else {
 					// test if head already present
 					for (unsigned k = 0; k < member_t::MAXHEAD && pMember->heads[k]; k++) {
@@ -714,8 +714,8 @@ struct genmemberContext_t : dbtool_t {
 		signature_t *pSignature = pStore->signatures + sid;
 
 		// early-reject if candidate is larger than safe group
-		if ((~pSignature->flags & signature_t::SIGMASK_UNSAFE) && treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
-			if (opt_text == TEXT_COMPARE)
+		if ((pSignature->flags & signature_t::SIGMASK_SAFE) && treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
+			if (opt_text == OPTTEXT_COMPARE)
 				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '-', pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
 
 			skipSize++;
@@ -743,8 +743,8 @@ struct genmemberContext_t : dbtool_t {
 		 */
 		unsigned cmp = 0;
 
-		if (~pSignature->flags & signature_t::SIGMASK_UNSAFE) {
-			if (tmpMember.flags & signature_t::SIGMASK_UNSAFE) {
+		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+			if (~tmpMember.flags & signature_t::SIGMASK_SAFE) {
 				// group is safe, candidate not. Reject
 				cmp = '<';
 				skipUnsafe++;
@@ -754,7 +754,7 @@ struct genmemberContext_t : dbtool_t {
 				assert(tmpMember.size == pSignature->size);
 			}
 		} else {
-			if (~tmpMember.flags & signature_t::SIGMASK_UNSAFE) {
+			if (tmpMember.flags & signature_t::SIGMASK_SAFE) {
 				// group is unsafe, candidate is safe. Accept
 				cmp = '>';
 			} else if (tmpMember.size > pSignature->size) {
@@ -768,14 +768,14 @@ struct genmemberContext_t : dbtool_t {
 			}
 		}
 
-		if (opt_text == TEXT_COMPARE)
+		if (opt_text == OPTTEXT_COMPARE)
 			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, tmpMember.sid, cmp, tmpMember.name, tmpMember.size, tmpMember.numPlaceholder, tmpMember.numEndpoint, tmpMember.numBackRef);
 
 		if (cmp == '<' || cmp == '-')
 			return true;  // lost challange
 
 		// won challenge
-		if (opt_text == TEXT_WON)
+		if (opt_text == OPTTEXT_WON)
 			printf("%s\n", pNameR);
 
 		/*
@@ -807,15 +807,15 @@ struct genmemberContext_t : dbtool_t {
 						member_t *p = pStore->members + iMid;
 
 						if (p->Qmid == pSignature->firstMember) {
-							assert(p->flags & signature_t::SIGMASK_UNSAFE);
+							assert(~p->flags & signature_t::SIGMASK_SAFE);
 							p->Qmid = 0;
 						}
 						if (p->Tmid == pSignature->firstMember) {
-							assert(p->flags & signature_t::SIGMASK_UNSAFE);
+							assert(~p->flags & signature_t::SIGMASK_SAFE);
 							p->Tmid = 0;
 						}
 						if (p->Fmid == pSignature->firstMember) {
-							assert(p->flags & signature_t::SIGMASK_UNSAFE);
+							assert(~p->flags & signature_t::SIGMASK_SAFE);
 							p->Fmid = 0;
 						}
 					}
@@ -834,7 +834,7 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			// mark group as safe
-			pSignature->flags &= ~signature_t::SIGMASK_UNSAFE;
+			pSignature->flags |= signature_t::SIGMASK_SAFE;
 			pSignature->size = tmpMember.size;
 
 			// group has become safe
@@ -1012,8 +1012,7 @@ struct genmemberContext_t : dbtool_t {
 			 * Add to imprint index, either all or empty/unsafe only
 			 */
 
-			if (!unsafeOnly || (pSignature->flags & signature_t::SIGMASK_UNSAFE)) {
-
+			if (!unsafeOnly || (~pSignature->flags & signature_t::SIGMASK_SAFE)) {
 				// avoid `"storage full"`. Give warning later
 				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0) {
 					// break now, display text later/ Leave progress untouched
@@ -1032,7 +1031,7 @@ struct genmemberContext_t : dbtool_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			if (pSignature->flags & signature_t::SIGMASK_UNSAFE)
+			if (~pSignature->flags & signature_t::SIGMASK_SAFE)
 				numUnsafe++;
 
 			ctx.progress++;
@@ -1306,17 +1305,17 @@ struct genmemberContext_t : dbtool_t {
 				tree.decodeFast(pMember->name);
 				findHeadTail(pMember, tree);
 
-				if (pSignature->flags & signature_t::SIGMASK_UNSAFE) {
+				if (~pSignature->flags & signature_t::SIGMASK_SAFE) {
 					/*
 					 * Adding (unsafe) member to unsafe group
 					 */
 
 					// member should be unsafe
-					assert(pMember->flags & signature_t::SIGMASK_UNSAFE);
+					assert(~pMember->flags & signature_t::SIGMASK_SAFE);
 					// nodeSize should match
 					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
 
-				} else if (~pMember->flags & signature_t::SIGMASK_UNSAFE) {
+				} else if (pMember->flags & signature_t::SIGMASK_SAFE) {
 					/*
 					 * Adding safe member to safe group
 					 */
@@ -1369,7 +1368,7 @@ struct genmemberContext_t : dbtool_t {
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (pStore->signatures[iSid].firstMember == 0)
 				numEmpty++;
-			if (pStore->signatures[iSid].flags & signature_t::SIGMASK_UNSAFE)
+			if (~pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE)
 				numUnsafe++;
 		}
 
@@ -1848,7 +1847,7 @@ int main(int argc, char *const *argv) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.TEXT_BRIEF && app.opt_text != app.TEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -1961,7 +1960,7 @@ int main(int argc, char *const *argv) {
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0)
 			app.numEmpty++;
-		if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE)
+		if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)
 			app.numUnsafe++;
 	}
 
@@ -2014,7 +2013,7 @@ int main(int argc, char *const *argv) {
 		// compact, sort and reindex members
 		app.finaliseMembers();
 
-		if (app.opt_text == app.TEXT_BRIEF) {
+		if (app.opt_text == app.OPTTEXT_BRIEF) {
 			/*
 			 * Display members of complete dataset
 			 *
@@ -2028,7 +2027,7 @@ int main(int argc, char *const *argv) {
 			}
 		}
 
-		if (app.opt_text == app.TEXT_VERBOSE) {
+		if (app.opt_text == app.OPTTEXT_VERBOSE) {
 			/*
 			 * Display full members, grouped by signature
 			 */
@@ -2049,8 +2048,8 @@ int main(int argc, char *const *argv) {
 					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
 						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
 
-					if (pMember->flags & signature_t::SIGMASK_UNSAFE)
-						printf("U");
+					if (pMember->flags & signature_t::SIGMASK_SAFE)
+						printf("S");
 					printf("\n");
 				}
 			}
@@ -2060,9 +2059,9 @@ int main(int argc, char *const *argv) {
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)
 		 */
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			if (store.signatures[iSid].flags & signature_t::SIGMASK_UNSAFE) {
+			if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
 				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(store.members[iMid].flags & signature_t::SIGMASK_UNSAFE);
+					assert(~store.members[iMid].flags & signature_t::SIGMASK_SAFE);
 				}
 			}
 		}
