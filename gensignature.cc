@@ -367,15 +367,6 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		/*
-		 * Special case for read-only and empty input
-		 */
-		if (!pStore->maxSignature && this->readOnlyMode) {
-			if (opt_text == 1)
-				printf("%s\n", pNameR);
-			return true;
-		}
-
-		/*
 		 * Test for database overflow
 		 */
 		if (this->opt_truncate) {
@@ -454,12 +445,12 @@ struct gensignatureContext_t : dbtool_t {
 			return true;
 		}
 
+		signature_t *pSignature = pStore->signatures + sid;
+
 		/*
 		 * !! NOTE: The following selection is just for the display name.
 		 *          Better choices will be analysed later.
 		 */
-
-		signature_t *pSignature = pStore->signatures + sid;
 
 		int cmp = 0; // "<0" if "best < candidate", ">0" if "best > candidate"
 
@@ -512,15 +503,14 @@ struct gensignatureContext_t : dbtool_t {
 			if (opt_text == TEXT_WON)
 				printf("%s\n", pNameR);
 
-			// only update if signatures are writable
-			if (!this->readOnlyMode)
-				return true;
-
-			::strcpy(pSignature->name, pNameR);
-			pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
-			pSignature->numPlaceholder = numPlaceholder;
-			pSignature->numEndpoint = numEndpoint;
-			pSignature->numBackRef = numBackRef;
+			// only add if signatures are writable
+			if (!this->readOnlyMode) {
+				::strcpy(pSignature->name, pNameR);
+				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+				pSignature->numPlaceholder = numPlaceholder;
+				pSignature->numEndpoint = numEndpoint;
+				pSignature->numBackRef = numBackRef;
+			}
 		}
 
 		return true;

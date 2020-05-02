@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-05-02 00:46:30 Synced workflow `genhint`,`genmember`,`gensignature`.
 2020-05-02 00:42:48 Improved `--text=`.
 2020-05-02 00:22:13 Fixed `dbtool_t::sizeDatabaseSections()`.
 2020-04-30 00:42:34 Fixed `genhint`,`genmember`,`gensignature`.
