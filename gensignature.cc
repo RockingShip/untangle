@@ -1343,11 +1343,7 @@ int main(int argc, char *const *argv) {
 	// test readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != 3 && app.opt_text != 4);
 
-	// allow for copy-on-write
-	if (!app.readOnlyMode)
-		app.copyOnWrite = 1;
-
-	db.open(app.arg_inputDatabase, app.copyOnWrite);
+	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1373,37 +1369,8 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	/*
-	 * @date 2020-04-25 00:05:32
-	 *
-	 * NOTE: `signatureIndex`, `hintIndex` and `imprintIndex` are first-level indices derived from `signatures`, `hints` and `imprints`
-	 *       `imprints` is a second-level index derived from `signatures`
-	 *
-	 * workflow:
-	 *   - No output specified make primary sections/indices secondary
-	 *   - Size output sections according to command-line overrides
-	 *   - If none given for primary sections (signatures,imprints) take from metrics
-	 *   - If none given for secondary sections (hints) inherit from input database
-	 *   - Any changes that change the hashing properties of indices invalidate them and require rebuilding
-	 *   - Any primary section/index have their contents copied
-	 *   - Any secondary section/index that remain same size get inherited
-	 *   - All indices must have at least one entry more then their data
-	 *   - All primary sections must have at least the reserved first entry
-	 *   - Any secondary section may have zero entries
-	 *
-	 * @date 2020-04-21 19:59:47
-	 *
-	 * if (inheritSection)
-	 *   inherit();
-	 * else if (rebuildSection)
-	 *   rebuild();
-	 * else
-	 *   copy();
-	 */
-
-	// need indices (removing from inherit will auto-create)
-	if (!app.readOnlyMode)
-		app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	// need non-empty sections
+	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 
 	/*
 	 * @date 2020-03-17 13:57:25
@@ -1421,14 +1388,13 @@ int main(int argc, char *const *argv) {
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
+#if 0
 	// no input imprints or interleave changed
 	if (db.numImprint == 0 || db.interleave == store.interleave) {
 		app.rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
 		app.inheritSections &= ~app.rebuildSections;
 	}
-
-	if (app.rebuildSections && app.readOnlyMode)
-		ctx.fatal("readOnlyMode and database sections [%s] require rebuilding\n", store.sectionToText(app.rebuildSections));
+#endif
 
 	/*
 	 * Finalise allocations and create database
@@ -1450,9 +1416,6 @@ int main(int argc, char *const *argv) {
 		}
 	}
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] Store create: interleave=%u maxSignature=%u signatureIndex=%u maxImprint=%u imprintIndex=%u\n", ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxImprint, store.imprintIndexSize);
-
 	// actual create
 	store.create(app.inheritSections);
 	app.pStore = &store;
@@ -1465,37 +1428,32 @@ int main(int argc, char *const *argv) {
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
 
+	// initialize evaluator early using input database
+	tinyTree_t tree(ctx);
+	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
+	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
+
 	/*
 	 * Inherit/copy sections
 	 */
 
 	app.populateDatabaseSections(store, db);
 
-	// initialize evaluator
-	tinyTree_t tree(ctx);
-	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
-
 	/*
 	 * Rebuild sections
 	 */
 
-	if (!app.readOnlyMode) {
-		// todo: move this to `populateDatabaseSections()`
-		// data sections cannot be automatically rebuilt
-		assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	// todo: move this to `populateDatabaseSections()`
+	// data sections cannot be automatically rebuilt
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
-		if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-			// rebuild imprints
-			app.rebuildImprints();
-			app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-		}
-		if (app.rebuildSections)
-			store.rebuildIndices(app.rebuildSections);
-	} else if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-		if (app.rebuildSections)
-			fprintf(stderr, "[%s] WARNING: readOnlyMode and database sections [%s] are missing.", ctx.timeAsString(), store.sectionToText(app.rebuildSections));
+	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+		// rebuild imprints
+		app.rebuildImprints();
+		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 	}
+	if (app.rebuildSections)
+		store.rebuildIndices(app.rebuildSections);
 
 	/*
 	 * Where to look for new candidates

@@ -146,7 +146,7 @@ struct dbtool_t : callable_t {
 	 * @param {database_t} db - read-only input database
 	 * @param {number} numNodes - to find matching metrics
 	 */
-	void sizeDatabaseSections(database_t &store, const database_t &db, unsigned numNodes) {
+	void __attribute__((optimize("O0"))) sizeDatabaseSections(database_t &store, const database_t &db, unsigned numNodes) {
 
 		/*
 		 * @date 2020-03-17 13:57:25
@@ -158,237 +158,326 @@ struct dbtool_t : callable_t {
 		 * The ratio between index and data size is called `ratio`.
 		 */
 
+		inheritSections &= ~rebuildSections;
+
 		/*
-		 * signatures
+		 * signature
 		 */
 
-		if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
-			// inherited. pass-though
-			store.maxSignature = db.numSignature;
-		} else if (this->opt_maxSignature) {
+		// data
+		if (this->opt_maxSignature) {
 			// user specified
 			store.maxSignature = this->opt_maxSignature;
-		} else {
-			// metrics
+		} else if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
+			// inherited. pass-though
+			store.maxSignature = db.numSignature;
+		} else if (!readOnlyMode) {
+			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics)
 				ctx.fatal("no preset for --maxsignature\n");
 
-			store.maxSignature = pMetrics->numSignature;
+			// give metrics a margin of error
+			store.maxSignature = ctx.raisePercent(pMetrics->numSignature, 5);
+		} else if (db.numSignature) {
+			// non-empty. pass-though
+			store.maxSignature = db.numSignature;
+		} else {
+			// empty. create minimal sized section
+			store.maxSignature = 1;
 		}
 
-		if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
-			// inherited. pass-though
-			store.signatureIndexSize = db.signatureIndexSize;
-		} else if (this->opt_signatureIndexSize) {
-			// user specified
-			store.signatureIndexSize = this->opt_signatureIndexSize;
-		} else if (~inheritSections & database_t::ALLOCMASK_SIGNATURE) {
-			// data is not inherited, apply fitting indexSize
-			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
-			if (this->copyOnWrite && store.signatureIndexSize == db.signatureIndexSize)
-				inheritSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
-		} else if (db.signatureIndexSize) {
-			// inherit input size
-			store.signatureIndexSize = db.signatureIndexSize;
-		} else {
-			// create new index for inherited data
-			store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+		if (store.maxSignature > db.numSignature) {
+			// disable inherit when section wants to grow
+			inheritSections &= ~database_t::ALLOCMASK_SIGNATURE;
+		} else if (this->copyOnWrite) {
+			// inherit when section fits and copy-on-write
+			inheritSections |= database_t::ALLOCMASK_SIGNATURE;
 		}
-		// input index empty or unusable
-		if (db.numSignature && (~inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX)) {
-			if (!db.signatureIndexSize || db.signatureIndexSize != store.signatureIndexSize)
+
+		// index
+		if (!store.maxSignature) {
+			// no data to index
+			store.signatureIndexSize = 0;
+		} else {
+			if (this->opt_signatureIndexSize) {
+				// user specified
+				store.signatureIndexSize = this->opt_signatureIndexSize;
+			} else if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
+				// inherited. pass-though
+				store.signatureIndexSize = db.signatureIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+			} else if (db.signatureIndexSize) {
+				// non-empty. pass-though
+				store.signatureIndexSize = db.signatureIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.signatureIndexSize = 1;
+			}
+
+			if (store.signatureIndexSize != db.signatureIndexSize) {
+				// source section is missing or unusable
 				rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+			}
 		}
 
 		/*
-		 * hints
+		 * hint
 		 */
 
-		if (inheritSections & database_t::ALLOCMASK_HINT) {
-			// inherited. pass-though
-			store.maxHint = db.numHint;
-		} else if (this->opt_maxHint) {
+		// data
+		if (this->opt_maxHint) {
 			// user specified
 			store.maxHint = this->opt_maxHint;
+		} else if (inheritSections & database_t::ALLOCMASK_HINT) {
+			// inherited. pass-though
+			store.maxHint = db.numHint;
+		} else if (!readOnlyMode) {
+			// resize using metrics
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			if (!pMetrics)
+				ctx.fatal("no preset for --maxhint\n");
+
+			// give metrics a margin of error
+			store.maxHint = ctx.raisePercent(pMetrics->numHint, 5);
+		} else if (db.numHint) {
+			// non-empty. pass-though
+			store.maxHint = db.numHint;
 		} else {
-			// metrics
-#if 1
-			store.maxHint = 255; // hardcoded metrics
-#else
-			ctx.fatal("no preset for --maxhint\n");
-#endif
+			// empty. create minimal sized section
+			store.maxHint = 1;
 		}
 
-		if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
-			// inherited. pass-though
-			store.hintIndexSize = db.hintIndexSize;
-		} else if (this->opt_hintIndexSize) {
-			// user specified
-			store.hintIndexSize = this->opt_hintIndexSize;
-		} else if (~inheritSections & database_t::ALLOCMASK_HINT) {
-			// data is not inherited, apply fitting indexSize
-			store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
-			if (this->copyOnWrite && store.hintIndexSize == db.hintIndexSize)
-				inheritSections |= database_t::ALLOCMASK_HINTINDEX;
-		} else if (db.hintIndexSize) {
-			// inherit input size
-			store.hintIndexSize = db.hintIndexSize;
-		} else {
-			// create new index for inherited data
-			store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
+		if (store.maxHint > db.numHint) {
+			// disable inherit when section wants to grow
+			inheritSections &= ~database_t::ALLOCMASK_HINT;
+		} else if (this->copyOnWrite) {
+			// inherit when section fits and copy-on-write
+			inheritSections |= database_t::ALLOCMASK_HINT;
 		}
-		// input index empty or unusable
-		if (db.numHint && (~inheritSections & database_t::ALLOCMASK_HINTINDEX)) {
-			if (!db.hintIndexSize || db.hintIndexSize != store.hintIndexSize)
+
+		// index
+		if (!store.maxHint) {
+			// no data to index
+			store.hintIndexSize = 0;
+		} else {
+			if (this->opt_hintIndexSize) {
+				// user specified
+				store.hintIndexSize = this->opt_hintIndexSize;
+			} else if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
+				// inherited. pass-though
+				store.hintIndexSize = db.hintIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
+			} else if (db.hintIndexSize) {
+				// non-empty. pass-though
+				store.hintIndexSize = db.hintIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.hintIndexSize = 1;
+			}
+
+			if (store.hintIndexSize != db.hintIndexSize) {
+				// source section is missing or unusable
 				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_HINTINDEX;
+			}
 		}
 
 		/*
-		 * imprints
+		 * imprint
 		 */
 
-		// interleave
+		// interleave is not a section but a setting
 		if (this->opt_interleave) {
 			// user specified
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
-			if (!pMetrics)
-				ctx.fatal("no preset for --interleave\n");
-
-			store.interleaveStep = pMetrics->interleaveStep;
-			store.interleave = this->opt_interleave;
-		} else if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
-			// inherited. pass-though
-			store.interleave = db.interleave;
-			store.interleaveStep = db.interleaveStep;
-		} else if (this->opt_interleave) {
-			// user specified
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
-			if (!pMetrics)
-				ctx.fatal("no preset for --interleave\n");
-
-			store.interleaveStep = pMetrics->interleaveStep;
 			store.interleave = this->opt_interleave;
 		} else if (db.interleave) {
-			// unspecified, can inherit
+			// inherit interleave
 			store.interleave = db.interleave;
-			store.interleaveStep = db.interleaveStep;
 		} else {
-			// set interleave when first time
-			this->opt_interleave = METRICS_DEFAULT_INTERLEAVE;
-
-			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, this->opt_interleave);
-			assert(pMetrics);
-
-			store.interleaveStep = pMetrics->interleaveStep;
-			store.interleave = this->opt_interleave;
+			// set interleave on first time
+			store.interleave = METRICS_DEFAULT_INTERLEAVE;
 		}
 
-		if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
-			// inherited. pass-though
-			store.maxImprint = db.numImprint;
-		} else if (this->opt_maxImprint) {
-			// user specified
-			store.maxImprint = this->opt_maxImprint;
-		} else {
-			// metrics
-			const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
+		if (store.interleave) {
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
 			if (!pMetrics)
-				ctx.fatal("no preset for --maximprint\n");
+				ctx.fatal("no preset for --interleave\n");
 
-			store.maxImprint = pMetrics->numImprint;
+			store.interleave = pMetrics->numStored;
+			store.interleaveStep = pMetrics->interleaveStep;
+		}
+		if (store.interleave != db.interleave) {
+			// change of interleave triggers a rebuild (implicit disables inherit)
+			rebuildSections |= database_t::ALLOCMASK_IMPRINT;
+			inheritSections &= ~rebuildSections;
 		}
 
-		if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
-			// inherited. pass-though
-			store.imprintIndexSize = db.imprintIndexSize;
-		} else if (this->opt_imprintIndexSize) {
-			// user specified
-			store.imprintIndexSize = this->opt_imprintIndexSize;
-		} else if (~inheritSections & database_t::ALLOCMASK_IMPRINT) {
-			// data is not inherited, apply fitting indexSize
-			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
-			if (this->copyOnWrite && store.imprintIndexSize == db.imprintIndexSize)
-				inheritSections |= database_t::ALLOCMASK_IMPRINTINDEX;
-		} else if (db.imprintIndexSize) {
-			// inherit input size
-			store.imprintIndexSize = db.imprintIndexSize;
+		// data
+		if (!store.maxSignature) {
+			// no data to index
+			store.interleave = 0;
+			store.maxImprint = 0;
 		} else {
-			// create new index for inherited data
-			store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+			if (this->opt_maxImprint) {
+				// user specified
+				store.maxImprint = this->opt_maxImprint;
+			} else if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
+				// inherited. pass-though
+				store.maxImprint = db.numImprint;
+			} else if (!readOnlyMode) {
+				// resize using metrics
+				const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
+				if (!pMetrics)
+					ctx.fatal("no preset for --maximprint\n");
+
+				store.maxImprint = ctx.raisePercent(pMetrics->numImprint, 5);
+			} else if (db.numImprint) {
+				// non-empty. pass-though
+				store.maxImprint = db.numImprint;
+			} else {
+				// empty. create minimal sized section
+				store.interleave = 1;
+				store.interleaveStep = MAXTRANSFORM;
+				store.maxImprint = 1;
+			}
+
+			// imprint as data
+			if (store.maxImprint > db.numImprint) {
+				// disable inherit when section wants to grow
+				inheritSections &= ~database_t::ALLOCMASK_IMPRINT;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_IMPRINT;
+			}
+
+			// imprint as index
+			if (!db.numImprint || store.interleave != db.interleave) {
+				// source section is missing or unusable
+				rebuildSections |= database_t::ALLOCMASK_IMPRINT;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_IMPRINT;
+			}
 		}
-		// input index empty or unusable
-		if (db.numImprint && (~inheritSections & database_t::ALLOCMASK_IMPRINTINDEX)) {
-			if (!db.imprintIndexSize || db.imprintIndexSize != store.imprintIndexSize)
+
+		// index
+		if (!store.maxImprint) {
+			// no data to index
+			store.imprintIndexSize = 0;
+		} else {
+			if (this->opt_imprintIndexSize) {
+				// user specified
+				store.imprintIndexSize = this->opt_imprintIndexSize;
+			} else if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
+				// inherited. pass-though
+				store.imprintIndexSize = db.imprintIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+			} else if (db.imprintIndexSize) {
+				// non-empty. pass-though
+				store.imprintIndexSize = db.imprintIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.imprintIndexSize = 1;
+			}
+
+			if (store.imprintIndexSize != db.imprintIndexSize) {
+				// source section is missing or unusable
 				rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+			}
 		}
 
 		/*
-		 * members
+		 * member
 		 */
 
-		if (inheritSections & database_t::ALLOCMASK_MEMBER) {
+		// data
+		if (this->opt_maxMember) {
+			// user specified
+			store.maxMember = this->opt_maxMember;
+		} else if (inheritSections & database_t::ALLOCMASK_MEMBER) {
 			// inherited. pass-though
 			store.maxMember = db.numMember;
-		} else if (this->opt_maxMember) {
-			// user specified
-			store.maxMember = this->opt_maxMember; // user specified
-		} else {
-			// metrics
+		} else if (!readOnlyMode) {
+			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics)
 				ctx.fatal("no preset for --maxmember\n");
 
-			store.maxMember = pMetrics->numMember;
-		}
-
-		if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
-			// inherited. pass-though
-			store.memberIndexSize = db.memberIndexSize;
-		} else if (this->opt_memberIndexSize) {
-			// user specified
-			store.memberIndexSize = this->opt_memberIndexSize;
-		} else if (~inheritSections & database_t::ALLOCMASK_MEMBER) {
-			// data is not inherited, apply fitting indexSize
-			store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
-			if (this->copyOnWrite && store.memberIndexSize == db.memberIndexSize)
-				inheritSections |= database_t::ALLOCMASK_MEMBERINDEX;
-		} else if (db.memberIndexSize) {
-			// inherit input size
-			store.memberIndexSize = db.memberIndexSize;
+			// give metrics a margin of error
+			store.maxMember = ctx.raisePercent(pMetrics->numMember, 5);
+		} else if (db.numMember) {
+			// non-empty. pass-though
+			store.maxMember = db.numMember;
 		} else {
-			// create new index for inherited data
-			store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+			// empty. create minimal sized section
+			store.maxMember = 1;
 		}
-		// input index empty or unusable
-		if (db.numMember && (~inheritSections & database_t::ALLOCMASK_MEMBERINDEX)) {
-			if (!db.memberIndexSize || db.memberIndexSize != store.memberIndexSize)
+
+		if (store.maxMember > db.numMember) {
+			// disable inherit when section wants to grow
+			inheritSections &= ~database_t::ALLOCMASK_MEMBER;
+		} else if (this->copyOnWrite) {
+			// inherit when section fits and copy-on-write
+			inheritSections |= database_t::ALLOCMASK_MEMBER;
+		}
+
+		// index
+		if (!store.maxMember) {
+			// no data to index
+			store.memberIndexSize = 0;
+		} else {
+			if (this->opt_memberIndexSize) {
+				// user specified
+				store.memberIndexSize = this->opt_memberIndexSize;
+			} else if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
+				// inherited. pass-though
+				store.memberIndexSize = db.memberIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+			} else if (db.memberIndexSize) {
+				// non-empty. pass-though
+				store.memberIndexSize = db.memberIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.memberIndexSize = 1;
+			}
+
+			if (store.memberIndexSize != db.memberIndexSize) {
+				// source section is missing or unusable
 				rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_MEMBERINDEX;
+			}
 		}
 
-		/*
-		 * rebuilt (writable) sections may not be inherited (read-only)
-		 */
-
+		// rebuilt sections cannot be inherited
 		inheritSections &= ~rebuildSections;
 
-		/*
-		 * validate
-		 */
-
-		if (!readOnlyMode) {
-			// indices must be at least one larger than their data
-			if (store.maxSignature && store.maxSignature > store.signatureIndexSize + 1)
-				ctx.fatal("--maxsignature=%u exceeds --signatureIndexSize=%u\n", store.maxSignature, store.signatureIndexSize);
-			if (store.maxHint && store.maxHint > store.hintIndexSize + 1)
-				ctx.fatal("--maxhint=%u exceeds --hintIndexSize=%u\n", store.maxHint, store.hintIndexSize);
-			if (store.maxImprint && store.maxImprint > store.imprintIndexSize + 1)
-				ctx.fatal("--maximprint=%u exceeds --imprintIndexSize=%u\n", store.maxImprint, store.imprintIndexSize);
-		} else if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-			if (rebuildSections)
-				fprintf(stderr, "[%s] WARNING: readOnlyMode and database sections [%s] require rebuilding", ctx.timeAsString(), store.sectionToText(rebuildSections));
-		}
-
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
+			        ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxMember, store.memberIndexSize);
 
 		// output data must be large enough to fit input data
 		if (store.maxSignature < db.numSignature)
@@ -417,7 +506,7 @@ struct dbtool_t : callable_t {
 	 * @param {database_t} store - writable output database
 	 * @param {database_t} db - read-only input database
 	 */
-	void populateDatabaseSections(database_t &store, const database_t &db) {
+	void __attribute__((optimize("O0"))) populateDatabaseSections(database_t &store, const database_t &db) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
 			static char inheritText[512], rebuildText[512];
@@ -457,8 +546,8 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (!store.maxSignature) {
+			// set signatures to null but keep index intact for (empty) lookups
 			store.signatures = NULL;
-			store.signatureIndex = NULL;
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
 				// inherited. pass-though
@@ -474,12 +563,13 @@ struct dbtool_t : callable_t {
 				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
 				store.signatures = db.signatures;
 				store.numSignature = db.numSignature;
-			} else {
+			} else if (~rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
 				fprintf(stderr, "[%s] Copying signature section\n", ctx.timeAsString());
 
+				assert(store.maxSignature >= db.numSignature);
 				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
-				::memcpy(store.signatures, db.signatures, db.numSignature * sizeof(*db.signatures));
 				store.numSignature = db.numSignature;
+				::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
 			}
 
 			if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
@@ -493,7 +583,7 @@ struct dbtool_t : callable_t {
 			} else if (!db.signatureIndexSize) {
 				// was missing
 				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
-				::memset(store.signatureIndex, 0, store.signatureIndexSize);
+				::memset(store.signatureIndex, 0, store.signatureIndexSize * sizeof(*store.signatureIndex));
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.signatureIndexSize == db.signatureIndexSize);
@@ -504,8 +594,8 @@ struct dbtool_t : callable_t {
 				// copy
 				assert(store.signatureIndexSize == db.signatureIndexSize);
 				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
-				::memcpy(store.signatureIndex, db.signatureIndex, db.signatureIndexSize);
 				store.signatureIndexSize = db.signatureIndexSize;
+				::memcpy(store.signatureIndex, db.signatureIndex, store.signatureIndexSize * sizeof(*store.signatureIndex));
 			}
 		}
 
@@ -514,8 +604,8 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (!store.maxHint) {
+			// set signatures to null but keep index intact for (empty) lookups
 			store.hints = NULL;
-			store.hintIndex = NULL;
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_HINT) {
 				// inherited. pass-though
@@ -531,12 +621,13 @@ struct dbtool_t : callable_t {
 				assert(~store.allocFlags & database_t::ALLOCMASK_HINT);
 				store.hints = db.hints;
 				store.numHint = db.numHint;
-			} else {
+			} else if (~rebuildSections & database_t::ALLOCMASK_HINT) {
 				fprintf(stderr, "[%s] Copying hint section\n", ctx.timeAsString());
 
+				assert(store.maxHint >= db.numHint);
 				assert(store.allocFlags & database_t::ALLOCMASK_HINT);
-				::memcpy(store.hints, db.hints, db.numHint * sizeof(*db.hints));
 				store.numHint = db.numHint;
+				::memcpy(store.hints, db.hints, store.numHint * sizeof(*store.hints));
 			}
 
 			if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
@@ -550,7 +641,7 @@ struct dbtool_t : callable_t {
 			} else if (!db.hintIndexSize) {
 				// was missing
 				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-				::memset(store.hintIndex, 0, store.hintIndexSize);
+				::memset(store.hintIndex, 0, store.hintIndexSize * sizeof(*store.hintIndex));
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.hintIndexSize == db.hintIndexSize);
@@ -561,8 +652,8 @@ struct dbtool_t : callable_t {
 				// copy
 				assert(store.hintIndexSize == db.hintIndexSize);
 				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-				::memcpy(store.hintIndex, db.hintIndex, db.hintIndexSize);
 				store.hintIndexSize = db.hintIndexSize;
+				::memcpy(store.hintIndex, db.hintIndex, store.hintIndexSize * sizeof(*store.hintIndex));
 			}
 		}
 
@@ -571,8 +662,8 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (!store.maxImprint) {
+			// set signatures to null but keep index intact for (empty) lookups
 			store.imprints = NULL;
-			store.imprintIndex = NULL;
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
 				// inherited. pass-though
@@ -588,12 +679,13 @@ struct dbtool_t : callable_t {
 				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINT);
 				store.imprints = db.imprints;
 				store.numImprint = db.numImprint;
-			} else {
+			} else if (~rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 				fprintf(stderr, "[%s] Copying imprint section\n", ctx.timeAsString());
 
+				assert(store.maxImprint >= db.numImprint);
 				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINT);
-				::memcpy(store.imprints, db.imprints, db.numImprint * sizeof(*db.imprints));
 				store.numImprint = db.numImprint;
+				::memcpy(store.imprints, db.imprints, store.numImprint * sizeof(*store.imprints));
 			}
 
 			if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
@@ -607,7 +699,7 @@ struct dbtool_t : callable_t {
 			} else if (!db.imprintIndexSize) {
 				// was missing
 				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
-				::memset(store.imprintIndex, 0, store.imprintIndexSize);
+				::memset(store.imprintIndex, 0, store.imprintIndexSize * sizeof(*store.imprintIndex));
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.imprintIndexSize == db.imprintIndexSize);
@@ -618,8 +710,8 @@ struct dbtool_t : callable_t {
 				// copy
 				assert(store.imprintIndexSize == db.imprintIndexSize);
 				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
-				::memcpy(store.imprintIndex, db.imprintIndex, db.imprintIndexSize);
 				store.imprintIndexSize = db.imprintIndexSize;
+				::memcpy(store.imprintIndex, db.imprintIndex, store.imprintIndexSize * sizeof(*store.imprintIndex));
 			}
 		}
 
@@ -628,8 +720,8 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (!store.maxMember) {
+			// set signatures to null but keep index intact for (empty) lookups
 			store.members = NULL;
-			store.memberIndex = NULL;
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_MEMBER) {
 				// inherited. pass-though
@@ -645,12 +737,13 @@ struct dbtool_t : callable_t {
 				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBER);
 				store.members = db.members;
 				store.numMember = db.numMember;
-			} else {
+			} else if (~rebuildSections & database_t::ALLOCMASK_MEMBER) {
 				fprintf(stderr, "[%s] Copying member section\n", ctx.timeAsString());
 
+				assert(store.maxMember >= db.numMember);
 				assert(store.allocFlags & database_t::ALLOCMASK_MEMBER);
-				::memcpy(store.members, db.members, db.numMember * sizeof(*db.members));
 				store.numMember = db.numMember;
+				::memcpy(store.members, db.members, store.numMember * sizeof(*store.members));
 			}
 
 			if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
@@ -664,7 +757,7 @@ struct dbtool_t : callable_t {
 			} else if (!db.memberIndexSize) {
 				// was missing
 				assert(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
-				::memset(store.memberIndex, 0, store.memberIndexSize);
+				::memset(store.memberIndex, 0, store.memberIndexSize * sizeof(*store.memberIndex));
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.memberIndexSize == db.memberIndexSize);
@@ -675,8 +768,8 @@ struct dbtool_t : callable_t {
 				// copy
 				assert(store.memberIndexSize == db.memberIndexSize);
 				assert(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
-				::memcpy(store.memberIndex, db.memberIndex, db.memberIndexSize);
 				store.memberIndexSize = db.memberIndexSize;
+				::memcpy(store.memberIndex, db.memberIndex, store.memberIndexSize * sizeof(*store.memberIndex));
 			}
 		}
 	}
