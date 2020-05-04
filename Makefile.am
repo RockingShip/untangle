@@ -11,7 +11,7 @@ BUILT_SOURCES = genrestartdata
 
 noinst_PROGRAMS =
 bin_PROGRAMS = \
-	eval gentransform tlookup gensignature genrestartdata genmember slookup genhint selftest
+	eval gentransform tlookup gensignature genrestartdata genmember slookup genhint selftest genswap
 
 # genrestartdata is slow and output is small, include in distribution
 restartdata.h : genrestartdata.cc
@@ -64,3 +64,8 @@ genhint.$(OBJEXT) : restartdata.h
 # @date 2020-04-21 23:30:30
 selftest_SOURCES = selftest.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 selftest_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2020-05-02 23:02:57
+genswap_SOURCES = genswap.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
+genswap_LDADD = $(LDADD) $(AM_LDADD)
+genswap.$(OBJEXT) : restartdata.h
