@@ -388,6 +388,9 @@ struct metricsGenerator_t {
 	/// @var {number} - Total signatures (unique footprints). Provided by `selftest --metrics`
 	uint64_t numSignature; // (including mandatory zero entry)
 
+	/// @var {number} - Numner of unique swaps
+	uint64_t numSwap; // (including mandatory zero entry)
+
 	/// @var {number} - Numner of unique hints
 	uint64_t numHint; // (including mandatory zero entry)
 
@@ -403,23 +406,23 @@ struct metricsGenerator_t {
  *   last updated
  */
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 1, 0, 0,             3,         3,        255, 3,        0},
-	{9, 0, 0, 0,             3,         3,        255, 3,        0},
-	{9, 1, 1, 4,             5,         7,        255, 7,        0},
-	{9, 0, 1, 6,             7,         9,        255, 9,        0},
-	{9, 1, 2, 154,           155,       49,       255, 108,      0},
-	{9, 0, 2, 424,           425,       110,      255, 275,      0},
-	{9, 1, 3, 15548,         15221,     1311,     255, 6862,     0},
-	{9, 0, 3, 81406,         79835,     5666,     255, 29721,    0},
-	{9, 1, 4, 2969462,       2777493,   96363,    255, 801917,   0},
-	{9, 0, 4, 29990974,      28304991,  791647,   255, 5959653,  0},
+	{9, 1, 0, 0,             3,         3,        2,   3,   3,        0},
+	{9, 0, 0, 0,             3,         3,        2,   3,   3,        0},
+	{9, 1, 1, 4,             5,         7,        3,   6,   7,        0},
+	{9, 0, 1, 6,             7,         9,        3,   6,   9,        0},
+	{9, 1, 2, 154,           155,       49,       7,   14,  108,      0},
+	{9, 0, 2, 424,           425,       110,      7,   14,  275,      0},
+	{9, 1, 3, 15548,         15221,     1311,     27,  27,  6862,     0},
+	{9, 0, 3, 81406,         79835,     5666,     27,  27,  29721,    0},
+	{9, 1, 4, 2969462,       2777493,   96363,    152, 152, 801917,   0},
+	{9, 0, 4, 29990974,      28304991,  791647,   152, 152, 5959653,  0},
 	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
-	{9, 1, 5, 913288021,     809357847, 10233318, 0,   56349342, 2}, // NOTE: this is the extension to 4n9
-	{9, 1, 5, 913288021,     809357847, 15490349, 0,   0,        2}, // NOTE: this is full 5n9-pure (placed second and hidden)
+	{9, 1, 5, 913288021,     809357847, 10233318, 0,   0,   56349342, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 5, 913288021,     809357847, 15490349, 0,   0,   0,        2}, // NOTE: this is full 5n9-pure (placed second and hidden)
 	// below only intended for members
-	{9, 0, 5, 17927026892,   0,         0,        0,   65103540, 2}, // NOTE: this is the extension to 4n9
-	{9, 1, 6, 410335296888,  0,         0,        0,   0,        2}, // numProgress takes about 60 minutes
-	{9, 0, 6, 1556055783374, 0,         0,        0,   0,        3}, // from historic metrics
+	{9, 0, 5, 17927026892,   0,         0,        0,   0,   65103540, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 6, 410335296888,  0,         0,        0,   0,   0,        2}, // numProgress takes about 60 minutes
+	{9, 0, 6, 1556055783374, 0,         0,        0,   0,   0,        3}, // from historic metrics
 	//
 	{0}
 };

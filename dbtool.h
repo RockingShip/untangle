@@ -4,7 +4,7 @@
 /*
  * @date 2020-04-27 18:47:26
  *
- * A collection of utilities shared across database creation tools `gensignature`, `genhint`, `genmember` and more.
+ * A collection of utilities shared across database creation tools `gensignature`, `genswap`, `genhint`, `genmember` and more.
  *
  */
 
@@ -74,11 +74,15 @@ struct dbtool_t : callable_t {
 	/// @var {number} Maximum number of signatures to be stored database
 	unsigned opt_maxSignature;
 	/// @var {number} size of member index WARNING: must be prime
+	/// @var {number} Maximum number of swaps to be stored database
+	unsigned opt_maxSwap;
 	unsigned opt_memberIndexSize;
 	/// @var {number} index/data ratio
 	double opt_ratio;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
+	/// @var {number} size of swap index WARNING: must be prime
+	unsigned opt_swapIndexSize;
 
 	/// @var {number} "0" assume input is read-only, else input is copy-on-write.
 	unsigned copyOnWrite;
@@ -101,13 +105,16 @@ struct dbtool_t : callable_t {
 		opt_maxImprint = 0;
 		opt_maxMember = 0;
 		opt_maxSignature = 0;
+		opt_maxSwap = 0;
 		opt_memberIndexSize = 0;
 		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
 		opt_signatureIndexSize = 0;
+		opt_swapIndexSize = 0;
 
 		copyOnWrite = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM |
 		                  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
+		                  database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX |
 		                  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
 		                  database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
 		                  database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
@@ -224,6 +231,73 @@ struct dbtool_t : callable_t {
 			} else if (this->copyOnWrite) {
 				// inherit when section fits and copy-on-write
 				inheritSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+			}
+		}
+
+		/*
+		 * swap
+		 */
+
+		// data
+		if (this->opt_maxSwap) {
+			// user specified
+			store.maxSwap = this->opt_maxSwap;
+		} else if (inheritSections & database_t::ALLOCMASK_SWAP) {
+			// inherited. pass-though
+			store.maxSwap = db.numSwap;
+		} else if (!readOnlyMode) {
+			// resize using metrics
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			if (!pMetrics)
+				ctx.fatal("no preset for --maxswap\n");
+
+			// give metrics a margin of error
+			store.maxSwap = ctx.raisePercent(pMetrics->numSwap, 5);
+		} else if (db.numSwap) {
+			// non-empty. pass-though
+			store.maxSwap = db.numSwap;
+		} else {
+			// empty. create minimal sized section
+			store.maxSwap = 1;
+		}
+
+		if (store.maxSwap > db.numSwap) {
+			// disable inherit when section wants to grow
+			inheritSections &= ~database_t::ALLOCMASK_SWAP;
+		} else if (this->copyOnWrite) {
+			// inherit when section fits and copy-on-write
+			inheritSections |= database_t::ALLOCMASK_SWAP;
+		}
+
+		// index
+		if (!store.maxSwap) {
+			// no data to index
+			store.swapIndexSize = 0;
+		} else {
+			if (this->opt_swapIndexSize) {
+				// user specified
+				store.swapIndexSize = this->opt_swapIndexSize;
+			} else if (inheritSections & database_t::ALLOCMASK_SWAPINDEX) {
+				// inherited. pass-though
+				store.swapIndexSize = db.swapIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.swapIndexSize = ctx.nextPrime(store.maxSwap * this->opt_ratio);
+			} else if (db.swapIndexSize) {
+				// non-empty. pass-though
+				store.swapIndexSize = db.swapIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.swapIndexSize = 1;
+			}
+
+			if (store.swapIndexSize != db.swapIndexSize) {
+				// source section is missing or unusable
+				rebuildSections |= database_t::ALLOCMASK_SWAPINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_SWAPINDEX;
 			}
 		}
 
@@ -476,12 +550,14 @@ struct dbtool_t : callable_t {
 		inheritSections &= ~rebuildSections;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
-			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
-			        ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxMember, store.memberIndexSize);
+			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
+			        ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxMember, store.memberIndexSize);
 
 		// output data must be large enough to fit input data
 		if (store.maxSignature < db.numSignature)
 			ctx.fatal("--maxsignature=%u needs to be at least %u\n", store.maxSignature, db.numSignature);
+		if (store.maxSwap < db.numSwap)
+			ctx.fatal("--maxswap=%u needs to be at least %u\n", store.maxSwap, db.numSwap);
 		if (store.maxHint < db.numHint)
 			ctx.fatal("--maxhint=%u needs to be at least %u\n", store.maxHint, db.numHint);
 		if (store.maxMember < db.numMember)
@@ -596,6 +672,64 @@ struct dbtool_t : callable_t {
 				assert(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
 				store.signatureIndexSize = db.signatureIndexSize;
 				::memcpy(store.signatureIndex, db.signatureIndex, store.signatureIndexSize * sizeof(*store.signatureIndex));
+			}
+		}
+
+		/*
+		 * swaps
+		 */
+
+		if (!store.maxSwap) {
+			// set signatures to null but keep index intact for (empty) lookups
+			store.swaps = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_SWAP) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_SWAP);
+				store.swaps = db.swaps;
+				store.numSwap = db.numSwap;
+			} else if (!db.numSwap) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_SWAP);
+				store.numSwap = 1;
+			} else if (store.maxSwap <= db.numSwap && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(~store.allocFlags & database_t::ALLOCMASK_SWAP);
+				store.swaps = db.swaps;
+				store.numSwap = db.numSwap;
+			} else if (~rebuildSections & database_t::ALLOCMASK_SWAP) {
+				fprintf(stderr, "[%s] Copying swap section\n", ctx.timeAsString());
+
+				assert(store.maxSwap >= db.numSwap);
+				assert(store.allocFlags & database_t::ALLOCMASK_SWAP);
+				store.numSwap = db.numSwap;
+				::memcpy(store.swaps, db.swaps, store.numSwap * sizeof(*store.swaps));
+			}
+
+			if (inheritSections & database_t::ALLOCMASK_SWAPINDEX) {
+				// inherited. pass-though
+				assert(~store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				store.swapIndexSize = db.swapIndexSize;
+				store.swapIndex = db.swapIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_SWAPINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+			} else if (!db.swapIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				::memset(store.swapIndex, 0, store.swapIndexSize * sizeof(*store.swapIndex));
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.swapIndexSize == db.swapIndexSize);
+				assert(~store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				store.swapIndex = db.swapIndex;
+				store.swapIndexSize = db.swapIndexSize;
+			} else {
+				// copy
+				assert(store.swapIndexSize == db.swapIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				store.swapIndexSize = db.swapIndexSize;
+				::memcpy(store.swapIndex, db.swapIndex, store.swapIndexSize * sizeof(*store.swapIndex));
 			}
 		}
 

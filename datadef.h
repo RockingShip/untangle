@@ -180,8 +180,11 @@ struct signature_t {
 	 * the following are 16-bit values and align better here
 	 */
 
-	/// @var {number} idex to `hints`
+	/// @var {number} index of `hints`
 	uint16_t hintId;
+
+	/// @var {number} index of `swaps`
+	uint16_t swapId;
 
 	/*
 	 * the following are 8-bit values and align better if placed last
@@ -217,7 +220,13 @@ struct signature_t {
  * Hints are used to determine optimal `--interleave` settings for (primarily) `genhint`.
  */
 struct hint_t {
-	uint32_t numStored[MAXSLOTS * 2];
+
+	enum {
+		/// @constant {number} Maximum number of entries
+		MAXENTRY = MAXSLOTS * 2,
+	};
+
+	uint32_t numStored[MAXENTRY];
 
 	/**
 	 * @date 2020-04-19 22:28:43
@@ -229,8 +238,43 @@ struct hint_t {
 	 */
 	inline bool equals(const struct hint_t &rhs) const {
 
-		for (unsigned j = 0; j < MAXSLOTS * 2; j++) {
+		for (unsigned j = 0; j < MAXENTRY; j++) {
 			if (this->numStored[j] != rhs.numStored[j])
+				return false;
+		}
+
+		return true;
+	}
+
+};
+
+/*
+ * @date 2020-05-04 13:14:11
+ *
+ * Swap instructions for level-5 normalisation.
+ * Apply, compare and swap stored tids to normalise endpoints
+ */
+struct swap_t {
+
+	enum {
+		/// @constant {number} Maximum number of entries
+		MAXENTRY = 10,
+	};
+
+	uint32_t tids[MAXENTRY];
+
+	/**
+	 * @date 2020-05-04 13:16:40
+	 *
+	 * Compare two swaps and determine if both are same
+	 *
+	 * @param {hint_t} rhs - right hand side of comparison
+	 * @return {boolean} `true` if same, `false` if different
+	 */
+	inline bool equals(const struct swap_t &rhs) const {
+
+		for (unsigned j = 0; j < MAXENTRY; j++) {
+			if (this->tids[j] != rhs.tids[j])
 				return false;
 		}
 

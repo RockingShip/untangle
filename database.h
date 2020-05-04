@@ -81,7 +81,7 @@
 #endif
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20200419
+#define FILE_MAGIC        0x20200506
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -100,6 +100,7 @@ struct fileHeader_t {
 	uint32_t magic_flags;            // conditions it was created
 	uint32_t magic_maxSlots;
 	uint32_t magic_sizeofSignature;
+	uint32_t magic_sizeofSwap;
 	uint32_t magic_sizeofHint;
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofMember;
@@ -116,6 +117,8 @@ struct fileHeader_t {
 	uint32_t transformIndexSize;    // for both fwd/rev
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
+	uint32_t numSwap;
+	uint32_t swapIndexSize;
 	uint32_t numHint;
 	uint32_t hintIndexSize;
 	uint32_t numImprint;
@@ -139,6 +142,8 @@ struct fileHeader_t {
 	uint64_t offRevTransformNameIndex;
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
+	uint64_t offSwaps;
+	uint64_t offSwapIndex;
 	uint64_t offHints;
 	uint64_t offHintIndex;
 	uint64_t offImprints;
@@ -172,6 +177,8 @@ struct database_t {
 		ALLOCFLAG_TRANSFORM = 0,
 		ALLOCFLAG_SIGNATURE,
 		ALLOCFLAG_SIGNATUREINDEX,
+		ALLOCFLAG_SWAP,
+		ALLOCFLAG_SWAPINDEX,
 		ALLOCFLAG_HINT,
 		ALLOCFLAG_HINTINDEX,
 		ALLOCFLAG_IMPRINT,
@@ -183,6 +190,8 @@ struct database_t {
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
 		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
+		ALLOCMASK_SWAP               = 1 << ALLOCFLAG_SWAP,
+		ALLOCMASK_SWAPINDEX          = 1 << ALLOCFLAG_SWAPINDEX,
 		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
 		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
@@ -218,6 +227,12 @@ struct database_t {
 	signature_t        *signatures;                 // signature collection
 	uint32_t           signatureIndexSize;          // index size (must be prime)
 	uint32_t           *signatureIndex;             // index
+	// swap store
+	uint32_t           numSwap;                     // number of swaps
+	uint32_t           maxSwap;                     // maximum size of collection
+	swap_t             *swaps;                      // swap collection
+	uint32_t           swapIndexSize;               // index size (must be prime)
+	uint32_t           *swapIndex;                  // index
 	// hint store
 	uint32_t           numHint;                     // number of hints
 	uint32_t           maxHint;                     // maximum size of collection
@@ -272,6 +287,13 @@ struct database_t {
 		signatureIndexSize = 0;
 		signatureIndex = NULL;
 
+		// swap store
+		numSwap = 0;
+		maxSwap = 0;
+		swaps = NULL;
+		swapIndexSize = 0;
+		swapIndex = NULL;
+
 		// hint store
 		numHint = 0;
 		maxHint = 0;
@@ -323,6 +345,10 @@ struct database_t {
 			ctx.myFree("database_t::signatures", signatures);
 		if (allocFlags & ALLOCMASK_SIGNATUREINDEX)
 			ctx.myFree("database_t::signatureIndex", signatureIndex);
+		if (allocFlags & ALLOCMASK_SWAP)
+			ctx.myFree("database_t::swaps", swaps);
+		if (allocFlags & ALLOCMASK_SWAPINDEX)
+			ctx.myFree("database_t::swapIndex", swapIndex);
 		if (allocFlags & ALLOCMASK_HINT)
 			ctx.myFree("database_t::hints", hints);
 		if (allocFlags & ALLOCMASK_HINTINDEX)
@@ -471,6 +497,28 @@ struct database_t {
 			}
 		}
 
+		// swap store
+		if (inheritSections & (ALLOCMASK_SWAP | ALLOCMASK_SWAPINDEX)) {
+			if (pFrom->numSwap == 0) {
+				printf("{\"error\":\"Missing swap section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
+				       __FUNCTION__, pName);
+				exit(1);
+			}
+
+			if (inheritSections & ALLOCMASK_SWAP) {
+				assert(~allocFlags & ALLOCMASK_SWAP);
+				this->maxSwap = pFrom->maxSwap;
+				this->numSwap = pFrom->numSwap;
+				this->swaps = pFrom->swaps;
+			}
+
+			if (inheritSections & ALLOCMASK_SWAPINDEX) {
+				assert(~allocFlags & ALLOCMASK_SWAPINDEX);
+				this->swapIndexSize = pFrom->swapIndexSize;
+				this->swapIndex = pFrom->swapIndex;
+			}
+		}
+
 		// hint store
 		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
 			if (pFrom->numHint == 0) {
@@ -570,6 +618,12 @@ struct database_t {
 		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX))
 			memUsage += signatureIndexSize * sizeof(*signatureIndex);
 
+		// swap store
+		if (maxSwap && (~excludeSections & ALLOCMASK_SWAP))
+			memUsage += maxSwap * sizeof(*swaps); // increase with 5%
+		if (swapIndexSize && (~excludeSections & ALLOCMASK_SWAPINDEX))
+			memUsage += swapIndexSize * sizeof(*swapIndex);
+
 		// hint store
 		if (maxHint && (~excludeSections & ALLOCMASK_HINT))
 			memUsage += maxHint * sizeof(*hints); // increase with 5%
@@ -625,6 +679,20 @@ struct database_t {
 			assert(ctx.isPrime(signatureIndexSize));
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATUREINDEX;
+		}
+
+		// swap store
+		if (maxSwap && (~excludeSections & ALLOCMASK_SWAP)) {
+			// increase with 5%
+			maxSwap = maxSwap;
+			numSwap = 1; // do not start at 1
+			swaps = (swap_t *) ctx.myAlloc("database_t::swaps", maxSwap, sizeof(*swaps));
+			allocFlags |= ALLOCMASK_SWAP;
+		}
+		if (swapIndexSize && (~excludeSections & ALLOCMASK_SWAPINDEX)) {
+			assert(ctx.isPrime(swapIndexSize));
+			swapIndex = (uint32_t *) ctx.myAlloc("database_t::swapIndex", swapIndexSize, sizeof(*swapIndex));
+			allocFlags |= ALLOCMASK_SWAPINDEX;
 		}
 
 		// hint store
@@ -751,6 +819,8 @@ struct database_t {
 			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", fileHeader.offEnd, (uint64_t) sbuf.st_size);
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
 			ctx.fatal("db magic_sizeofSignature. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
+		if (fileHeader.magic_sizeofSwap != sizeof(swap_t))
+			ctx.fatal("db magic_sizeofSwap. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofSwap, sizeof(swap_t));
 		if (fileHeader.magic_sizeofHint != sizeof(hint_t))
 			ctx.fatal("db magic_sizeofHint. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofHint, sizeof(hint_t));
 		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
@@ -780,6 +850,12 @@ struct database_t {
 		signatures = (signature_t *) (rawDatabase + fileHeader.offSignatures);
 		signatureIndexSize = fileHeader.signatureIndexSize;
 		signatureIndex = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
+
+		// swap
+		maxSwap = numSwap = fileHeader.numSwap;
+		swaps = (swap_t * )(rawDatabase + fileHeader.offSwaps);
+		swapIndexSize = fileHeader.swapIndexSize;
+		swapIndex = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
 
 		// hint
 		maxHint = numHint = fileHeader.numHint;
@@ -845,6 +921,8 @@ struct database_t {
 		ctx.progressHi += align32(sizeof(*this->revTransformNameIndex * this->transformIndexSize));
 		ctx.progressHi += align32(sizeof(*this->signatures) * this->numSignature);
 		ctx.progressHi += align32(sizeof(*this->signatureIndex) * this->signatureIndexSize);
+		ctx.progressHi += align32(sizeof(*this->swaps) * this->numSwap);
+		ctx.progressHi += align32(sizeof(*this->swapIndex) * this->swapIndexSize);
 		ctx.progressHi += align32(sizeof(*this->hints) * this->numHint);
 		ctx.progressHi += align32(sizeof(*this->hintIndex) * this->hintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->imprints) * this->numImprint);
@@ -931,6 +1009,27 @@ struct database_t {
 		}
 
 		/*
+		 * write swaps
+		 */
+		if (this->numSwap) {
+			// first entry must be zero
+			swap_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->swaps, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.numSwap = this->numSwap;
+			fileHeader.offSwaps = flen;
+			flen += writeData(outf, this->swaps, align32(sizeof(*this->swaps) * this->numSwap));
+			if (this->swapIndexSize) {
+				// Index
+				fileHeader.swapIndexSize = this->swapIndexSize;
+				fileHeader.offSwapIndex = flen;
+				flen += writeData(outf, this->swapIndex, align32(sizeof(*this->swapIndex) * this->swapIndexSize));
+			}
+		}
+
+		/*
 		 * write hints
 		 */
 		if (this->numHint) {
@@ -1007,6 +1106,7 @@ struct database_t {
 		fileHeader.magic_flags = ctx.flags;
 		fileHeader.magic_maxSlots = MAXSLOTS;
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
+		fileHeader.magic_sizeofSwap = sizeof(swap_t);
 		fileHeader.magic_sizeofHint = sizeof(hint_t);
 		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
 		fileHeader.magic_sizeofMember = sizeof(member_t);
@@ -1312,7 +1412,7 @@ struct database_t {
 
 		// calculate starting position
 		unsigned crc32 = 0;
-		for (unsigned j = 0; j < MAXSLOTS * 2; j++)
+		for (unsigned j = 0; j < hint_t::MAXENTRY; j++)
 			crc32 = __builtin_ia32_crc32si(crc32, pHint->numStored[j]);
 
 		unsigned ix = crc32 % hintIndexSize;
@@ -1766,6 +1866,8 @@ struct database_t {
 		uint64_t numProgress = 0;
 		if (sections & ALLOCMASK_SIGNATUREINDEX)
 			numProgress += this->numSignature;
+		if (sections & ALLOCMASK_SWAPINDEX)
+			numProgress += this->numSwap;
 		if (sections & ALLOCMASK_HINTINDEX)
 			numProgress += this->numHint;
 		if (sections & ALLOCMASK_IMPRINTINDEX)
@@ -1810,6 +1912,48 @@ struct database_t {
 				unsigned ix = this->lookupSignature(pSignature->name);
 				assert(this->signatureIndex[ix] == 0);
 				this->signatureIndex[ix] = iSid;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * Swaps
+		 */
+
+		if (sections & ALLOCMASK_SWAPINDEX) {
+			// clear
+			::memset(this->swapIndex, 0, this->swapIndexSize * sizeof(*this->swapIndex));
+
+			// rebuild
+			for (unsigned iSwap = 1; iSwap < this->numSwap; iSwap++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+						        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						        (double) ctx.cntCompare / ctx.cntHash);
+					}
+
+					ctx.tick = 0;
+				}
+
+				const swap_t *pSwap = this->swaps + iSwap;
+
+				unsigned ix = this->lookupSwap(pSwap);
+				assert(this->swapIndex[ix] == 0);
+				this->swapIndex[ix] = iSwap;
 
 				ctx.progress++;
 			}
@@ -1973,6 +2117,18 @@ struct database_t {
 			if (sections)
 				::strcat(pBuffer, "|");
 		}
+		if (sections & ALLOCMASK_SWAP) {
+			::strcat(pBuffer, "swap");
+			sections &= ~ALLOCMASK_SWAP;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_SWAPINDEX) {
+			::strcat(pBuffer, "swapIndex");
+			sections &= ~ALLOCMASK_SWAPINDEX;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
 		if (sections & ALLOCMASK_HINT) {
 			::strcat(pBuffer, "hint");
 			sections &= ~ALLOCMASK_HINT;
@@ -2026,6 +2182,8 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
+		json_object_set_new_nocheck(jResult, "numSwap", json_integer(this->numSwap));
+		json_object_set_new_nocheck(jResult, "swapIndexSize", json_integer(this->swapIndexSize));
 		json_object_set_new_nocheck(jResult, "numHint", json_integer(this->numHint));
 		json_object_set_new_nocheck(jResult, "hintIndexSize", json_integer(this->hintIndexSize));
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));

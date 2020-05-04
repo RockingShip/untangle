@@ -58,6 +58,8 @@ struct slookupContext_t {
 	unsigned opt_imprint;
 	/// @var {number} show signature members
 	unsigned opt_member;
+	/// @var {number} show signature swaps
+	unsigned opt_swap;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -70,6 +72,7 @@ struct slookupContext_t {
 		opt_database = "untangle.db";
 		opt_imprint = 0;
 		opt_member = 0;
+		opt_swap = 0;
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
@@ -147,16 +150,30 @@ struct slookupContext_t {
 			return;
 		}
 
-		printf("%u%s:%s%s/%u:%.*s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u flags=[%x%s%s%s] %s\n",
+		printf("%u%s:%s%s/%u:%.*s: size=%u numPlaceholder=%u numEndpoint=%u numBackRef=%u",
 		       sid & ~IBIT, (sid & IBIT) ? "~" : "",
 		       pSignature->name, (sid & IBIT) ? "~" : "",
 		       tid, pSignature->numPlaceholder, pStore->fwdTransformNames[tid],
-		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef,
+		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+
+		printf(" flags=[%x%s%s%s]",
 		       pSignature->flags,
 		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
-		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "",
-		       pName);
+		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "");
+
+		if (opt_swap) {
+			printf(" swaps=[");
+			const swap_t *pSwap = pStore->swaps + pSignature->swapId;
+			for (unsigned j = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
+				if (j)
+					putchar(',');
+				printf("%u:%.*s", pSwap->tids[j], pSignature->numPlaceholder, pStore->fwdTransformNames[pSwap->tids[j]]);
+			}
+			putchar(']');
+		}
+
+		printf(" %s\n", pSignature->name);
 
 		if (opt_member) {
 			unsigned lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;
@@ -310,6 +327,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-m --members[=1]           Show members brief\n");
 		fprintf(stderr, "\t-m --members=2             Show members verbose\n");
 		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t-s --swap                  Show swaps\n");
 		fprintf(stderr, "\t-v --verbose               Say less\n");
 	}
 }
@@ -347,6 +365,7 @@ int main(int argc, char *const *argv) {
 			LO_IMPRINT = 'i',
 			LO_MEMBER = 'm',
 			LO_QUIET = 'q',
+			LO_SWAP = 's',
 			LO_VERBOSE = 'v',
 		};
 
@@ -363,6 +382,7 @@ int main(int argc, char *const *argv) {
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"pure",        0, 0, LO_PURE},
 			{"quiet",       2, 0, LO_QUIET},
+			{"swap",        2, 0, LO_SWAP},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
 			//
@@ -421,6 +441,9 @@ int main(int argc, char *const *argv) {
 				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+				break;
+			case LO_SWAP:
+				app.opt_swap = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_swap + 1;
 				break;
 			case LO_TIMER:
 				ctx.opt_timer = ::strtoul(optarg, NULL, 0);

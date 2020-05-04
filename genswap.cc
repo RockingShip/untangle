@@ -536,11 +536,13 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --force                    Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate            Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                     This list\n");
+		fprintf(stderr, "\t   --maxswap=<number>         Maximum number of swaps [default=%u]\n", app.opt_maxSwap);
 		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                    Say more\n");
 		fprintf(stderr, "\t   --[no-]saveindex           Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
+		fprintf(stderr, "\t   --swapindexsize=<number>   Size of swap index [default=%u]\n", app.opt_swapIndexSize);
 		fprintf(stderr, "\t   --task=sge                 Get sid task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
@@ -574,6 +576,7 @@ int main(int argc, char *const *argv) {
 			LO_FORCE,
 			LO_GENERATE,
 			LO_LOAD,
+			LO_MAXSWAP,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
@@ -583,6 +586,7 @@ int main(int argc, char *const *argv) {
 			LO_PURE,
 			LO_SAVEINDEX,
 			LO_SID,
+			LO_SWAPINDEXSIZE,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
@@ -595,27 +599,29 @@ int main(int argc, char *const *argv) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",        1, 0, LO_DEBUG},
-			{"force",        0, 0, LO_FORCE},
-			{"generate",     0, 0, LO_GENERATE},
-			{"help",         0, 0, LO_HELP},
-			{"load",         1, 0, LO_LOAD},
-			{"paranoid",     0, 0, LO_PARANOID},
-			{"pure",         0, 0, LO_PURE},
-			{"no-generate",  0, 0, LO_NOGENERATE},
-			{"no-paranoid",  0, 0, LO_NOPARANOID},
-			{"no-pure",      0, 0, LO_NOPURE},
-			{"no-saveindex", 0, 0, LO_NOSAVEINDEX},
-			{"no-unsafe",    0, 0, LO_NOUNSAFE},
-			{"quiet",        2, 0, LO_QUIET},
-			{"saveindex",    0, 0, LO_SAVEINDEX},
-			{"sid",          1, 0, LO_SID},
-			{"task",         1, 0, LO_TASK},
-			{"text",         2, 0, LO_TEXT},
-			{"timer",        1, 0, LO_TIMER},
-			{"verbose",      2, 0, LO_VERBOSE},
+			{"debug",         1, 0, LO_DEBUG},
+			{"force",         0, 0, LO_FORCE},
+			{"generate",      0, 0, LO_GENERATE},
+			{"help",          0, 0, LO_HELP},
+			{"load",          1, 0, LO_LOAD},
+			{"maxswap",       1, 0, LO_MAXSWAP},
+			{"paranoid",      0, 0, LO_PARANOID},
+			{"pure",          0, 0, LO_PURE},
+			{"no-generate",   0, 0, LO_NOGENERATE},
+			{"no-paranoid",   0, 0, LO_NOPARANOID},
+			{"no-pure",       0, 0, LO_NOPURE},
+			{"no-saveindex",  0, 0, LO_NOSAVEINDEX},
+			{"no-unsafe",     0, 0, LO_NOUNSAFE},
+			{"quiet",         2, 0, LO_QUIET},
+			{"saveindex",     0, 0, LO_SAVEINDEX},
+			{"sid",           1, 0, LO_SID},
+			{"swapindexsize", 1, 0, LO_SWAPINDEXSIZE},
+			{"task",          1, 0, LO_TASK},
+			{"text",          2, 0, LO_TEXT},
+			{"timer",         1, 0, LO_TIMER},
+			{"verbose",       2, 0, LO_VERBOSE},
 			//
-			{NULL,           0, 0, 0}
+			{NULL,            0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -655,6 +661,9 @@ int main(int argc, char *const *argv) {
 				exit(0);
 			case LO_LOAD:
 				app.opt_load = optarg;
+				break;
+			case LO_MAXSWAP:
+				app.opt_maxSwap = ctx.nextPrime(::strtod(optarg, NULL));
 				break;
 			case LO_NOGENERATE:
 				app.opt_generate = 0;
@@ -702,6 +711,9 @@ int main(int argc, char *const *argv) {
 				}
 				break;
 			}
+			case LO_SWAPINDEXSIZE:
+				app.opt_swapIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+				break;
 			case LO_TASK: {
 				if (::strcmp(optarg, "sge") == 0) {
 					const char *p;
@@ -862,7 +874,7 @@ int main(int argc, char *const *argv) {
 
 	database_t store(ctx);
 
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE);
+	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
 	// will require local copy of signatures
 	app.rebuildSections |= database_t::ALLOCMASK_SIGNATURE;
 
@@ -921,7 +933,7 @@ int main(int argc, char *const *argv) {
 
 	// todo: move this to `populateDatabaseSections()`
 	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
 		store.numSignature = db.numSignature;

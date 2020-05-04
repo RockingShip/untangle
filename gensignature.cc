@@ -1442,7 +1442,7 @@ int main(int argc, char *const *argv) {
 
 	// todo: move this to `populateDatabaseSections()`
 	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 		// rebuild imprints

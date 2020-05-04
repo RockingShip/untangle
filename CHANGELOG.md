@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-05-04 22:46:54 Database version 20200506.
+2020-04-20 00:24:45 Added `swap_t` to `database_t`
 2020-04-19 00:10:20 Added `genswap`.
 2020-05-02 22:39:15 Use hints for `genhint --analyse` and `genmember --unsafe`.
 2020-05-02 22:28:30 Added `slookup --member`.

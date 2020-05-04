@@ -431,7 +431,7 @@ struct genhintContext_t : dbtool_t {
 			return cmp;
 
 		// then compare inactive indices (highest first)
-		for (unsigned j = 0; j < MAXSLOTS * 2; j++) {
+		for (unsigned j = 0; j < hint_t::MAXENTRY; j++) {
 			if (j != pApp->activeHintIndex) {
 				cmp = pHintR->numStored[j] - pHintL->numStored[j];
 				if (cmp)
@@ -1013,7 +1013,7 @@ int main(int argc, char *const *argv) {
 
 	// todo: move this to `populateDatabaseSections()`
 	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
 		store.numSignature = db.numSignature;
@@ -1067,7 +1067,7 @@ int main(int argc, char *const *argv) {
 
 			printf("%s\t", pSignature->name);
 
-			for (unsigned j = 0; j < MAXSLOTS * 2; j++)
+			for (unsigned j = 0; j < hint_t::MAXENTRY; j++)
 				printf("\t%u", pHint->numStored[j]);
 
 			printf("\n");
