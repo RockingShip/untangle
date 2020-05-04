@@ -4,9 +4,51 @@
  * @date 2020-05-02 23:02:57
  *
  * `genswap` analyses endpoint symmetry.
- * Swapping is relative symmetry in contrast to transformId which reference an absolute layout.
+ * Swapping is relative symmetry in contrast to transformId which references an absolute layout.
  *
- * It is used for level-5 normalisation where sid's are known early and tid known late.
+ * It is used for level-5 normalisation where sid's are known early and tid's known late.
+ *
+ * `swaps[]` is a list of transform masks that are applied to a structure that requires level-5 normalisation.
+ * - Populate `MAXSLOT` slots with the contents of the endpoints.
+ * - Slots are usually assigned in tree walking order. Order is not really important as long as it is consistent.
+ * - Apply transform to slots
+ * - Compare and reject the worde of th two
+ * - Repeat for all remaining transforms.
+ *
+ * NOTE: it's not about applying a transform on the endpoints, like "abc/cab" -> "cab"
+ *       It's applying transforms to the slots. "{slots[2],slots[0],slots[1]}"
+ *
+ * Example:
+ *   `"acb++"`, sid=9 with swaps `"[bac,acb,bca]"`.
+ *
+ * Starting slots:
+ *   `"slots[] = {'c','b','a'}`"
+ *
+ * Apply first transform `"bac"`:
+ *      test[transform[0]-'a'] = test[1] = name[0];
+ *      test[transform[1]-'a'] = test[0] = name[1];
+ *      test[transform[2]-'a'] = test[2] = name[2];
+ *
+ *      slots="cba", test="bca".
+ *      Choose for "test[]" in favour of "slots"
+ *
+ * Apply second transform `"acb"`:
+ *      test[transform[0]-'a'] = test[0] = name[0];
+ *      test[transform[1]-'a'] = test[2] = name[1];
+ *      test[transform[2]-'a'] = test[1] = name[2];
+ *
+ *      slots="bca", test="bac".
+ *      Keep "slots[]"
+ *
+ * Apply third and final transform `"bca"`:
+ *      test[transform[0]-'a'] = test[1] = name[0];
+ *      test[transform[1]-'a'] = test[2] = name[1];
+ *      test[transform[2]-'a'] = test[0] = name[2];
+ *
+ *      slots="bca", test="abc".
+ *      Choose for "test[]" as final result
+ *
+ * todo: missing smarter extra round...
  *
  * Text modes:
  *
@@ -107,7 +149,7 @@ struct genswapContext_t : dbtool_t {
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 
-	/// @var {number[]} - For a given signature, which tid's are in use. Contents is sid when true. IBIT set means disabled.
+	/// @var {number[]} - For a given signature, which tid's result in identical result. Contents is sid when true. IBIT set means disabled.
 	uint32_t *swapsFound;
 	/// @var {number[]} - Found swaps for a given signature. IBIT set means disabled.
 	uint32_t *swapsInuse;
@@ -154,11 +196,12 @@ struct genswapContext_t : dbtool_t {
 	/**
 	 * @date 2020-05-02 23:06:26
 	 *
-	 * Determine swaps for signature
+	 * Build a collection of transforms such that after applying/rewriting all to the dataset, all end-point symmetry has been removed.
 	 *
 	 * @param {signature_t} pName - signature requiring swaps
+	 * @return {number} swapId
 	 */
-	void foundSignatureSwap(const char *pName) {
+	unsigned foundSignatureSwap(const char *pName) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
@@ -333,6 +376,53 @@ struct genswapContext_t : dbtool_t {
 			if (!changed)
 				this->swapsFound[iSelect] |= IBIT;
 		}
+
+		/*
+		 * Add to database
+		 */
+		swap_t swap;
+
+		::memset(&swap, 0, sizeof(swap));
+
+		/*
+		 * populate record
+		 */
+
+		unsigned numEntry = 0;
+		for (unsigned j = 0; j < numSwaps; j++) {
+			// skip if transparent
+			if (this->swapsFound[j] == 0)
+				continue;
+			// skip if disabled
+			if (this->swapsFound[j] & IBIT)
+				continue;
+
+			assert(numEntry < swap_t::MAXENTRY);
+			swap.tids[numEntry++] = this->swapsFound[j];
+		}
+
+		if (opt_text == OPTTEXT_WON) {
+			printf("%s\t", pSignature->name);
+
+			for (unsigned j = 0; j < swap_t::MAXENTRY && swap.tids[j]; j++)
+				printf("\t%u", swap.tids[j]);
+
+			printf("\n");
+		}
+
+		// add to database
+		if (!this->readOnlyMode) {
+			// lookup/add swapId
+			unsigned ix = pStore->lookupSwap(&swap);
+			unsigned swapId = pStore->swapIndex[ix];
+			if (swapId == 0)
+				pStore->swapIndex[ix] = swapId = pStore->addSwap(&swap);
+
+			// add swapId to signature
+			return swapId;
+		}
+
+		return 0;
 	}
 
 	/**
@@ -340,7 +430,7 @@ struct genswapContext_t : dbtool_t {
 	 *
 	 * Read and add endpoint swaps from file
 	 */
-	void swapsFromFile(void) {
+	void /*__attribute__((optimize("O0")))*/ swapsFromFile(void) {
 
 		/*
 		 * Load swaps from file.
@@ -361,22 +451,6 @@ struct genswapContext_t : dbtool_t {
 		char name[64];
 
 		for (;;) {
-			static char line[512];
-
-			if (::fgets(line, sizeof(line), f) == 0)
-				break; // end-of-input
-
-			name[0] = 0;
-
-			// todo:
-			int ret = ::sscanf(line, "%s\n", name);
-
-			if (ret < 1) {
-				ctx.fatal("line %lu is empty\n", ctx.progress);
-			}
-			if (ret != 1)
-				ctx.fatal("line %lu has incorrect values\n", ctx.progress);
-
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -384,6 +458,73 @@ struct genswapContext_t : dbtool_t {
 				        ctx.timeAsString(), ctx.progress, perSecond);
 
 				ctx.tick = 0;
+			}
+
+			static char line[512];
+			char *pLine = line;
+			char *endptr;
+			swap_t swap;
+
+			::memset(&swap, 0, sizeof(swap));
+
+			/*
+			 * populate record
+			 */
+
+			if (::fgets(line, sizeof(line), f) == 0)
+				break; // end-of-input
+
+			/*
+			 * load name
+			 */
+
+			// extract name
+			char *pName = name;
+
+			while (*pLine && !::isspace(*pLine))
+				*pName++ = *pLine++;
+			*pName = 0; // terminator
+
+			if (!name[0]) {
+				printf("{\"error\":\"bad or empty line\",\"where\":\"%s\",\"line\":%lu}\n",
+				       __FUNCTION__, ctx.progress);
+				exit(1);
+			}
+
+			/*
+			 * load entries
+			 */
+
+			unsigned numEntry = 0;
+			for (;;) {
+				// get next numeric value
+				unsigned tid = ::strtoul(pLine, &endptr, 0);
+
+				/*
+				 * Test for end-of-line
+				 */
+				if (pLine == endptr) {
+					// let endptr swallow spaces
+					while (::isspace(*endptr))
+						endptr++;
+					// is it end-of-line
+					if (!*endptr)
+						break;
+					// rewind to error position
+					endptr = pLine;
+				}
+
+				if (pLine == endptr || numEntry >= swap_t::MAXENTRY || tid >= MAXTRANSFORM) {
+					printf("{\"error\":\"bad or too many columns\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
+					       __FUNCTION__, name, ctx.progress);
+					exit(1);
+				}
+
+				swap.tids[numEntry++] = tid;
+				pLine = endptr;
+
+				if (!*pLine)
+					break; // done
 			}
 
 			/*
@@ -394,12 +535,35 @@ struct genswapContext_t : dbtool_t {
 			unsigned ix = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0) {
-				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
+				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
 				       __FUNCTION__, name, ctx.progress);
 				exit(1);
 			}
 
 			if (!this->readOnlyMode) {
+				// lookup/add swapId
+				ix = pStore->lookupSwap(&swap);
+				unsigned swapId = pStore->swapIndex[ix];
+				if (swapId == 0)
+					pStore->swapIndex[ix] = swapId = pStore->addSwap(&swap);
+
+				// add swapId to signature
+				if (pStore->signatures[sid].swapId == 0) {
+					pStore->signatures[sid].swapId = swapId;
+				} else if (pStore->signatures[sid].swapId != swapId) {
+					printf("{\"error\":\"inconsistent swap\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
+					       __FUNCTION__, name, ctx.progress);
+					exit(1);
+				}
+			}
+
+			if (opt_text == OPTTEXT_WON) {
+				printf("%s", pStore->signatures[sid].name);
+
+				for (unsigned j = 0; j < swap_t::MAXENTRY && swap.tids[j]; j++)
+					printf("\t%u", swap.tids[j]);
+
+				printf("\n");
 			}
 
 			ctx.progress++;
@@ -411,9 +575,9 @@ struct genswapContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read swaps. numSignature=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] Read members. numSwap=%u(%.0f%%)\n",
 			        ctx.timeAsString(),
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature);
+			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap);
 	}
 
 	/**
@@ -457,7 +621,11 @@ struct genswapContext_t : dbtool_t {
 				continue;
 			}
 
-			foundSignatureSwap(pStore->signatures[iSid].name);
+			signature_t *pSignature = pStore->signatures + iSid;
+			if (!pSignature->swapId) {
+				uint32_t swapId = foundSignatureSwap(pStore->signatures[iSid].name);
+				pSignature->swapId = swapId;
+			}
 
 			ctx.progress++;
 		}
@@ -981,7 +1149,21 @@ int main(int argc, char *const *argv) {
 	 */
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
-		// todo:
+		// Many swaps are empty, only output those found
+
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			const signature_t *pSignature = store.signatures + iSid;
+			const swap_t *pSwap = store.swaps + pSignature->swapId;
+
+			if (pSwap->tids[0]) {
+				printf("%s\t", pSignature->name);
+
+				for (unsigned j = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++)
+					printf("\t%u", pSwap->tids[j]);
+
+				printf("\n");
+			}
+		}
 	}
 
 	/*

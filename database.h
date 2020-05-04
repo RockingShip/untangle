@@ -1277,6 +1277,81 @@ struct database_t {
 			return pos & ~IBIT; // long name
 	}
 
+
+	/**
+	 * @date 2020-05-04 10:06:58
+	 *
+	 * Lookup a name after applying a transform and return its matching enumeration id.
+	 *
+	 * @param {string} pName - Transform name
+	 * @param {string} pSkin - Apply transform to pName
+	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
+	 * @return {number} - Transform enumeration id or `IBIT` if "not-found"
+	 */
+	inline unsigned lookupTransformName(const char *pName, const char *pSkin, uint32_t *pIndex) {
+		assert(pIndex);
+
+		// starting position in index
+		unsigned pos = MAXSLOTS + 1;
+
+		// walk through states
+		while (*pName) {
+			pos = pIndex[pos + pSkin[*pName - 'a'] - 'a'];
+			pName++;
+		}
+
+		// what to return
+		if (pos == 0)
+			return IBIT; // "not-found"
+		else if (~pos & IBIT)
+			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
+		else
+			return pos & ~IBIT; // long name
+	}
+
+	/**
+	 * @date 2020-05-04 10:06:58
+	 *
+	 * Lookup a name after applying transform to slot indices and return its matching enumeration id.
+	 *
+	 * Example, for `transform="cab"`: "{slots[2],slots[0],slots[1]}"
+	 *
+	 * @param {string} pName - Transform name
+	 * @param {string} pSkin - Apply transform to pName
+	 * @param {number[MAXTRANSFORMINDEX]} pIndex - output name lookup index
+	 * @return {number} - Transform enumeration id or `IBIT` if "not-found"
+	 */
+	inline unsigned lookupTransformSlot(const char *pName, const char *pSkin, uint32_t *pIndex) {
+		assert(pIndex);
+
+		// transform indices
+		char newName[MAXSLOTS + 1];
+		unsigned j;
+		for (j = 0; pSkin[j]; j++)
+			newName[pSkin[j] - 'a'] = pName[j];
+		newName[j] = 0;
+
+		// apply result
+		pName = newName;
+
+		// starting position in index
+		unsigned pos = MAXSLOTS + 1;
+
+		// walk through states
+		while (*pName) {
+			pos = pIndex[pos + *pName - 'a'];
+			pName++;
+		}
+
+		// what to return
+		if (pos == 0)
+			return IBIT; // "not-found"
+		else if (~pos & IBIT)
+			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
+		else
+			return pos & ~IBIT; // long name
+	}
+
 	/**
  	 * @date 2020-03-13 14:20:29
  	 *
@@ -1389,6 +1464,70 @@ struct database_t {
 		strcpy(pSignature->name, name);
 
 		return (unsigned) (pSignature - this->signatures);
+	}
+
+	/*
+	 * Swap store
+	 */
+
+	/**
+	 * @date 2020-05-04 14:37:11
+	 *
+	 * Perform swap lookup
+	 *
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the swap.
+	 *
+	 * @param v {swap_t} v - key value
+	 * @return {number} offset into index
+	 */
+	inline unsigned lookupSwap(const swap_t *pSwap) {
+		ctx.cntHash++;
+
+		// calculate starting position
+		unsigned crc32 = 0;
+		for (unsigned j = 0; j < swap_t::MAXENTRY; j++)
+			crc32 = __builtin_ia32_crc32si(crc32, pSwap->tids[j]);
+
+		unsigned ix = crc32 % swapIndexSize;
+		unsigned bump = ix;
+		if (bump == 0)
+			bump = swapIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		for (;;) {
+			ctx.cntCompare++;
+			if (this->swapIndex[ix] == 0)
+				return ix; // "not-found"
+
+			if (this->swaps[this->swapIndex[ix]].equals(*pSwap))
+				return ix; // "found"
+
+			// overflow, jump to next entry
+			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+			ix += bump;
+			if (ix >= swapIndexSize)
+				ix -= swapIndexSize;
+		}
+	}
+
+	/**
+ 	 * Add a new swap to the dataset
+ 	 *
+	 * @param v {swap_t} v - key value
+	 * @return {number} swapId
+	 */
+	inline unsigned addSwap(swap_t *pSwap) {
+		unsigned swapId = this->numSwap++;
+
+		if (this->numSwap > this->maxSwap)
+			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSwap);
+
+		::memcpy(&this->swaps[swapId], pSwap, sizeof(*pSwap));
+
+		return swapId;
 	}
 
 	/*

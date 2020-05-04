@@ -160,7 +160,7 @@ struct genhintContext_t : dbtool_t {
 	 * @param {database_t} tempdb - temporary database to generate imprints with
 	 * @return {number} hintId
 	 */
-	unsigned foundSidHints(const char *pName, database_t &tempdb) {
+	unsigned foundSignatureHints(const char *pName, database_t &tempdb) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
@@ -206,7 +206,7 @@ struct genhintContext_t : dbtool_t {
 			// output count
 			hint.numStored[pInterleave - metricsInterleave] = tempdb.numImprint - 1;
 
-			if (this->opt_text == 1)
+			if (this->opt_text == OPTTEXT_WON)
 				printf("\t%u", tempdb.numImprint - 1);
 		}
 		if (this->opt_text == OPTTEXT_WON)
@@ -253,41 +253,83 @@ struct genhintContext_t : dbtool_t {
 		ctx.tick = 0;
 
 		char name[64];
-		hint_t hint;
-
-		assert(MAXSLOTS * 2 == 18);
 
 		// <name> <hint0> <hint1> ...
 		for (;;) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				int perSecond = ctx.updateSpeed();
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | ",
+				        ctx.timeAsString(), ctx.progress, perSecond);
+
+				ctx.tick = 0;
+			}
+
 			static char line[512];
+			char *pLine = line;
+			char *endptr;
+			hint_t hint;
+
+			::memset(&hint, 0, sizeof(hint));
+
+			/*
+			 * populate record
+			 */
 
 			if (::fgets(line, sizeof(line), f) == 0)
 				break; // end-of-input
 
-			::memset(&hint, 0, sizeof(hint));
-			name[0] = 0;
+			/*
+			 * load name
+			 */
 
-			int ret = ::sscanf(line, "%s %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
-			                   name,
-			                   &hint.numStored[0], &hint.numStored[1], &hint.numStored[2], &hint.numStored[3],
-			                   &hint.numStored[4], &hint.numStored[5], &hint.numStored[6], &hint.numStored[7],
-			                   &hint.numStored[8], &hint.numStored[9], &hint.numStored[10], &hint.numStored[11],
-			                   &hint.numStored[12], &hint.numStored[13], &hint.numStored[14], &hint.numStored[15]);
+			// extract name
+			char *pName = name;
 
-			if (ret < 1) {
-				ctx.fatal("line %lu is empty\n", ctx.progress);
+			while (*pLine && !::isspace(*pLine))
+				*pName++ = *pLine++;
+			*pName = 0; // terminator
+
+			if (!name[0]) {
+				printf("{\"error\":\"bad or empty line\",\"where\":\"%s\",\"line\":%lu}\n",
+				       __FUNCTION__, ctx.progress);
+				exit(1);
 			}
-			if (ret != 17)
-				ctx.fatal("line %lu has incorrect values\n", ctx.progress);
 
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				int perSecond = ctx.updateSpeed();
+			/*
+			 * load entries
+			 */
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numHint=%u(%.0f%%)",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint);
+			unsigned numEntry = 0;
+			for (;;) {
+				// get next numeric value
+				unsigned tid = ::strtoul(pLine, &endptr, 0);
 
-				ctx.tick = 0;
+				/*
+				 * Test for end-of-line
+				 */
+				if (pLine == endptr) {
+					// let endptr swallow spaces
+					while (::isspace(*endptr))
+						endptr++;
+					// is it end-of-line
+					if (!*endptr)
+						break;
+					// rewind to error position
+					endptr = pLine;
+				}
+
+				if (pLine == endptr || numEntry >= hint_t::MAXENTRY) {
+					printf("{\"error\":\"bad or too many columns\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
+					       __FUNCTION__, name, ctx.progress);
+					exit(1);
+				}
+
+				hint.numStored[numEntry++] = tid;
+				pLine = endptr;
+
+				if (!*pLine)
+					break; // done
 			}
 
 			/*
@@ -298,7 +340,7 @@ struct genhintContext_t : dbtool_t {
 			unsigned ix = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0) {
-				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
+				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
 				       __FUNCTION__, name, ctx.progress);
 				exit(1);
 			}
@@ -314,10 +356,19 @@ struct genhintContext_t : dbtool_t {
 				if (pStore->signatures[sid].hintId == 0) {
 					pStore->signatures[sid].hintId = hintId;
 				} else if (pStore->signatures[sid].hintId != hintId) {
-					printf("{\"error\":\"inconsistent hint\",\"where\":\"%s\",\"name\":\"%s\",\"progress\":%lu}\n",
+					printf("{\"error\":\"inconsistent hint\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
 					       __FUNCTION__, name, ctx.progress);
 					exit(1);
 				}
+			}
+
+			if (opt_text == OPTTEXT_WON) {
+				printf("%s", pStore->signatures[sid].name);
+
+				for (unsigned j = 0; j < hint_t::MAXENTRY && hint.numStored[j]; j++)
+					printf("\t%u", hint.numStored[j]);
+
+				printf("\n");
 			}
 
 			ctx.progress++;
@@ -329,9 +380,8 @@ struct genhintContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read members. numSignature=%u(%.0f%%) numHint=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] Read members. numHint=%u(%.0f%%)\n",
 			        ctx.timeAsString(),
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint);
 	}
 
@@ -346,7 +396,7 @@ struct genhintContext_t : dbtool_t {
 	 *
 	 * @param {database_t} tempdb - worker database to count imprints
 	 */
-	void hintsFromGenerator(database_t &tempdb) {
+	void hintsFromSignature(database_t &tempdb) {
 
 		tinyTree_t tree(ctx);
 
@@ -385,7 +435,7 @@ struct genhintContext_t : dbtool_t {
 
 			signature_t *pSignature = pStore->signatures + iSid;
 			if (!pSignature->hintId) {
-				uint32_t hintId = foundSidHints(pSignature->name, tempdb);
+				uint32_t hintId = foundSignatureHints(pSignature->name, tempdb);
 				pSignature->hintId = hintId;
 			}
 
@@ -622,7 +672,7 @@ void usage(char *const *argv, bool verbose) {
 }
 
 /**
- * pure2020-03-14 11:19:40
+ * @date 2020-03-14 11:19:40
  *
  * Program main entry point
  * Process all user supplied arguments to construct a application context.
@@ -1051,7 +1101,7 @@ int main(int argc, char *const *argv) {
 		tempdb.create(0);
 		tempdb.enableVersioned();
 
-		app.hintsFromGenerator(tempdb);
+		app.hintsFromSignature(tempdb);
 	}
 
 	/*
@@ -1067,7 +1117,7 @@ int main(int argc, char *const *argv) {
 
 			printf("%s\t", pSignature->name);
 
-			for (unsigned j = 0; j < hint_t::MAXENTRY; j++)
+			for (unsigned j = 0; j < hint_t::MAXENTRY && pHint->numStored[j]; j++)
 				printf("\t%u", pHint->numStored[j]);
 
 			printf("\n");
