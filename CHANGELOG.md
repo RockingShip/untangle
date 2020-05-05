@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-05-05 15:36:30 Improved `genswapContext_t::foundSignatureSwap()`.
 2020-05-02 00:46:30 Synced workflow `genhint`,`genswap`.
 2020-05-04 22:46:54 Database version 20200506.
 2020-04-20 00:24:45 Added `swap_t` to `database_t`
@@ -77,7 +78,6 @@ This release is to archive the current generator.
 For the `pure dataset the generator needs to scan `6n9-pure` and possibly partially `7n9-pure` space.
 This requires a next-generation generator wit significantly less duplicates (currently 28%) and higher speed (`6n9-pure` 80 minutes). 
 
- 
 Normalisations:
 
  1) Algebraic (function grouping)

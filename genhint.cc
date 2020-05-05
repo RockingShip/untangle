@@ -125,6 +125,8 @@ struct genhintContext_t : dbtool_t {
 
 	/// @var {unsigned} - active index for `hints[]`
 	unsigned activeHintIndex;
+	/// @var {number} duplicate swaps in database
+	unsigned skipDuplicate;
 
 	/**
 	 * Constructor
@@ -149,6 +151,7 @@ struct genhintContext_t : dbtool_t {
 		pEvalRev = NULL;
 
 		activeHintIndex = 0;
+		skipDuplicate = 0;
 	}
 
 	/**
@@ -166,8 +169,10 @@ struct genhintContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
-				        ctx.timeAsString(), ctx.progress, perSecond);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numHint=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+				        skipDuplicate);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -177,8 +182,10 @@ struct genhintContext_t : dbtool_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d numHint=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
+				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+				        skipDuplicate);
 			}
 
 			ctx.tick = 0;
@@ -219,7 +226,8 @@ struct genhintContext_t : dbtool_t {
 			unsigned hintId = pStore->hintIndex[ix];
 			if (hintId == 0)
 				pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
-
+			else
+				skipDuplicate++;
 			// add hintId to signature
 			return hintId;
 		}
@@ -259,8 +267,10 @@ struct genhintContext_t : dbtool_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | ",
-				        ctx.timeAsString(), ctx.progress, perSecond);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numHint=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+				        skipDuplicate);
 
 				ctx.tick = 0;
 			}
@@ -351,6 +361,8 @@ struct genhintContext_t : dbtool_t {
 				unsigned hintId = pStore->hintIndex[ix];
 				if (hintId == 0)
 					pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
+				else
+					skipDuplicate++;
 
 				// add hintId to signature
 				if (pStore->signatures[sid].hintId == 0) {
@@ -380,9 +392,10 @@ struct genhintContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read members. numHint=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] Read hints. numHint=%u(%.0f%%) | skipDuplicate=%u\n",
 			        ctx.timeAsString(),
-			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint);
+			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+			        skipDuplicate);
 	}
 
 	/**
@@ -446,7 +459,10 @@ struct genhintContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Done\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] numHint=%u(%.0f%%) | skipDuplicate=%u\n",
+			        ctx.timeAsString(),
+			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+			        skipDuplicate);
 	}
 
 	/**

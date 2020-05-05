@@ -73,9 +73,9 @@ struct dbtool_t : callable_t {
 	unsigned opt_maxMember;
 	/// @var {number} Maximum number of signatures to be stored database
 	unsigned opt_maxSignature;
-	/// @var {number} size of member index WARNING: must be prime
 	/// @var {number} Maximum number of swaps to be stored database
 	unsigned opt_maxSwap;
+	/// @var {number} size of member index WARNING: must be prime
 	unsigned opt_memberIndexSize;
 	/// @var {number} index/data ratio
 	double opt_ratio;

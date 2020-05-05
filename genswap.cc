@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-05-02 23:02:57
@@ -19,36 +19,34 @@
  *       It's applying transforms to the slots. "{slots[2],slots[0],slots[1]}"
  *
  * Example:
- *   `"acb++"`, sid=9 with swaps `"[bac,acb,bca]"`.
+ *   `"acb++"`, sid=9 with swaps `"[bac,bca,acb]"`.
  *
  * Starting slots:
- *   `"slots[] = {'c','b','a'}`"
+ *   `"slots[] = {'c','a','b'}`"
  *
  * Apply first transform `"bac"`:
- *      test[transform[0]-'a'] = test[1] = name[0];
- *      test[transform[1]-'a'] = test[0] = name[1];
- *      test[transform[2]-'a'] = test[2] = name[2];
+ *      test[transform[0]-'a'] = test[1] = slots[0]
+ *      test[transform[1]-'a'] = test[0] = slots[1]
+ *      test[transform[2]-'a'] = test[2] = slots[2]
  *
- *      slots="cba", test="bca".
+ *      slots="cab", test="acb".
  *      Choose for "test[]" in favour of "slots"
  *
- * Apply second transform `"acb"`:
- *      test[transform[0]-'a'] = test[0] = name[0];
- *      test[transform[1]-'a'] = test[2] = name[1];
- *      test[transform[2]-'a'] = test[1] = name[2];
+ * Apply second transform `"bca"`:
+ *      test[transform[0]-'a'] = test[1] = slots[0];
+ *      test[transform[1]-'a'] = test[2] = slots[1];
+ *      test[transform[2]-'a'] = test[0] = slots[2];
  *
- *      slots="bca", test="bac".
+ *      slots="acb", test="bac".
  *      Keep "slots[]"
  *
- * Apply third and final transform `"bca"`:
- *      test[transform[0]-'a'] = test[1] = name[0];
- *      test[transform[1]-'a'] = test[2] = name[1];
- *      test[transform[2]-'a'] = test[0] = name[2];
+ * Apply third and final transform `"acb"`:
+ *      test[transform[0]-'a'] = test[0] = slots[0];
+ *      test[transform[1]-'a'] = test[2] = slots[1];
+ *      test[transform[2]-'a'] = test[1] = slots[2];
  *
- *      slots="bca", test="abc".
+ *      slots="acb", test="abc".
  *      Choose for "test[]" as final result
- *
- * todo: missing smarter extra round...
  *
  * Text modes:
  *
@@ -149,11 +147,17 @@ struct genswapContext_t : dbtool_t {
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 
-	/// @var {number[]} - For a given signature, which tid's result in identical result. Contents is sid when true. IBIT set means disabled.
+	/// @var {number} current version incarnation
+	uint32_t iVersion;
+	/// @var {number} duplicate swaps in database
+	unsigned skipDuplicate;
+	/// @var {number[]} - Versioned memory of active swaps/transforms
+	uint32_t *swapsActive;
+	/// @var {number[]} - List of found swaps/transforms for signature under investigation. IBET set indicates they are disabled
 	uint32_t *swapsFound;
-	/// @var {number[]} - Found swaps for a given signature. IBIT set means disabled.
-	uint32_t *swapsInuse;
-	/// @var {number[]} - Upper limits of transform for given number of placeholders
+	/// @var {number[]} - Versioned memory of active swaps/transforms
+	uint64_t *swapsWeight;
+	/// @var {number[]} - Weights to assist choosing in case of draws
 	unsigned tidHi[MAXSLOTS + 1];
 
 	/**
@@ -173,14 +177,17 @@ struct genswapContext_t : dbtool_t {
 		opt_taskLast = 0;
 		opt_text = 0;
 
+		iVersion = 0;
 		pStore = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
+		skipDuplicate = 0;
+		swapsActive = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsActive", MAXTRANSFORM, sizeof(*swapsActive));
+		swapsFound = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsFound", MAXTRANSFORM, sizeof(*swapsFound));
+		swapsWeight = (uint64_t *) ctx.myAlloc("genswapContext_t::swapsWeight", MAXTRANSFORM, sizeof(*swapsWeight));
 		for (unsigned j = 0; j <= MAXSLOTS; j++)
 			tidHi[j] = 0;
-		swapsInuse = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsInuse", MAXTRANSFORM, sizeof(*swapsInuse));
-		swapsFound = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsFound", MAXTRANSFORM, sizeof(*swapsFound));
 	}
 
 	/**
@@ -189,14 +196,117 @@ struct genswapContext_t : dbtool_t {
 	 * Release system resources
 	 */
 	~genswapContext_t() {
-		ctx.myFree("database_t::swapsInuse", swapsInuse);
+		ctx.myFree("database_t::swapsActive", swapsActive);
 		ctx.myFree("database_t::swapsFound", swapsFound);
+		ctx.myFree("database_t::swapsWeight", swapsWeight);
+	}
+
+
+	/**
+	 * @date 2020-05-04 23:54:12
+	 *
+	 * Given a list of Transforms, some deactivated by having their IBIT set.
+	 * Apply transform to collection to find pairs.
+	 * Flag better half of pair to pass to next round.
+	 *
+	 * @param {signature_t} pSignature - signature for `--text` mode
+	 * @param {number} tidFocus - which transform to use
+	 * @param {number} numFound - total number of transforms
+	 * @param {number[]} pFound - list of transforms
+	 * @return {number} - number of transforms still active
+	 */
+	unsigned countNextActive(const signature_t *pSignature, unsigned tidFocus, unsigned numFound, uint32_t *pFound) {
+		// result
+		unsigned numActiveNext = 0;
+
+		// bump version number
+		this->iVersion++;
+
+		// get name of selected transform
+		const char *pFocus = pStore->fwdTransformNames[tidFocus];
+
+		for (unsigned j = 0; j < numFound; j++) {
+			// get transform
+			unsigned tidOrig = pFound[j];
+			const char *pOrig = pStore->fwdTransformNames[tidOrig & ~IBIT];
+
+			// apply transform to slots
+			unsigned tidSwapped = pStore->lookupTransformSlot(pOrig, pFocus, pStore->fwdTransformNameIndex);
+			const char *pSwapped = pStore->fwdTransformNames[tidSwapped];
+
+			// skip if disabled
+//			if (tidOrig & IBIT)
+//				continue;
+
+			/*
+			 * Compare pOrig/pSwap
+			 */
+			int cmp = 0;
+			for (unsigned k = 0; k < MAXSLOTS; k++) {
+				cmp = pOrig[k] - pSwapped[k];
+				if (cmp)
+					break;
+			}
+
+			if (tidOrig & IBIT) {
+				printf("%u\t%s\t%s\t%c\t%.*s\t%.*s\n",
+				       (unsigned) (pSignature - pStore->signatures),
+				       pSignature->name,
+				       pFocus,
+				       '*',
+				       pSignature->numPlaceholder, pOrig,
+				       pSignature->numPlaceholder, pSwapped);
+				continue;
+			}
+
+			if (cmp < 0) {
+				// original is better
+				if (this->swapsActive[tidOrig] != iVersion) {
+					numActiveNext++;
+					this->swapsActive[tidOrig] = iVersion;
+				}
+			} else if (cmp > 0) {
+				// swapped is better
+				if (this->swapsActive[tidSwapped] != iVersion) {
+					numActiveNext++;
+					this->swapsActive[tidSwapped] = iVersion;
+				}
+			} else {
+				assert(0);
+			}
+
+			if (opt_text == OPTTEXT_COMPARE && pSignature) {
+				// test if `pSwap` becomes active again
+				if (cmp < 0)
+					cmp = '<';
+				else if (cmp > 0)
+					cmp = '>';
+				else
+					assert(0);
+
+				printf("%u\t%s\t%s\t%c\t%.*s\t%.*s\n",
+				       (unsigned) (pSignature - pStore->signatures),
+				       pSignature->name,
+				       pFocus,
+				       cmp,
+				       pSignature->numPlaceholder, pOrig,
+				       pSignature->numPlaceholder, pSwapped);
+			}
+
+		}
+
+		return numActiveNext;
 	}
 
 	/**
 	 * @date 2020-05-02 23:06:26
 	 *
 	 * Build a collection of transforms such that after applying/rewriting all to the dataset, all end-point symmetry has been removed.
+	 *
+	 * Create a list of transforms that will create a collection of all permutation.
+	 * Applying one of the transforms to the collection will divide the collection into pairs, one being better ordered than the other.
+	 * Drop all the worse alternatives.
+	 * Repeat applying other transforms until the collection consists of a single transparent (normalised) name.
 	 *
 	 * @param {signature_t} pName - signature requiring swaps
 	 * @return {number} swapId
@@ -207,8 +317,10 @@ struct genswapContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
-				        ctx.timeAsString(), ctx.progress, perSecond);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numSwap=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+				        skipDuplicate);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -218,14 +330,19 @@ struct genswapContext_t : dbtool_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d numSwap=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
+				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+				        skipDuplicate);
 			}
 
 			ctx.tick = 0;
 		}
 
-		// lookup signature
+		/*
+		 * lookup signature
+		 */
+
 		unsigned ix = pStore->lookupSignature(pName);
 		const unsigned sid = pStore->signatureIndex[ix];
 		if (sid == 0) {
@@ -238,10 +355,8 @@ struct genswapContext_t : dbtool_t {
 
 		signature_t *pSignature = pStore->signatures + sid;
 
-		unsigned numSwaps = 0;
-
 		/*
-		 * go through all the transforms
+		 * Create a list of transforms representing all permutations
 		 */
 
 		tree.decodeFast(pSignature->name);
@@ -249,6 +364,8 @@ struct genswapContext_t : dbtool_t {
 		// put untransformed result in reverse transform
 		tree.eval(this->pEvalRev);
 
+		this->iVersion++;
+		unsigned numSwaps = 0;
 		for (unsigned tid = 0; tid < tidHi[pSignature->numPlaceholder]; tid++) {
 			// point to evaluator for given transformId
 			footprint_t *v = this->pEvalFwd + tid * tinyTree_t::TINYTREE_NEND;
@@ -259,146 +376,113 @@ struct genswapContext_t : dbtool_t {
 			// test if result is unchanged
 			if (this->pEvalRev[tree.root].equals(v[tree.root])) {
 				// remember tid
-				assert(numSwaps < 512);
+				assert(numSwaps < MAXTRANSFORM);
 				this->swapsFound[numSwaps++] = tid;
 				// mark it as in use
-				this->swapsInuse[tid] = sid;
+				this->swapsActive[tid] = iVersion;
 			}
 		}
 
+		// test if swaps are present
+		if (numSwaps <= 1)
+			return 0;
+
 		/*
-		 * Condense the list:
+		 * Record to populate
+		 */
+		swap_t swap;
+		::memset(&swap, 0, sizeof(swap));
+		unsigned numEntry = 0;
+
+		/*
+		 * Validate if condensing is possible:
 		 *
-		 * For each transform in list:
-		 * - apply selected transform to every other member including self.
+		 * For each transform in collection:
+		 * - apply selected transform to every other collection item including self.
 		 * - all transformed should be present in collection.
-		 * - For all pairs disable the worse.
 		 */
 
 		for (unsigned iSelect = 0; iSelect < numSwaps; iSelect++) {
-			char mask[MAXSLOTS + 1];
-
 			unsigned tidSelect = this->swapsFound[iSelect];
 
-			// test if item has been disabled
-			if (this->swapsInuse[tidSelect] & IBIT)
+			// selected may not be transparent (tid=0) because it has no effect
+			if (tidSelect == 0)
 				continue;
-
-			// selected may not be tid=0 because that is a transform without effect
-			if (tidSelect == 0) {
-				this->swapsFound[iSelect] |= IBIT;
-				printf("- %u %s %u %s\n", sid, pSignature->name, tidSelect, pStore->fwdTransformNames[tidSelect]);
-				continue;
-			}
 
 			const char *pSelect = pStore->fwdTransformNames[tidSelect];
 			bool okay = true;
-			bool changed = false;
 
 			/*
-			 * apply selected transform to collection
+			 * apply selected transform to collection and locate pair
 			 */
 			for (unsigned j = 0; j < numSwaps; j++) {
-				unsigned tidL = this->swapsFound[j] & ~IBIT;
-				const char *pL = pStore->fwdTransformNames[tidL];
+				unsigned tidOrig = this->swapsFound[j] & ~IBIT;
+				const char *pOrig = pStore->fwdTransformNames[tidOrig];
+				unsigned tidSwapped = pStore->lookupTransformSlot(pOrig, pSelect, pStore->fwdTransformNameIndex);
 
-				// apply selected to item
-				for (unsigned k = 0; k < MAXSLOTS; k++) {
-					mask[k] = pSelect[pL[k] - 'a'];
-				}
-				mask[MAXSLOTS] = 0;
-
-				// determine if transformed present
-				unsigned tidR = pStore->lookupTransform(mask, pStore->fwdTransformNameIndex);
-				const char *pR = pStore->fwdTransformNames[tidR];
-
-				(void) &pR;
-
-				if ((this->swapsInuse[tidR] & ~IBIT) != sid)
+				// test if other half pair present
+				if (this->swapsActive[tidSwapped] != iVersion)
 					okay = false;
 			}
 
 			if (!okay) {
-				printf("* %u %s %u %s\n", sid, pSignature->name, tidSelect, pStore->fwdTransformNames[tidSelect]);
-				continue; // selected not suitable to reduce pairs
+				/*
+					 * @date 2020-05-04 11:30:06
+					 * Turns out this never happens so coding assumes this to be true.
+				 */
+				assert(0);
 			}
-
-			/*
-			 * Find pairs and disable the lesser
-			 */
-			for (unsigned j = 0; j < numSwaps; j++) {
-				unsigned tidL = this->swapsFound[j] & ~IBIT;
-				const char *pL = pStore->fwdTransformNames[tidL];
-
-				// apply selected to item
-				for (unsigned k = 0; k < MAXSLOTS; k++) {
-					mask[k] = pSelect[pL[k] - 'a'];
-				}
-				mask[MAXSLOTS] = 0;
-
-				// determine if transformed present
-				unsigned tidR = pStore->lookupTransform(mask, pStore->fwdTransformNameIndex);
-				const char *pR = pStore->fwdTransformNames[tidR];
-
-				// compare l/r
-				int cmp = 0;
-				for (unsigned k = 0; k < MAXSLOTS; k++) {
-					cmp = pL[k] - pR[k];
-					if (cmp)
-						break;
-				}
-
-				printf("%s: %s %d %s\n", pSelect, pL, cmp, pR);
-				// disable the worse
-				if (0) {
-					if (cmp < 0) {
-						// disable rhs
-						assert(~this->swapsInuse[tidL] & IBIT);
-						if (~this->swapsInuse[tidR] & IBIT)
-							changed = true;
-						this->swapsInuse[tidR] |= IBIT;
-					} else if (cmp > 0) {
-						// disable lhs
-						assert(~this->swapsInuse[tidR] & IBIT);
-						if (~this->swapsInuse[tidL] & IBIT)
-							changed = true;
-						this->swapsInuse[tidL] |= IBIT;
-					} else {
-						// must not be identical
-						assert(0);
-					}
-				}
-			}
-
-			printf("%c %u %s %u %s\n", changed ? '+' : '-', sid, pSignature->name, tidSelect, pStore->fwdTransformNames[tidSelect]);
-
-			// disable if no change was made.
-			if (!changed)
-				this->swapsFound[iSelect] |= IBIT;
 		}
 
 		/*
-		 * Add to database
-		 */
-		swap_t swap;
-
-		::memset(&swap, 0, sizeof(swap));
-
-		/*
-		 * populate record
+		 * Find a transform that maximise the disabling of other permutations
 		 */
 
-		unsigned numEntry = 0;
-		for (unsigned j = 0; j < numSwaps; j++) {
-			// skip if transparent
-			if (this->swapsFound[j] == 0)
-				continue;
-			// skip if disabled
-			if (this->swapsFound[j] & IBIT)
-				continue;
+		for (unsigned iRound = 0;; iRound++) {
 
+			/*
+				 * NOTE: consider all swaps including those disabled because this allows the possibility that some transforms can be applied multiple times
+			 */
+			unsigned bestTid = 0;
+			unsigned bestCount = 0;
+			for (unsigned iFocus = 0; iFocus < numSwaps; iFocus++) {
+				unsigned tidFocus = this->swapsFound[iFocus] & ~IBIT;
+				if (tidFocus == 0)
+					continue; // skip transparent or disabled transform
+
+				// calculate number active left after applying selected transform
+				unsigned activeLeft = this->countNextActive(pSignature, tidFocus, numSwaps, this->swapsFound);
+
+				// remember which is best
+				if (bestTid == 0 || activeLeft < bestCount || (activeLeft == bestCount && swapsWeight[tidFocus] < swapsWeight[bestTid])) {
+					bestTid = tidFocus;
+					bestCount = activeLeft;
+				}
+			}
+			assert(bestCount);
+
+			// apply best transform
+			this->countNextActive(pSignature, bestTid, numSwaps, this->swapsFound);
+
+			// apply result
+			for (unsigned iFocus = 0; iFocus < numSwaps; iFocus++) {
+				unsigned tidFocus = this->swapsFound[iFocus];
+
+				if (this->swapsActive[tidFocus & ~IBIT] == this->iVersion) {
+					// focus remains active
+					this->swapsFound[iFocus] &= ~IBIT;
+				} else {
+					// focus becomes inactive
+					this->swapsFound[iFocus] |= IBIT;
+				}
+			}
+
+			// add to record
 			assert(numEntry < swap_t::MAXENTRY);
-			swap.tids[numEntry++] = this->swapsFound[j];
+			swap.tids[numEntry++] = bestTid;
+
+			if (bestCount == 1)
+				break;
 		}
 
 		if (opt_text == OPTTEXT_WON) {
@@ -417,6 +501,8 @@ struct genswapContext_t : dbtool_t {
 			unsigned swapId = pStore->swapIndex[ix];
 			if (swapId == 0)
 				pStore->swapIndex[ix] = swapId = pStore->addSwap(&swap);
+			else
+				skipDuplicate++;
 
 			// add swapId to signature
 			return swapId;
@@ -454,8 +540,10 @@ struct genswapContext_t : dbtool_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | ",
-				        ctx.timeAsString(), ctx.progress, perSecond);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numSwap=%u(%.0f%%) | skipDuplicate=%u",
+				        ctx.timeAsString(), ctx.progress, perSecond,
+				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+				        skipDuplicate);
 
 				ctx.tick = 0;
 			}
@@ -546,6 +634,8 @@ struct genswapContext_t : dbtool_t {
 				unsigned swapId = pStore->swapIndex[ix];
 				if (swapId == 0)
 					pStore->swapIndex[ix] = swapId = pStore->addSwap(&swap);
+				else
+					skipDuplicate++;
 
 				// add swapId to signature
 				if (pStore->signatures[sid].swapId == 0) {
@@ -575,9 +665,10 @@ struct genswapContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "[%s] Read members. numSwap=%u(%.0f%%)\n",
+			fprintf(stderr, "[%s] Read swaps. numSwap=%u(%.0f%%) | skipDuplicate=%u\n",
 			        ctx.timeAsString(),
-			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap);
+			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+			        skipDuplicate);
 	}
 
 	/**
@@ -634,7 +725,10 @@ struct genswapContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Done\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] numSwap=%u(%.0f%%) | skipDuplicate=%u\n",
+			        ctx.timeAsString(),
+			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+			        skipDuplicate);
 	}
 
 };
@@ -1050,7 +1144,7 @@ int main(int argc, char *const *argv) {
 	app.opt_maxSignature = db.numSignature;
 
 	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that do not occur
+	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that should not occur
 
 	/*
 	 * Finalise allocations and create database
@@ -1125,6 +1219,31 @@ int main(int argc, char *const *argv) {
 	app.tidHi[8] = store.lookupTransform("hgfedcba", store.fwdTransformNameIndex) + 1;
 	app.tidHi[9] = MAXTRANSFORM;
 	assert(app.tidHi[2] == 2 && app.tidHi[3] == 6 && app.tidHi[4] == 24 && app.tidHi[5] == 120 && app.tidHi[6] == 720 && app.tidHi[7] == 5040 && app.tidHi[8] == 40320);
+
+	/*
+	 * Determine weights of transforms. More shorter cyclic loops the better
+	 */
+
+	for (unsigned iTid = 0; iTid < store.numTransform; iTid++) {
+		app.swapsWeight[iTid] = 0;
+
+		// count cycles
+		unsigned found = 0;
+		const char *pName = store.fwdTransformNames[iTid];
+		for (unsigned j = 0; j < MAXSLOTS; j++) {
+			if (~found & (1 << (pName[j] - 'a'))) {
+				// new starting point
+				unsigned w = 1;
+				// walk cycle
+				for (unsigned k = pName[j] - 'a'; ~found & (1 << k); k = pName[k] - 'a') {
+					w *= (MAXSLOTS + 1); // weight is power of length
+					found |= 1 << k;
+				}
+				// update wight
+				app.swapsWeight[iTid] += w;
+			}
+		}
+	}
 
 	/*
 	 * Where to look for new candidates
