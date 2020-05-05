@@ -135,8 +135,8 @@ struct selftestContext_t : dbtool_t {
 		const char *pName = generator.encode(generator.root);
 
 		if (::strcmp(pName, "ab+ab>^") != 0) {
-			printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
-			       __FUNCTION__, pName, "ab+ab>^");
+			printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+			       __FUNCTION__, __FILE__, __LINE__, pName, "ab+ab>^");
 			exit(1);
 		}
 
@@ -219,8 +219,8 @@ struct selftestContext_t : dbtool_t {
 					} else {
 						int ret = generator.decodeSafe(treeName, skin);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
-							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
+							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
 							exit(1);
 						}
 					}
@@ -231,8 +231,8 @@ struct selftestContext_t : dbtool_t {
 					} else {
 						int ret = generator.decodeSafe(treeName);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
-							       __FUNCTION__, testNr, iFast, iPure, iSkin, treeName, ret);
+							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
+							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, ret);
 						}
 					}
 				}
@@ -307,8 +307,8 @@ struct selftestContext_t : dbtool_t {
 						encountered ^= 1; // invert result
 
 					if (expected != encountered) {
-						printf("{\"error\":\"compare failed\",\"where\":\"%s\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
-						       __FUNCTION__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						printf("{\"error\":\"compare failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
+						       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 						exit(1);
 					}
 					numPassed++;
@@ -345,8 +345,8 @@ struct selftestContext_t : dbtool_t {
 
 		// assert entry is unique
 		if (selftestWindowResults[ctx.progress] != NULL) {
-			printf("{\"error\":\"entry not unique\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
-			       __FUNCTION__, selftestWindowResults[ctx.progress], pName, ctx.progress);
+			printf("{\"error\":\"entry not unique\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
+			       __FUNCTION__, __FILE__, __LINE__, selftestWindowResults[ctx.progress], pName, ctx.progress);
 			exit(1);
 		}
 
@@ -381,15 +381,15 @@ struct selftestContext_t : dbtool_t {
 
 		// assert entry is present
 		if (selftestWindowResults[ctx.progress] == NULL) {
-			printf("{\"error\":\"missing\",\"where\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
-			       __FUNCTION__, pName, ctx.progress);
+			printf("{\"error\":\"missing\",\"where\":\"%s:%s:%d\",\"expected\":\"%s\",\"progress\":%lu}\n",
+			       __FUNCTION__, __FILE__, __LINE__, pName, ctx.progress);
 			exit(1);
 		}
 
 		// compare
 		if (::strcmp(pName, selftestWindowResults[ctx.progress]) != 0) {
-			printf("{\"error\":\"entry missmatch\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
-			       __FUNCTION__, selftestWindowResults[ctx.progress], pName, ctx.progress);
+			printf("{\"error\":\"entry mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\",\"progress\":%lu}\n",
+			       __FUNCTION__, __FILE__, __LINE__, selftestWindowResults[ctx.progress], pName, ctx.progress);
 			exit(1);
 		}
 
@@ -501,8 +501,8 @@ struct selftestContext_t : dbtool_t {
 
 		// compare
 		if (!pExpect[tree.root].equals(pEncountered[tree.root])) {
-			printf("{\"error\":\"decode with skin failed\",\"where\":\"%s\"}\n",
-			       __FUNCTION__);
+			printf("{\"error\":\"decode with skin failed\",\"where\":\"%s:%s:%d\"}\n",
+			       __FUNCTION__, __FILE__, __LINE__);
 			exit(1);
 		}
 
@@ -515,8 +515,8 @@ struct selftestContext_t : dbtool_t {
 
 		// compare
 		if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
-			printf("{\"error\":\"decode with cache failed\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
-			       __FUNCTION__, pExpectedName, "abc!de!f2!");
+			printf("{\"error\":\"decode with cache failed\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+			       __FUNCTION__, __FILE__, __LINE__, pExpectedName, "abc!de!f2!");
 			exit(1);
 		}
 	}
@@ -542,21 +542,21 @@ struct selftestContext_t : dbtool_t {
 
 			// test empty name is transparent skin
 			if (tid != 0) {
-				printf("{\"error\":\"failed empty name lookup\",\"where\":\"%s\",\"tid\":%u}\n",
-				       __FUNCTION__, tid);
+				printf("{\"error\":\"failed empty name lookup\",\"where\":\"%s:%s:%d\",\"tid\":%u}\n",
+				       __FUNCTION__, __FILE__, __LINE__, tid);
 				exit(1);
 			}
 
 			// test transparent transform ([0]) is transparent
 			for (unsigned k = 0; k < MAXSLOTS; k++) {
 				if (pStore->fwdTransformNames[0][k] != (char) ('a' + k)) {
-					printf("{\"error\":\"failed transparent forward\",\"where\":\"%s\",\"name\":\"%s\"}\n",
-					       __FUNCTION__, pStore->fwdTransformNames[0]);
+					printf("{\"error\":\"failed transparent forward\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n",
+					       __FUNCTION__, __FILE__, __LINE__, pStore->fwdTransformNames[0]);
 					exit(1);
 				}
 				if (pStore->revTransformNames[0][k] != (char) ('a' + k)) {
-					printf("{\"error\":\"failed transparent reverse\",\"where\":\"%s\",\"name\":\"%s\"}\n",
-					       __FUNCTION__, pStore->revTransformNames[0]);
+					printf("{\"error\":\"failed transparent reverse\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n",
+					       __FUNCTION__, __FILE__, __LINE__, pStore->revTransformNames[0]);
 					exit(1);
 				}
 			}
@@ -611,8 +611,8 @@ struct selftestContext_t : dbtool_t {
 					name[iLen] = 'a' + iLen;
 
 					if (iTransform != encountered) {
-						printf("{\"error\":\"failed lookup\",\"where\":\"%s\",\"encountered\":%u,\"round\":%u,\"iTransform\":%u,\"iLen\":%u,\"name\":\"%s\"}\n",
-						       __FUNCTION__, encountered, round, iTransform, iLen, name);
+						printf("{\"error\":\"failed lookup\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"round\":%u,\"iTransform\":%u,\"iLen\":%u,\"name\":\"%s\"}\n",
+						       __FUNCTION__, __FILE__, __LINE__, encountered, round, iTransform, iLen, name);
 						exit(1);
 					}
 
@@ -632,8 +632,8 @@ struct selftestContext_t : dbtool_t {
 			unsigned reverse = pStore->lookupTransform(pStore->fwdTransformNames[forward], pStore->fwdTransformNameIndex);
 
 			if (reverse != iTransform) {
-				printf("{\"error\":\"failed lookup\",\"where\":\"%s\",\"encountered\":%u,\"expected\":%u}\n",
-				       __FUNCTION__, reverse, iTransform);
+				printf("{\"error\":\"failed lookup\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n",
+				       __FUNCTION__, __FILE__, __LINE__, reverse, iTransform);
 				exit(1);
 			}
 
@@ -683,7 +683,7 @@ struct selftestContext_t : dbtool_t {
 			pStore->signatureVersion[ix1] = pStore->iVersion;
 		}
 		if (!collision1) {
-			printf("{\"error\":\"failed to find first hash overflow\",\"where\":\"%s\"}\n", __FUNCTION__);
+			printf("{\"error\":\"failed to find first hash overflow\",\"where\":\"%s:%s:%d\"}\n", __FUNCTION__, __FILE__, __LINE__);
 			exit(1);
 		}
 
@@ -718,10 +718,10 @@ struct selftestContext_t : dbtool_t {
 			pStore->signatureVersion[ix2] = pStore->iVersion;
 		}
 		if (!ix1) {
-			printf("{\"error\":\"failed to find second hash overflow\",\"where\":\"%s\"}\n", __FUNCTION__);
+			printf("{\"error\":\"failed to find second hash overflow\",\"where\":\"%s:%s:%d\"}\n", __FUNCTION__, __FILE__, __LINE__);
 			exit(1);
 		} else if (ix1 == ix2) {
-			printf("{\"error\":\"both hash overflow2 identical\",\"where\":\"%s\",\"ix\":%u,\"name\":\"%s\"}\n", __FUNCTION__, ix1, pStore->fwdTransformNames[collision1]);
+			printf("{\"error\":\"both hash overflow2 identical\",\"where\":\"%s:%s:%d\",\"ix\":%u,\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, ix1, pStore->fwdTransformNames[collision1]);
 			exit(1);
 		}
 
@@ -754,12 +754,12 @@ struct selftestContext_t : dbtool_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 				fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
 		} else if (ix == ix1) {
-			printf("{\"error\":\"delete broke overlow chain\",\"where\":\"%s\",\"ix1\":%u,\"name1\":\"%s\",\"ix2\":%u,\"name2\":\"%s\"}\n",
-			       __FUNCTION__, ix1, pStore->fwdTransformNames[collision1], ix2, pStore->fwdTransformNames[collision2]);
+			printf("{\"error\":\"delete broke overlow chain\",\"where\":\"%s:%s:%d\",\"ix1\":%u,\"name1\":\"%s\",\"ix2\":%u,\"name2\":\"%s\"}\n",
+			       __FUNCTION__, __FILE__, __LINE__, ix1, pStore->fwdTransformNames[collision1], ix2, pStore->fwdTransformNames[collision2]);
 			exit(1);
 		} else {
-			printf("{\"error\":\"delete corrupted index\",\"where\":\"%s\",\"ix\":%u,\"ix1\":%u,\"name1\":\"%s\",\"ix2\":%u,\"name2\":\"%s\"}\n",
-			       __FUNCTION__, ix, ix1, pStore->fwdTransformNames[collision1], ix, pStore->fwdTransformNames[collision2]);
+			printf("{\"error\":\"delete corrupted index\",\"where\":\"%s:%s:%d\",\"ix\":%u,\"ix1\":%u,\"name1\":\"%s\",\"ix2\":%u,\"name2\":\"%s\"}\n",
+			       __FUNCTION__, __FILE__, __LINE__, ix, ix1, pStore->fwdTransformNames[collision1], ix, pStore->fwdTransformNames[collision2]);
 			exit(1);
 		}
 
@@ -911,8 +911,8 @@ struct selftestContext_t : dbtool_t {
 
 					// check
 					if (strcmp(cell, pFwdNames[row * numCols + col]) != 0) {
-						printf("{\"error\":\"failed merge\",\"where\":\"%s\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%u,\"numRows\":%u,\"col\":%u,\"colName\":\"%s\",\"row\":%u,\"rowName\":\"%s\"}\n",
-						       __FUNCTION__, cell, pFwdNames[row * numCols + col], numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
+						printf("{\"error\":\"failed merge\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\",\"numCols\":%u,\"numRows\":%u,\"col\":%u,\"colName\":\"%s\",\"row\":%u,\"rowName\":\"%s\"}\n",
+						       __FUNCTION__, __FILE__, __LINE__, cell, pFwdNames[row * numCols + col], numCols, numRows, col, pFwdNames[col], row * numCols, pFwdNames[row * numCols]);
 						exit(1);
 					}
 
@@ -1037,15 +1037,15 @@ struct selftestContext_t : dbtool_t {
 
 				// lookup
 				if (!pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &sid, &tid)) {
-					printf("{\"error\":\"tree not found\",\"where\":\"%s\",\"interleave\":%u,\"tid\":\"%s\"}\n",
-					       __FUNCTION__, pStore->interleave, pStore->fwdTransformNames[iTransform]);
+					printf("{\"error\":\"tree not found\",\"where\":\"%s:%s:%d\",\"interleave\":%u,\"tid\":\"%s\"}\n",
+					       __FUNCTION__, __FILE__, __LINE__, pStore->interleave, pStore->fwdTransformNames[iTransform]);
 					exit(1);
 				}
 
 				// test that transform id's match
 				if (iTransform != tid) {
-					printf("{\"error\":\"tid lookup mismatch\",\"where\":\"%s\",\"encountered\":%u,\"expected\":%u}\n",
-					       __FUNCTION__, tid, iTransform);
+					printf("{\"error\":\"tid lookup mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n",
+					       __FUNCTION__, __FILE__, __LINE__, tid, iTransform);
 					exit(1);
 				}
 
@@ -1068,8 +1068,8 @@ struct selftestContext_t : dbtool_t {
 
 			// test that number of imprints match
 			if (pInterleave->numStored != pStore->numImprint - 1) {
-				printf("{\"error\":\"numImprint missmatch\",\"where\":\"%s\",\"encountered\":%u,\"expected\":%u}\n",
-				       __FUNCTION__, pStore->numImprint - 1, pInterleave->numStored);
+				printf("{\"error\":\"numImprint mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n",
+				       __FUNCTION__, __FILE__, __LINE__, pStore->numImprint - 1, pInterleave->numStored);
 				exit(1);
 			}
 		}
@@ -1215,14 +1215,14 @@ struct selftestContext_t : dbtool_t {
 
 				cmp = this->comparSignature(pStore->signatures + j - 1, pStore->signatures + j, &ctx);
 				if (cmp >= 0) {
-					printf("{\"error\":\"compare fail\",\"where\":\"%s\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
-					       __FUNCTION__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
+					printf("{\"error\":\"compare fail\",\"where\":\"%s:%s:%d\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
+					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
 					exit(1);
 				}
 				cmp = this->comparSignature(pStore->signatures + j, pStore->signatures + j - 1, &ctx);
 				if (cmp <= 0) {
-					printf("{\"error\":\"compare fail\",\"where\":\"%s\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
-					       __FUNCTION__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
+					printf("{\"error\":\"compare fail\",\"where\":\"%s:%s:%d\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
+					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
 					exit(1);
 				}
 
@@ -1389,8 +1389,8 @@ struct selftestContext_t : dbtool_t {
 			        speed, storage);
 
 			if (ctx.progress != ctx.progressHi) {
-				printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
-				       __FUNCTION__, ctx.progress, ctx.progressHi, pRound->numNode);
+				printf("{\"error\":\"progressHi failed\",\"where\":\"%s:%s:%d\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
+				       __FUNCTION__, __FILE__, __LINE__, ctx.progress, ctx.progressHi, pRound->numNode);
 			}
 
 			/*

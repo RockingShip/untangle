@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 /// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
 #define IBIT 0x80000000
@@ -189,13 +190,30 @@ struct context_t {
 	 *
 	 * Fatal error and exit
 	 *
+	 * @date 2020-05-05 16:35:58
+	 *
+	 * Always to stdout to break `--text`.
+	 * Also to stderr if stdout is redirected
+	 *
 	 * @param format
 	 * @param ...
 	 */
 	void __attribute__((noreturn)) __attribute__ ((format (printf, 2, 3))) fatal(const char *format, ...) {
-		va_list ap;
-		va_start(ap, format);
-		vfprintf(stderr, format, ap);
+		::va_list ap;
+		::va_start(ap, format);
+
+		if (::isatty(1)) {
+			// to stdout
+			::vfprintf(stdout, format, ap);
+		} else {
+			// using varargs twice will crash
+			char *p;
+			::vasprintf(&p, format, ap);
+			::fputs(p, stdout);
+			::fputs(p, stderr);
+			::free(p);
+		}
+
 		::exit(1);
 	}
 

@@ -188,8 +188,8 @@ struct genrestartdataContext_t : callable_t {
 		unsigned numTabs = this->countRestartTabs();
 
 		if (numRestart != this->opt_taskLast) {
-			printf("{\"error\":\"taskLast does not match number of restart tabs\",\"where\":\"%s\",\"encountered\":\"%u\",\"expected\":\"%u\"\n",
-			       __FUNCTION__, this->opt_taskLast, numTabs);
+			printf("{\"error\":\"taskLast does not match number of restart tabs\",\"where\":\"%s:%s:%d\",\"encountered\":\"%u\",\"expected\":\"%u\"\n",
+			       __FUNCTION__, __FILE__, __LINE__, this->opt_taskLast, numTabs);
 			exit(1);
 		}
 

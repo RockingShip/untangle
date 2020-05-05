@@ -1302,8 +1302,8 @@ struct genmemberContext_t : dbtool_t {
 
 		FILE *f = fopen(this->opt_load, "r");
 		if (f == NULL)
-			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-			          __FUNCTION__, this->opt_load);
+			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
+			          this->opt_load, __FUNCTION__, __FILE__, __LINE__);
 
 		// apply settings for `--window`
 		generator.windowLo = this->opt_windowLo;
@@ -1344,9 +1344,11 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			if (ret != 1 && ret != 4)
-				ctx.fatal("line %lu is bad/empty\n", ctx.progress);
+				ctx.fatal("\n{\"error\":\"bad/empty line\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
+				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 			if (ret == 4 && (numPlaceholder != newPlaceholder || numEndpoint != newEndpoint || numBackRef != newBackRef))
-				ctx.fatal("line %lu has incorrect values\n", ctx.progress);
+				ctx.fatal("\n{\"error\":\"line has incorrect values\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
+				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			// test if line is within progress range
 			// NOTE: first line has `progress==0`
@@ -1468,8 +1470,8 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.progress != ctx.progressHi && this->opt_windowLo == 0 && this->opt_windowHi == 0) {
 			// can only test if windowing is disabled
-			printf("{\"error\":\"progressHi failed\",\"where\":\"%s\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
-			       __FUNCTION__, ctx.progress, ctx.progressHi, arg_numNodes);
+			printf("{\"error\":\"progressHi failed\",\"where\":\"%s:%s:%d\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
+			       __FUNCTION__, __FILE__, __LINE__, ctx.progress, ctx.progressHi, arg_numNodes);
 		}
 
 		if (truncated) {
@@ -2347,24 +2349,31 @@ int main(int argc, char *const *argv) {
 		store.save(app.arg_outputDatabase);
 	}
 
-	if (app.opt_taskLast)
-		fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
-	else if (app.opt_windowLo || app.opt_windowHi)
-		fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
-	else
-		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 #if defined(ENABLE_JANSSON)
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
+		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
+		if (app.opt_taskLast) {
+			json_object_set_new_nocheck(jResult, "taskId", json_integer(app.opt_taskId));
+			json_object_set_new_nocheck(jResult, "taskLast", json_integer(app.opt_taskLast));
+		}
+		if (app.opt_windowLo || app.opt_windowHi) {
+			json_object_set_new_nocheck(jResult, "windowLo", json_integer(app.opt_windowLo));
+			json_object_set_new_nocheck(jResult, "windowHi", json_integer(app.opt_windowHi));
+		}
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
-		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		if (!isatty(1))
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-	}
+		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+#else
+		if (app.opt_taskLast)
+			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
+		else if (app.opt_windowLo || app.opt_windowHi)
+			fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
+		else
+			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 #endif
+	}
 
 	return 0;
 }

@@ -656,17 +656,18 @@ int main(int argc, char *const *argv) {
 		store.save(app.arg_outputDatabase);
 	}
 
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 #if defined(ENABLE_JANSSON)
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
+		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
-		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		if (!isatty(1))
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-	}
+		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+#else
+		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 #endif
+	}
 
 	return 0;
 }

@@ -253,8 +253,8 @@ struct genhintContext_t : dbtool_t {
 
 		FILE *f = ::fopen(this->opt_load, "r");
 		if (f == NULL)
-			ctx.fatal("{\"error\":\"fopen() failed\",\"where\":\"%s\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-			          __FUNCTION__, this->opt_load);
+			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
+			          this->opt_load, __FUNCTION__, __FILE__, __LINE__);
 
 		// reset ticker
 		ctx.setupSpeed(0);
@@ -300,11 +300,9 @@ struct genhintContext_t : dbtool_t {
 				*pName++ = *pLine++;
 			*pName = 0; // terminator
 
-			if (!name[0]) {
-				printf("{\"error\":\"bad or empty line\",\"where\":\"%s\",\"line\":%lu}\n",
-				       __FUNCTION__, ctx.progress);
-				exit(1);
-			}
+			if (!name[0])
+				ctx.fatal("\n{\"error\":\"bad or empty line\",\"where\":\"%s:%s:%d\",\"line\":%lu}\n",
+				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			/*
 			 * load entries
@@ -329,11 +327,9 @@ struct genhintContext_t : dbtool_t {
 					endptr = pLine;
 				}
 
-				if (pLine == endptr || numEntry >= hint_t::MAXENTRY) {
-					printf("{\"error\":\"bad or too many columns\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
-					       __FUNCTION__, name, ctx.progress);
-					exit(1);
-				}
+				if (pLine == endptr || numEntry >= hint_t::MAXENTRY)
+					ctx.fatal("\n{\"error\":\"bad or too many columns\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
+					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 				hint.numStored[numEntry++] = tid;
 				pLine = endptr;
@@ -349,11 +345,9 @@ struct genhintContext_t : dbtool_t {
 			// lookup signature
 			unsigned ix = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
-			if (sid == 0) {
-				printf("{\"error\":\"missing signature\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
-				       __FUNCTION__, name, ctx.progress);
-				exit(1);
-			}
+			if (sid == 0)
+				ctx.fatal("\n{\"error\":\"missing signature\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
+				          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 			if (!this->readOnlyMode) {
 				// lookup/add hintId
@@ -367,11 +361,9 @@ struct genhintContext_t : dbtool_t {
 				// add hintId to signature
 				if (pStore->signatures[sid].hintId == 0) {
 					pStore->signatures[sid].hintId = hintId;
-				} else if (pStore->signatures[sid].hintId != hintId) {
-					printf("{\"error\":\"inconsistent hint\",\"where\":\"%s\",\"name\":\"%s\",\"line\":%lu}\n",
-					       __FUNCTION__, name, ctx.progress);
-					exit(1);
-				}
+				} else if (pStore->signatures[sid].hintId != hintId)
+					ctx.fatal("\n{\"error\":\"inconsistent hint\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
+					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 			}
 
 			if (opt_text == OPTTEXT_WON) {
@@ -1161,23 +1153,31 @@ int main(int argc, char *const *argv) {
 		store.save(app.arg_outputDatabase);
 	}
 
-	if (app.opt_taskLast)
-		fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_sidLo, app.opt_sidHi);
-	else if (app.opt_sidLo || app.opt_sidHi)
-		fprintf(stderr, "{\"done\":\"%s\",\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_sidLo, app.opt_sidHi);
-	else
-		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-
+	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 #if defined(ENABLE_JANSSON)
-	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !app.opt_text) {
 		json_t *jResult = json_object();
+		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
+		if (app.opt_taskLast) {
+			json_object_set_new_nocheck(jResult, "taskId", json_integer(app.opt_taskId));
+			json_object_set_new_nocheck(jResult, "taskLast", json_integer(app.opt_taskLast));
+		}
+		if (app.opt_sidLo || app.opt_sidHi) {
+			json_object_set_new_nocheck(jResult, "sidLo", json_integer(app.opt_sidLo));
+			json_object_set_new_nocheck(jResult, "sidHi", json_integer(app.opt_sidHi));
+		}
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
-		printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		if (!isatty(1))
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-	}
+		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+#else
+		if (app.opt_taskLast)
+			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_sidLo, app.opt_sidHi);
+		else if (app.opt_sidLo || app.opt_sidHi)
+			fprintf(stderr, "{\"done\":\"%s\",\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_sidLo, app.opt_sidHi);
+		else
+			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
 #endif
+	}
+
 	return 0;
 }

@@ -65,6 +65,7 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -373,9 +374,9 @@ struct database_t {
 			 * Database was opened with `mmap()`
 			 */
 			if (::munmap((void *) rawDatabase, fileHeader.offEnd))
-				ctx.fatal("munmap() returned: %m\n");
+				ctx.fatal("\n{\"error\":\"munmap()\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", __FUNCTION__, __FILE__, __LINE__);
 			if (::close(hndl))
-				ctx.fatal("close() returned: %m\n");
+				ctx.fatal("\n{\"error\":\"close()\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", __FUNCTION__, __FILE__, __LINE__);
 		} else if (rawDatabase) {
 			/*
 			 * Database was loaded with `read()`
@@ -452,11 +453,9 @@ struct database_t {
 
 		// transform store
 		if (inheritSections & ALLOCMASK_TRANSFORM) {
-			if (pFrom->numTransform == 0) {
-				printf("{\"error\":\"Missing transform section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numTransform == 0)
+				ctx.fatal("\n{\"error\":\"Missing transform section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			assert(maxTransform == 0);
 			maxTransform = pFrom->maxTransform;
@@ -477,11 +476,9 @@ struct database_t {
 
 		// signature store
 		if (inheritSections & (ALLOCMASK_SIGNATURE | ALLOCMASK_SIGNATUREINDEX)) {
-			if (pFrom->numSignature == 0) {
-				printf("{\"error\":\"Missing signature section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numSignature == 0)
+				ctx.fatal("\n{\"error\":\"Missing signature section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_SIGNATURE) {
 				assert(~allocFlags & ALLOCMASK_SIGNATURE);
@@ -499,11 +496,9 @@ struct database_t {
 
 		// swap store
 		if (inheritSections & (ALLOCMASK_SWAP | ALLOCMASK_SWAPINDEX)) {
-			if (pFrom->numSwap == 0) {
-				printf("{\"error\":\"Missing swap section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numSwap == 0)
+				ctx.fatal("\n{\"error\":\"Missing swap section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_SWAP) {
 				assert(~allocFlags & ALLOCMASK_SWAP);
@@ -521,11 +516,9 @@ struct database_t {
 
 		// hint store
 		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
-			if (pFrom->numHint == 0) {
-				printf("{\"error\":\"Missing hint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numHint == 0)
+				ctx.fatal("\n{\"error\":\"Missing hint section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_HINT) {
 				assert(~allocFlags & ALLOCMASK_HINT);
@@ -543,11 +536,9 @@ struct database_t {
 
 		// imprint store
 		if (inheritSections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
-			if (pFrom->numImprint == 0) {
-				printf("{\"error\":\"Missing imprint section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numImprint == 0)
+				ctx.fatal("\n{\"error\":\"Missing imprint section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			this->interleave = pFrom->interleave;
 			this->interleaveStep = pFrom->interleaveStep;
@@ -568,11 +559,9 @@ struct database_t {
 
 		// member store
 		if (inheritSections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
-			if (pFrom->numMember == 0) {
-				printf("{\"error\":\"Missing member section\",\"where\":\"%s\",\"database\":\"%s\"}\n",
-				       __FUNCTION__, pName);
-				exit(1);
-			}
+			if (pFrom->numMember == 0)
+				ctx.fatal("\n{\"error\":\"Missing member section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+				          __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_MEMBER) {
 				assert(~allocFlags & ALLOCMASK_MEMBER);
@@ -759,11 +748,11 @@ struct database_t {
 		 */
 		hndl = ::open(fileName, O_RDONLY);
 		if (hndl == -1)
-			ctx.fatal("fopen(\"%s\",\"r\") returned: %m\n", fileName);
+			ctx.fatal("\n{\"error\":\"fopen('%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		struct stat sbuf;
 		if (::fstat(hndl, &sbuf))
-			ctx.fatal("fstat(\"%s\") returned: %m\n", fileName);
+			ctx.fatal("\n{\"error\":\"fstat('%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 #if defined(HAVE_MMAP)
 		/*
@@ -774,18 +763,18 @@ struct database_t {
 		if (copyOnWrite) {
 			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
 			if (pMemory == MAP_FAILED)
-				ctx.fatal("mmap(PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_NORESERVE,%s) returned: %m\n", fileName);
+				ctx.fatal("\n{\"error\":\"mmap(PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 		} else {
 			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, hndl, 0);
 			if (pMemory == MAP_FAILED)
-				ctx.fatal("mmap(PROT_READ, MAP_SHARED|MAP_NORESERVE,%s) returned: %m\n", fileName);
+				ctx.fatal("\n{\"error\":\"mmap(PROT_READ,MAP_SHARED|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 		}
 
 		// set memory usage preferances
 		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_RANDOM))
-			ctx.fatal("madvise(MADV_RANDOM) returned: %m\n");
+			ctx.fatal("\n{\"error\":\"madvise(MADV_RANDOM,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_DONTDUMP))
-			ctx.fatal("madvise(MADV_DONTDUMP) returned: %m\n");
+			ctx.fatal("\n{\"error\":\"madvise(MADV_DONTDUMP,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		rawDatabase = (const uint8_t *) pMemory;
 #else
@@ -812,21 +801,21 @@ struct database_t {
 
 		::memcpy(&fileHeader, rawDatabase, sizeof(fileHeader));
 		if (fileHeader.magic != FILE_MAGIC)
-			ctx.fatal("db version missmatch. Encountered %08x, Expected %08x, \n", fileHeader.magic, FILE_MAGIC);
+			ctx.fatal("\n{\"error\":\"db version mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%08x\",\"expected\":\"%08x\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic, FILE_MAGIC);
 		if (fileHeader.magic_maxSlots != MAXSLOTS)
-			ctx.fatal("db magic_maxslots. Encountered %u, Expected %u\n", fileHeader.magic_maxSlots, MAXSLOTS);
+			ctx.fatal("\n{\"error\":\"db magic_maxslots\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_maxSlots, MAXSLOTS);
 		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
-			ctx.fatal("db size missmatch. Encountered %lu, Expected %lu\n", fileHeader.offEnd, (uint64_t) sbuf.st_size);
+			ctx.fatal("\n{\"error\":\"db size mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%lu\",\"expected\":\"%lu\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.offEnd, sbuf.st_size);
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
-			ctx.fatal("db magic_sizeofSignature. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofSignature, sizeof(signature_t));
+			ctx.fatal("\n{\"error\":\"db magic_sizeofSignature\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSignature, (unsigned) sizeof(signature_t));
 		if (fileHeader.magic_sizeofSwap != sizeof(swap_t))
-			ctx.fatal("db magic_sizeofSwap. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofSwap, sizeof(swap_t));
+			ctx.fatal("\n{\"error\":\"db magic_sizeofSwap\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSwap, (unsigned) sizeof(swap_t));
 		if (fileHeader.magic_sizeofHint != sizeof(hint_t))
-			ctx.fatal("db magic_sizeofHint. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofHint, sizeof(hint_t));
+			ctx.fatal("\n{\"error\":\"db magic_sizeofHint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofHint, (unsigned) sizeof(hint_t));
 		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
-			ctx.fatal("db magic_sizeofImprint. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofImprint, sizeof(imprint_t));
+			ctx.fatal("\n{\"error\":\"db magic_sizeofImprint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofImprint, (unsigned) sizeof(imprint_t));
 		if (fileHeader.magic_sizeofMember != sizeof(member_t))
-			ctx.fatal("db magic_sizeofMember. Encountered %u, Expected %lu\n", fileHeader.magic_sizeofMember, sizeof(member_t));
+			ctx.fatal("\n{\"error\":\"db magic_sizeofMember\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofMember, (unsigned) sizeof(member_t));
 
 		creationFlags = fileHeader.magic_flags;
 
@@ -944,7 +933,7 @@ struct database_t {
 
 		FILE *outf = fopen(fileName, "w");
 		if (!outf)
-			ctx.fatal("Failed to open %s: %m\n", fileName);
+			ctx.fatal("\n{\"error\":\"fopen('w','%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		/*
 		 * Write empty header (overwritten later)
@@ -1118,14 +1107,18 @@ struct database_t {
 
 		// test for errors, most likely disk-full
 		if (feof(outf) || ferror(outf)) {
+			int savErrno = errno;
 			::remove(fileName);
-			ctx.fatal("[ferror(%s,\"w\") returned: %m]\n", fileName);
+			errno = savErrno;
+			ctx.fatal("\n{\"error\":\"ferror('%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 		}
 
 		// close
 		if (fclose(outf)) {
+			int savErrno = errno;
 			::remove(fileName);
-			ctx.fatal("[fclose(%s,\"w\") returned: %m]\n", fileName);
+			errno = savErrno;
+			ctx.fatal("\n{\"error\":\"fclose('%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -1165,8 +1158,9 @@ struct database_t {
 			/*
 			 * Write
 			 */
-			if ((uint64_t) ::read(hndl, data, sliceLength) != sliceLength)
-				ctx.fatal("[Failed to read %lu bytes: %m]\n", sliceLength);
+			size_t ret = ::read(hndl, data, sliceLength);
+			if (ret != sliceLength)
+				ctx.fatal("\n{\"error\":\"read(%lu)\",\"where\":\"%s:%s:%d\",\"return\":\"%lu\"}\n", sliceLength, __FUNCTION__, __FILE__, __LINE__, ret);
 
 			/*
 			 * Update
@@ -1211,8 +1205,9 @@ struct database_t {
 			/*
 			 * Write
 			 */
-			if (fwrite(data, sliceLength, 1, outf) != 1)
-				ctx.fatal("[Failed to write %lu bytes: %m]\n", sliceLength);
+			size_t ret = ::fwrite(data, 1, sliceLength, outf);
+			if (ret != 1)
+				ctx.fatal("\n{\"error\":\"fwrite(%lu)\",\"where\":\"%s:%s:%d\",\"return\":\"%lu\"}\n", sliceLength, __FUNCTION__, __FILE__, __LINE__, ret);
 
 			/*
 			 * Update
@@ -1455,7 +1450,7 @@ struct database_t {
 		signature_t *pSignature = this->signatures + this->numSignature++;
 
 		if (this->numSignature > this->maxSignature)
-			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxSignature\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxSignature);
 
 		// clear before use
 		::memset(pSignature, 0, sizeof(*pSignature));
@@ -1523,7 +1518,7 @@ struct database_t {
 		unsigned swapId = this->numSwap++;
 
 		if (this->numSwap > this->maxSwap)
-			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxSwap);
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxSwap\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxSwap);
 
 		::memcpy(&this->swaps[swapId], pSwap, sizeof(*pSwap));
 
@@ -1587,7 +1582,7 @@ struct database_t {
 		unsigned hintId = this->numHint++;
 
 		if (this->numHint > this->maxHint)
-			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxHint\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
 
 		::memcpy(&this->hints[hintId], pHint, sizeof(*pHint));
 
@@ -1675,7 +1670,7 @@ struct database_t {
 		imprint_t *pImprint = this->imprints + this->numImprint++;
 
 		if (this->numImprint > this->maxImprint)
-			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxImprint\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxImprint);
 
 		// only populate key fields
 		pImprint->footprint = v;
@@ -1868,9 +1863,8 @@ struct database_t {
 						// signature already present, return found
 						return pImprint->sid;
 					} else if (pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
-						       __FUNCTION__, sid, iCol, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
-						exit(1);
+						ctx.fatal("\n{\"error\":\"index entry already in use\",\"where\":\"%s:%s:%d\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						          __FUNCTION__, __FILE__, __LINE__, sid, iCol, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 					}
 				}
 
@@ -1909,9 +1903,8 @@ struct database_t {
 						// signature already present, return found
 						return pImprint->sid;
 					} else if (pImprint->sid != sid) {
-						printf("{\"error\":\"index entry already in use\",\"where\":\"%s\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
-						       __FUNCTION__, sid, iRow, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
-						exit(1);
+						ctx.fatal("\n{\"error\":\"index entry already in use\",\"where\":\"%s:%s:%d\",\"newsid\":\"%u\",\"newtid\":\"%u\",\"oldsid\":\"%u\",\"oldtid\":\"%u\",\"newname\":\"%s\",\"newname\":\"%s\"}\n",
+						          __FUNCTION__, __FILE__, __LINE__, sid, iRow, pImprint->sid, pImprint->tid, this->signatures[pImprint->sid].name, this->signatures[sid].name);
 					}
 				}
 			}
@@ -1979,7 +1972,7 @@ struct database_t {
 		member_t *pMember = this->members + this->numMember++;
 
 		if (this->numMember > this->maxMember)
-			ctx.fatal("\n[%s %s:%u storage full %u]\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxMember\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxMember);
 
 		// clear before use
 		::memset(pMember, 0, sizeof(*pMember));

@@ -963,10 +963,8 @@ struct generatorTree_t : tinyTree_t {
 				/*
 				 * assert that restart data is in sync with reality
 				 */
-				if (ctx.progress != *this->pRestartData) {
-					ctx.fatal("restartData out of sync. Encountered:%lu, Expected:%lu", ctx.progress, *this->pRestartData);
-					assert(ctx.progress == *this->pRestartData);
-				}
+				if (ctx.progress != *this->pRestartData)
+					ctx.fatal("\n{\"error\":\"restartData out of sync\",\"where\":\"%s:%s:%d\",\"encountered\":\"%lu\",\"expected\":\"%lu\"}\n", __FUNCTION__, __FILE__, __LINE__, ctx.progress, *this->pRestartData);
 
 				// jump to next restart point
 				this->pRestartData++;
