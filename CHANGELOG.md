@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2020-05-05 16:18:36 Delete output when `write()` fails.
 2020-05-05 16:18:36 Consistent use of `ctx.fatal()`.
 2020-05-05 15:36:30 Improved `genswapContext_t::foundSignatureSwap()`.
 2020-05-04 20:52:00 Synced workflow `genhint`,`genswap`.

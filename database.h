@@ -940,7 +940,7 @@ struct database_t {
 		 */
 		uint64_t flen = 0;
 
-		flen += writeData(outf, &fileHeader, align32(sizeof(fileHeader)));
+		flen += writeData(outf, &fileHeader, align32(sizeof(fileHeader)), fileName);
 
 		/*
 		 * write transforms
@@ -950,19 +950,19 @@ struct database_t {
 
 			// write forward/reverse transforms
 			fileHeader.offFwdTransforms = flen;
-			flen += writeData(outf, this->fwdTransformData, align32(sizeof(*this->fwdTransformData) * this->numTransform));
+			flen += writeData(outf, this->fwdTransformData, align32(sizeof(*this->fwdTransformData) * this->numTransform), fileName);
 			fileHeader.offRevTransforms = flen;
-			flen += writeData(outf, this->revTransformData, align32(sizeof(*this->revTransformData) * this->numTransform));
+			flen += writeData(outf, this->revTransformData, align32(sizeof(*this->revTransformData) * this->numTransform), fileName);
 
 			// write forward/reverse names
 			fileHeader.offFwdTransformNames = flen;
-			flen += writeData(outf, this->fwdTransformNames, align32(sizeof(*this->fwdTransformNames) * this->numTransform));
+			flen += writeData(outf, this->fwdTransformNames, align32(sizeof(*this->fwdTransformNames) * this->numTransform), fileName);
 			fileHeader.offRevTransformNames = flen;
-			flen += writeData(outf, this->revTransformNames, align32(sizeof(*this->revTransformNames) * this->numTransform));
+			flen += writeData(outf, this->revTransformNames, align32(sizeof(*this->revTransformNames) * this->numTransform), fileName);
 
 			// write inverted skins
 			fileHeader.offRevTransformIds = flen;
-			flen += writeData(outf, this->revTransformIds, align32(sizeof(*this->revTransformIds) * this->numTransform));
+			flen += writeData(outf, this->revTransformIds, align32(sizeof(*this->revTransformIds) * this->numTransform), fileName);
 
 			// write index
 			if (transformIndexSize) {
@@ -970,9 +970,9 @@ struct database_t {
 
 				// write index
 				fileHeader.offFwdTransformNameIndex = flen;
-				flen += writeData(outf, this->fwdTransformNameIndex, align32(sizeof(*this->fwdTransformNameIndex) * this->transformIndexSize));
+				flen += writeData(outf, this->fwdTransformNameIndex, align32(sizeof(*this->fwdTransformNameIndex) * this->transformIndexSize), fileName);
 				fileHeader.offRevTransformNameIndex = flen;
-				flen += writeData(outf, this->revTransformNameIndex, align32(sizeof(*this->revTransformNameIndex) * this->transformIndexSize));
+				flen += writeData(outf, this->revTransformNameIndex, align32(sizeof(*this->revTransformNameIndex) * this->transformIndexSize), fileName);
 			}
 		}
 
@@ -988,12 +988,12 @@ struct database_t {
 			// collection
 			fileHeader.numSignature = this->numSignature;
 			fileHeader.offSignatures = flen;
-			flen += writeData(outf, this->signatures, align32(sizeof(*this->signatures) * this->numSignature));
+			flen += writeData(outf, this->signatures, align32(sizeof(*this->signatures) * this->numSignature), fileName);
 			if (this->signatureIndexSize) {
 				// Index
 				fileHeader.signatureIndexSize = this->signatureIndexSize;
 				fileHeader.offSignatureIndex = flen;
-				flen += writeData(outf, this->signatureIndex, align32(sizeof(*this->signatureIndex) * this->signatureIndexSize));
+				flen += writeData(outf, this->signatureIndex, align32(sizeof(*this->signatureIndex) * this->signatureIndexSize), fileName);
 			}
 		}
 
@@ -1009,12 +1009,12 @@ struct database_t {
 			// collection
 			fileHeader.numSwap = this->numSwap;
 			fileHeader.offSwaps = flen;
-			flen += writeData(outf, this->swaps, align32(sizeof(*this->swaps) * this->numSwap));
+			flen += writeData(outf, this->swaps, align32(sizeof(*this->swaps) * this->numSwap), fileName);
 			if (this->swapIndexSize) {
 				// Index
 				fileHeader.swapIndexSize = this->swapIndexSize;
 				fileHeader.offSwapIndex = flen;
-				flen += writeData(outf, this->swapIndex, align32(sizeof(*this->swapIndex) * this->swapIndexSize));
+				flen += writeData(outf, this->swapIndex, align32(sizeof(*this->swapIndex) * this->swapIndexSize), fileName);
 			}
 		}
 
@@ -1030,12 +1030,12 @@ struct database_t {
 			// collection
 			fileHeader.numHint = this->numHint;
 			fileHeader.offHints = flen;
-			flen += writeData(outf, this->hints, align32(sizeof(*this->hints) * this->numHint));
+			flen += writeData(outf, this->hints, align32(sizeof(*this->hints) * this->numHint), fileName);
 			if (this->hintIndexSize) {
 				// Index
 				fileHeader.hintIndexSize = this->hintIndexSize;
 				fileHeader.offHintIndex = flen;
-				flen += writeData(outf, this->hintIndex, align32(sizeof(*this->hintIndex) * this->hintIndexSize));
+				flen += writeData(outf, this->hintIndex, align32(sizeof(*this->hintIndex) * this->hintIndexSize), fileName);
 			}
 		}
 
@@ -1054,12 +1054,12 @@ struct database_t {
 			// collection
 			fileHeader.numImprint = this->numImprint;
 			fileHeader.offImprints = flen;
-			flen += writeData(outf, this->imprints, align32(sizeof(*this->imprints) * this->numImprint));
+			flen += writeData(outf, this->imprints, align32(sizeof(*this->imprints) * this->numImprint), fileName);
 			if (this->imprintIndexSize) {
 				// Index
 				fileHeader.imprintIndexSize = this->imprintIndexSize;
 				fileHeader.offImprintIndex = flen;
-				flen += writeData(outf, this->imprintIndex, align32(sizeof(*this->imprintIndex) * this->imprintIndexSize));
+				flen += writeData(outf, this->imprintIndex, align32(sizeof(*this->imprintIndex) * this->imprintIndexSize), fileName);
 			}
 		}
 
@@ -1075,12 +1075,12 @@ struct database_t {
 			// collection
 			fileHeader.numMember = this->numMember;
 			fileHeader.offMember = flen;
-			flen += writeData(outf, this->members, align32(sizeof(*this->members) * this->numMember));
+			flen += writeData(outf, this->members, align32(sizeof(*this->members) * this->numMember), fileName);
 			if (this->memberIndexSize) {
 				// Index
 				fileHeader.memberIndexSize = this->memberIndexSize;
 				fileHeader.offMemberIndex = flen;
-				flen += writeData(outf, this->memberIndex, align32(sizeof(*this->memberIndex) * this->memberIndexSize));
+				flen += writeData(outf, this->memberIndex, align32(sizeof(*this->memberIndex) * this->memberIndexSize), fileName);
 			}
 		}
 
@@ -1135,7 +1135,7 @@ struct database_t {
 	 *
 	 * @param {number} hndl - OS file handle
 	 * @param {void[]} data - Buffer to read to
-	 * @param {number} dataLength = how much to read
+	 * @param {number} dataLength - how much to read
 	 * @return {number} total number of bytes read
 	 */
 	uint64_t readData(int hndl, void *data, size_t dataLength) {
@@ -1181,10 +1181,11 @@ struct database_t {
 	 *
 	 * @param {number} hndl - OS file handle
 	 * @param {void[]} data - Buffer to read to
-	 * @param {number} dataLength = how much to write
+	 * @param {number} dataLength - how much to write
+	 * @param {string} fileName - file to delete on error
 	 * @return {number} total number of bytes written
 	 */
-	uint64_t writeData(FILE *outf, const void *data, size_t dataLength) {
+	uint64_t writeData(FILE *outf, const void *data, size_t dataLength, const char *fileName) {
 
 		// write in chunks of 1024*1024 bytes
 
@@ -1206,8 +1207,12 @@ struct database_t {
 			 * Write
 			 */
 			size_t ret = ::fwrite(data, 1, sliceLength, outf);
-			if (ret != sliceLength)
+			if (ret != sliceLength) {
+				int savErrno = errno;
+				::remove(fileName);
+				errno = savErrno;
 				ctx.fatal("\n{\"error\":\"fwrite(%lu)\",\"where\":\"%s:%s:%d\",\"return\":\"%lu\"}\n", sliceLength, __FUNCTION__, __FILE__, __LINE__, ret);
+			}
 
 			/*
 			 * Update
