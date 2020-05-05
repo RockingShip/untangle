@@ -212,8 +212,8 @@ void usage(char *const *argv, bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.arg_database);
 		fprintf(stderr, "\t-h --help            This list\n");
-		fprintf(stderr, "\t-q --quiet           Say more\n");
-		fprintf(stderr, "\t-v --verbose         Say less\n");
+		fprintf(stderr, "\t-q --quiet           Say less\n");
+		fprintf(stderr, "\t-v --verbose         Say more\n");
 	}
 }
 

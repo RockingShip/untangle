@@ -481,10 +481,10 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "\t   --force           Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t-h --help            This list\n");
-		fprintf(stderr, "\t-q --quiet           Say more\n");
+		fprintf(stderr, "\t-q --quiet           Say less\n");
 		fprintf(stderr, "\t   --text            Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds> Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-v --verbose         Say less\n");
+		fprintf(stderr, "\t-v --verbose         Say more\n");
 
 	}
 }

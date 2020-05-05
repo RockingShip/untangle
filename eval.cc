@@ -136,12 +136,12 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --fast       Do not normalise input\n");
 		fprintf(stderr, "\t-h --help       This list\n");
 		fprintf(stderr, "\t   --pure       Output using exclusively  QnTF\n");
-		fprintf(stderr, "\t-q --quiet      Say more\n");
+		fprintf(stderr, "\t-q --quiet      Say less\n");
 		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%u]\n", opt_seed);
 		fprintf(stderr, "\t   --selftest   Validate proper operation\n");
 		fprintf(stderr, "\t   --shrinkwrap Adjust nstart to highest found endpount\n");
 		fprintf(stderr, "\t-s --skin       Display notation with placeholders and skin mapping\n");
-		fprintf(stderr, "\t-v --verbose    Say less\n");
+		fprintf(stderr, "\t-v --verbose    Say more\n");
 		fprintf(stderr, "\t-Q --Q          Select top-level Q\n");
 		fprintf(stderr, "\t-T --T          Select top-level T\n");
 		fprintf(stderr, "\t-F --F          Select top-level F\n");

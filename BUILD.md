@@ -36,10 +36,13 @@ Building `untangle`
     # load signatures
     ./gensignature transform.db 4 4n9.db --load=4n9.lst --no-generate
 
-    # load hints
-    ./genhint 4n9.db hint-4n9.db --load=hint-4n9.lst --no-generate
+    # load swaps
+    ./genswap 4n9.db swap-4n9.db --load=swap-4n9.lst --no-generate
 
-    # load members
+    # load hints
+    ./genhint swap-4n9.db hint-4n9.db --load=hint-4n9.lst --no-generate
+
+    # load members including 5n9-pure members to replace 4n9-unsafe members
     ./genmember hint-4n9.db 5 member-5n9.db --load=member-5n9.lst --no-generate
 ```
     
@@ -56,13 +59,7 @@ With each step generator tools adds sections and content to the database.
 `gentransform` creates te initial database containing all the skin and transform data.
 You won't get far without it.
     
-First, self test to determine if assumptions are correct
-    
-```sh
-    ./gentransform - --selftest
-```
-    
-Then create database
+Create initial (empty) database
     
 ```sh
     ./gentransform transform.db
@@ -71,7 +68,7 @@ Then create database
 ## create signatures
 
 Signatures searches for uniqueness in a given address space.
-The target signature address space for this vesion of the project is 4-node and 9-endpoint/variables.
+The target signature address space for this version of the project is 4-node and 9-endpoint/variables.
 
 - The intermediate databases can be kept small by omitting the index.
   They will be automatically rebuilt on load.
@@ -85,19 +82,29 @@ The target signature address space for this vesion of the project is 4-node and 
     ./gensignature 3n9.db       4 4n9.db
 
     # remove intermediates
-    rm 0n9.db 1n9.db 2n9.db 3n9.db 4n9.db
+    rm 0n9.db 1n9.db 2n9.db 3n9.db
 ``
+
+## create swaps
+
+Swaps are used to detect endpoint symmetry.
+It supplyies instructions on how to swap endpoints to achieve normalised stats.
+It is needed by level-5 normalisation.
+
+```sh
+    ./genswap 4n9.db swap-4n9.db
+```
 
 ## create hints
 
-Hints measure the symmtery of signatures.
-Higher symmetry has less load on the assosiative index.
-Hints are used to tune the assosiative index giving faster database construction times.
+Hints measure the symmetry of signatures.
+Higher symmetry has less load on the associative index.
+Hints are used to tune the associative index giving faster database construction times.
 
 Creating hints takes about 17 hours.
 
 ```sh
-    ./genhint 4n9.db hint-4n9.db
+    ./genhint swap-4n9.db hint-4n9.db
 ```
 
 Alternatively use with SunGridEngine which requires multiple machines.
@@ -203,12 +210,9 @@ for member-6n9-pure.db
     # submit workers
     mkdir log-6n9-pure
     qsub -cwd -o log-6n9-pure -e log-6n9-pure -b y -t 1-999 -q 8G.q ./genmember  work-5n9-pure.db 6 --pure --maxmember=80e6 --text=1 --task=sge
-
-
 ```
 
-
-# Developer instructions
+# Developer instructions (under construction)
  
 ## `restartData[]`
  
@@ -228,7 +232,7 @@ Use the log output of `genrestartdata` to update `numProgress` in `metricsGenera
 
 Update `metricsGenerator[]` with the output the commands below.
 
-In this mode the `foundTree()` adds the candidate to the database and only displays the first occurance.
+In this mode the `foundTree()` adds the candidate to the database and only displays the first occurrence.
 You need to add 1 to the total because `wc` does not include the first reserved entry.
 
 ```sh

@@ -667,7 +667,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maxhint=<number>         Maximum number of hints [default=%u]\n", app.opt_maxHint);
 		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                    Say more\n");
+		fprintf(stderr, "\t-q --quiet                    Say less\n");
 		fprintf(stderr, "\t   --[no-]saveindex           Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=sge                 Get sid task settings from SGE environment\n");
@@ -675,7 +675,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t   --[no-]unsafe              Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-v --verbose                  Say less\n");
+		fprintf(stderr, "\t-v --verbose                  Say more\n");
 	}
 }
 

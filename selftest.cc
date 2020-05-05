@@ -1518,10 +1518,10 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --metrics=<number>              Collect metrics\n");
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                         Say more\n");
+		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-v --verbose                       Say less\n");
+		fprintf(stderr, "\t-v --verbose                       Say more\n");
 	}
 }
 

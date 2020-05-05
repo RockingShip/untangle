@@ -326,9 +326,9 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-i --imprint               Use imprint index\n");
 		fprintf(stderr, "\t-m --members[=1]           Show members brief\n");
 		fprintf(stderr, "\t-m --members=2             Show members verbose\n");
-		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t-q --quiet                 Say less\n");
 		fprintf(stderr, "\t-s --swap                  Show swaps\n");
-		fprintf(stderr, "\t-v --verbose               Say less\n");
+		fprintf(stderr, "\t-v --verbose               Say more\n");
 	}
 }
 

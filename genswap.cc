@@ -235,8 +235,8 @@ struct genswapContext_t : dbtool_t {
 			const char *pSwapped = pStore->fwdTransformNames[tidSwapped];
 
 			// skip if disabled
-//			if (tidOrig & IBIT)
-//				continue;
+			if (tidOrig & IBIT)
+				continue;
 
 			/*
 			 * Compare pOrig/pSwap
@@ -246,17 +246,6 @@ struct genswapContext_t : dbtool_t {
 				cmp = pOrig[k] - pSwapped[k];
 				if (cmp)
 					break;
-			}
-
-			if (tidOrig & IBIT) {
-				printf("%u\t%s\t%s\t%c\t%.*s\t%.*s\n",
-				       (unsigned) (pSignature - pStore->signatures),
-				       pSignature->name,
-				       pFocus,
-				       '*',
-				       pSignature->numPlaceholder, pOrig,
-				       pSignature->numPlaceholder, pSwapped);
-				continue;
 			}
 
 			if (cmp < 0) {
@@ -791,7 +780,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --maxswap=<number>         Maximum number of swaps [default=%u]\n", app.opt_maxSwap);
 		fprintf(stderr, "\t   --[no-]paranoid            Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                    Say more\n");
+		fprintf(stderr, "\t-q --quiet                    Say less\n");
 		fprintf(stderr, "\t   --[no-]saveindex           Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>],<high>       Sid range upper bound [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --swapindexsize=<number>   Size of swap index [default=%u]\n", app.opt_swapIndexSize);
@@ -799,7 +788,7 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-v --verbose                  Say less\n");
+		fprintf(stderr, "\t-v --verbose                  Say more\n");
 	}
 }
 

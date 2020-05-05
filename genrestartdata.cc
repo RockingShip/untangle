@@ -455,11 +455,11 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t-h --help                  This list\n");
 		fprintf(stderr, "\t   --[no-]paranoid         Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure             Enable QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
-		fprintf(stderr, "\t-q --quiet                 Say more\n");
+		fprintf(stderr, "\t-q --quiet                 Say less\n");
 		fprintf(stderr, "\t   --sge                   Get SGE task settings from environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>      Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --timer=<seconds>       Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t-v --verbose               Say less\n");
+		fprintf(stderr, "\t-v --verbose               Say more\n");
 	}
 }
 
