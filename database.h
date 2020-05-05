@@ -1206,7 +1206,7 @@ struct database_t {
 			 * Write
 			 */
 			size_t ret = ::fwrite(data, 1, sliceLength, outf);
-			if (ret != 1)
+			if (ret != sliceLength)
 				ctx.fatal("\n{\"error\":\"fwrite(%lu)\",\"where\":\"%s:%s:%d\",\"return\":\"%lu\"}\n", sliceLength, __FUNCTION__, __FILE__, __LINE__, ret);
 
 			/*
