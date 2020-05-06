@@ -173,7 +173,7 @@ struct slookupContext_t {
 			putchar(']');
 		}
 
-		printf(" %s\n", pSignature->name);
+		printf(" %s\n", pName);
 
 		if (opt_member) {
 			unsigned lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;

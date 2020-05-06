@@ -38,9 +38,13 @@ jansson-*
 
 # generated files
 eval
+genhint
+genmember
 genrestartdata
 gensignature
+genswap
 gentransform
+selftest
 slookup
 tlookup
 

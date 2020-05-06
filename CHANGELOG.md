@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [2.2.0] 2020-05-06 00:07:33
+
+Database version "20200506".
+
+This release is the first part/chapter of the project.
+
+ - `gentransform` creates permutations for endpoints and skins
+ - `gensignature` searches uniqueness in a given address space
+ - `genswap` searches for endpoint symmetry and rewrite instructions for normalisation
+ - `genhint` determines structure symmetry and delivers tuning metrics for associative lookups
+ - `genmember` searches for construction `building block` structures/layouts.
+ - `eval` reference implementation for level-1 to 3 normalisation
+ - `selftest` validate assumptions and basic workings
+ - `slookup` database frontend for level-4 queries
+ - `tlookup` database frontend for transform queries
+ 
+Included but as a separate archive, datasets to easily create the database
+ - `4n9.lst` - signatures for `4n9` space
+ - `swap-4n9.lst` - endpoint swap data for 4n9
+ - `hint-4n9.lst` - `4n9` tuning metrics for `genmember`
+ - `member-5n9.lst` - `4n9` members including `5n9-pure` members to replace `4n9-unsafe` members
+ 
+There (might) also be a number of experimental pure (`QnTF-only`) datasets.
+A number of tools are still pending for/with higher level normalisations which will be presented in later chapters.    
+ 
+Quick guide to reconstruct the database:
+
+```
+    # create initial database 
+    ./gentransform transform.db
+
+    # load signatures
+    ./gensignature transform.db 4 4n9.db --load=4n9.lst --no-generate
+
+    # load swaps
+    ./genswap 4n9.db swap-4n9.db --load=swap-4n9.lst --no-generate
+
+    # load hints
+    ./genhint swap-4n9.db hint-4n9.db --load=hint-4n9.lst --no-generate
+
+    # load members
+    ./genmember hint-4n9.db 5 member-5n9.db --load=member-5n9.lst --no-generate
+```
+
+Then throw in a query:
+
+```
+    ./slookup -D member-5n9.db -i 'ab+ac+&'
+```
+
 ```
 2020-05-05 16:18:36 Delete output when `write()` fails.
 2020-05-05 16:18:36 Consistent use of `ctx.fatal()`.
@@ -94,5 +144,6 @@ Features:
 - Database creation `gentransform` `gensignature` `genmember`
 - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...HEAD
+[2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
 [2.1.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...v2.1.0
