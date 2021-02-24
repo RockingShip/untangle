@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [2.2.0] 2020-05-06 00:07:33
+```
+2021-02-24 17:59:14 Changed: Updated `README.md`.
+```
+
+## [Version 2.2.0] 2020-05-06 00:07:33
 
 Database version "20200506".
 
@@ -16,10 +20,10 @@ This release is the first part/chapter of the project.
  - `gensignature` searches uniqueness in a given address space
  - `genswap` searches for endpoint symmetry and rewrite instructions for normalisation
  - `genhint` determines structure symmetry and delivers tuning metrics for associative lookups
- - `genmember` searches for construction `building block` structures/layouts.
- - `eval` reference implementation for level-1 to 3 normalisation
+ - `genmember` searches for `building block` for constructing structures/layouts.
+ - `eval` reference implementation for level 1 to 3 normalisation
  - `selftest` validate assumptions and basic workings
- - `slookup` database frontend for level-4 queries
+ - `slookup` database frontend for level 4 queries
  - `tlookup` database frontend for transform queries
  
 Included but as a separate archive, datasets to easily create the database
@@ -98,7 +102,7 @@ Then throw in a query:
 2020-04-21 10:19:51 Enhance database with section allocation and inheritance. 
 ```
 
-## [2.1.0] 2020-04-20 00:51:51
+## [Version 2.1.0] 2020-04-20 00:51:51
 
 This release is to mark the change in database version to `"20200419"` and the introduction of hints for interleave and imprint tuning.
  
@@ -123,7 +127,7 @@ This release is to mark the change in database version to `"20200419"` and the i
 2020-04-12 23:10:40 Next-generation generator.
 ```
 
-## 2.0.0 2020-04-11 16:27:00
+## Version 2.0.0 2020-04-11 16:27:00
 
 This release is to archive the current generator.
 
@@ -132,18 +136,18 @@ This requires a next-generation generator wit significantly less duplicates (cur
 
 Normalisations:
 
- 1) Algebraic (function grouping)
- 2) Dyadic ordering (layout ordering)
- 3) Imprints (layout orientation "skins")
- 4) Signatures (restructuring)
+  1. Algebraic (function grouping)
+  1. Dyadic ordering (layout ordering)
+  1. Imprints (layout orientation "skins")
+  1. Signatures (restructuring)
  
 Features: 
-- Level 1+2 query `eval`
-- Level 3+4 query `slookup`
-- Skin/transform query `tlookup`
-- Database creation `gentransform` `gensignature` `genmember`
-- Build tool `genrestartdata`
+  - Level 1+2 query `eval`
+  - Level 3+4 query `slookup`
+  - Skin/transform query `tlookup`
+  - Database creation `gentransform` `gensignature` `genmember`
+  - Build tool `genrestartdata`
 
 [Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...HEAD
-[2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
-[2.1.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...v2.1.0
+[Version 2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
+[Version 2.1.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...v2.1.0

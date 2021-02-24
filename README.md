@@ -1,70 +1,74 @@
+\[click on image to start the interactive model, NOTE: CPU intensive\]  
+![3D-model-2138x2138.jpg](assets/3D-model-480x480.jpg)  
+\[3D wireframe model of a fractal structure containing 9 inputs and 9 outputs\]
+
+# Untangle (v2)
+
+Content grows on-demand as parts of v1 get merged, currently at about 20%
+
+## Welcome to the Wonderful World of fractal logic and computing
+
 _This might be a good spot to break the loop_
 
-# Untangle (v2.x)
+All our logic operators share a common component.  
+Better worded, all our logic operators are derived from a single operator: the fractal switch.
 
-Extract essence of information and store/contain in fractal structures.
+The fractal world is all about inheritance and transformation.  
+Binary values are transformations of a shared reference value: null.
 
-This project is also "The making of untangle v2.x". its contents grows in an on-demand basis.
+Because there is just a single operator and single value, both can be removed from the equation/system.  
+What's left is structure in the form of information and connection.
 
-There is a walk-through trail marked by timestamped jsdoc comments, easily identifiable by the `@date` tag.
-There are also general annotations found in `jekyll/_posts` directory, also with a date based trail.
-Words and their meaning might be cyclic-dependent.
+These structures are self-modifying and `untangle` is their containment field.  
+`untangle` isolates and extracts the essence of information.
 
-Serial-orientated documentation and historic archives will not be made available before v3.
+What `untangle` does is:
 
-Documentation needs to be kept simple because it will consume too much time I prefer using to get it operational.
+  - transform logic expressions into fractal structures
+  - let structures digest information
+  - solve equations by extracting information
 
-# Mindset
+### Time trail
 
-There are three important assumptions you should keep in mind:
+Untangle is a large project developed over many years.  
+The previous version (v1.50) is a working small-scale prototype.  
+Feedback revealed a fundamental assumption being invalid.  
+About choosing a representative structure/expression from a group of synonyms.  
+Smaller is not always better and sometimes even makes it worse.
 
-## This is a dual system, not a binary or numeric system
+Version 2 is a rewrite and possibly the first large-scale pre-production platform.  
+Version 1.50 will be imported in parts and rewritten with the new paradigm in mind.  
+Attention goes all over the place in a non-linear fashion.  
+To aid future documentation, a trail of "@date" tokens are used as markers.  
+Names, descriptions and comments may refer to future explanations.
 
-Numeric is represented by a word consisting of many bits.
-This projects breaks it down to the smallest component and operator, smaller than found in traditional hardware.
+## History
 
-Binary implies a kind of enumeration where commonly `true` is considered superior to `false`.
-In a dual system there are two opposite/complementary values.
-They are identical in every and all aspects, the only way to differentiate them is by comparing them to a reference value.
-For this project their values are `zero` and `not-zero`.
+This is a rewrite from scratch of version 1.35 and 1.50.
+The merging of both failed at a critical moment due to personal reasons.
+Also, a number of fundamental issues that were starting to backfire needed to be fixed.
 
-## Time is a dimension
+In total there are 6 normalisation levels and the project that needed these fractal structures.
 
-Time is used to indicate the flow of information through expressions.
-For example in `a+b*c`, the multiply is performed before the addition.
-Concepts that change the direction of time like loops or conditionals do not exist and need to be loop-unrolled or expanded first.
-
-## Constants are a function of time
-
-{placeholder}
-Constants are a function of time containing all the steps required to determine the value.
-
-# Requirements
+## Requirements
 
 *   64-bits CPU architecture.
 *   SSE4.2 CRC assembler instruction.
-*   32G-64G physical memory.
-*   200G SSD storage. Expect files upto 24G or 60G when developing.
+*   32G physical memory, 64G when developing.
+*   200G SSD storage. Expect databases of 24G and files upto 60G when developing.
 *   autotools.
-*   JSON with jansson. http://www.digip.org/jansson (highly recommended) 
-*   AWS instances with StarGridEngine. (optionally) 
+*   JSON with jansson. [http://www.digip.org/jansson](http://www.digip.org/jansson).
+*   Sun Grid Engine [https://arc.liv.ac.uk/trac/SGE](https://arc.liv.ac.uk/trac/SGE). (optionally).
+*   AWS instances with Star Cluster [http://star.mit.edu/cluster](http://star.mit.edu/cluster). (optionally).
 
-# History
-
-This is a rewrite from scratch of version 1.35 and 1.50. 
-The merging of both failed at a critical moment due to personal reasons. 
-Also, a number of fundamental issues that were starting to backfire needed to be fixed.
-
-In total there are 6 normalisation levels and the project that needed these fractal structures. 
-
-# Installation
+## Installation
 
 Please read [INSTALL.md](INSTALL.md)
 
-# Versioning
+## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/xyzzy/untangle/tags).
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/RockingShip/untangle/tags).
 
-# License
+## License
 
-This project is licensed under the GNU General Public License v3 - see the [LICENSE](LICENSE) file for details
+This project is licensed under the GNU General Public License v3 - see the [LICENSE.txt](LICENSE.txt) file for details
