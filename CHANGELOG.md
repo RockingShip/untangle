@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-03-22 23:04:19 Changed: item order in navbar.
 2021-03-21 22:24:11 Added: `moonwalk` theme.
 2021-02-24 17:59:14 Changed: Updated `README.md`.
 ```
