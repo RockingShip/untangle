@@ -1,4 +1,5 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
@@ -7,10 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-03-21 22:24:11 Added: `moonwalk` theme.
 2021-02-24 17:59:14 Changed: Updated `README.md`.
 ```
 
-## [Version 2.2.0] 2020-05-06 00:07:33
+## 2020-05-06 00:07:33 [Version 2.2.0]
 
 Database version "20200506".
 
@@ -102,7 +104,7 @@ Then throw in a query:
 2020-04-21 10:19:51 Enhance database with section allocation and inheritance. 
 ```
 
-## [Version 2.1.0] 2020-04-20 00:51:51
+## 2020-04-20 00:51:51 [Version 2.1.0]
 
 This release is to mark the change in database version to `"20200419"` and the introduction of hints for interleave and imprint tuning.
  
@@ -127,7 +129,7 @@ This release is to mark the change in database version to `"20200419"` and the i
 2020-04-12 23:10:40 Next-generation generator.
 ```
 
-## Version 2.0.0 2020-04-11 16:27:00
+## 2020-04-11 16:27:00 Version 2.0.0
 
 This release is to archive the current generator.
 
@@ -137,9 +139,9 @@ This requires a next-generation generator wit significantly less duplicates (cur
 Normalisations:
 
   1. Algebraic (function grouping)
-  1. Dyadic ordering (layout ordering)
-  1. Imprints (layout orientation "skins")
-  1. Signatures (restructuring)
+  2. Dyadic ordering (layout ordering)
+  3. Imprints (layout orientation "skins")
+  4. Signatures (restructuring)
  
 Features: 
   - Level 1+2 query `eval`

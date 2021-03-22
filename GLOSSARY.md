@@ -1,12 +1,13 @@
 ---
-layout: post
+layout: default
 title: "Glossary"
+image: assets/favimage-472x472.jpg
 date: 2020-01-20 21:59:36
-tags: core
 ---
 
-Connection of terms and codewords used. 
-Some may have an extended or alternative meaning to traditional terminology.
+# Glossary
+
+Collection of used terms and codewords.
 
 * `4n9` / `5n9`
 
@@ -62,9 +63,10 @@ Some may have an extended or alternative meaning to traditional terminology.
     The number of endpoints equals `"<number-of-nodes>*2+1"`.
    
 * footprint
- 
+
     Bit vector containing the results of the micro-fractal evaluations for all possible endpoint values.
-    
+    "The result".
+
 * fractal space
 
     Fractal space best described as graph and icon based.
