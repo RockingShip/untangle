@@ -14,6 +14,9 @@ Extract essence of information and store/contain in fractal structures
 
 Content grows on-demand as parts of v1 get merged, currently at about 20%
 
+Instead of an ad with tracking...  
+Like to [donate ![opencollective](assets/opencollective-icon.svg)](https://opencollective.com/RockingShip) some appreciation for the use or inspiration this gives you?
+
 ### Welcome to the Wonderful World of fractal logic and computing
 
 _This might be a good spot to break the loop_
