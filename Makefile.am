@@ -79,8 +79,12 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = buildtest0 validate
+PROGRAMS_PART2 = build9bit buildtest0 validate
 EXTRA_PART2 =
+
+# @date 2021-05-15 18:53:07
+build9bit_SOURCES = build9bit.cc basetree.h context.h
+build9bit_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-15 12:41:29
 buildtest0_SOURCES = buildtest0.cc basetree.h context.h
