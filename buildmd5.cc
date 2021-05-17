@@ -122,6 +122,8 @@ struct buildmd5Context_t : context_t {
 	unsigned   opt_split;
 	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
+	/// @var {NODE} variables referencing zero/false and nonZero/true
+	NODE       vFalse, vTrue;
 
 	buildmd5Context_t() {
 		arg_json    = NULL;
@@ -130,6 +132,8 @@ struct buildmd5Context_t : context_t {
 		opt_force   = 0;
 		opt_split   = 0;
 		opt_maxnode = DEFAULT_MAXNODE;
+		vFalse.id = 0;
+		vTrue.id  = IBIT;
 	}
 
 	/*
@@ -137,16 +141,16 @@ struct buildmd5Context_t : context_t {
 	 * The current round intermediates are stored as roots/entrypoints
 	 * The new tree will find the intermediates as 'extended' keys
 	 */
-	void splitTree(NODE *V, uint32_t tstart, int roundNr) {
+	void splitTree(NODE *V, uint32_t vstart, int roundNr) {
 		unsigned savNumRoots = gTree->numRoots;
 
 		// output 32 round intermediates
 		assert(gTree->numRoots >= 32);
 		gTree->numRoots = 32;
 
-		for (uint32_t i = tstart; i < tstart + 32; i++) {
-			gTree->rootNames[i - tstart] = allNames[i]; // assign root name
-			gTree->roots[i - tstart]     = V[i].id; // node id of intermediate
+		for (uint32_t i = vstart; i < vstart + 32; i++) {
+			gTree->rootNames[i - vstart] = allNames[i]; // assign root name
+			gTree->roots[i - vstart]     = V[i].id; // node id of intermediate
 		}
 
 		// save
@@ -195,8 +199,8 @@ struct buildmd5Context_t : context_t {
 		++gTree->nodeIndexVersion;
 
 		// setup intermediate keys for continuation
-		for (uint32_t i = tstart; i < tstart + 32; i++) {
-			V[i].id = NSTART + i - tstart;
+		for (uint32_t i = vstart; i < vstart + 32; i++) {
+			V[i].id = NSTART + i - vstart;
 			gTree->keyNames[V[i].id] = allNames[i];
 		}
 	}
@@ -207,7 +211,7 @@ struct buildmd5Context_t : context_t {
 		for (unsigned i = 0; i < 32; i++) {
 			NODE l = V[L + i];
 			if ((R >> i) & 1) {
-				V[Q + i] = l ^ ovf ^ IBIT;
+				V[Q + i] = l ^ ovf ^ vTrue;
 				ovf = ovf | l;
 			} else {
 				V[Q + i] = l ^ ovf;
@@ -218,7 +222,7 @@ struct buildmd5Context_t : context_t {
 
 	void toN(NODE *V, int L, unsigned int VAL) {
 		for (unsigned i = 0; i < 32; i++) {
-			V[L + i] = ((VAL >> i) & 1) ? IBIT : 0;
+			V[L + i] = ((VAL >> i) & 1) ? vTrue : 0;
 		}
 	}
 
@@ -251,7 +255,7 @@ struct buildmd5Context_t : context_t {
 		for (unsigned i = 0; i < 32; i++) {
 			NODE l = V[Q + i];
 			if ((VAL >> i) & 1) {
-				V[Q + i] = l ^ ovf ^ IBIT;
+				V[Q + i] = l ^ ovf ^ vTrue;
 				ovf = ovf | l;
 			} else {
 				V[Q + i] = l ^ ovf;
@@ -307,7 +311,7 @@ struct buildmd5Context_t : context_t {
 		for (unsigned i = 0; i < 32; i++) {
 			NODE l = V[Q + i];
 			if ((VAL >> i) & 1) {
-				V[Q + i] = l ^ ovf ^ IBIT;
+				V[Q + i] = l ^ ovf ^ vTrue;
 				ovf = ovf | l;
 			} else {
 				V[Q + i] = l ^ ovf;
@@ -363,7 +367,7 @@ struct buildmd5Context_t : context_t {
 		for (unsigned i = 0; i < 32; i++) {
 			NODE l = V[Q + i];
 			if ((VAL >> i) & 1) {
-				V[Q + i] = l ^ ovf ^ IBIT;
+				V[Q + i] = l ^ ovf ^ vTrue;
 				ovf = ovf | l;
 			} else {
 				V[Q + i] = l ^ ovf;
@@ -395,7 +399,7 @@ struct buildmd5Context_t : context_t {
 		NODE ovf = 0;
 
 		for (unsigned i = 0; i < 32; i++)
-			W[i] = V[B + i] ^ (V[C + i] | (V[D + i] ^ IBIT));
+			W[i] = V[B + i] ^ (V[C + i] | (V[D + i] ^ vTrue));
 
 		// add
 		for (unsigned i = 0; i < 32; i++) {
@@ -419,7 +423,7 @@ struct buildmd5Context_t : context_t {
 		for (unsigned i = 0; i < 32; i++) {
 			NODE l = V[Q + i];
 			if ((VAL >> i) & 1) {
-				V[Q + i] = l ^ ovf ^ IBIT;
+				V[Q + i] = l ^ ovf ^ vTrue;
 				ovf = ovf | l;
 			} else {
 				V[Q + i] = l ^ ovf;
@@ -579,8 +583,8 @@ struct buildmd5Context_t : context_t {
 
 		// any de-reference of locations before `kstart` is considered triggering of undefined behaviour.
 		// this could be intentional.
-		for (uint32_t i = gTree->nstart; i < VLAST; i++)
-			V[i].id = kError; // mark as uninitialized
+		for (uint32_t iKey = gTree->nstart; iKey < VLAST; iKey++)
+			V[iKey].id = iKey; // mark as uninitialized
 
 		// build. Uses gBuild
 		build(V);

@@ -370,8 +370,8 @@ struct buildspongentContext_t : context_t {
 
 		// any de-reference of locations before `kstart` is considered triggering of undefined behaviour.
 		// this could be intentional.
-		for (uint32_t i = gTree->nstart; i < VLAST; i++)
-			V[i].id = kError; // mark as uninitialized
+		for (uint32_t iKey = gTree->nstart; iKey < VLAST; iKey++)
+			V[iKey].id = iKey; // mark as uninitialized
 
 		// build. Uses gBuild
 		build(V);

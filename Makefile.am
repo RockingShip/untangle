@@ -79,12 +79,16 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build9bit builddes buildmd5 buildspongent buildtest0 spongent validate
-EXTRA_PART2 = genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
+PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 spongent validate
+EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-05-15 18:53:07
 build9bit_SOURCES = build9bit.cc basetree.h context.h
 build9bit_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-05-17 16:49:11
+buildaes_SOURCES = buildaes.cc buildaes.h buildaesbox.h validateaes.h
+buildaes_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-09 23:51:48
 builddes_SOURCES = builddes.cc builddes.h builddesbox.h validatedes.h
