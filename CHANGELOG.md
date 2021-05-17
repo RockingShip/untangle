@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-16 22:43:25 Added: `buildspongent.cc`.
 2021-05-17 00:07:39 Added: `buildmd5.cc`.
 2021-05-16 22:41:53 Added: `builddes.cc`.
 2021-05-15 18:53:07 Added: `build9bit.cc`.

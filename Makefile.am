@@ -79,8 +79,8 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build9bit builddes buildmd5 buildtest0 validate
-EXTRA_PART2 = genvalidatedes.js genvalidatemd5.js
+PROGRAMS_PART2 = build9bit builddes buildmd5 buildspongent buildtest0 spongent validate
+EXTRA_PART2 = genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-05-15 18:53:07
 build9bit_SOURCES = build9bit.cc basetree.h context.h
@@ -94,9 +94,17 @@ builddes_LDADD = $(LDADD) $(AM_LDADD)
 buildmd5_SOURCES = buildmd5.cc buildmd5.h validatemd5.h
 buildmd5_LDADD = $(LDADD) $(AM_LDADD)
 
+# @date 2021-05-17 14:36:48
+buildspongent_SOURCES = buildspongent.cc buildspongent.h buildspongentbox.h validatespongent.h
+buildspongent_LDADD = $(LDADD) $(AM_LDADD)
+
 # @date 2021-05-15 12:41:29
 buildtest0_SOURCES = buildtest0.cc basetree.h context.h
 buildtest0_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-05-17 14:21:07
+spongent_SOURCES = spongent.cc spongent.h
+spongent_CXXFLAGS = -D_SPONGENT088080008_
 
 # @date 2021-05-13 15:47:59
 validate_SOURCES = validate.cc basetree.h context.h
