@@ -31,16 +31,29 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-/// @constant {number} IBIT - Which bit of the operand is reserved to flag that the result needs to be inverted
+/**
+ * Which bit of node/key/root ID's is reserved to flag that the result needs to be inverted
+ *
+ * @constant {number} IBIT
+ */
 #define IBIT 0x80000000
 
-/// @constant {number} MAXSLOTS - Total number of slots
+/**
+ * Number of slots/keys for `tinyTree_t` structures.
+ *
+ * @constant {number} MAXSLOTS
+ */
 #define MAXSLOTS 9
 
-/// @constant {number} MAXTRANSFORM - Number of slot permutations
+/**
+ * Number of MAXSLOTS key permutations
+ *
+ * @constant {number} MAXTRANSFORM - Number of slot permutations
+ */
 #define MAXTRANSFORM (1*2*3*4*5*6*7*8*9)
 
 /**
@@ -76,11 +89,15 @@ struct context_t {
 		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting, smaller collection of candidates
 		MAGICFLAG_UNSAFE        = 2,    // Imprints for empty/unsafe groups, imprint index tuned for a subset of signatures
 		MAGICFLAG_AINF          = 3,    // add-if-not-found, signatures/imprints contain false duplicates
+		MAGICFLAG_CASCADE       = 4,    // Enable level-3 normalisation: cascaded OR/NE/AND
+		MAGICFLAG_REWRITE       = 5,    // Enable level-4 normalisation: Database lookup/rewrite
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
 		MAGICMASK_UNSAFE        = 1 << MAGICFLAG_UNSAFE,
 		MAGICMASK_AINF          = 1 << MAGICFLAG_AINF,
+		MAGICMASK_CASCADE       = 1 << MAGICFLAG_CASCADE,
+		MAGICMASK_REWRITE       = 1 << MAGICFLAG_REWRITE,
 		// @formatter:on
 	};
 
@@ -92,11 +109,13 @@ struct context_t {
 	enum {
 		// @formatter:off
 		// common flags go from low to high
+		DEBUGFLAG_COMPARE           = 0,	// Display the intermediate steps in `baseTree_t::compare()`
 
 		// un-common or internal flags go from high to low
-		DEBUGFLAG_GENERATOR_TABS    = 30,    // Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
-		DEBUGFLAG_METRICS_RATIO     = 31,    // Let `selftest --metrics` generate ratio metrics
+		DEBUGFLAG_GENERATOR_TABS    = 30,	// Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
+		DEBUGFLAG_METRICS_RATIO     = 31,	// Let `selftest --metrics` generate ratio metrics
 
+		DEBUGMASK_COMPARE           = 1 << DEBUGFLAG_COMPARE,
 		DEBUGMASK_GENERATOR_TABS    = 1 << DEBUGFLAG_GENERATOR_TABS,
 		DEBUGMASK_METRICS_RATIO     = 1 << DEBUGFLAG_METRICS_RATIO,
 		// @formatter:on
@@ -120,10 +139,11 @@ struct context_t {
 	unsigned tick;
         /// @var {number} Indication that a restart point has passed
         unsigned restartTick;
-	/// @var {uint64_t} - total memory allocated by `myAlloc()`
-	uint64_t totalAllocated;
 
 	// statistics
+
+	/// @var {uint64_t} - total memory allocated by `myAlloc()`
+	uint64_t totalAllocated;
 
 	/// @var {uint64_t} - number of calls to baseTree::hash()
 	uint64_t cntHash;
@@ -151,23 +171,43 @@ struct context_t {
 	 * Constructor
 	 */
 	context_t() {
-		cntHash = 0;
-		cntCompare = 0;
 		flags = 0;
+		// user arguments
 		opt_debug = 0;
 		opt_timer = 1; // default is 1-second intervals
 		opt_verbose = VERBOSE_TICK;
-		progress = 0;
-		progressCoef = 0;
-		progressCoefEnd = 0.10; // dampen speed changes at Training end (low responsive)
-		progressCoefMultiplier = 0.9072878562; //  #seconds as #th root of (end/start). set for 20 second training
-		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
-		progressHi = 0;
-		progressLast = 0;
-		progressSpeed = 0;
+		// timed progress
 		restartTick = 0;
 		tick = 0;
+		// statistics
 		totalAllocated = 0;
+		cntHash = 0;
+		cntCompare = 0;
+		progress = 0;
+		progressHi = 0;
+		progressCoef = 0;
+		progressCoefStart = 0.70; // dampen speed changes at training start (high responsive)
+		progressCoefEnd = 0.10; // dampen speed changes at Training end (low responsive)
+		progressCoefMultiplier = 0.9072878562; //  #seconds as #th root of (end/start). set for 20 second training
+		progressLast = 0;
+		progressSpeed = 0;
+	}
+
+	/*
+	 * @date 2021-05-14 22:15:31
+	 *
+	 * Display creation flags
+	 */
+	void logFlags(uint32_t flags) {
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s%s%s%s\n", timeAsString(),
+			flags,
+			(flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
+			(flags & context_t::MAGICMASK_PURE) ? " PURE" : "",
+			(flags & context_t::MAGICMASK_UNSAFE) ? " UNSAFE" : "",
+			(flags & context_t::MAGICMASK_AINF) ? " AINF" : "",
+			(flags & context_t::MAGICMASK_CASCADE) ? " CASCADE" : "",
+			(flags & context_t::MAGICMASK_REWRITE) ? " REWRITE" : ""
+		);
 	}
 
 	/**
@@ -176,7 +216,7 @@ struct context_t {
 	 * Construct a time themed prefix string for console logging
 	 */
 	const char *timeAsString(void) {
-		static char tstr[256];
+		static char tstr[64];
 
 		time_t t = ::time(0);
 		struct tm *tm = ::localtime(&t);
@@ -234,6 +274,11 @@ struct context_t {
 		if (__nmemb == 0 || __size == 0)
 			return NULL;
 
+		// round size up to nearest 32 bytes
+		__size *= __nmemb;
+		__size += 32;
+		__size &= ~31ULL;
+
 		totalAllocated += __nmemb * __size;
 
 		/*
@@ -241,11 +286,6 @@ struct context_t {
 		 *
 		 * AVX2 needs 32byte alignment
 		 */
-
-		// round size up to nearest 32 bytes
-		__size *= __nmemb;
-		__size += 32;
-		__size &= ~31ULL;
 
 		void *ret = ::aligned_alloc(32, __size);
 		if (ret == 0)
@@ -265,7 +305,7 @@ struct context_t {
 	 *
 	 * Release memory
 	 *
-	 * @param {string} name - Name associated to memory area. Should match that of `myALloc()`
+	 * @param {string} name - Name associated to memory area. Should match that of `myAlloc()`
 	 * @param {void[]} ptr - Pointer to memory area to be released
 	 */
 	void myFree(const char *name, void *ptr) {
@@ -274,6 +314,10 @@ struct context_t {
 
 		::free(ptr);
 	}
+
+        /*
+         * Prime numbers
+         */
 
 	/**
 	 * @date 2020-03-25 02:29:23
@@ -454,6 +498,8 @@ struct context_t {
 		// NOTE: this is only called on a timer event, thus "opt_timer > 0"
 		// if the timer interval is more than one second, scale speed accordingly
 		int perSecond = perInterval / opt_timer;
+		if (perSecond == 0)
+			perSecond = 1; // avoid division by zero
 
 		progressLast = progress;
 

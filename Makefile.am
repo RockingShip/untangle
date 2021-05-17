@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST = \
-	LICENSE.txt CHANGELOG.md INSTALL.md README.md \
-	.gitignore
+	LICENSE.txt BUILD.md CHANGELOG.md GLOSSARY.md README.md \
+	.gitignore $(EXTRA_PART2)
 
 MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
@@ -10,8 +10,13 @@ CLEANFILES =
 BUILT_SOURCES = genrestartdata
 
 noinst_PROGRAMS =
-bin_PROGRAMS = \
-    eval genhint genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
+bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2)
+
+##
+## This section for dataset creation utilities
+##
+
+PROGRAMS_PART1 = eval genhint genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
 
 # genrestartdata is slow and output is small, include in distribution
 restartdata.h : genrestartdata.cc
@@ -69,3 +74,18 @@ slookup.$(OBJEXT) : restartdata.h
 # @date 2020-03-13 12:56:11
 tlookup_SOURCES = tlookup.cc database.h datadef.h context.h tinytree.h
 tlookup_LDADD = $(LDADD) $(AM_LDADD)
+
+##
+## This section for creation of examples
+##
+
+PROGRAMS_PART2 = buildtest0 validate
+EXTRA_PART2 =
+
+# @date 2021-05-15 12:41:29
+buildtest0_SOURCES = buildtest0.cc basetree.h context.h
+buildtest0_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-05-13 15:47:59
+validate_SOURCES = validate.cc basetree.h context.h
+validate_LDADD = $(LDADD) $(AM_LDADD)

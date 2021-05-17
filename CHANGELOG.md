@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-13 00:47:53 Added: `basetree.h`, `buildtest0.cc` and `validate.cc`.
 2021-03-26 18:56:06 Added: Donate button.
 2021-03-22 23:04:19 Changed: item order in navbar.
 2021-03-21 22:24:11 Added: `moonwalk` theme.

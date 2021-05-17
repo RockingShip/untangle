@@ -1,5 +1,4 @@
-Building `untangle`
-=
+# Building `untangle` (preliminary)
 
 `untangle` is designed with `gcc`, `autotools` and Linux exclusively in mind.
 
