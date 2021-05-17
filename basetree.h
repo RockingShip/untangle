@@ -40,7 +40,7 @@
  *
  * @constant {number} DEFAULT_MAXNODE
  */
-#define DEFAULT_MAXNODE 1000000
+#define DEFAULT_MAXNODE 100000000
 #endif
 
 #if !defined(MAXPOOLARRAY)
@@ -226,7 +226,7 @@ struct baseTree_t {
 		posHistory(0),
 		history((uint32_t *) ctx.myAlloc("baseTree_t::history", nstart, sizeof *history)),
 		// node index  NOTE: reserve 4G for the node+version index
-		nodeIndexSize(536870 - 879), // first prime number before 0x20000000-8 (so that 4*this does not exceed 0x80000000-32),
+		nodeIndexSize(536870879), // first prime number before 0x20000000-8 (so that 4*this does not exceed 0x80000000-32),
 		nodeIndex((uint32_t *) ctx.myAlloc("baseTree_t::nodeIndex", nodeIndexSize, sizeof *nodeIndex)),
 		nodeIndexVersion((uint32_t *) ctx.myAlloc("baseTree_t::nodeIndexVersion", nodeIndexSize, sizeof *nodeIndexVersion)),
 		nodeIndexVersionNr(1), // own version because longer life span
@@ -335,9 +335,9 @@ struct baseTree_t {
 	uint32_t *allocMap(void) {
 		uint32_t *pMap;
 
-		if (numPoolVersion > 0) {
-			// get first free version map
-			pMap = gPoolVersion[--numPoolVersion];
+		if (numPoolMap > 0) {
+			// get first free node map
+			pMap = gPoolMap[--numPoolMap];
 		} else {
 			// allocate new map
 			pMap = (uint32_t *) ctx.myAlloc("baseTree_t::versionMap", maxNodes, sizeof *pMap);

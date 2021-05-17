@@ -477,7 +477,7 @@ struct context_t {
 		// Test for first time
 		if (progressLast == 0) {
 			progressLast = progress;
-			return 0;
+			return 1; // avoid division by zero
 		}
 
 		// update speed

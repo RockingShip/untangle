@@ -42,6 +42,23 @@
 context_t ctx;
 
 /**
+ * @date 2021-05-17 22:45:37
+ *
+ * Signal handlers
+ *
+ * Bump interval timer
+ *
+ * @param {number} sig - signal (ignored)
+ */
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
+	}
+}
+
+
+/**
  * @date 2021-05-13 15:30:14
  *
  * Main program logic as application context
@@ -515,6 +532,8 @@ struct validateContext_t {
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% %3d:%02d:%02d",
 					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+
+				ctx.tick = 0;
 			}
 
 			/*
@@ -773,6 +792,12 @@ int main(int argc, char *const *argv) {
 	/*
 	 * Main
 	 */
+
+        // register timer handler
+        if (ctx.opt_timer) {
+                signal(SIGALRM, sigalrmHandler);
+                ::alarm(ctx.opt_timer);
+        }
 
 	/*
 	 * Load json into context

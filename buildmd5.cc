@@ -144,11 +144,11 @@ struct buildmd5Context_t : context_t {
 	void splitTree(NODE *V, uint32_t vstart, int roundNr) {
 		unsigned savNumRoots = gTree->numRoots;
 
-		// output 32 round intermediates
-		assert(gTree->numRoots >= 32);
-		gTree->numRoots = 32;
+		// output 128 round intermediates
+		assert(gTree->numRoots >= 128);
+		gTree->numRoots = 128;
 
-		for (uint32_t i = vstart; i < vstart + 32; i++) {
+		for (uint32_t i = vstart; i < vstart + 128; i++) {
 			gTree->rootNames[i - vstart] = allNames[i]; // assign root name
 			gTree->roots[i - vstart]     = V[i].id; // node id of intermediate
 		}
@@ -186,20 +186,18 @@ struct buildmd5Context_t : context_t {
 			free(filename);
 		}
 
-		assert(!"split-tree"); // determine number if intermediates
-
 		// setup continuation tree
 		gTree->rootsId  = gTree->keysId;
 		gTree->keysId   = 0;
 		gTree->estart   = NSTART; // first external/extended key
-		gTree->nstart   = NSTART + 32; // inputs are keys + 32 round intermediates
+		gTree->nstart   = NSTART + 128; // inputs are keys + 128 round intermediates
 		gTree->ncount   = gTree->nstart;
 		gTree->numRoots = savNumRoots;
 		// invalidate lookup cache
-		++gTree->nodeIndexVersion;
+		++gTree->nodeIndexVersionNr;
 
 		// setup intermediate keys for continuation
-		for (uint32_t i = vstart; i < vstart + 32; i++) {
+		for (uint32_t i = vstart; i < vstart + 128; i++) {
 			V[i].id = NSTART + i - vstart;
 			gTree->keyNames[V[i].id] = allNames[i];
 		}
@@ -227,6 +225,9 @@ struct buildmd5Context_t : context_t {
 	}
 
 	void F1(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
+		if (opt_verbose >= VERBOSE_SUMMARY)
+			printf("F1 %s\n", gTree->keyNames[K]);
+
 		NODE W[32];
 		NODE ovf = 0;
 
@@ -283,6 +284,9 @@ struct buildmd5Context_t : context_t {
 	}
 
 	void F2(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
+		if (opt_verbose >= VERBOSE_SUMMARY)
+			printf("F2 %s\n", gTree->keyNames[K]);
+
 		NODE W[32];
 		NODE ovf = 0;
 
@@ -339,6 +343,9 @@ struct buildmd5Context_t : context_t {
 	}
 
 	void F3(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
+		if (opt_verbose >= VERBOSE_SUMMARY)
+			printf("F3 %s\n", gTree->keyNames[K]);
+
 		NODE W[32];
 		NODE ovf = 0;
 
@@ -395,6 +402,9 @@ struct buildmd5Context_t : context_t {
 	}
 
 	void F4(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
+		if (opt_verbose >= VERBOSE_SUMMARY)
+			printf("F4 %s\n", gTree->keyNames[K]);
+
 		NODE W[32];
 		NODE ovf = 0;
 

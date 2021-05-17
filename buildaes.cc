@@ -177,7 +177,7 @@ struct buildaesContext_t : context_t {
 		gTree->ncount   = gTree->nstart;
 		gTree->numRoots = savNumRoots;
 		// invalidate lookup cache
-		++gTree->nodeIndexVersion;
+		++gTree->nodeIndexVersionNr;
 
 		// setup intermediate keys for continuation
 		for (uint32_t i = vstart; i < vstart + 32; i++) {
