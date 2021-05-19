@@ -14,9 +14,6 @@ Extract essence of information and store/contain in fractal structures
 
 Content grows on-demand as parts of v1 get merged, currently at about 20%
 
-Instead of an ad with tracking...  
-Like to [donate ![opencollective](assets/opencollective-icon.svg)](https://opencollective.com/RockingShip) some appreciation for the use or inspiration this gives you?
-
 ### Welcome to the Wonderful World of fractal logic and computing
 
 _This might be a good spot to break the loop_
@@ -49,12 +46,31 @@ binary-operators used in algebra can describe about 0.1% of them.
   - [Welcome to the Wonderful World of fractal logic and computing](#welcome-to-the-wonderful-world-of-fractal-logic-and-computing)
     - [Table of contents](#table-of-contents)
     - [Time trail](#time-trail)
+    - [Duality](#duality)
+    - [Time is a dimension](#time-is-a-dimension)
   - [QTF operator](#qtf-operator)
     - [Traditional implementation](#traditional-implementation)
     - [Unified operator](#unified-operator)
-  - Normalisation(#normalisation)
+  - [Normalisation](#normalisation)
     - [Level-1 normalisation](#level-1-normalisation)
+      - [Variable substitution](#variable-substitution)
+      - [Semi-final normalised collection](#semi-final-normalised-collection)
+      - [Final normalised collection](#final-normalised-collection)
+      - [`QnTF` normalisation](#qntf-normalisation)
+      - [Symmetric ordering](#symmetric-ordering)
+      - [QnTF implementation](#qntf-implementation)
     - [Level-2 normalisation](#level-2-normalisation)
+    - [Level-3 normalisation (cascading)](#level-3-normalisation-cascading)
+      - [Structure and skin separation](#structure-and-skin-separation)
+      - [Structure sizes](#structure-sizes)
+  - [Metrics](#metrics)
+  - [Normalising2](#normalising2)
+  - [Associative index](#associative-index)
+  - [Notation](#notation)
+  - [Anatomy of a fractal tree file](#anatomy-of-a-fractal-tree-file)
+  - [Structure based compare](#structure-based-compare)
+  - [Versioned memory](#versioned-memory)
+  - [Manifest](#manifest)
   - [Requirements](#requirements)
   - [Building and Installation](#building-and-installation)
   - [Versioning](#versioning)
@@ -94,22 +110,9 @@ For example with `a+b*c`, the multiply is performed before the addition.
 Time flows from `*` to `+`.  
 Concepts that change the direction of time like loops or conditionals do not exist and need to be loop-unrolled or expanded first.
 
-## Constants are a function of time
-
-Constant as a concept changes meaning.  
-They are the result of an expression based an expression  fixed transformation of null.
-
-Within the structures they form dead code and dissipate, shrinking the structure size.
-Thay are steps of dead code which dissipates out of the structures.
-
-{placeholder}
-Constants are a function of time containing all the steps required to determine the value.
-
 ## QTF operator
 
 <!-- @date 2020-03-05 12:58:00 -->
-
-# Background
 
 Information can be described by formulas.
 Formulas can be rewritten into expressions.
@@ -190,7 +193,7 @@ Given 3 variables and the value `"false"` each with an optional NOT allows for "
 
 #### Variable substitution
 
-When focusing on variables, many of these possibilities can be be rewritten as substitutions.
+When focusing on variables, many of these possibilities can be rewritten as substitutions.
 For example, `"c?a:b"` can be rewritten as `"a?b:c"` given `"a=>c, b=>a, c=>b"`.
 
 Isolating the base variables and possible substitution mappings gives the following "16*8=128" base possibilities.
@@ -315,22 +318,22 @@ This implies that with this normalisation any tree can be constructed exclusivel
 with the penalty that storage is less efficient due to extra nodes as side effect of the substitution.
 
 This allows the creation of a tree consisting of a single operator.
-Information stored in structures without data.
+Knowledge stored in structures without data.
 
 #### Symmetric ordering
 
-todo: needs content
+TODO
 
 #### QnTF implementation
 
-Example implementation of a `QnTF` only tree designed for gcc.
+Example implementation of a `QnTF`-only in "C" with [statements as expressions](https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html).
 
 Tree contains the expression `"d AND ((a OR b) > c) > e"`
 
 ```C
 ({ unsigned _[] = {
 // reference value for "false"
-0U,
+0,
 // input variables
 a,b,c,d,e,
 // expression
@@ -344,16 +347,7 @@ _[9] ? !_[5]: _[0]};
 })
 ```
 
-[infix]: https://en.wikipedia.org/wiki/Infix_notation
-[Yin and yang]: https://en.wikipedia.org/wiki/Yin_and_yang
-[postfix]: https://en.wikipedia.org/wiki/Reverse_Polish_notation
-[ternary operator]: https://en.wikipedia.org/wiki/Ternary_operation#Computer_science
-
 ### Level-2 normalisation
-
-@date 2021-02-24 23:19:10
-
-write larger `5n9` structures in terms of `4n9` or smaller.
 
 <!-- @date 2020-03-10 12:41:45 -->
 
@@ -363,7 +357,7 @@ It has one flaw, it is full of redundancy.
 Take for example the classic expressions `"a*(b+c)"` and `"(a*b)+(a*c)"`.
 Although structurally different, both have the same effect.
 
-Some expresssions are trivial, most are not.
+Some expressions are trivial, most are not.
 For example: `"b?(a==b):(a!=c)"` is a synonym of `"a!=(c>b)"`.
 
 This redundancy makes the difference between identical (same structure) and similar (same footprint).
@@ -377,6 +371,8 @@ level-2 normalisation focuses on effect (footprint).
 A footprint is a vector containing the results for all the possible states the inputs can take.
 For example, expressions with 9 variables would have a vector with 512 (2^9) outcomes.
 
+### Level-3 normalisation (cascading)
+
 #### Structure and skin separation
 
 The expressions "a!=(c>b)" and "c!=(a>b)" have identical structure yet different footprints.
@@ -387,7 +383,7 @@ The default skin is a "transparent" skin.
 Skins are always applied to ordered structures.
 A structure is called ordered if the endpoints are assigned in order of the path used to walk through the tree.
 
-##### Structure sizes
+#### Structure sizes
 
 Examples of 4-node trees:
 ```
@@ -407,7 +403,7 @@ In the right most example, `"2"` is a back reference to the `"cde"` node.
 Although expanding the back-reference will produce a 4-node tree, the storage only has three.
 It is therefore considered a 3-node tree.
 
-#### Metrics
+## Metrics
 
 The collection of 4-node, 9-endpoint trees is called the `"4n9"` dataset.
 After level-2 normalisation, the complete tree and any fragment of that tree consisting of 4 directly connected nodes
@@ -426,7 +422,17 @@ Three and powers of three are reoccurring numbers found in observations.
 Unless specifically motivated, many arbitrary choices in the code are based on that.
 Selecting `4n9` as base collection for having 9 endpoints per tree is one of those.
 
-#####  Normalising
+##  Normalising2
+
+<-- @date 2021-05-18 21:37:38 -->
+
+\[as found in code\]
+
+Level-1: Single node, invert propagation  
+Level-2: Single node, function grouping (QTF reordering)
+Level-3: Multi node, dyadic ordering, cascading OR/NE/AND
+Level-4: Multi-node, database lookups
+Level-5: Multi-node, multi-layer
 
  - Take a non-normalised structure.
  - Separate into ordered-structure and skin
@@ -436,7 +442,7 @@ Selecting `4n9` as base collection for having 9 endpoints per tree is one of tho
  - Merge both skins
  - Result is replacement structure and merged skins
 
- # Associative index
+## Associative index
 
  With a complete associative lookup, the dataset index contains all possible 9! skin variations of the footprints.
  A footprint requires 64 bytes storage implying a total storage for the index of "64*791647*9!" = 18Tbyte
@@ -455,7 +461,203 @@ Selecting `4n9` as base collection for having 9 endpoints per tree is one of tho
  Given the 9! skins, one implementation could be (1*2*3*4*5) rows and (6*7*8*9) columns.
  For a given lookup, grab the first endpoints of a skin and permute all 120 possibilities.
  For each alternative perform an index search to see if it matches one of the 3024 stored footprints.
- When a index search hits, a match is found and the skin can computed accordingly.
+ When an index search hits, a match is found and the skin can computed accordingly.
+
+## Notation
+
+Trees use the postfix notation.  
+This is a depth-first search where per node the path starts with `Q`, then followed by `T` and `F`.
+Symbols represent operators, letters represent endpoints/placeholders, `0` is zero and digits are back references to previous operators.
+
+Operators:
+
+|postfix | infix |
+|:----:|:----:|
+| `a~`   | `!a`|
+| `abc?` | `a ? b  : c` |
+| `abc!` | `a ? !b : c` |
+| `ab+` | `a OR b` |
+| `ab^` | `a XOR b`, `a != b` |
+| `ab>` | `a > b` |
+| `ab&` | `a AND b` |
+
+NOTE: the `~` is not a `QTF` operator and basically only used to flip the polarity of roots/results.
+
+The notation is best written when following the outline of a tree in an anti-clockwise direction starting from the root.
+
+- Skip operators when passing down
+- Write endpoints when passing
+- Write operators when passing up
+
+Building a tree manually from a notation is best done by reading the notation right-to-left.
+
+See following example (red arrow=skip, blue arrow=notate):  
+![notation-outline-480x270.jpg](assets/notation-outline-480x270.jpg)
+
+Example with back-references:
+```
+      |
+  +---?-----+   <-------- fourth node
+  |   |     |
+  |   |   +-?-+   <-------- third node
+  |   |   | | |             Q references first node (2 back)
+  | /-|---/ | g             T references second node (1 back)
+  | | |    /
+  | |  \ /  
+  | |   v
+  | |   |
+  | | +-?-+   <-------- second node  
+  | | | | |             Q references first node (1 back)
+   \|/  d e
+    v 
+    |
+  +-?-+   <-------- first node
+  | | |
+  a b c
+```
+
+Backlinks are reusing paths and do not count as part of the outline.  
+Following the outline, the above graph has the notation: `abc?1de?21f??`.  
+`./eval 'abc?1de?21f??' --code` can aid in illustrating the actual id's.
+
+Range extension:  
+Uppercase letters are base-26 prefixes, A=0, Z=25.  
+Examples:  
+`B = 1`  
+`AAAB = 1`  
+`BCD` = 731` \[ ((1*26+2)*26)+3 \]
+
+
+For prefixed endpoints (lowercase): multiply prefix with 26 before adding to the endpoint value.  
+For prefixed back-references (digits): multiply prefix with 10 before adding to the back-link value.  
+Examples (assuming `kstart=1`):  
+`z`, endpoint 26
+`Ba`, endpoint 27
+`CB3`, backlink 553
+
+
+## Anatomy of a fractal tree file
+
+The programs building the trees should usually generate two files:
+ - the tree data file (extension .dat)
+ - the metadata description, optionally containing validation tests (extension .json).
+
+The data file is basically a vector of QTF operators with a number of regions:
+
+|Offset | Region |
+|:----:|:-----|
+| 0    | 0, zero, reference value |
+| kstart+0 | first input value, non normalised notation: `0 ? 0 : <value>` |
+| ... | |
+| kstart+? | last input value |
+| estart+0 | first extended value, non normalised notation: `0 ? 0 : <value>` |
+| ... | |
+| estart+? | last extended value |
+| nstart+0 | first QTF operator of expression/system |
+| ... | |
+| nstart+? | last QTF operator |
+
+Following the data vector is a vector containing the location of the roots/entrypoints/results.  
+
+Tree meta fields
+| name | description |
+|:-----|:------------|
+|  0        | reference value
+|  KSTART   | start of keys
+|  ESTART   | start of extended keys
+|  NSTART   | start of nodes
+|  NCOUNT   | start of roots
+|  NUMROOTS | number of roots
+
+When concatenating trees, the result of the roots are placed in the key region of the next tree.  
+The roots are the collection of original (global) input keys followed by intermediate (local) values.  
+This allows for larger systems to be sliced/split into smaller trees.
+
+```
+ 0 kstart  nstart       ncount    ncount+numRoots
+ v v       v            V       v
++-+-------+------------+-------+
+|0| KEYS  | QTF expr   | ROOTS |
++-+-------+------------+-------+
+                        |||||||  <- transport/connection
+                        vvvvvvv
+                     +-+-------+------------+-------+
+                     |0| KEYS  | QTF expr   | ROOTS |
+                     +-+-------+------------+-------+
+                                             ^^^^^^^--result
+```
+
+## Structure based compare
+
+TODO
+
+The compare return value can be one of:
+```
+      -3 structure leftHandSide LESS rightHandSide
+      -2 same structure but endpoints leftHandSide LESS rightHandSide
+      -1 leftHandSide fits in rightHandSide
+       0 EQUAL
+      +1 rightHandSide fits in leftHandSide
+      +2 same structure but endpoints leftHandSide GREATER rightHandSide
+      +3 structure leftHandSide GREATER rightHandSide
+```
+
+## Versioned memory
+
+TODO
+
+## Manifest
+
+Resource context:
+
+[GLOSSARY](GLOSSARY.md)
+[context.h](context.h)
+
+Database creation:
+
+[database.h](database.h)  
+[datadef.h](datadef.h)  
+[dbtool.h](dbtool.h)
+[eval.cc](eval.cc)  
+[generator.h](generator.h)  
+[genhint.cc](genhint.cc)  
+[genmember.cc](genmember.cc)  
+[genrestartdata.cc](genrestartdata.cc)  
+[gensignature.cc](gensignature.cc)  
+[genswap.cc](genswap.cc)  
+[gentransform.cc](gentransform.cc)
+[metrics.h](metrics.h)
+[restartdata.h](restartdata.h)  
+[slookup.cc](slookup.cc)
+[tinytree.h](tinytree.h)  
+[tlookup.cc](tlookup.cc)
+
+System creation:
+
+[basetree.h](basetree.h)
+[build9bit.cc](build9bit.cc)
+[buildaes.cc](buildaes.cc)
+[buildaes.h](buildaes.h)  
+[buildaesbox.h](buildaesbox.h)
+[builddes.cc](builddes.cc)  
+[builddes.h](builddes.h)
+[builddesbox.h](builddesbox.h)
+[buildmd5.cc](buildmd5.cc)  
+[buildmd5.h](buildmd5.h)
+[buildspongent.cc](buildspongent.cc)  
+[buildspongent.h](buildspongent.h)
+[buildspongentbox.h](buildspongentbox.h)
+[buildtest0.cc](buildtest0.cc)
+[genvalidateaes.js](genvalidateaes.js)
+[genvalidatedes.js](genvalidatedes.js)
+[genvalidatemd5.js](genvalidatemd5.js)
+[genvalidatespongent.js](genvalidatespongent.js)
+[spongent.cc](spongent.cc)  
+[spongent.h](spongent.h)
+[validateaes.h](validateaes.h)
+[validatedes.h](validatedes.h)
+[validatemd5.h](validatemd5.h)
+[validatespongent.h](validatespongent.h)
 
 ## Requirements
 
