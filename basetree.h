@@ -1058,7 +1058,7 @@ struct baseTree_t {
 
 
 		/*
-		 * Level 3 normalisation: cascade ORNE/AND
+		 * Level 3 normalisation: cascade OR/NE/AND
 		 */
 
 		static int xcnt;

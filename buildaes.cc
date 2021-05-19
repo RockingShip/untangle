@@ -190,7 +190,7 @@ struct buildaesContext_t : context_t {
 	/*
 	 * Build aes expression
 	 * Ints are replaced by node_t wrappers in vectors.
-
+	 *
 	 * NOTE: disable optimisations or wait a day
 	 */
 	void __attribute__((optimize("O0"))) build(NODE *V) {
