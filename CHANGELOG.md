@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-20 16:40:32 Fixed: Tree initialisation, `ostart` and program consistency.
 2021-05-19 01:02:46 Changed: Updated `README.md`.
 2021-05-17 23:08:33 Fixed: `build... --cascade`.
 2021-05-16 22:41:53 Added: `buildaes.cc`.
@@ -49,8 +50,8 @@ A number of tools are still pending for/with higher level normalisations which w
  
 Quick guide to reconstruct the database:
 
-```
-    # create initial database 
+```sh
+    # create initial database
     ./gentransform transform.db
 
     # load signatures
@@ -68,7 +69,7 @@ Quick guide to reconstruct the database:
 
 Then throw in a query:
 
-```
+```sh
     ./slookup -D member-5n9.db -i 'ab+ac+&'
 ```
 
@@ -153,13 +154,15 @@ Normalisations:
   3. Imprints (layout orientation "skins")
   4. Signatures (restructuring)
  
-Features: 
+Features:
+
   - Level 1+2 query `eval`
   - Level 3+4 query `slookup`
   - Skin/transform query `tlookup`
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.3.0...HEAD
+[Version 2.3.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...v2.3.0
 [Version 2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
 [Version 2.1.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.0.0...v2.1.0

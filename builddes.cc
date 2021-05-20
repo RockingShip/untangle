@@ -101,7 +101,7 @@ struct builddesContext_t : context_t {
 	unsigned   opt_force;
 	/// @var {number} --split, split the tree into round
 	unsigned   opt_split;
-	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
 	/// @var {NODE} variables referencing zero/false and nonZero/true
 	NODE       vFalse, vTrue;
@@ -125,6 +125,8 @@ struct builddesContext_t : context_t {
 	void splitTree(NODE *V, uint32_t vstart, int roundNr) {
 		unsigned savNumRoots = gTree->numRoots;
 
+		assert(!"todo:");
+
 		// output 32 round intermediates
 		assert(gTree->numRoots >= 32);
 		gTree->numRoots = 32;
@@ -136,9 +138,6 @@ struct builddesContext_t : context_t {
 
 		// save
 		{
-			// generate (hopefully) a unique tree id
-			gTree->keysId = rand();
-
 			char *filename;
 			asprintf(&filename, arg_data, roundNr);
 
@@ -168,20 +167,18 @@ struct builddesContext_t : context_t {
 		}
 
 		// setup continuation tree
-		gTree->rootsId  = gTree->keysId;
-		gTree->keysId   = 0;
-		gTree->estart   = NSTART; // first external/extended key
-		gTree->nstart   = NSTART + 32; // inputs are keys + 32 round intermediates
+		gTree->keysId   = gTree->rootsId; // keys of this tree must match previous tree
+		gTree->rootsId  = rand(); // this tree roots gets new unique id
 		gTree->ncount   = gTree->nstart;
 		gTree->numRoots = savNumRoots;
 		// invalidate lookup cache
 		++gTree->nodeIndexVersionNr;
 
 		// setup intermediate keys for continuation
-		for (uint32_t i = vstart; i < vstart + 32; i++) {
-			V[i].id = NSTART + i - vstart;
-			gTree->keyNames[V[i].id] = allNames[i];
-		}
+//		for (uint32_t i = vstart; i < vstart + 32; i++) {
+//			V[i].id = NSTART + i - vstart;
+//			gTree->keyNames[V[i].id] = allNames[i];
+//		}
 
 	}
 
@@ -831,46 +828,48 @@ struct builddesContext_t : context_t {
 		V[o30] = V[v1529];
 		V[o20] = V[v1530];
 		V[o10] = V[v1531];
-
-		// setup root names
-		assert(gTree->numRoots == VSTART - OSTART);
-		for (uint32_t iRoot = 0; iRoot < gTree->numRoots; iRoot++)
-			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
 	}
 
 	void main(void) {
 		/*
+		 * allocate and initialise placeholder/helper array references to variables
+		 * NOTE: use NSTART because this is the last intermediate as gTree->nstart might point to ESTART)
+		 */
+		NODE *V = (NODE *) malloc(ELAST * sizeof V[0]);
+
+		/*
 		 * Allocate the build tree containing the complete formula
 		 */
+		if (opt_split) {
+			// use extended keys for inermediates
+			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ELAST/*NSTART*/, ELAST/*numRoots*/, opt_maxnode, opt_flags);
+		} else {
+			// basic keys
+			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
+		}
 
-		gTree = new baseTree_t(*this, KSTART, NSTART, VSTART - OSTART/*numRoots*/, opt_maxnode, opt_flags);
+		// setup key names
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+			// key name
+			gTree->keyNames[iKey] = allNames[iKey];
 
-		// setup base key names
-		for (unsigned i = 0; i < gTree->nstart; i++)
-			gTree->keyNames[i] = allNames[i];
-
-		// assign initial chain id
-		gTree->rootsId = rand();
-
-		// allocate and initialise placeholder/helper array
-		// references to variables
-		NODE *V = (NODE *) malloc(VLAST * sizeof V[0]);
-
-		// set initial keys
-		for (uint32_t iKey = 0; iKey < gTree->nstart; iKey++) {
-			// key variable
-			V[iKey].id = iKey;
-
-			// key node
+			// tree key
 			gTree->N[iKey].Q = 0;
 			gTree->N[iKey].T = 0;
 			gTree->N[iKey].F = iKey;
+
+			// key variable
+			V[iKey].id = iKey;
 		}
 
-		// any de-reference of locations before `kstart` is considered triggering of undefined behaviour.
-		// this could be intentional.
-		for (uint32_t iKey = gTree->nstart; iKey < VLAST; iKey++)
-			V[iKey].id = iKey; // mark as uninitialized
+		// setup root names
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
+			// key name
+			gTree->rootNames[iRoot] = allNames[iRoot];
+
+			// root result
+			gTree->roots[iRoot] = iRoot;
+		}
 
 		// build. Uses gBuild
 		build(V);
@@ -878,9 +877,9 @@ struct builddesContext_t : context_t {
 		/*
 		 * Assign the roots/entrypoints.
 		 */
-		gTree->numRoots = VSTART - OSTART;
-		for (unsigned i = OSTART; i < VSTART; i++)
-			gTree->roots[i - OSTART] = V[i].id;
+		gTree->numRoots = gTree->estart;
+		for (unsigned iRoot =0; iRoot < gTree->estart; iRoot++)
+			gTree->roots[iRoot] = V[iRoot].id;
 
 		/*
 		 * Create tests as json object
@@ -1060,7 +1059,7 @@ int main(int argc, char *const *argv) {
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
 				break;
-				//
+
 			case LO_PARANOID:
 				app.opt_flags |= app.MAGICMASK_PARANOID;
 				break;

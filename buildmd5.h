@@ -54,10 +54,6 @@ enum {
 	ke00, ke01, ke02, ke03, ke04, ke05, ke06, ke07, ke08, ke09, ke10, ke11, ke12, ke13, ke14, ke15, ke16, ke17, ke18, ke19, ke20, ke21, ke22, ke23, ke24, ke25, ke26, ke27, ke28, ke29, ke30, ke31,
 	kf00, kf01, kf02, kf03, kf04, kf05, kf06, kf07, kf08, kf09, kf10, kf11, kf12, kf13, kf14, kf15, kf16, kf17, kf18, kf19, kf20, kf21, kf22, kf23, kf24, kf25, kf26, kf27, kf28, kf29, kf30, kf31,
 
-	/*
-	 * NOTE: NSTART of the main tree starts here, the following are offsets for `T[]`
-	 */
-
 	// output roots/entrypoints
 	o00, o01, o02, o03, o04, o05, o06, o07,
 	o10, o11, o12, o13, o14, o15, o16, o17,
@@ -75,6 +71,10 @@ enum {
 	od0, od1, od2, od3, od4, od5, od6, od7,
 	oe0, oe1, oe2, oe3, oe4, oe5, oe6, oe7,
 	of0, of1, of2, of3, of4, of5, of6, of7,
+
+	/*
+	 * NOTE: NSTART of the main tree starts here, the following are offsets for `V[]` and optional extended keys
+	 */
 
 	// All the intermediate rounds
 	ax00, ax01, ax02, ax03, ax04, ax05, ax06, ax07, ax08, ax09, ax10, ax11, ax12, ax13, ax14, ax15, ax16, ax17, ax18, ax19, ax20, ax21, ax22, ax23, ax24, ax25, ax26, ax27, ax28, ax29, ax30, ax31,
@@ -146,12 +146,11 @@ enum {
 	cf00, cf01, cf02, cf03, cf04, cf05, cf06, cf07, cf08, cf09, cf10, cf11, cf12, cf13, cf14, cf15, cf16, cf17, cf18, cf19, cf20, cf21, cf22, cf23, cf24, cf25, cf26, cf27, cf28, cf29, cf30, cf31,
 	bf00, bf01, bf02, bf03, bf04, bf05, bf06, bf07, bf08, bf09, bf10, bf11, bf12, bf13, bf14, bf15, bf16, bf17, bf18, bf19, bf20, bf21, bf22, bf23, bf24, bf25, bf26, bf27, bf28, bf29, bf30, bf31,
 
-	VLAST,
+	ELAST, // last variable
 
-	KSTART = k000, // first key
-	NSTART = o00, // first node
+	KSTART = k000, // first input
 	OSTART = o00, // first output
-	VSTART = ax00, // intermediates
+	ESTART = ax00, // first intermediate
 };
 
 const char* allNames[] = {

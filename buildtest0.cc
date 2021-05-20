@@ -54,9 +54,9 @@ const char *allNames[] = {
 };
 
 /// @var {baseTree_t*} global reference to tree
-baseTree_t     *gTree    = NULL;
+baseTree_t *gTree = NULL;
 /// @var {json_t*} validation tests
-json_t         *gTests; // validation tests
+json_t     *gTests; // validation tests
 
 struct NODE {
 	uint32_t id;
@@ -134,14 +134,14 @@ struct buildtest0Context_t : context_t {
 	uint32_t   opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned   opt_force;
-	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
 
 	buildtest0Context_t() {
-		arg_json  = NULL;
-		arg_data  = NULL;
-		opt_flags = 0;
-		opt_force = 0;
+		arg_json    = NULL;
+		arg_data    = NULL;
+		opt_flags   = 0;
+		opt_force   = 0;
 		opt_maxnode = DEFAULT_MAXNODE;
 	}
 
@@ -150,23 +150,22 @@ struct buildtest0Context_t : context_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree    = new baseTree_t(*this, KSTART, NSTART, OLAST - OSTART/*numRoots*/, opt_maxnode, opt_flags);
+		gTree = new baseTree_t(*this, KSTART, OSTART, NSTART, NSTART, NSTART/*numRoots*/, opt_maxnode, opt_flags);
 
-		// setup base key/root names
-		for (unsigned i = 0; i < gTree->nstart; i++)
-			gTree->keyNames[i]  = allNames[i];
+		// setup key names
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+			gTree->keyNames[iKey] = allNames[iKey];
 
-		for (unsigned i = 0; i < gTree->numRoots; i++)
-			gTree->rootNames[i] = allNames[OSTART + i];
-
-		// assign initial chain id
-		gTree->keysId = rand();
-
-		// setup keys
-		for (uint32_t iKey = 0; iKey < gTree->nstart; iKey++) {
 			gTree->N[iKey].Q = 0;
 			gTree->N[iKey].T = 0;
 			gTree->N[iKey].F = iKey;
+		}
+
+		// setup root names
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
+			gTree->rootNames[iRoot] = allNames[iRoot];
+
+			gTree->roots[iRoot] = iRoot;
 		}
 
 		// setup nodes
@@ -357,7 +356,7 @@ int main(int argc, char *const *argv) {
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
 				break;
-				//
+
 			case LO_PARANOID:
 				app.opt_flags |= app.MAGICMASK_PARANOID;
 				break;

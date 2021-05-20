@@ -101,7 +101,7 @@ struct buildaesContext_t : context_t {
 	unsigned   opt_force;
 	/// @var {number} --split, split the tree into round
 	unsigned   opt_split;
-	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
 	/// @var {NODE} variables referencing zero/false and nonZero/true
 	NODE       vFalse, vTrue;
@@ -125,6 +125,8 @@ struct buildaesContext_t : context_t {
 	void splitTree(NODE *V, uint32_t vstart, int roundNr) {
 		unsigned savNumRoots = gTree->numRoots;
 
+		assert(!"todo:");
+
 		// output 32 round intermediates
 		assert(gTree->numRoots >= 32);
 		gTree->numRoots = 32;
@@ -136,9 +138,6 @@ struct buildaesContext_t : context_t {
 
 		// save
 		{
-			// generate (hopefully) a unique tree id
-			gTree->keysId = rand();
-
 			char *filename;
 			asprintf(&filename, arg_data, roundNr);
 
@@ -168,29 +167,27 @@ struct buildaesContext_t : context_t {
 		}
 
 		assert(!"TODO");
-		
+
 		// setup continuation tree
-		gTree->rootsId  = gTree->keysId;
-		gTree->keysId   = 0;
-		gTree->estart   = NSTART; // first external/extended key
-		gTree->nstart   = NSTART + 32; // inputs are keys + 32 round intermediates
+		gTree->keysId   = gTree->rootsId; // keys of this tree must match previous tree
+		gTree->rootsId  = rand(); // this tree roots gets new unique id
 		gTree->ncount   = gTree->nstart;
 		gTree->numRoots = savNumRoots;
 		// invalidate lookup cache
 		++gTree->nodeIndexVersionNr;
 
 		// setup intermediate keys for continuation
-		for (uint32_t i = vstart; i < vstart + 32; i++) {
-			V[i].id = NSTART + i - vstart;
-			gTree->keyNames[V[i].id] = allNames[i];
-		}
+//		for (uint32_t i = vstart; i < vstart + 32; i++) {
+//			V[i].id = NSTART + i - vstart;
+//			gTree->keyNames[V[i].id] = allNames[i];
+//		}
 
 	}
 
 	/*
 	 * Build aes expression
 	 * Ints are replaced by node_t wrappers in vectors.
-
+	 *
 	 * NOTE: disable optimisations or wait a day
 	 */
 	void __attribute__((optimize("O0"))) build(NODE *V) {
@@ -2620,48 +2617,49 @@ _b7 = (V[A##2])^V[A##7]^V[B##2]^V[B##3]^V[B##4]^V[B##5]^V[B##6]^V[C##3]^V[C##4]^
 		V[o336] = V[v9322]^V[v9323]^V[v9324]^V[v9325]^V[v9326]^V[k4336]^vTrue;
 		V[o337] = V[v9323]^V[v9324]^V[v9325]^V[v9326]^V[v9327]^V[k4337];
 //fprintf(stderr,"\v");
-		//@formatter:ov
-
-		// setup root vames
-		assert(gTree->numRoots == VSTART - OSTART);
-		for (uint32_t iRoot = 0; iRoot < gTree->numRoots; iRoot++)
-			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
-
+		//@formatter:on
 	}
-	
+
 	void main(void) {
+		/*
+		 * allocate and initialise placeholder/helper array references to variables
+		 * NOTE: use NSTART because this is the last intermediate as gTree->nstart might point to ESTART)
+		 */
+		NODE *V = (NODE *) malloc(ELAST * sizeof V[0]);
+
 		/*
 		 * Allocate the build tree containing the complete formula
 		 */
+		if (opt_split) {
+			// use extended keys for inermediates
+			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ELAST/*NSTART*/, ELAST/*numRoots*/, opt_maxnode, opt_flags);
+		} else {
+			// basic keys
+			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
+		}
 
-		gTree = new baseTree_t(*this, KSTART, NSTART, VSTART - OSTART/*numRoots*/, opt_maxnode, opt_flags);
+		// setup key names
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+			// key name
+			gTree->keyNames[iKey] = allNames[iKey];
 
-		// setup base key names
-		for (unsigned i = 0; i < gTree->nstart; i++)
-			gTree->keyNames[i] = allNames[i];
-
-		// assign initial chain id
-		gTree->rootsId = rand();
-
-		// allocate and initialise placeholder/helper array
-		// references to variables
-		NODE *V = (NODE *) malloc(VLAST * sizeof V[0]);
-
-		// set initial keys
-		for (uint32_t iKey = 0; iKey < gTree->nstart; iKey++) {
-			// key variable
-			V[iKey].id = iKey;
-
-			// key node
+			// tree key
 			gTree->N[iKey].Q = 0;
 			gTree->N[iKey].T = 0;
 			gTree->N[iKey].F = iKey;
+
+			// key variable
+			V[iKey].id = iKey;
 		}
 
-		// any de-reference of locations before `kstart` is considered triggering of undefined behaviour.
-		// this could be intentional.
-		for (uint32_t iKey = gTree->nstart; iKey < VLAST; iKey++)
-			V[iKey].id = iKey; // mark as uninitialized
+		// setup root names
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
+			// key name
+			gTree->rootNames[iRoot] = allNames[iRoot];
+
+			// root result
+			gTree->roots[iRoot] = iRoot;
+		}
 
 		// build. Uses gBuild
 		build(V);
@@ -2669,9 +2667,9 @@ _b7 = (V[A##2])^V[A##7]^V[B##2]^V[B##3]^V[B##4]^V[B##5]^V[B##6]^V[C##3]^V[C##4]^
 		/*
 		 * Assign the roots/entrypoints.
 		 */
-		gTree->numRoots = VSTART - OSTART;
-		for (unsigned i = OSTART; i < VSTART; i++)
-			gTree->roots[i - OSTART] = V[i].id;
+		gTree->numRoots = gTree->estart;
+		for (unsigned iRoot =0; iRoot < gTree->estart; iRoot++)
+			gTree->roots[iRoot] = V[iRoot].id;
 
 		/*
 		 * Create tests as json object
@@ -2768,7 +2766,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char * const * argv) {
+int main(int argc, char *const *argv) {
 	setlinebuf(stdout);
 
 	for (;;) {
@@ -2783,12 +2781,12 @@ int main(int argc, char * const * argv) {
 			/* name, has_arg, flag, val */
 			{"debug",       1, 0, LO_DEBUG},
 			{"force",       0, 0, LO_FORCE},
-			{"help",       0, 0, LO_HELP},
+			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
-			{"quiet",      2, 0, LO_QUIET},
+			{"quiet",       2, 0, LO_QUIET},
 			{"split",       0, 0, LO_SPLIT},
 			{"timer",       1, 0, LO_TIMER},
-			{"verbose",    2, 0, LO_VERBOSE},
+			{"verbose",     2, 0, LO_VERBOSE},
 			//
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
@@ -2803,7 +2801,7 @@ int main(int argc, char * const * argv) {
 //			{"pivot3",      0, 0, LO_PIVOT3},
 //			{"no-pivot3",   0, 0, LO_NOPIVOT3},
 			//
-			{NULL,         0, 0, 0}
+			{NULL,          0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -2820,7 +2818,7 @@ int main(int argc, char * const * argv) {
 			}
 		}
 
-		*cp        = '\0';
+		*cp = '\0';
 
 		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
@@ -2833,49 +2831,49 @@ int main(int argc, char * const * argv) {
 			case LO_FORCE:
 				app.opt_force++;
 				break;
-		case LO_HELP:
-			usage(argv, true);
-			exit(0);
+			case LO_HELP:
+				usage(argv, true);
+				exit(0);
 			case LO_MAXNODE:
 				app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
 				break;
-		case LO_QUIET:
+			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
-			break;
+				break;
 			case LO_SPLIT:
 				app.opt_split++;
-			break;
-		case LO_TIMER:
+				break;
+			case LO_TIMER:
 				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-			break;
+				break;
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
-			break;
-				//
-		case LO_PARANOID:
+				break;
+
+			case LO_PARANOID:
 				app.opt_flags |= app.MAGICMASK_PARANOID;
-			break;
-		case LO_NOPARANOID:
+				break;
+			case LO_NOPARANOID:
 				app.opt_flags &= ~app.MAGICMASK_PARANOID;
-			break;
+				break;
 			case LO_PURE:
 				app.opt_flags |= app.MAGICMASK_PURE;
-			break;
+				break;
 			case LO_NOPURE:
 				app.opt_flags &= ~app.MAGICMASK_PURE;
-			break;
-		case LO_REWRITE:
+				break;
+			case LO_REWRITE:
 				app.opt_flags |= app.MAGICMASK_REWRITE;
-			break;
-		case LO_NOREWRITE:
+				break;
+			case LO_NOREWRITE:
 				app.opt_flags &= ~app.MAGICMASK_REWRITE;
-			break;
-		case LO_CASCADE:
+				break;
+			case LO_CASCADE:
 				app.opt_flags |= app.MAGICMASK_CASCADE;
-			break;
-		case LO_NOCASCADE:
+				break;
+			case LO_NOCASCADE:
 				app.opt_flags &= ~app.MAGICMASK_CASCADE;
-			break;
+				break;
 //			case LO_SHRINK:
 //				app.opt_flags |=  app.MAGICMASK_SHRINK;
 //				break;
@@ -2889,9 +2887,9 @@ int main(int argc, char * const * argv) {
 //				app.opt_flags &=  ~app.MAGICMASK_PIVOT3;
 //				break;
 
-		case '?':
+			case '?':
 				app.fatal("Try `%s --help' for more information.\n", argv[0]);
-		default:
+			default:
 				app.fatal("getopt returned character code %d\n", c);
 		}
 	}

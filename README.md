@@ -563,7 +563,8 @@ Tree meta fields
 | name | description |
 |:-----|:------------|
 |  0        | reference value
-|  KSTART   | start of keys
+|  KSTART   | start of first input
+|  OSTART   | start of first output
 |  ESTART   | start of extended keys
 |  NSTART   | start of nodes
 |  NCOUNT   | start of roots
@@ -571,7 +572,12 @@ Tree meta fields
 
 When concatenating trees, the result of the roots are placed in the key region of the next tree.  
 The roots are the collection of original (global) input keys followed by intermediate (local) values.  
-This allows for larger systems to be sliced/split into smaller trees.
+This allows for larger systems to be sliced/split into smaller trees.  
+The idea is that after processing a tree, the roots are a copy of the entry values (< nstart) and that updates/substitutions are ids of nodes containing the results (>= nstart).
+
+Normally keyNames and rootNames are identical.  
+They should only differ for the range >= estart.
+Extended keys are reserved for concatenating two consecutive trees.
 
 ```
  0 kstart  nstart       ncount    ncount+numRoots
@@ -586,6 +592,13 @@ This allows for larger systems to be sliced/split into smaller trees.
                      +-+-------+------------+-------+
                                              ^^^^^^^--result
 ```
+
+When using extended keys:
+
+ - The first `estart` entries of `roots[]` should match `N[]`
+ - `ekeys` are valid for the scope of a single tree
+ - `keyNames[]` and `rootnames[]` are considered different
+ - 
 
 ## Structure based compare
 
@@ -617,7 +630,7 @@ Database creation:
 
 [database.h](database.h)  
 [datadef.h](datadef.h)  
-[dbtool.h](dbtool.h)
+[dbtool.h](dbtool.h)  
 [eval.cc](eval.cc)  
 [generator.h](generator.h)  
 [genhint.cc](genhint.cc)  
@@ -625,39 +638,40 @@ Database creation:
 [genrestartdata.cc](genrestartdata.cc)  
 [gensignature.cc](gensignature.cc)  
 [genswap.cc](genswap.cc)  
-[gentransform.cc](gentransform.cc)
-[metrics.h](metrics.h)
+[gentransform.cc](gentransform.cc)  
+[metrics.h](metrics.h)  
 [restartdata.h](restartdata.h)  
-[slookup.cc](slookup.cc)
+[selftest.cc](selftest.cc)  
+[slookup.cc](slookup.cc)  
 [tinytree.h](tinytree.h)  
-[tlookup.cc](tlookup.cc)
+[tlookup.cc](tlookup.cc)  
 
 System creation:
 
-[basetree.h](basetree.h)
-[build9bit.cc](build9bit.cc)
-[buildaes.cc](buildaes.cc)
+[basetree.h](basetree.h)  
+[build9bit.cc](build9bit.cc)  
+[buildaes.cc](buildaes.cc)  
 [buildaes.h](buildaes.h)  
-[buildaesbox.h](buildaesbox.h)
+[buildaesbox.h](buildaesbox.h)  
 [builddes.cc](builddes.cc)  
-[builddes.h](builddes.h)
-[builddesbox.h](builddesbox.h)
+[builddes.h](builddes.h)  
+[builddesbox.h](builddesbox.h)  
 [buildmd5.cc](buildmd5.cc)  
-[buildmd5.h](buildmd5.h)
+[buildmd5.h](buildmd5.h)  
 [buildspongent.cc](buildspongent.cc)  
-[buildspongent.h](buildspongent.h)
-[buildspongentbox.h](buildspongentbox.h)
-[buildtest0.cc](buildtest0.cc)
-[genvalidateaes.js](genvalidateaes.js)
-[genvalidatedes.js](genvalidatedes.js)
-[genvalidatemd5.js](genvalidatemd5.js)
-[genvalidatespongent.js](genvalidatespongent.js)
+[buildspongent.h](buildspongent.h)  
+[buildspongentbox.h](buildspongentbox.h)  
+[buildtest0.cc](buildtest0.cc)  
+[genvalidateaes.js](genvalidateaes.js)  
+[genvalidatedes.js](genvalidatedes.js)  
+[genvalidatemd5.js](genvalidatemd5.js)  
+[genvalidatespongent.js](genvalidatespongent.js)  
 [spongent.cc](spongent.cc)  
-[spongent.h](spongent.h)
-[validateaes.h](validateaes.h)
-[validatedes.h](validatedes.h)
-[validatemd5.h](validatemd5.h)
-[validatespongent.h](validatespongent.h)
+[spongent.h](spongent.h)  
+[validateaes.h](validateaes.h)  
+[validatedes.h](validatedes.h)  
+[validatemd5.h](validatemd5.h)  
+[validatespongent.h](validatespongent.h)  
 
 ## Requirements
 

@@ -98,12 +98,13 @@ struct baseTreeHeader_t {
 	// meta
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
-	uint32_t keysId;              //
-	uint32_t rootsId;             //
+	uint32_t keysId;              // if non-zero, keys must match roots of specific tree
+	uint32_t rootsId;             // id of this trees roots/results
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 
 	// primary fields
 	uint32_t kstart;              // first input key id
+	uint32_t ostart;              // first output key id
 	uint32_t estart;              // first external/extended key id.
 	uint32_t nstart;              // id of first node
 	uint32_t ncount;              // number of nodes in use
@@ -151,10 +152,11 @@ struct baseTree_t {
 	// meta
 	uint32_t   flags;		// creation constraints
 	uint32_t   allocFlags;		// memory constraints
-	uint32_t   keysId;		// id of tree containing referenced keys
-	uint32_t   rootsId;		// id of this tree containing roots/results
+	uint32_t   keysId;		// if non-zero, keys must match roots of specific tree
+	uint32_t   rootsId;		// id of this trees roots/results
 	// primary fields
-	uint32_t   kstart;		// first input key id. Identical for all trees in chain.
+	uint32_t   kstart;		// first input key id.
+	uint32_t   ostart;		// first output key id.
 	uint32_t   estart;		// first external/extended key id. Roots from previous tree in chain.
 	uint32_t   nstart;		// id of first node
 	uint32_t   ncount;		// number of nodes in use
@@ -166,7 +168,7 @@ struct baseTree_t {
 	const char *nameData;		// unsliced key names
 	// primary storage
 	baseNode_t *N;			// nodes
-	uint32_t   *roots;		// entry points. can be inverted
+	uint32_t   *roots;		// entry points. can be inverted. first estart entries should match keys
 	// history
 	uint32_t   numHistory;		//
 	uint32_t   posHistory;		//
@@ -194,9 +196,66 @@ struct baseTree_t {
 	//@formatter:on
 
 	/*
+	 * Create an empty tree, placeholder for reading from file
+	 */
+	baseTree_t(context_t &ctx) :
+	//@formatter:off
+		ctx(ctx),
+		hndl(-1),
+		rawDatabase(NULL),
+		fileHeader(NULL),
+		// meta
+		flags(0),
+		allocFlags(0),
+		keysId(0),
+		rootsId(rand()),
+		// primary fields
+		kstart(0),
+		ostart(0),
+		estart(0),
+		nstart(0),
+		ncount(0),
+		maxNodes(0),
+		numRoots(0),
+		// names
+		keyNames(NULL),
+		rootNames(NULL),
+		nameData(NULL),
+		// primary storage (allocated by storage context)
+		N(NULL),
+		roots(NULL),
+		// history
+		numHistory(0),
+		posHistory(0),
+		history(NULL),
+		// node index
+		nodeIndexSize(0),
+		nodeIndex(NULL),
+		nodeIndexVersion(NULL),
+		nodeIndexVersionNr(0),
+		// pools
+		numPoolMap(0),
+		gPoolMap(NULL),
+		numPoolVersion(0),
+		gPoolVersion(NULL),
+		mapVersionNr(0),
+		// structure based compare (NOTE: needs to go after pools!)
+		stackL(NULL),
+		stackR(NULL),
+		compNodeL(NULL),
+		compNodeR(NULL),
+		compVersionL(NULL), // allocate as node-id map because of local version numbering
+		compVersionR(NULL),  // allocate as node-id map because of local version numbering
+		compVersionNr(1),
+		numCompare(0)
+	//@formatter:on
+	{
+	}
+
+	/*
 	 * Create a memory stored tree
 	 */
-	baseTree_t(context_t &ctx, uint32_t kstart, uint32_t nstart, uint32_t numRoots, uint32_t maxNodes, uint32_t flags) :
+	baseTree_t(context_t &ctx, uint32_t kstart, uint32_t ostart, uint32_t estart, uint32_t nstart, uint32_t numRoots, uint32_t maxNodes, uint32_t flags) :
 	//@formatter:off
 		ctx(ctx),
 		hndl(-1),
@@ -206,10 +265,11 @@ struct baseTree_t {
 		flags(flags),
 		allocFlags(0),
 		keysId(0),
-		rootsId(0),
+		rootsId(rand()),
 		// primary fields
 		kstart(kstart),
-		estart(nstart),
+		ostart(ostart),
+		estart(estart),
 		nstart(nstart),
 		ncount(nstart),
 		maxNodes(maxNodes),
@@ -367,6 +427,8 @@ struct baseTree_t {
 	 *
 	 * Allocate a map that can hold versioned memory id's
 	 * Returned map is uninitialised and should ONLY contain previous (lower) version numbers
+
+	 * NOTE: caller needs clear map on `mapVersionNr` wraparound
 	 *
 	 * @return {uint32_t*} - Uninitialised map for versioned memory id's
 	 */
@@ -380,10 +442,6 @@ struct baseTree_t {
 			// allocate new map
 			pVersion = (uint32_t *) ctx.myAlloc("baseTree_t::versionMap", maxNodes, sizeof *pVersion);
 		}
-
-		// if version increment would cause a wraparound, clear map
-		if (((mapVersionNr + 1) & 0xffffffff) == 0)
-			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
 
 		return pVersion;
 	}
@@ -1058,7 +1116,7 @@ struct baseTree_t {
 
 
 		/*
-		 * Level 3 normalisation: cascade ORNE/AND
+		 * Level 3 normalisation: cascade OR/NE/AND
 		 */
 
 		static int xcnt;
@@ -1495,37 +1553,8 @@ struct baseTree_t {
 	 */
 	unsigned loadFile(const char *fileName, bool shared = true) {
 
-		/*
-		 * release allocations
-		 */
-		if (keyNames)
-			ctx.myFree("baseTree_t::keyNames", keyNames);
-		if (rootNames)
-			ctx.myFree("baseTree_t::rootNames", rootNames);
-		if (allocFlags & baseTree_t::ALLOCMASK_NAMES)
-			ctx.myFree("baseTree_t::nameData", (char *) nameData); // this has been `malloc()` and cast to const
-		if (allocFlags & baseTree_t::ALLOCMASK_NODES)
-			ctx.myFree("baseTree_t::N", N);
-		if (allocFlags & baseTree_t::ALLOCMASK_ROOTS)
-			ctx.myFree("baseTree_t::roots", roots);
-		if (allocFlags & baseTree_t::ALLOCMASK_HISTORY)
-			ctx.myFree("baseTree_t::history", history);
-		if (allocFlags & baseTree_t::ALLOCMASK_INDEX) {
-			ctx.myFree("baseTree_t::nodeIndex", nodeIndex);
-			ctx.myFree("baseTree_t::nodeIndexVersion", nodeIndexVersion);
-		}
-
-		allocFlags &= ~baseTree_t::ALLOCMASK_NAMES;
-		allocFlags &= ~baseTree_t::ALLOCMASK_NODES;
-		allocFlags &= ~baseTree_t::ALLOCMASK_ROOTS;
-		allocFlags &= ~baseTree_t::ALLOCMASK_HISTORY;
-		allocFlags &= ~baseTree_t::ALLOCMASK_INDEX;
-
-		// release pools
-		while (numPoolMap > 0)
-			ctx.myFree("baseTree_t::nodeMap", gPoolMap[--numPoolMap]);
-		while (numPoolVersion > 0)
-			ctx.myFree("baseTree_t::versionMap", gPoolVersion[--numPoolVersion]);
+		if (keyNames || rootNames || allocFlags)
+			ctx.fatal("baseTree_t::loadFile() on non-initial tree\n");
 
 		/*
 		 * Open/attach/read file
@@ -1611,6 +1640,7 @@ struct baseTree_t {
 		keysId     = fileHeader->keysId;
 		rootsId    = fileHeader->rootsId;
 		kstart     = fileHeader->kstart;
+		ostart     = fileHeader->ostart;
 		estart     = fileHeader->estart;
 		nstart     = fileHeader->nstart;
 		ncount     = fileHeader->ncount;
@@ -1621,12 +1651,24 @@ struct baseTree_t {
 		// @date 2021-05-14 21:46:35 Tree is read-only
 		maxNodes = ncount; // used for map allocations
 
-		keyNames  = (const char **) ctx.myAlloc("baseTree_t::keyNames", nstart, sizeof *keyNames);
-		rootNames = (const char **) ctx.myAlloc("baseTree_t::rootNames", numRoots, sizeof *rootNames);
-		nameData  = (const char *) (rawDatabase + fileHeader->offNames);
-		N         = (baseNode_t *) (rawDatabase + fileHeader->offNodes);
-		roots     = (uint32_t *) (rawDatabase + fileHeader->offRoots);
-		history   = (uint32_t *) (rawDatabase + fileHeader->offHistory);
+		// primary
+		keyNames      = (const char **) ctx.myAlloc("baseTree_t::keyNames", nstart, sizeof *keyNames);
+		rootNames     = (const char **) ctx.myAlloc("baseTree_t::rootNames", numRoots, sizeof *rootNames);
+		nameData      = (const char *) (rawDatabase + fileHeader->offNames);
+		N             = (baseNode_t *) (rawDatabase + fileHeader->offNodes);
+		roots         = (uint32_t *) (rawDatabase + fileHeader->offRoots);
+		history       = (uint32_t *) (rawDatabase + fileHeader->offHistory);
+		// pools
+		gPoolMap      = (uint32_t **) ctx.myAlloc("baseTree_t::gPoolMap", MAXPOOLARRAY, sizeof(*gPoolMap));
+		gPoolVersion  = (uint32_t **) ctx.myAlloc("baseTree_t::gPoolVersion", MAXPOOLARRAY, sizeof(*gPoolVersion));
+		// structure based compare
+		stackL        = allocMap();
+		stackR        = allocMap();
+		compNodeL     = allocMap();
+		compNodeR     = allocMap();
+		compVersionL  = allocMap(); // allocate as node-id map because of local version numbering
+		compVersionR  = allocMap();  // allocate as node-id map because of local version numbering
+		compVersionNr = 1;
 
 		// slice names
 		{
@@ -1738,8 +1780,14 @@ struct baseTree_t {
 
 		uint32_t *pSelect    = allocVersion();
 		uint32_t *pMap       = allocMap();
-		uint32_t thisVersion = ++mapVersionNr; // may wraparound
+		uint32_t thisVersion = ++mapVersionNr;
 		uint32_t numNodes    = 0;
+
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pSelect, 0, maxNodes * sizeof *pSelect);
+			thisVersion = ++mapVersionNr;
+		}
 
 		for (uint32_t iKey = 0; iKey < nstart; iKey++) {
 			pSelect[iKey] = thisVersion;
@@ -1856,6 +1904,7 @@ struct baseTree_t {
 		header.rootsId     = rootsId;
 		header.crc32       = crc32;
 		header.kstart      = kstart;
+		header.ostart      = ostart;
 		header.estart      = estart;
 		header.nstart      = nstart;
 		header.ncount      = nextId; // NOTE: count equals the nodes actually written
@@ -1909,6 +1958,7 @@ struct baseTree_t {
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
 		json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
 		json_object_set_new_nocheck(jResult, "kstart", json_integer(fileHeader->kstart));
+		json_object_set_new_nocheck(jResult, "ostart", json_integer(fileHeader->ostart));
 		json_object_set_new_nocheck(jResult, "estart", json_integer(fileHeader->estart));
 		json_object_set_new_nocheck(jResult, "nstart", json_integer(fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
@@ -1928,7 +1978,7 @@ struct baseTree_t {
 			jResult = json_object();
 
 		/*
-		 * Key names
+		 * Key/root names
 		 */
 		json_t *jKeyNames = json_array();
 
@@ -1936,14 +1986,24 @@ struct baseTree_t {
 			json_array_append_new(jKeyNames, json_string_nocheck(this->keyNames[iKey]));
 		json_object_set_new_nocheck(jResult, "keys", jKeyNames);
 
-		/*
-		 * Root names
-		 */
-		json_t *jRootNames = json_array();
+		// with extended keys, keys/roots are considered different
+		if (this->estart != this->nstart || this->estart != this->numRoots) {
+			jKeyNames = json_array();
 
-		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
-			json_array_append_new(jRootNames, json_string_nocheck(this->rootNames[iRoot]));
-		json_object_set_new_nocheck(jResult, "roots", jRootNames);
+			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++)
+				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot]));
+			json_object_set_new_nocheck(jResult, "roots", jKeyNames);
+		}
+
+		/*
+		 * Outputs
+		 */
+		jKeyNames = json_array();
+		for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			if (this->roots[iRoot] != iRoot)
+				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot]));
+		}
+		json_object_set_new_nocheck(jResult, "output", jKeyNames);
 
 #if 0
 

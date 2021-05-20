@@ -36,10 +36,9 @@ enum {
 	kZero = 0, kError, // reserved
 	k0, k1, k2, k3, k4, k5, k6, k7, k8, // keys
 	o0, o1, o2, o3, o4, o5, o6, o7, o8, // roots
-	OLAST, // last
+	NSTART, // last
 
 	KSTART = k0,
-	NSTART = o0,
 	OSTART = o0,
 };
 
@@ -125,7 +124,7 @@ struct build9bitContext_t : context_t {
 	uint32_t   opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned   opt_force;
-	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
 	/// @var {number} --seed, randon number generator seed
 	unsigned   opt_seed;
@@ -143,8 +142,6 @@ struct build9bitContext_t : context_t {
 	 * Build the tree
 	 */
 	void build(void) {
-		assert(gTree->numRoots == TABLEBITS);
-
 		// fill array
 		for (unsigned i = 0; i < TABLESIZE; i++)
 			databits[i] = i;
@@ -163,7 +160,7 @@ struct build9bitContext_t : context_t {
 		/*
 		 * Generate the tree's for the different output/root bits
 		 */
-		for (unsigned iRoot = 0; iRoot < TABLEBITS; iRoot++) {
+		for (unsigned iBit = 0; iBit < TABLEBITS; iBit++) {
 
 			// collection of "OR" terms
 			unsigned lastRow = 0; // terminator: "row = 0"
@@ -171,7 +168,7 @@ struct build9bitContext_t : context_t {
 			for (unsigned iRow = 0; iRow < TABLESIZE; iRow++) {
 
 				// only for rows with specific bit in output set
-				if (databits[iRow] & (1 << iRoot)) {
+				if (databits[iRow] & (1 << iBit)) {
 
 					// collection of "AND" terms
 					uint32_t lastCol = IBIT; // terminator: "col = !0"
@@ -191,7 +188,7 @@ struct build9bitContext_t : context_t {
 				}
 			}
 
-			gTree->roots[iRoot] = lastRow;
+			gTree->roots[gTree->ostart + iBit] = lastRow;
 		}
 	}
 
@@ -200,23 +197,22 @@ struct build9bitContext_t : context_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(*this, KSTART, NSTART, OLAST - OSTART/*numRoots*/, opt_maxnode, opt_flags);
+		gTree = new baseTree_t(*this, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxnode, opt_flags);
 
-		// setup base key/root names
-		for (unsigned i = 0; i < gTree->nstart; i++)
-			gTree->keyNames[i] = allNames[i];
+		// setup key names
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+			gTree->keyNames[iKey] = allNames[iKey];
 
-		for (unsigned i = 0; i < gTree->numRoots; i++)
-			gTree->rootNames[i] = allNames[OSTART + i];
-
-		// assign initial chain id
-		gTree->keysId = rand();
-
-		// setup keys
-		for (uint32_t iKey = 0; iKey < gTree->nstart; iKey++) {
 			gTree->N[iKey].Q = 0;
 			gTree->N[iKey].T = 0;
 			gTree->N[iKey].F = iKey;
+		}
+
+		// setup root names
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
+			gTree->rootNames[iRoot] = allNames[iRoot];
+
+			gTree->roots[iRoot] = iRoot;
 		}
 
 		/*
@@ -395,7 +391,7 @@ int main(int argc, char *const *argv) {
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
 				break;
-				//
+
 			case LO_PARANOID:
 				app.opt_flags |= app.MAGICMASK_PARANOID;
 				break;

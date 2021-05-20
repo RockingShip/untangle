@@ -78,6 +78,7 @@ struct validateContext_t {
 
 	// json data
 	uint32_t   kstart;
+	uint32_t   ostart;
 	uint32_t   estart;
 	uint32_t   nstart;
 	uint32_t   ncount;
@@ -98,6 +99,7 @@ struct validateContext_t {
 		pInputTree    = NULL;
 
 		kstart    = 0;
+		ostart    = 0;
 		estart    = 0;
 		nstart    = 0;
 		numRoots  = 0;
@@ -149,6 +151,7 @@ struct validateContext_t {
 		 * import dimensions
 		 */
 		kstart   = json_integer_value(json_object_get(jInput, "kstart"));
+		ostart   = json_integer_value(json_object_get(jInput, "ostart"));
 		estart   = json_integer_value(json_object_get(jInput, "estart"));
 		nstart   = json_integer_value(json_object_get(jInput, "nstart"));
 		ncount   = json_integer_value(json_object_get(jInput, "ncount"));
@@ -162,16 +165,28 @@ struct validateContext_t {
 			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
-		if (estart < kstart || kstart >= ncount) {
+		if (ostart < kstart || ostart >= ncount) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("pstart out of range"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("ostart out of range"));
 			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 			json_object_set_new_nocheck(jError, "kstart", json_integer(kstart));
+			json_object_set_new_nocheck(jError, "ostart", json_integer(ostart));
+			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
+		if (estart < ostart || estart >= ncount) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("estart out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
+			json_object_set_new_nocheck(jError, "ostart", json_integer(ostart));
 			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
 			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 		if (nstart < estart || nstart >= ncount) {
+			/*
+			 * NOTE: this test should be dropped as extended keys should always be set to uninitialised
+			 */
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("nstart out of range"));
 			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
@@ -180,11 +195,12 @@ struct validateContext_t {
 			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
-		if (numRoots == 0) {
+		if (numRoots < estart) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("numroots out of range"));
 			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 			json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
+			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -195,7 +211,7 @@ struct validateContext_t {
 		json_t *jKeyNames = json_object_get(jInput, "keys");
 		if (!jKeyNames) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag keys"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'keys'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
@@ -214,27 +230,45 @@ struct validateContext_t {
 		for (uint32_t iKey = 0; iKey < nstart; iKey++)
 			keyNames[iKey] = strdup(json_string_value(json_array_get(jKeyNames, iKey)));
 
-		json_t *jRootNames = json_object_get(jInput, "roots");
-		if (!jRootNames) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag roots"));
-			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
+		if (estart == nstart && estart == numRoots) {
+			// keyNames and rootNames are considered identical
+			rootNames = keyNames;
+		} else {
+			json_t *jRootNames = json_object_get(jInput, "roots");
+			if (!jRootNames) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'roots'"));
+				json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
 
-		unsigned numRootNames = json_array_size(jRootNames);
-		if (numRootNames != numRoots) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of roots"));
-			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
-			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots));
-			json_object_set_new_nocheck(jError, "encountered", json_integer(numRootNames));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
+			unsigned numRootNames = json_array_size(jRootNames);
+			if (numRootNames != numRoots) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of roots"));
+				json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
+				json_object_set_new_nocheck(jError, "expected", json_integer(numRoots));
+				json_object_set_new_nocheck(jError, "encountered", json_integer(numRootNames));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
 
-		rootNames = (const char **) malloc(numRoots * sizeof *rootNames);
-		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
-			rootNames[iRoot] = strdup(json_string_value(json_array_get(jRootNames, iRoot)));
+			rootNames = (const char **) malloc(numRoots * sizeof *rootNames);
+			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
+				rootNames[iRoot] = strdup(json_string_value(json_array_get(jRootNames, iRoot)));
+
+			// check that the first estart entries match
+			for (uint32_t iKey = 0; iKey < estart; iKey++) {
+				if (strcmp(keyNames[iKey], rootNames[iKey]) != 0) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("key/root name missmatch"));
+					json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
+					json_object_set_new_nocheck(jError, "ix", json_integer(iKey));
+					json_object_set_new_nocheck(jError, "key", json_string(keyNames[iKey]));
+					json_object_set_new_nocheck(jError, "root", json_string(rootNames[iKey]));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+			}
+		}
 
 		/*
 		 * Import tests
@@ -244,7 +278,7 @@ struct validateContext_t {
 		gNumTests = json_array_size(jTests);
 		if (!gNumTests) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag tests"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'tests'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
@@ -274,7 +308,7 @@ struct validateContext_t {
 			/*
 			 * decode key data
 			 */
-			uint8_t  *pData = gTestKeys + iTest * (nstart - kstart);
+			uint8_t  *pData = gTestKeys + iTest * (ostart - kstart);
 			unsigned iBit   = 0;
 
 			// convert
@@ -313,12 +347,12 @@ struct validateContext_t {
 						pData[iBit++] = byte & (1 << k);
 				}
 			}
-			if (iBit < nstart - kstart) {
+			if (iBit < ostart - kstart) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key data too short in test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 				json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-				json_object_set_new_nocheck(jError, "expected", json_integer(nstart - kstart));
+				json_object_set_new_nocheck(jError, "expected", json_integer(ostart - kstart));
 				json_object_set_new_nocheck(jError, "encountered", json_integer(iBit));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
@@ -326,7 +360,7 @@ struct validateContext_t {
 			/*
 			 * decode root data
 			 */
-			pData = gTestRoots + iTest * numRoots;
+			pData = gTestRoots + iTest * (estart - ostart);
 			iBit  = 0;
 
 			// convert
@@ -361,17 +395,18 @@ struct validateContext_t {
 				}
 
 				for (unsigned k = 0; k < 8; k++) {
-					if (iBit < numRoots)
+					if (iBit < estart - ostart)
 						pData[iBit++] = byte & (1 << k);
 				}
 			}
 
-			if (iBit < numRoots) {
+			if (iBit < estart - ostart) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root data too short in test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
 				json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-				json_object_set_new_nocheck(jError, "expected", json_integer(numRoots));
+				json_object_set_new_nocheck(jError, "expected", json_integer(estart - ostart));
+				json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
 				json_object_set_new_nocheck(jError, "encountered", json_integer(iBit));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
@@ -389,7 +424,7 @@ struct validateContext_t {
 	 */
 	void validateData(const char *fname) {
 		// load tree
-		baseTree_t tree(ctx, 0, 0, 0, 0, 0); // todo: constructor
+		baseTree_t tree(ctx);
 
 		if (tree.loadFile(fname)) {
 			json_t *jError = json_object();
@@ -408,18 +443,20 @@ struct validateContext_t {
 		}
 
 		// check dimensions
-		if (tree.kstart != kstart || tree.estart != estart || tree.nstart != nstart || tree.numRoots != numRoots) {
+		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.nstart != nstart || tree.numRoots != numRoots) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
 			json_object_set_new_nocheck(jError, "filename", json_string(fname));
 			json_t *jMeta = json_object();
 			json_object_set_new_nocheck(jMeta, "kstart", json_integer(kstart));
+			json_object_set_new_nocheck(jMeta, "ostart", json_integer(ostart));
 			json_object_set_new_nocheck(jMeta, "estart", json_integer(estart));
 			json_object_set_new_nocheck(jMeta, "nstart", json_integer(nstart));
 			json_object_set_new_nocheck(jMeta, "numroots", json_integer(numRoots));
 			json_object_set_new_nocheck(jError, "meta", jMeta);
 			json_t *jData = json_object();
 			json_object_set_new_nocheck(jData, "kstart", json_integer(tree.kstart));
+			json_object_set_new_nocheck(jData, "ostart", json_integer(tree.ostart));
 			json_object_set_new_nocheck(jData, "estart", json_integer(tree.estart));
 			json_object_set_new_nocheck(jData, "nstart", json_integer(tree.nstart));
 			json_object_set_new_nocheck(jData, "numroots", json_integer(tree.numRoots));
@@ -543,12 +580,12 @@ struct validateContext_t {
 			for (uint32_t iKey = 0; iKey < tree.ncount; iKey++)
 				pEval[iKey] = iKey; // non-zero is error marker
 
-			// load the test data
-			uint8_t *pData = gTestKeys + iTest * (nstart - kstart);
+			// load the test data into K region
+			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
 
 			for (uint32_t iKey = 0; iKey < kstart; iKey++)
 				pEval[iKey] = iKey; // all non-zero de-references will trigger an error
-			for (uint32_t iKey  = kstart; iKey < nstart; iKey++)
+			for (uint32_t iKey  = kstart; iKey < ostart; iKey++)
 				pEval[iKey] = pData[iKey - kstart] ? IBIT : 0;
 
 			/*
@@ -596,12 +633,12 @@ struct validateContext_t {
 			}
 
 			// load the result data
-			pData = gTestRoots + iTest * numRoots;
+			pData = gTestRoots + iTest * (estart - ostart);
 
 			/*
 			 * Compare the results for the provides
 			 */
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			for (uint32_t iRoot = ostart; iRoot < estart; iRoot++) {
 
 				uint32_t r = tree.roots[iRoot];
 
@@ -616,7 +653,7 @@ struct validateContext_t {
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
-				uint32_t expected    = pData[iRoot] ? IBIT : 0;
+				uint32_t expected    = pData[iRoot - ostart] ? IBIT : 0;
 				uint32_t encountered = pEval[r & ~IBIT] ^(r & IBIT);
 
 
@@ -708,12 +745,12 @@ int main(int argc, char *const *argv) {
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"help",      0, 0, LO_HELP},
-			{"quiet",     2, 0, LO_QUIET},
-			{"verbose",   2, 0, LO_VERBOSE},
 			{"debug",     1, 0, LO_DEBUG},
-			{"timer",     1, 0, LO_TIMER},
+			{"help",      0, 0, LO_HELP},
 			{"onlyifset", 0, 0, LO_ONLYIFSET},
+			{"quiet",     2, 0, LO_QUIET},
+			{"timer",     1, 0, LO_TIMER},
+			{"verbose",   2, 0, LO_VERBOSE},
 
 			{NULL,        0, 0, 0}
 		};
@@ -739,25 +776,24 @@ int main(int argc, char *const *argv) {
 			break;
 
 		switch (c) {
+			case LO_DEBUG:
+				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+				break;
 			case LO_HELP:
 				usage(argv, true);
 				exit(0);
+			case LO_ONLYIFSET:
+				app.opt_onlyIfSet++;
+				break;
 			case LO_QUIET:
 				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
-				break;
-			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 				break;
 			case LO_TIMER:
 				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
 				break;
-			case LO_ONLYIFSET:
-				app.opt_onlyIfSet++;
+			case LO_VERBOSE:
+				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
 				break;
-
 
 			case '?':
 				ctx.fatal("Try `%s --help' for more information.\n", argv[0]);

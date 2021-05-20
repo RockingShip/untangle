@@ -80,6 +80,10 @@ enum {
 	o320, o321, o322, o323, o324, o325, o326, o327,
 	o330, o331, o332, o333, o334, o335, o336, o337,
 
+	/*
+	 * NOTE: NSTART of the main tree starts here, the following are offsets for `V[]` and optional extended keys
+	 */
+
 	// All the intermediate rounds, in order of being generated
 	k0700, k0701, k0702, k0703, k0704, k0705, k0706, k0707, k1130, k1131, k1132, k1133, k1134, k1135, k1136, k1137,
 	k1520, k1521, k1522, k1523, k1524, k1525, k1526, k1527, k1910, k1911, k1912, k1913, k1914, k1915, k1916, k1917,
@@ -183,13 +187,11 @@ enum {
 	v9030, v9031, v9032, v9033, v9034, v9035, v9036, v9037, v9130, v9131, v9132, v9133, v9134, v9135, v9136, v9137,
 	v9230, v9231, v9232, v9233, v9234, v9235, v9236, v9237, v9330, v9331, v9332, v9333, v9334, v9335, v9336, v9337,
 
+	ELAST, // last variable
 
-	VLAST,
-
-	KSTART = k000, // first key
-	NSTART = o000, // first node
+	KSTART = k000, // first input
 	OSTART = o000, // first output
-	VSTART = k0700, // intermediates
+	ESTART = k0700, // first intermediate
 };
 
 const char* allNames[] = {

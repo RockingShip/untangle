@@ -39,10 +39,6 @@ enum {
 	k90, k91, k92, k93, k94, k95, k96, k97,
 	ka0, ka1, ka2, ka3, ka4, ka5, ka6, ka7,
 
-	/*
-	 * NOTE: NSTART of the main tree starts here, the following are offsets for `T[]`
-	 */
-
 	// output roots/entrypoints
 	o00, o01, o02, o03, o04, o05, o06, o07,
 	o10, o11, o12, o13, o14, o15, o16, o17,
@@ -56,25 +52,31 @@ enum {
 	o90, o91, o92, o93, o94, o95, o96, o97,
 	oa0, oa1, oa2, oa3, oa4, oa5, oa6, oa7,
 
-	VSTART,
+	/*
+	 * NOTE: NSTART of the main tree starts here, the following are offsets for `V[]` and optional extended keys
+	 */
+
+	ESTART, // start of extended
 
 	/*
-	 * For this version on spongert, the buffer is 11 bytes long and 11 permutation in both the absorbing and squeezing areas. The starting buffer of each permutation is tagged a P point
+	 * NOTE: Variables have no name and are not considered extended keys
+	 */
+
+	/*
+	 * For this version on spongent, the buffer is 11 bytes long and 11 permutation in both the absorbing and squeezing areas. The starting buffer of each permutation is tagged a P point
 	 */
 
 //_NSTART = _PSTART+1+(8*11*11*2 * 15/*permutation split into 15 chunks*/),
 //_NSTART = _PSTART+1+(8*11*11*2 * 45/*permutation split into 45 chunks*/),
-	VLAST = VSTART +
-		   1 +//reserved for main entrypoint
-		   (8 * 11 * // 88 bits wide
-		    11 * 2 * // 44 rounds
-		    45) + // 45 permutations per round
-		   7, // alignment
+	VLAST = ESTART +
+		1 +//reserved for main entrypoint
+		(8 * 11 * // 88 bits wide
+		 11 * 2 * // 44 rounds
+		 45) + // 45 permutations per round
+		7, // alignment
 
-	KSTART = k00, // first key
-	NSTART = o00, // first node
+	KSTART = k00, // first input
 	OSTART = o00, // first output
-
 };
 
 const char* allNames[] = {

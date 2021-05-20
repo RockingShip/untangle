@@ -96,9 +96,7 @@ struct buildspongentContext_t : context_t {
 	uint32_t   opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned   opt_force;
-	/// @var {number} --split, split the tree into round
-	unsigned   opt_split;
-	/// @var {number} --opt_maxnode, Maximum number of nodes for `baseTree_t`.
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned   opt_maxnode;
 
 	buildspongentContext_t() {
@@ -106,30 +104,29 @@ struct buildspongentContext_t : context_t {
 		arg_data    = NULL;
 		opt_flags   = 0;
 		opt_force   = 0;
-		opt_split   = 0;
 		opt_maxnode = DEFAULT_MAXNODE;
 	}
 
 	void __attribute__((optimize("O0"))) Permute(NODE value[11][8], NODE *V, uint32_t kstart, uint32_t ostart) {
 
 
-		static int     IV[] = { 0x05,0x0a,0x14,0x29,0x13,0x27,0x0f,0x1e,0x3d,0x3a,0x34,0x28,0x11,0x23,0x07,0x0e,0x1c,0x39,0x32,0x24,0x09,0x12,0x25,0x0b,0x16,0x2d,0x1b,0x37,0x2e,0x1d,0x3b,0x36,0x2c,0x19,0x33,0x26,0x0d,0x1a,0x35,0x2a,0x15,0x2b,0x17,0x2f,0x1f };
-		static int INV_IV[] = { 0xa0,0x50,0x28,0x94,0xc8,0xe4,0xf0,0x78,0xbc,0x5c,0x2c,0x14,0x88,0xc4,0xe0,0x70,0x38,0x9c,0x4c,0x24,0x90,0x48,0xa4,0xd0,0x68,0xb4,0xd8,0xec,0x74,0xb8,0xdc,0x6c,0x34,0x98,0xcc,0x64,0xb0,0x58,0xac,0x54,0xa8,0xd4,0xe8,0xf4,0xf8 };
+		static int IV[]     = {0x05, 0x0a, 0x14, 0x29, 0x13, 0x27, 0x0f, 0x1e, 0x3d, 0x3a, 0x34, 0x28, 0x11, 0x23, 0x07, 0x0e, 0x1c, 0x39, 0x32, 0x24, 0x09, 0x12, 0x25, 0x0b, 0x16, 0x2d, 0x1b, 0x37, 0x2e, 0x1d, 0x3b, 0x36, 0x2c, 0x19, 0x33, 0x26, 0x0d, 0x1a, 0x35, 0x2a, 0x15, 0x2b, 0x17, 0x2f, 0x1f};
+		static int INV_IV[] = {0xa0, 0x50, 0x28, 0x94, 0xc8, 0xe4, 0xf0, 0x78, 0xbc, 0x5c, 0x2c, 0x14, 0x88, 0xc4, 0xe0, 0x70, 0x38, 0x9c, 0x4c, 0x24, 0x90, 0x48, 0xa4, 0xd0, 0x68, 0xb4, 0xd8, 0xec, 0x74, 0xb8, 0xdc, 0x6c, 0x34, 0x98, 0xcc, 0x64, 0xb0, 0x58, 0xac, 0x54, 0xa8, 0xd4, 0xe8, 0xf4, 0xf8};
 
 		NODE tmp[11][8];
 
 		if (kstart) {
-			value[0][0] = value[0][0] ^ V[kstart+8*0+0];
-			value[0][1] = value[0][1] ^ V[kstart+8*0+1];
-			value[0][2] = value[0][2] ^ V[kstart+8*0+2];
-			value[0][3] = value[0][3] ^ V[kstart+8*0+3];
-			value[0][4] = value[0][4] ^ V[kstart+8*0+4];
-			value[0][5] = value[0][5] ^ V[kstart+8*0+5];
-			value[0][6] = value[0][6] ^ V[kstart+8*0+6];
-			value[0][7] = value[0][7] ^ V[kstart+8*0+7];
+			value[0][0] = value[0][0] ^ V[kstart + 8 * 0 + 0];
+			value[0][1] = value[0][1] ^ V[kstart + 8 * 0 + 1];
+			value[0][2] = value[0][2] ^ V[kstart + 8 * 0 + 2];
+			value[0][3] = value[0][3] ^ V[kstart + 8 * 0 + 3];
+			value[0][4] = value[0][4] ^ V[kstart + 8 * 0 + 4];
+			value[0][5] = value[0][5] ^ V[kstart + 8 * 0 + 5];
+			value[0][6] = value[0][6] ^ V[kstart + 8 * 0 + 6];
+			value[0][7] = value[0][7] ^ V[kstart + 8 * 0 + 7];
 		}
 
-		for(int i=0; i<45; i++) {
+		for (int i = 0; i < 45; i++) {
 			//@formatter:off
 
 #define A 10
@@ -259,14 +256,14 @@ struct buildspongentContext_t : context_t {
 		}
 
 		if (ostart) {
-			V[ostart+0] = value[0][0];
-			V[ostart+1] = value[0][1];
-			V[ostart+2] = value[0][2];
-			V[ostart+3] = value[0][3];
-			V[ostart+4] = value[0][4];
-			V[ostart+5] = value[0][5];
-			V[ostart+6] = value[0][6];
-			V[ostart+7] = value[0][7];
+			V[ostart + 0] = value[0][0];
+			V[ostart + 1] = value[0][1];
+			V[ostart + 2] = value[0][2];
+			V[ostart + 3] = value[0][3];
+			V[ostart + 4] = value[0][4];
+			V[ostart + 5] = value[0][5];
+			V[ostart + 6] = value[0][6];
+			V[ostart + 7] = value[0][7];
 		}
 
 //printf("%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n", value[0].toInt(), value[1].toInt(),value[2].toInt(),value[3].toInt(),value[4].toInt(),value[5].toInt(),value[6].toInt(),value[7].toInt(),value[8].toInt(),value[9].toInt(),value[A].toInt());
@@ -304,74 +301,68 @@ struct buildspongentContext_t : context_t {
 
 		// first _PSTART is main entrypoint
 
-		//@formatter:off
-		Permute(value, V, KSTART+8*0, 0);
-		Permute(value, V, KSTART+8*1, 0);
-		Permute(value, V, KSTART+8*2, 0);
-		Permute(value, V, KSTART+8*3, 0);
-		Permute(value, V, KSTART+8*4, 0);
-		Permute(value, V, KSTART+8*5, 0);
-		Permute(value, V, KSTART+8*6, 0);
-		Permute(value, V, KSTART+8*7, 0);
-		Permute(value, V, KSTART+8*8, 0);
-		Permute(value, V, KSTART+8*9, 0);
-		Permute(value, V, KSTART+8*10, 0);
+		Permute(value, V, KSTART + 8 * 0, 0);
+		Permute(value, V, KSTART + 8 * 1, 0);
+		Permute(value, V, KSTART + 8 * 2, 0);
+		Permute(value, V, KSTART + 8 * 3, 0);
+		Permute(value, V, KSTART + 8 * 4, 0);
+		Permute(value, V, KSTART + 8 * 5, 0);
+		Permute(value, V, KSTART + 8 * 6, 0);
+		Permute(value, V, KSTART + 8 * 7, 0);
+		Permute(value, V, KSTART + 8 * 8, 0);
+		Permute(value, V, KSTART + 8 * 9, 0);
+		Permute(value, V, KSTART + 8 * 10, 0);
 
 		value[0][7] = value[0][7] ^ IBIT;
 
-		Permute(value, V, 0, OSTART+8*0);
-		Permute(value, V, 0, OSTART+8*1);
-		Permute(value, V, 0, OSTART+8*2);
-		Permute(value, V, 0, OSTART+8*3);
-		Permute(value, V, 0, OSTART+8*4);
-		Permute(value, V, 0, OSTART+8*5);
-		Permute(value, V, 0, OSTART+8*6);
-		Permute(value, V, 0, OSTART+8*7);
-		Permute(value, V, 0, OSTART+8*8);
-		Permute(value, V, 0, OSTART+8*9);
-		Permute(value, V, 0, OSTART+8*10);
-		//@formatter:on
-
-		// setup root names
-		assert(gTree->numRoots == VSTART - OSTART);
-		for (uint32_t iRoot = 0; iRoot < gTree->numRoots; iRoot++)
-			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
+		Permute(value, V, 0, OSTART + 8 * 0);
+		Permute(value, V, 0, OSTART + 8 * 1);
+		Permute(value, V, 0, OSTART + 8 * 2);
+		Permute(value, V, 0, OSTART + 8 * 3);
+		Permute(value, V, 0, OSTART + 8 * 4);
+		Permute(value, V, 0, OSTART + 8 * 5);
+		Permute(value, V, 0, OSTART + 8 * 6);
+		Permute(value, V, 0, OSTART + 8 * 7);
+		Permute(value, V, 0, OSTART + 8 * 8);
+		Permute(value, V, 0, OSTART + 8 * 9);
+		Permute(value, V, 0, OSTART + 8 * 10);
 	}
 
 
 	void main(void) {
 		/*
-		 * Allocate the build tree containing the complete formula
+		 * allocate and initialise placeholder/helper array references to variables
+		 * NOTE: use NSTART because this is the last intermediate as gTree->nstart might point to ESTART)
 		 */
-
-		gTree = new baseTree_t(*this, KSTART, NSTART, VSTART - OSTART/*numRoots*/, opt_maxnode, opt_flags);
-
-		// setup base key names
-		for (unsigned i = 0; i < gTree->nstart; i++)
-			gTree->keyNames[i] = allNames[i];
-
-		// assign initial chain id
-		gTree->rootsId = rand();
-
-		// allocate and initialise placeholder/helper array
-		// references to variables
 		NODE *V = (NODE *) malloc(VLAST * sizeof V[0]);
 
-		// set initial keys
-		for (uint32_t iKey = 0; iKey < gTree->nstart; iKey++) {
-			// key variable
-			V[iKey].id = iKey;
+		/*
+		 * Allocate the build tree containing the complete formula
+		 */
+		gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
 
-			// key node
+		// setup key names
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+			// key name
+			gTree->keyNames[iKey] = allNames[iKey];
+
+			// tree key
 			gTree->N[iKey].Q = 0;
 			gTree->N[iKey].T = 0;
 			gTree->N[iKey].F = iKey;
+
+			// key variable
+			V[iKey].id = iKey;
 		}
 
-		// any de-reference of locations before `kstart` is considered triggering of undefined behaviour.
-		// this could be intentional.
-		for (uint32_t iKey = gTree->nstart; iKey < VLAST; iKey++)
-			V[iKey].id = iKey; // mark as uninitialized
+		// setup root names
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
+			// key name
+			gTree->rootNames[iRoot] = allNames[iRoot];
+
+			// root result
+			gTree->roots[iRoot] = iRoot;
+		}
 
 		// build. Uses gBuild
 		build(V);
@@ -379,9 +370,9 @@ struct buildspongentContext_t : context_t {
 		/*
 		 * Assign the roots/entrypoints.
 		 */
-		gTree->numRoots = VSTART - OSTART;
-		for (unsigned i = OSTART; i < VSTART; i++)
-			gTree->roots[i - OSTART] = V[i].id;
+		gTree->numRoots = gTree->estart;
+		for (unsigned iRoot =0; iRoot < gTree->estart; iRoot++)
+			gTree->roots[iRoot] = V[iRoot].id;
 
 		/*
 		 * Create tests as json object
@@ -448,7 +439,6 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
 		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t   --split\n");
 		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", app.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
 		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & app.MAGICMASK_PARANOID ? "enabled" : "disabled");
@@ -471,7 +461,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char * const * argv) {
+int main(int argc, char *const *argv) {
 	setlinebuf(stdout);
 
 	for (;;) {
@@ -486,12 +476,11 @@ int main(int argc, char * const * argv) {
 			/* name, has_arg, flag, val */
 			{"debug",       1, 0, LO_DEBUG},
 			{"force",       0, 0, LO_FORCE},
-			{"help",     0, 0, LO_HELP},
+			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
-			{"quiet",    2, 0, LO_QUIET},
-			{"split",       0, 0, LO_SPLIT},
+			{"quiet",       2, 0, LO_QUIET},
 			{"timer",       1, 0, LO_TIMER},
-			{"verbose",  2, 0, LO_VERBOSE},
+			{"verbose",     2, 0, LO_VERBOSE},
 			//
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
@@ -506,7 +495,7 @@ int main(int argc, char * const * argv) {
 //			{"pivot3",      0, 0, LO_PIVOT3},
 //			{"no-pivot3",   0, 0, LO_NOPIVOT3},
 			//
-			{NULL,       0, 0, 0}
+			{NULL,          0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -523,7 +512,7 @@ int main(int argc, char * const * argv) {
 			}
 		}
 
-		*cp        = '\0';
+		*cp = '\0';
 
 		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
@@ -536,49 +525,46 @@ int main(int argc, char * const * argv) {
 			case LO_FORCE:
 				app.opt_force++;
 				break;
-		case LO_HELP:
-			usage(argv, true);
-			exit(0);
+			case LO_HELP:
+				usage(argv, true);
+				exit(0);
 			case LO_MAXNODE:
 				app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
-			break;
+				break;
 			case LO_QUIET:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
-			break;
-			case LO_SPLIT:
-				app.opt_split++;
-			break;
-		case LO_TIMER:
+				break;
+			case LO_TIMER:
 				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-			break;
+				break;
 			case LO_VERBOSE:
 				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
-			break;
-				//
-		case LO_PARANOID:
+				break;
+
+			case LO_PARANOID:
 				app.opt_flags |= app.MAGICMASK_PARANOID;
-			break;
-		case LO_NOPARANOID:
+				break;
+			case LO_NOPARANOID:
 				app.opt_flags &= ~app.MAGICMASK_PARANOID;
-			break;
+				break;
 			case LO_PURE:
 				app.opt_flags |= app.MAGICMASK_PURE;
-			break;
+				break;
 			case LO_NOPURE:
 				app.opt_flags &= ~app.MAGICMASK_PURE;
-			break;
-		case LO_REWRITE:
+				break;
+			case LO_REWRITE:
 				app.opt_flags |= app.MAGICMASK_REWRITE;
-			break;
-		case LO_NOREWRITE:
+				break;
+			case LO_NOREWRITE:
 				app.opt_flags &= ~app.MAGICMASK_REWRITE;
-			break;
-		case LO_CASCADE:
+				break;
+			case LO_CASCADE:
 				app.opt_flags |= app.MAGICMASK_CASCADE;
-			break;
-		case LO_NOCASCADE:
+				break;
+			case LO_NOCASCADE:
 				app.opt_flags &= ~app.MAGICMASK_CASCADE;
-			break;
+				break;
 //			case LO_SHRINK:
 //				app.opt_flags |=  app.MAGICMASK_SHRINK;
 //				break;
@@ -592,9 +578,9 @@ int main(int argc, char * const * argv) {
 //				app.opt_flags &=  ~app.MAGICMASK_PIVOT3;
 //				break;
 
-		case '?':
+			case '?':
 				app.fatal("Try `%s --help' for more information.\n", argv[0]);
-		default:
+			default:
 				app.fatal("getopt returned character code %d\n", c);
 		}
 	}

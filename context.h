@@ -274,12 +274,12 @@ struct context_t {
 		if (__nmemb == 0 || __size == 0)
 			return NULL;
 
-		// round size up to nearest 32 bytes
+		// calculate and round size up to nearest 32 bytes
 		__size *= __nmemb;
 		__size += 32;
 		__size &= ~31ULL;
 
-		totalAllocated += __nmemb * __size;
+		totalAllocated += __size;
 
 		/*
 		 * @date 2020-04-16 20:06:57

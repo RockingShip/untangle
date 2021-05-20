@@ -46,10 +46,6 @@ enum {
 	i60, i61, i62, i63, i64, i65, i66, i67,
 	i70, i71, i72, i73, i74, i75, i76, i77,
 
-	/*
-	 * NOTE: NSTART of the main tree starts here, the following are offsets for `T[]`
-	 */
-
 	// output roots/entrypoints
 	o00, o01, o02, o03, o04, o05, o06, o07,
 	o10, o11, o12, o13, o14, o15, o16, o17,
@@ -59,6 +55,10 @@ enum {
 	o50, o51, o52, o53, o54, o55, o56, o57,
 	o60, o61, o62, o63, o64, o65, o66, o67,
 	o70, o71, o72, o73, o74, o75, o76, o77,
+
+	/*
+	 * NOTE: NSTART of the main tree starts here, the following are offsets for `V[]` and optional extended keys
+	 */
 
 	// All the intermediate rounds
 	v0000, v0001, v0002, v0003, v0004, v0005, v0006, v0007, v0008, v0009, v0010, v0011, v0012, v0013, v0014, v0015,
@@ -94,12 +94,11 @@ enum {
 	v1500, v1501, v1502, v1503, v1504, v1505, v1506, v1507, v1508, v1509, v1510, v1511, v1512, v1513, v1514, v1515,
 	v1516, v1517, v1518, v1519, v1520, v1521, v1522, v1523, v1524, v1525, v1526, v1527, v1528, v1529, v1530, v1531,
 
-	VLAST,
+	ELAST, // last variable
 
-	KSTART = k00, // first key
-	NSTART = o00, // first node
+	KSTART = k00, // first input
 	OSTART = o00, // first output
-	VSTART = v0000, // intermediates
+	ESTART = v0000, // first intermediate
 };
 
 const char* allNames[] = {
