@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-20 22:26:32 Added: `ksplit.cc`.
 2021-05-20 16:40:32 Fixed: Tree initialisation, `ostart` and program consistency.
 2021-05-19 01:02:46 Changed: Updated `README.md`.
 2021-05-17 23:08:33 Fixed: `build... --cascade`.

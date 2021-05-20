@@ -330,7 +330,7 @@ struct baseTree_t {
 		// release allocations if not mmapped
 		if (keyNames)
 			ctx.myFree("baseTree_t::keyNames", this->keyNames);
-		if (rootNames)
+		if (rootNames && rootNames != keyNames)
 			ctx.myFree("baseTree_t::rootNames", this->rootNames);
 		if (allocFlags & ALLOCMASK_NAMES)
 			ctx.myFree("baseTree_t::nameData", (char *) this->nameData); // this has been `malloc()` and cast to const
@@ -1697,7 +1697,7 @@ struct baseTree_t {
 	 * NOTE: Tree is compacted on writing
 	 * NOTE: With larger trees over NFS, this may take fome time
 	 */
-	void saveFile(const char *fileName) {
+	void saveFile(const char *fileName, bool showProgress = true) {
 
 		assert(numRoots > 0);
 
@@ -1816,7 +1816,8 @@ struct baseTree_t {
 		 */
 		header.offNodes = fpos;
 
-		ctx.tick = 0; // clear ticker timer
+		if (showProgress)
+			ctx.tick = 0; // clear ticker timer
 		uint32_t nextId = 0; // next free node id
 
 		for (uint32_t i = 0; i < ncount; i++) {
@@ -1839,7 +1840,7 @@ struct baseTree_t {
 				fpos += len;
 
 				// update ticker for slow files across NFS
-				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				if (showProgress && ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					fprintf(stderr, "\r\e[K%.5f%%", nextId * 100.0 / numNodes);
 					ctx.tick = 0;
 				}
@@ -1932,8 +1933,8 @@ struct baseTree_t {
 			ctx.fatal("[fclose(%s,\"w\") returned: %m]\n", fileName);
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K"); // erase progress
+		if (showProgress && ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K"); // erase showProgress
 
 //		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 //			fprintf(stderr, "[%s] Written %s, %u nodes, %lu bytes\n", ctx.timeAsString(), fileName, ncount - nstart, header.offEnd);
@@ -1986,8 +1987,19 @@ struct baseTree_t {
 			json_array_append_new(jKeyNames, json_string_nocheck(this->keyNames[iKey]));
 		json_object_set_new_nocheck(jResult, "keys", jKeyNames);
 
+		bool rootsDiffer = (this->nstart != this->numRoots);
+		if (!rootsDiffer) {
+			for (uint32_t iKey = 0; iKey < this->nstart; iKey++) {
+				if (strcmp(keyNames[iKey], rootNames[iKey]) != 0) {
+					fprintf(stderr, "\n%d %s %s\n", iKey, keyNames[iKey], rootNames[iKey]);
+					rootsDiffer = true;
+					break;
+				}
+			}
+		}
+
 		// with extended keys, keys/roots are considered different
-		if (this->estart != this->nstart || this->estart != this->numRoots) {
+		if (rootsDiffer) {
 			jKeyNames = json_array();
 
 			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++)

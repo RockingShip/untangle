@@ -594,6 +594,9 @@ struct buildmd5Context_t : context_t {
 		// build. Uses gBuild
 		build(V);
 
+		if (opt_verbose >= VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
 		/*
 		 * Assign the roots/entrypoints.
 		 */
