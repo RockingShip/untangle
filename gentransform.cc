@@ -103,8 +103,8 @@ struct gentransformContext_t {
 	gentransformContext_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
 		arg_outputDatabase = NULL;
-		opt_force = 0;
-		opt_text = 0;
+		opt_force          = 0;
+		opt_text           = 0;
 	}
 
 	/**
@@ -135,7 +135,7 @@ struct gentransformContext_t {
 		assert(MAXSLOTS == 9);
 
 		unsigned iTransform = 0; // enumeration of skin
-		unsigned IM = 0; // bitmask of endpoints in use, initially empty
+		unsigned IM         = 0; // bitmask of endpoints in use, initially empty
 
 		for (unsigned I = MAXSLOTS - 1; I != (unsigned) -1; I--) {
 
@@ -283,7 +283,7 @@ struct gentransformContext_t {
 
 			// transform name
 			const char *pStr = pNames[iTransform];
-			unsigned ix; // active entry
+			unsigned   ix; // active entry
 
 			// point to entrypoint
 			unsigned pos = MAXSLOTS + 1;
@@ -291,7 +291,7 @@ struct gentransformContext_t {
 			// process transform name upto but not including the last endpoint
 			while (pStr[1]) {
 				// which entry
-				ix = pos + *pStr - 'a';
+				ix  = pos + *pStr - 'a';
 
 				// test if slot for endpoint inuse
 				if (pIndex[ix] == 0) {
@@ -474,7 +474,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.db>  -- Create initial database containing transforms\n", argv[0]);
 
 	if (verbose) {
@@ -500,7 +500,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -510,28 +510,28 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG   = 1,
 			LO_FORCE,
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",    1, 0, LO_DEBUG},
-			{"force",    0, 0, LO_FORCE},
-			{"help",     0, 0, LO_HELP},
-			{"quiet",    2, 0, LO_QUIET},
-			{"text",     0, 0, LO_TEXT},
-			{"timer",    1, 0, LO_TIMER},
-			{"verbose",  2, 0, LO_VERBOSE},
+			{"debug",   1, 0, LO_DEBUG},
+			{"force",   0, 0, LO_FORCE},
+			{"help",    0, 0, LO_HELP},
+			{"quiet",   2, 0, LO_QUIET},
+			{"text",    0, 0, LO_TEXT},
+			{"timer",   1, 0, LO_TIMER},
+			{"verbose", 2, 0, LO_VERBOSE},
 			//
-			{NULL,       0, 0, 0}
+			{NULL,      0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -548,43 +548,43 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_TEXT:
-				app.opt_text++;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_TEXT:
+			app.opt_text++;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -625,7 +625,7 @@ int main(int argc, char *const *argv) {
 	database_t store(ctx);
 
 	// set section sizes to be created
-	store.maxTransform = MAXTRANSFORM;
+	store.maxTransform       = MAXTRANSFORM;
 	store.transformIndexSize = MAXTRANSFORMINDEX;
 
 	// create memory-based store
@@ -657,16 +657,12 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-#if defined(ENABLE_JANSSON)
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-#else
-		fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-#endif
 	}
 
 	return 0;

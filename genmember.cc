@@ -188,6 +188,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
+#include <jansson.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -203,10 +204,6 @@
 #include "restartdata.h"
 #include "tinytree.h"
 
-#if defined(ENABLE_JANSSON)
-#include "jansson.h"
-#endif
-
 /**
  * @date 2020-03-14 11:10:15
  *
@@ -219,9 +216,9 @@ struct genmemberContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		OPTTEXT_WON = 1,
+		OPTTEXT_WON     = 1,
 		OPTTEXT_COMPARE = 2,
-		OPTTEXT_BRIEF = 3,
+		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
 
 	};
@@ -233,94 +230,94 @@ struct genmemberContext_t : dbtool_t {
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
 	/// @var {number} Tree size in nodes to be generated for this invocation;
-	unsigned arg_numNodes;
+	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 	/// @var {number} --force, force overwriting of database if already exists
-	unsigned opt_force;
+	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
-	unsigned opt_generate;
+	unsigned   opt_generate;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned opt_saveIndex;
+	unsigned   opt_saveIndex;
 	/// @var {number} Sid range upper bound
-	unsigned opt_sidHi;
+	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
-	unsigned opt_sidLo;
+	unsigned   opt_sidLo;
 	/// @var {number} task Id. First task=1
-	unsigned opt_taskId;
+	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
-	unsigned opt_taskLast;
+	unsigned   opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
+	unsigned   opt_text;
 	/// @var {number} truncate on database overflow
-	double opt_truncate;
+	double     opt_truncate;
 	/// @var {number} generator upper bound
-	uint64_t opt_windowHi;
+	uint64_t   opt_windowHi;
 	/// @var {number} generator lower bound
-	uint64_t opt_windowLo;
+	uint64_t   opt_windowLo;
 
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 
 	/// @var {unsigned} - active index for `hints[]`
-	unsigned activeHintIndex;
+	unsigned        activeHintIndex;
 	/// @var {number} - Head of list of free members to allocate
-	unsigned freeMemberRoot;
+	unsigned        freeMemberRoot;
 	/// @var {number} - THE generator
 	generatorTree_t generator;
 	/// @var {number} - Number of empty signatures left
-	unsigned numEmpty;
+	unsigned        numEmpty;
 	/// @var {number} - Number of unsafe signatures left
-	unsigned numUnsafe;
+	unsigned        numUnsafe;
 	/// @var {number} `foundTree()` duplicate by name
-	unsigned skipDuplicate;
+	unsigned        skipDuplicate;
 	/// @var {number} `foundTree()` too large for signature
-	unsigned skipSize;
+	unsigned        skipSize;
 	/// @var {number} `foundTree()` unsafe abumdance
-	unsigned skipUnsafe;
+	unsigned        skipUnsafe;
 	/// @var {number} Where database overflow was caught
-	uint64_t truncated;
+	uint64_t        truncated;
 	/// @var {number} Name of signature causing overflow
-	char truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
+	char            truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
 	/**
 	 * Constructor
 	 */
 	genmemberContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		// arguments and options
-		arg_inputDatabase = NULL;
-		arg_numNodes = 0;
+		arg_inputDatabase  = NULL;
+		arg_numNodes       = 0;
 		arg_outputDatabase = NULL;
-		opt_force = 0;
-		opt_generate = 1;
-		opt_saveIndex = 1;
-		opt_taskId = 0;
-		opt_taskLast = 0;
-		opt_load = NULL;
-		opt_sidHi = 0;
-		opt_sidLo = 0;
-		opt_text = 0;
-		opt_truncate = 0;
-		opt_windowHi = 0;
-		opt_windowLo = 0;
+		opt_force          = 0;
+		opt_generate       = 1;
+		opt_saveIndex      = 1;
+		opt_taskId         = 0;
+		opt_taskLast       = 0;
+		opt_load           = NULL;
+		opt_sidHi          = 0;
+		opt_sidLo          = 0;
+		opt_text           = 0;
+		opt_truncate       = 0;
+		opt_windowHi       = 0;
+		opt_windowLo       = 0;
 
-		pStore = NULL;
+		pStore   = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
 		activeHintIndex = 0;
-		freeMemberRoot = 0;
-		numUnsafe = 0;
-		skipDuplicate = 0;
-		skipSize = 0;
-		skipUnsafe = 0;
-		truncated = 0;
+		freeMemberRoot  = 0;
+		numUnsafe       = 0;
+		skipDuplicate   = 0;
+		skipSize        = 0;
+		skipUnsafe      = 0;
+		truncated       = 0;
 		truncatedName[0] = 0;
 	}
 
@@ -411,7 +408,7 @@ struct genmemberContext_t : dbtool_t {
 			unsigned Q = treeR.N[treeR.root].Q;
 			{
 				const char *pComponentName = treeR.encode(Q, skin);
-				unsigned ix = pStore->lookupMember(pComponentName);
+				unsigned   ix              = pStore->lookupMember(pComponentName);
 
 				pMember->Qmid = pStore->memberIndex[ix];
 				pMember->Qsid = pStore->members[pMember->Qmid].sid;
@@ -424,7 +421,7 @@ struct genmemberContext_t : dbtool_t {
 			unsigned To = treeR.N[treeR.root].T & ~IBIT;
 			{
 				const char *pComponentName = treeR.encode(To, skin);
-				unsigned ix = pStore->lookupMember(pComponentName);
+				unsigned   ix              = pStore->lookupMember(pComponentName);
 
 				pMember->Tmid = pStore->memberIndex[ix];
 				pMember->Tsid = pStore->members[pMember->Tmid].sid ^ (treeR.N[treeR.root].T & IBIT);
@@ -437,7 +434,7 @@ struct genmemberContext_t : dbtool_t {
 			unsigned F = treeR.N[treeR.root].F;
 			{
 				const char *pComponentName = treeR.encode(F, skin);
-				unsigned ix = pStore->lookupMember(pComponentName);
+				unsigned   ix              = pStore->lookupMember(pComponentName);
 
 				pMember->Fmid = pStore->memberIndex[ix];
 				pMember->Fsid = pStore->members[pMember->Fmid].sid;
@@ -459,11 +456,11 @@ struct genmemberContext_t : dbtool_t {
 		 */
 		{
 			tinyTree_t tree(ctx);
-			unsigned numHead = 0; // number of found heads
+			unsigned   numHead = 0; // number of found heads
 
 			// replace `hot` node with placeholder
 			for (unsigned hot = tinyTree_t::TINYTREE_NSTART; hot < treeR.root; hot++) {
-				unsigned select = 1 << treeR.root | 1 << 0; // selected nodes to extract nodes
+				unsigned select                     = 1 << treeR.root | 1 << 0; // selected nodes to extract nodes
 				unsigned nextPlaceholderPlaceholder = tinyTree_t::TINYTREE_KSTART;
 				uint32_t what[tinyTree_t::TINYTREE_NEND];
 				what[0] = 0; // replacement for zero
@@ -472,9 +469,9 @@ struct genmemberContext_t : dbtool_t {
 				for (unsigned k = treeR.root; k >= tinyTree_t::TINYTREE_NSTART; k--) {
 					if (k != hot && (select & (1 << k))) {
 						const tinyNode_t *pNode = treeR.N + k;
-						const unsigned Q = pNode->Q;
-						const unsigned To = pNode->T & ~IBIT;
-						const unsigned F = pNode->F;
+						const unsigned   Q      = pNode->Q;
+						const unsigned   To     = pNode->T & ~IBIT;
+						const unsigned   F      = pNode->F;
 
 						if (Q >= tinyTree_t::TINYTREE_NSTART)
 							select |= 1 << Q;
@@ -498,10 +495,10 @@ struct genmemberContext_t : dbtool_t {
 				for (unsigned k = tinyTree_t::TINYTREE_NSTART; k <= treeR.root; k++) {
 					if (k != hot && select & (1 << k)) {
 						const tinyNode_t *pNode = treeR.N + k;
-						const unsigned Q = pNode->Q;
-						const unsigned To = pNode->T & ~IBIT;
-						const unsigned Ti = pNode->T & IBIT;
-						const unsigned F = pNode->F;
+						const unsigned   Q      = pNode->Q;
+						const unsigned   To     = pNode->T & ~IBIT;
+						const unsigned   Ti     = pNode->T & IBIT;
+						const unsigned   F      = pNode->F;
 
 						// assign placeholder to endpoint or `hot`
 						if (~select & (1 << Q)) {
@@ -567,7 +564,7 @@ struct genmemberContext_t : dbtool_t {
 				tree.encode(tree.root, name, skin);
 
 				// perform member lookup
-				unsigned ix = pStore->lookupMember(name);
+				unsigned ix      = pStore->lookupMember(name);
 				unsigned midHead = pStore->memberIndex[ix];
 				if (midHead == 0) {
 					// unsafe
@@ -606,11 +603,11 @@ struct genmemberContext_t : dbtool_t {
 
 		unsigned mid = freeMemberRoot;
 		if (mid) {
-			pMember = pStore->members + mid;
+			pMember        = pStore->members + mid;
 			freeMemberRoot = pMember->nextMember; // pop from free list
 			::strcpy(pMember->name, pName); // populate with name
 		} else {
-			mid = pStore->addMember(pName); // allocate new member
+			mid     = pStore->addMember(pName); // allocate new member
 			pMember = pStore->members + mid;
 		}
 
@@ -665,10 +662,10 @@ struct genmemberContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				        numEmpty, numUnsafe - numEmpty,
-				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+					numEmpty, numUnsafe - numEmpty,
+					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -679,10 +676,10 @@ struct genmemberContext_t : dbtool_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
-				        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				        numEmpty, numUnsafe - numEmpty,
-				        skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
+					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+					numEmpty, numUnsafe - numEmpty,
+					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
 			if (ctx.restartTick) {
@@ -724,7 +721,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Find the matching signature group. It's layout only so ignore transformId.
 		 */
 
-		unsigned sid = 0;
+		unsigned sid     = 0;
 		unsigned markSid = pStore->numSignature;
 
 		if ((ctx.flags & context_t::MAGICMASK_AINF) && !this->readOnlyMode) {
@@ -766,11 +763,11 @@ struct genmemberContext_t : dbtool_t {
 		::memset(&tmpMember, 0, sizeof(tmpMember));
 
 		::strcpy(tmpMember.name, pNameR);
-		tmpMember.sid = sid;
-		tmpMember.size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+		tmpMember.sid            = sid;
+		tmpMember.size           = treeR.count - tinyTree_t::TINYTREE_NSTART;
 		tmpMember.numPlaceholder = numPlaceholder;
-		tmpMember.numEndpoint = numEndpoint;
-		tmpMember.numBackRef = numBackRef;
+		tmpMember.numEndpoint    = numEndpoint;
+		tmpMember.numBackRef     = numBackRef;
 
 		findHeadTail(&tmpMember, treeR);
 
@@ -848,32 +845,32 @@ struct genmemberContext_t : dbtool_t {
 						 * Reuse `members[]`.
 						 * Field `nextMember` is perfect for that.
 						 */
-				while (pSignature->firstMember) {
-					// remove all references to the deleted
-					for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
-						member_t *p = pStore->members + iMid;
+						while (pSignature->firstMember) {
+							// remove all references to the deleted
+							for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+								member_t *p = pStore->members + iMid;
 
-						if (p->Qmid == pSignature->firstMember) {
-							assert(~p->flags & signature_t::SIGMASK_SAFE);
-							p->Qmid = 0;
+								if (p->Qmid == pSignature->firstMember) {
+									assert(~p->flags & signature_t::SIGMASK_SAFE);
+									p->Qmid = 0;
+								}
+								if (p->Tmid == pSignature->firstMember) {
+									assert(~p->flags & signature_t::SIGMASK_SAFE);
+									p->Tmid = 0;
+								}
+								if (p->Fmid == pSignature->firstMember) {
+									assert(~p->flags & signature_t::SIGMASK_SAFE);
+									p->Fmid = 0;
+								}
+							}
+
+							// release head of chain
+							member_t *p = pStore->members + pSignature->firstMember;
+
+							pSignature->firstMember = p->nextMember;
+
+							this->memberFree(p);
 						}
-						if (p->Tmid == pSignature->firstMember) {
-							assert(~p->flags & signature_t::SIGMASK_SAFE);
-							p->Tmid = 0;
-						}
-						if (p->Fmid == pSignature->firstMember) {
-							assert(~p->flags & signature_t::SIGMASK_SAFE);
-							p->Fmid = 0;
-						}
-					}
-
-					// release head of chain
-					member_t *p = pStore->members + pSignature->firstMember;
-
-					pSignature->firstMember = p->nextMember;
-
-					this->memberFree(p);
-				}
 					}
 				}
 
@@ -909,7 +906,7 @@ struct genmemberContext_t : dbtool_t {
 			*pMember = tmpMember;
 
 			// link
-			pMember->nextMember = pSignature->firstMember;
+			pMember->nextMember     = pSignature->firstMember;
 			pSignature->firstMember = pMember - pStore->members;
 
 			// index
@@ -935,7 +932,7 @@ struct genmemberContext_t : dbtool_t {
 
 		const member_t *pMemberL = static_cast<const member_t *>(lhs);
 		const member_t *pMemberR = static_cast<const member_t *>(rhs);
-		context_t *pApp = static_cast<context_t *>(arg);
+		context_t      *pApp     = static_cast<context_t *>(arg);
 
 		// test for empties (they should gather towards the end of `members[]`)
 		if (pMemberL->sid == 0 && pMemberR->sid == 0)
@@ -1030,9 +1027,9 @@ struct genmemberContext_t : dbtool_t {
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1043,9 +1040,9 @@ struct genmemberContext_t : dbtool_t {
 					int etaS = eta;
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
@@ -1092,14 +1089,14 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.progress != ctx.progressHi && opt_sidHi == 0) {
 			fprintf(stderr, "[%s] WARNING: Imprint storage full. Truncating at sid=%u \"%s\"\n",
-			        ctx.timeAsString(), (unsigned) ctx.progress, pStore->signatures[ctx.progress].name);
+				ctx.timeAsString(), (unsigned) ctx.progress, pStore->signatures[ctx.progress].name);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f\n",
-			        ctx.timeAsString(),
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+				ctx.timeAsString(),
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 	}
 
 	/**
@@ -1119,12 +1116,12 @@ struct genmemberContext_t : dbtool_t {
 		if (lhs == rhs)
 			return 0;
 
-		genmemberContext_t *pApp = static_cast<genmemberContext_t *>(arg);
+		genmemberContext_t *pApp        = static_cast<genmemberContext_t *>(arg);
 		// Arguments are signature offsets
-		const signature_t *pSignatureL = pApp->pStore->signatures + *(unsigned *) lhs;
-		const signature_t *pSignatureR = pApp->pStore->signatures + *(unsigned *) rhs;
-		const hint_t *pHintL = pApp->pStore->hints + pSignatureL->hintId;
-		const hint_t *pHintR = pApp->pStore->hints + pSignatureR->hintId;
+		const signature_t  *pSignatureL = pApp->pStore->signatures + *(unsigned *) lhs;
+		const signature_t  *pSignatureR = pApp->pStore->signatures + *(unsigned *) rhs;
+		const hint_t       *pHintL      = pApp->pStore->hints + pSignatureL->hintId;
+		const hint_t       *pHintR      = pApp->pStore->hints + pSignatureR->hintId;
 
 		int cmp;
 
@@ -1181,8 +1178,8 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		// fill map with offsets to signatures
-		unsigned numHint = 0;
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		unsigned      numHint = 0;
+		for (unsigned iSid    = 1; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			if (~pSignature->flags & signature_t::SIGMASK_SAFE)
@@ -1213,9 +1210,9 @@ struct genmemberContext_t : dbtool_t {
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1226,16 +1223,16 @@ struct genmemberContext_t : dbtool_t {
 					int etaS = eta;
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
 			}
 
 			// get signature
-			unsigned iSid = pHintMap[iHint];
+			unsigned          iSid        = pHintMap[iHint];
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			/*
@@ -1272,14 +1269,14 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.progress != ctx.progressHi && opt_sidHi == 0) {
 			fprintf(stderr, "[%s] WARNING: Imprint storage full. Truncating at %u \"%s\"\n",
-			        ctx.timeAsString(), (unsigned) ctx.progress, pStore->signatures[ctx.progress].name);
+				ctx.timeAsString(), (unsigned) ctx.progress, pStore->signatures[ctx.progress].name);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f\n",
-			        ctx.timeAsString(),
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+				ctx.timeAsString(),
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
 
 		ctx.myFree("pSignatureIndex", pHintMap);
 	}
@@ -1303,7 +1300,7 @@ struct genmemberContext_t : dbtool_t {
 		FILE *f = fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
-			          this->opt_load, __FUNCTION__, __FILE__, __LINE__);
+				  this->opt_load, __FUNCTION__, __FILE__, __LINE__);
 
 		// apply settings for `--window`
 		generator.windowLo = this->opt_windowLo;
@@ -1314,7 +1311,7 @@ struct genmemberContext_t : dbtool_t {
 		ctx.tick = 0;
 		skipDuplicate = skipSize = skipUnsafe = 0;
 
-		char name[64];
+		char     name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
 		this->truncated = 0;
 
@@ -1329,9 +1326,9 @@ struct genmemberContext_t : dbtool_t {
 			int ret = ::sscanf(line, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef);
 
 			// calculate values
-			unsigned newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
-			unsigned beenThere = 0;
-			for (const char *p = name; *p; p++) {
+			unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
+			unsigned        beenThere      = 0;
+			for (const char *p             = name; *p; p++) {
 				if (::islower(*p)) {
 					if (~beenThere & (1 << (*p - 'a'))) {
 						newPlaceholder++;
@@ -1345,10 +1342,10 @@ struct genmemberContext_t : dbtool_t {
 
 			if (ret != 1 && ret != 4)
 				ctx.fatal("\n{\"error\":\"bad/empty line\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 			if (ret == 4 && (numPlaceholder != newPlaceholder || numEndpoint != newEndpoint || numBackRef != newBackRef))
 				ctx.fatal("\n{\"error\":\"line has incorrect values\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			// test if line is within progress range
 			// NOTE: first line has `progress==0`
@@ -1380,7 +1377,7 @@ struct genmemberContext_t : dbtool_t {
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
-				        ctx.timeAsString(), this->truncated, this->truncatedName);
+					ctx.timeAsString(), this->truncated, this->truncatedName);
 
 			// save position for final status
 			this->opt_windowHi = this->truncated;
@@ -1388,12 +1385,12 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
-			        ctx.timeAsString(),
-			        ctx.progress,
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-			        numEmpty, numUnsafe - numEmpty,
-			        skipDuplicate, skipSize, skipUnsafe);
+				ctx.timeAsString(),
+				ctx.progress,
+				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				numEmpty, numUnsafe - numEmpty,
+				skipDuplicate, skipSize, skipUnsafe);
 	}
 
 	/**
@@ -1477,15 +1474,15 @@ struct genmemberContext_t : dbtool_t {
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
-				        ctx.timeAsString(), this->truncated, this->truncatedName);
+					ctx.timeAsString(), this->truncated, this->truncatedName);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
-			        pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-			        numEmpty, numUnsafe - numEmpty,
-			        skipDuplicate, skipSize, skipUnsafe);
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
+				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				numEmpty, numUnsafe - numEmpty,
+				skipDuplicate, skipSize, skipUnsafe);
 	}
 
 	/**
@@ -1516,7 +1513,7 @@ struct genmemberContext_t : dbtool_t {
 		::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
 		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++)
 			pStore->signatures[iSid].firstMember = 0;
-		pStore->numMember = 1;
+		pStore->numMember                            = 1;
 		skipDuplicate = skipSize = skipUnsafe = 0;
 
 		// reload everything
@@ -1530,7 +1527,7 @@ struct genmemberContext_t : dbtool_t {
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u skipUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1541,7 +1538,7 @@ struct genmemberContext_t : dbtool_t {
 					int etaS = eta;
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u skipUnsafe=%u | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
@@ -1593,7 +1590,7 @@ struct genmemberContext_t : dbtool_t {
 				pStore->memberIndex[ix] = pStore->numMember;
 
 				// add to group
-				pMember->nextMember = pSignature->firstMember;
+				pMember->nextMember     = pSignature->firstMember;
 				pSignature->firstMember = pStore->numMember;
 
 				// copy
@@ -1608,7 +1605,7 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Indexed members. numMember=%u skipUnsafe=%u\n",
-			        ctx.timeAsString(), pStore->numMember, skipUnsafe);
+				ctx.timeAsString(), pStore->numMember, skipUnsafe);
 
 		/*
 		 * Recalculate empty/unsafe groups
@@ -1632,7 +1629,7 @@ struct genmemberContext_t : dbtool_t {
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
 
 	}
 
@@ -1695,7 +1692,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]\n", argv[0]);
 
 	if (verbose) {
@@ -1739,7 +1736,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -1749,7 +1746,7 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG   = 1,
 			LO_FORCE,
 			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
@@ -1776,8 +1773,8 @@ int main(int argc, char *const *argv) {
 			LO_UNSAFE,
 			LO_WINDOW,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -1831,174 +1828,174 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_GENERATE:
-				app.opt_generate++;
-				break;
-			case LO_HELP:
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_GENERATE:
+			app.opt_generate++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_IMPRINTINDEXSIZE:
+			app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_INTERLEAVE:
+			app.opt_interleave = ::strtoul(optarg, NULL, 0);
+			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
+				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+			break;
+		case LO_LOAD:
+			app.opt_load = optarg;
+			break;
+		case LO_MAXIMPRINT:
+			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXMEMBER:
+			app.opt_maxMember = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MEMBERINDEXSIZE:
+			app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_NOGENERATE:
+			app.opt_generate = 0;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_NOUNSAFE:
+			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_RATIO:
+			app.opt_ratio = strtof(optarg, NULL);
+			break;
+		case LO_NOSAVEINDEX:
+			app.opt_saveIndex = 0;
+			break;
+		case LO_SAVEINDEX:
+			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+			break;
+		case LO_SID: {
+			unsigned m, n;
+
+			int ret = sscanf(optarg, "%u,%u", &m, &n);
+			if (ret == 2) {
+				app.opt_sidLo = m;
+				app.opt_sidHi = n;
+			} else if (ret == 1) {
+				app.opt_sidHi = m;
+			} else {
 				usage(argv, true);
-				exit(0);
-			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_INTERLEAVE:
-				app.opt_interleave = ::strtoul(optarg, NULL, 0);
-				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
-					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
-				break;
-			case LO_LOAD:
-				app.opt_load = optarg;
-				break;
-			case LO_MAXIMPRINT:
-				app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
-				break;
-			case LO_MAXMEMBER:
-				app.opt_maxMember = ctx.dToMax(::strtod(optarg, NULL));
-				break;
-			case LO_MEMBERINDEXSIZE:
-				app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_NOGENERATE:
-				app.opt_generate = 0;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_NOUNSAFE:
-				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_RATIO:
-				app.opt_ratio = strtof(optarg, NULL);
-				break;
-			case LO_NOSAVEINDEX:
-				app.opt_saveIndex = 0;
-				break;
-			case LO_SAVEINDEX:
-				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
-				break;
-			case LO_SID: {
-				unsigned m, n;
+				exit(1);
+			}
 
-				int ret = sscanf(optarg, "%u,%u", &m, &n);
-				if (ret == 2) {
-					app.opt_sidLo = m;
-					app.opt_sidHi = n;
-				} else if (ret == 1) {
-					app.opt_sidHi = m;
-				} else {
-					usage(argv, true);
+			break;
+		}
+		case LO_SIGNATUREINDEXSIZE:
+			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_TASK:
+			if (::strcmp(optarg, "sge") == 0) {
+				const char *p;
+
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
+				}
+
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
 					exit(1);
 				}
 
-				break;
-			}
-			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_TASK:
-				if (::strcmp(optarg, "sge") == 0) {
-					const char *p;
-
-					p = getenv("SGE_TASK_ID");
-					app.opt_taskId = p ? atoi(p) : 0;
-					if (app.opt_taskId < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-						exit(0);
-					}
-
-					p = getenv("SGE_TASK_LAST");
-					app.opt_taskLast = p ? atoi(p) : 0;
-					if (app.opt_taskLast < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-						exit(0);
-					}
-
-					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
-						exit(1);
-					}
-
-					// set ticker interval to 60 seconds
-					ctx.opt_timer = 60;
-				} else {
-					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-						usage(argv, true);
-						exit(1);
-					}
-					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-						fprintf(stderr, "Task id/last must be non-zero\n");
-						exit(1);
-					}
-					if (app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "Task id exceeds last\n");
-						exit(1);
-					}
-				}
-				break;
-			case LO_TEXT:
-				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_TRUNCATE:
-				app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
-				break;
-			case LO_UNSAFE:
-				ctx.flags |= context_t::MAGICMASK_UNSAFE;
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
-			case LO_WINDOW: {
-				uint64_t m, n;
-
-				int ret = sscanf(optarg, "%lu,%lu", &m, &n);
-				if (ret == 2) {
-					app.opt_windowLo = m;
-					app.opt_windowHi = n;
-				} else if (ret == 1) {
-					app.opt_windowHi = m;
-				} else {
+				// set ticker interval to 60 seconds
+				ctx.opt_timer = 60;
+			} else {
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
 					usage(argv, true);
 					exit(1);
 				}
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
+					exit(1);
+				}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
+				}
+			}
+			break;
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_TRUNCATE:
+			app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
+			break;
+		case LO_UNSAFE:
+			ctx.flags |= context_t::MAGICMASK_UNSAFE;
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+		case LO_WINDOW: {
+			uint64_t m, n;
 
-				break;
+			int ret = sscanf(optarg, "%lu,%lu", &m, &n);
+			if (ret == 2) {
+				app.opt_windowLo = m;
+				app.opt_windowHi = n;
+			} else if (ret == 1) {
+				app.opt_windowHi = m;
+			} else {
+				usage(argv, true);
+				exit(1);
 			}
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+			break;
+		}
+
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -2120,10 +2117,8 @@ int main(int argc, char *const *argv) {
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
 	}
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	/*
 	 * @date 2020-04-21 00:16:34
@@ -2251,10 +2246,10 @@ int main(int argc, char *const *argv) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] numImprint=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
-		        ctx.timeAsString(),
-		        store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-		        store.numMember, store.numMember * 100.0 / store.maxMember,
-		        app.numEmpty, app.numUnsafe - app.numEmpty);
+			ctx.timeAsString(),
+			store.numImprint, store.numImprint * 100.0 / store.maxImprint,
+			store.numMember, store.numMember * 100.0 / store.maxMember,
+			app.numEmpty, app.numUnsafe - app.numEmpty);
 
 	/*
 	 * Where to look for new candidates
@@ -2335,11 +2330,11 @@ int main(int argc, char *const *argv) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize = 0;
-			store.imprintIndexSize = 0;
-			store.numImprint = 0;
-			store.interleave = 0;
-			store.interleaveStep = 0;
+			store.hintIndexSize      = 0;
+			store.imprintIndexSize   = 0;
+			store.numImprint         = 0;
+			store.interleave         = 0;
+			store.interleaveStep     = 0;
 		}
 
 		// unexpected termination should unlink the outputs
@@ -2350,7 +2345,6 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-#if defined(ENABLE_JANSSON)
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.opt_taskLast) {
@@ -2365,14 +2359,6 @@ int main(int argc, char *const *argv) {
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-#else
-		if (app.opt_taskLast)
-			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
-		else if (app.opt_windowLo || app.opt_windowHi)
-			fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
-		else
-			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-#endif
 	}
 
 	return 0;

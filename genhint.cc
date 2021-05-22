@@ -80,9 +80,9 @@ struct genhintContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		OPTTEXT_WON = 1,
+		OPTTEXT_WON     = 1,
 		OPTTEXT_COMPARE = 2,
-		OPTTEXT_BRIEF = 3,
+		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
 
 	};
@@ -96,28 +96,28 @@ struct genhintContext_t : dbtool_t {
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 	/// @var {number} Analyse input database
-	unsigned opt_analyse;
+	unsigned   opt_analyse;
 	/// @var {number} force overwriting of database if already exists
-	unsigned opt_force;
+	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
-	unsigned opt_generate;
+	unsigned   opt_generate;
 	/// @var {string} name of file containing interleave hints
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned opt_saveIndex;
+	unsigned   opt_saveIndex;
 	/// @var {number} Sid range upper bound
-	unsigned opt_sidHi;
+	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
-	unsigned opt_sidLo;
+	unsigned   opt_sidLo;
 	/// @var {number} task Id. First task=1
-	unsigned opt_taskId;
+	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
-	unsigned opt_taskLast;
+	unsigned   opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
+	unsigned   opt_text;
 
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
@@ -133,25 +133,25 @@ struct genhintContext_t : dbtool_t {
 	 */
 	genhintContext_t(context_t &ctx) : dbtool_t(ctx) {
 		// arguments and options
-		opt_analyse = 0;
-		opt_force = 0;
-		opt_generate = 1;
-		arg_inputDatabase = NULL;
-		opt_load = NULL;
+		opt_analyse        = 0;
+		opt_force          = 0;
+		opt_generate       = 1;
+		arg_inputDatabase  = NULL;
+		opt_load           = NULL;
 		arg_outputDatabase = NULL;
-		opt_saveIndex = 1;
-		opt_sidHi = 0;
-		opt_sidLo = 0;
-		opt_taskId = 0;
-		opt_taskLast = 0;
-		opt_text = 0;
+		opt_saveIndex      = 1;
+		opt_sidHi          = 0;
+		opt_sidLo          = 0;
+		opt_taskId         = 0;
+		opt_taskLast       = 0;
+		opt_text           = 0;
 
-		pStore = NULL;
+		pStore   = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
 		activeHintIndex = 0;
-		skipDuplicate = 0;
+		skipDuplicate   = 0;
 	}
 
 	/**
@@ -170,9 +170,9 @@ struct genhintContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numHint=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+					skipDuplicate);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -183,15 +183,15 @@ struct genhintContext_t : dbtool_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d numHint=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
-				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
+					pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+					skipDuplicate);
 			}
 
 			ctx.tick = 0;
 		}
 
-		hint_t hint;
+		hint_t     hint;
 		tinyTree_t tree(ctx);
 
 		::memset(&hint, 0, sizeof(hint));
@@ -202,8 +202,8 @@ struct genhintContext_t : dbtool_t {
 		for (const metricsInterleave_t *pInterleave = metricsInterleave; pInterleave->numSlot; pInterleave++) {
 			// prepare database
 			tempdb.InvalidateVersioned();
-			tempdb.numImprint = 1; // skip reserved first entry
-			tempdb.interleave = pInterleave->numStored;
+			tempdb.numImprint     = 1; // skip reserved first entry
+			tempdb.interleave     = pInterleave->numStored;
 			tempdb.interleaveStep = pInterleave->interleaveStep;
 
 			// add imprint
@@ -222,7 +222,7 @@ struct genhintContext_t : dbtool_t {
 		// add to database
 		if (!this->readOnlyMode) {
 			// lookup/add hintId
-			unsigned ix = pStore->lookupHint(&hint);
+			unsigned ix     = pStore->lookupHint(&hint);
 			unsigned hintId = pStore->hintIndex[ix];
 			if (hintId == 0)
 				pStore->hintIndex[ix] = hintId = pStore->addHint(&hint);
@@ -254,7 +254,7 @@ struct genhintContext_t : dbtool_t {
 		FILE *f = ::fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
-			          this->opt_load, __FUNCTION__, __FILE__, __LINE__);
+				  this->opt_load, __FUNCTION__, __FILE__, __LINE__);
 
 		// reset ticker
 		ctx.setupSpeed(0);
@@ -268,17 +268,17 @@ struct genhintContext_t : dbtool_t {
 				int perSecond = ctx.updateSpeed();
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numHint=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+					skipDuplicate);
 
 				ctx.tick = 0;
 			}
 
 			static char line[512];
-			char *pLine = line;
-			char *endptr;
-			hint_t hint;
+			char        *pLine = line;
+			char        *endptr;
+			hint_t      hint;
 
 			::memset(&hint, 0, sizeof(hint));
 
@@ -298,11 +298,11 @@ struct genhintContext_t : dbtool_t {
 
 			while (*pLine && !::isspace(*pLine))
 				*pName++ = *pLine++;
-			*pName = 0; // terminator
+			*pName           = 0; // terminator
 
 			if (!name[0])
 				ctx.fatal("\n{\"error\":\"bad or empty line\",\"where\":\"%s:%s:%d\",\"line\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			/*
 			 * load entries
@@ -329,7 +329,7 @@ struct genhintContext_t : dbtool_t {
 
 				if (pLine == endptr || numEntry >= hint_t::MAXENTRY)
 					ctx.fatal("\n{\"error\":\"bad or too many columns\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+						  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 				hint.numStored[numEntry++] = tid;
 				pLine = endptr;
@@ -343,11 +343,11 @@ struct genhintContext_t : dbtool_t {
 			 */
 
 			// lookup signature
-			unsigned ix = pStore->lookupSignature(name);
+			unsigned ix  = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0)
 				ctx.fatal("\n{\"error\":\"missing signature\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 			if (!this->readOnlyMode) {
 				// lookup/add hintId
@@ -363,7 +363,7 @@ struct genhintContext_t : dbtool_t {
 					pStore->signatures[sid].hintId = hintId;
 				} else if (pStore->signatures[sid].hintId != hintId)
 					ctx.fatal("\n{\"error\":\"inconsistent hint\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+						  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 			}
 
 			if (opt_text == OPTTEXT_WON) {
@@ -385,9 +385,9 @@ struct genhintContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read hints. numHint=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(),
-			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-			        skipDuplicate);
+				ctx.timeAsString(),
+				pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+				skipDuplicate);
 	}
 
 	/**
@@ -452,9 +452,9 @@ struct genhintContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numHint=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(),
-			        pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
-			        skipDuplicate);
+				ctx.timeAsString(),
+				pStore->numHint, pStore->numHint * 100.0 / pStore->maxHint,
+				skipDuplicate);
 	}
 
 	/**
@@ -474,12 +474,12 @@ struct genhintContext_t : dbtool_t {
 		if (lhs == rhs)
 			return 0;
 
-		genhintContext_t *pApp = static_cast<genhintContext_t *>(arg);
+		genhintContext_t  *pApp        = static_cast<genhintContext_t *>(arg);
 		// Arguments are signature offsets
 		const signature_t *pSignatureL = pApp->pStore->signatures + *(unsigned *) lhs;
 		const signature_t *pSignatureR = pApp->pStore->signatures + *(unsigned *) rhs;
-		const hint_t *pHintL = pApp->pStore->hints + pSignatureL->hintId;
-		const hint_t *pHintR = pApp->pStore->hints + pSignatureR->hintId;
+		const hint_t      *pHintL      = pApp->pStore->hints + pSignatureL->hintId;
+		const hint_t      *pHintR      = pApp->pStore->hints + pSignatureR->hintId;
 
 		int cmp;
 
@@ -557,8 +557,8 @@ struct genhintContext_t : dbtool_t {
 			this->activeHintIndex = pInterleave - metricsInterleave;
 
 			// fill map with offsets to signatures
-			unsigned numHint = 0;
-			for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+			unsigned      numHint = 0;
+			for (unsigned iSid    = 1; iSid < pStore->numSignature; iSid++) {
 				const signature_t *pSignature = pStore->signatures + iSid;
 
 				if (~pSignature->flags & signature_t::SIGMASK_SAFE)
@@ -570,11 +570,11 @@ struct genhintContext_t : dbtool_t {
 			qsort_r(pHintMap, numHint, sizeof(*pHintMap), comparHint, this);
 
 			// count how many signatures fit in memory
-			uint64_t memLeft = this->opt_analyse;
-			unsigned numSelect = 0;
-			for (unsigned iHint = 0; iHint < numHint; iHint++) {
+			uint64_t      memLeft   = this->opt_analyse;
+			unsigned      numSelect = 0;
+			for (unsigned iHint     = 0; iHint < numHint; iHint++) {
 				const signature_t *pSignature = pStore->signatures + pHintMap[iHint];
-				const hint_t *pHint = pStore->hints + pSignature->hintId;
+				const hint_t      *pHint      = pStore->hints + pSignature->hintId;
 
 				// size imprints will use for signature
 				unsigned sz = sizeof(imprint_t) * pHint->numStored[this->activeHintIndex];
@@ -587,7 +587,7 @@ struct genhintContext_t : dbtool_t {
 				memLeft -= sz;
 			}
 
-			double numRound = (double) numHint / numSelect;
+			double   numRound   = (double) numHint / numSelect;
 			unsigned numCompare = __builtin_ceil(numRound) * pInterleave->numRuntime;
 			printf("ix=%u numHint=%u interleave=%u numSelect=%u numRound=%.1f numCompare=%u\n", this->activeHintIndex, numHint, metricsInterleave[this->activeHintIndex].numStored, numSelect, numRound, numCompare);
 		}
@@ -654,7 +654,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> [<output.db>]\n", argv[0]);
 
 	if (verbose) {
@@ -690,7 +690,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -721,8 +721,8 @@ int main(int argc, char *const *argv) {
 			LO_TIMER,
 			LO_UNSAFE,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -770,146 +770,146 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_ANALYSE:
-				app.opt_analyse = ctx.dToMax(::strtod(optarg, NULL));
-				break;
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_GENERATE:
-				app.opt_generate++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_HINTINDEXSIZE:
-				app.opt_hintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_LOAD:
-				app.opt_load = optarg;
-				break;
-			case LO_MAXHINT:
-				app.opt_maxHint = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_NOGENERATE:
-				app.opt_generate = 0;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_NOSAVEINDEX:
-				app.opt_saveIndex = 0;
-				break;
-			case LO_NOUNSAFE:
-				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SAVEINDEX:
-				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
-				break;
-			case LO_SID: {
-				unsigned m, n;
+		case LO_ANALYSE:
+			app.opt_analyse = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_GENERATE:
+			app.opt_generate++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_HINTINDEXSIZE:
+			app.opt_hintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_LOAD:
+			app.opt_load = optarg;
+			break;
+		case LO_MAXHINT:
+			app.opt_maxHint = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_NOGENERATE:
+			app.opt_generate = 0;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_NOSAVEINDEX:
+			app.opt_saveIndex = 0;
+			break;
+		case LO_NOUNSAFE:
+			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_SAVEINDEX:
+			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+			break;
+		case LO_SID: {
+			unsigned m, n;
 
-				int ret = sscanf(optarg, "%u,%u", &m, &n);
-				if (ret == 2) {
-					app.opt_sidLo = m;
-					app.opt_sidHi = n;
-				} else if (ret == 1) {
-					app.opt_sidHi = m;
-				} else {
+			int ret = sscanf(optarg, "%u,%u", &m, &n);
+			if (ret == 2) {
+				app.opt_sidLo = m;
+				app.opt_sidHi = n;
+			} else if (ret == 1) {
+				app.opt_sidHi = m;
+			} else {
+				usage(argv, true);
+				exit(1);
+			}
+			if (app.opt_sidHi && app.opt_sidLo >= app.opt_sidHi) {
+				fprintf(stderr, "--sid low exceeds high\n");
+				exit(1);
+			}
+			break;
+		}
+		case LO_TASK: {
+			if (::strcmp(optarg, "sge") == 0) {
+				const char *p;
+
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
+				}
+
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
+					exit(1);
+				}
+
+				// set ticker interval to 60 seconds
+				ctx.opt_timer = 60;
+			} else {
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
 					usage(argv, true);
 					exit(1);
 				}
-				if (app.opt_sidHi && app.opt_sidLo >= app.opt_sidHi) {
-					fprintf(stderr, "--sid low exceeds high\n");
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
 					exit(1);
 				}
-				break;
-			}
-			case LO_TASK: {
-				if (::strcmp(optarg, "sge") == 0) {
-					const char *p;
-
-					p = getenv("SGE_TASK_ID");
-					app.opt_taskId = p ? atoi(p) : 0;
-					if (app.opt_taskId < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-						exit(0);
-					}
-
-					p = getenv("SGE_TASK_LAST");
-					app.opt_taskLast = p ? atoi(p) : 0;
-					if (app.opt_taskLast < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-						exit(0);
-					}
-
-					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
-						exit(1);
-					}
-
-					// set ticker interval to 60 seconds
-					ctx.opt_timer = 60;
-				} else {
-					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-						usage(argv, true);
-						exit(1);
-					}
-					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-						fprintf(stderr, "Task id/last must be non-zero\n");
-						exit(1);
-					}
-					if (app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "Task id exceeds last\n");
-						exit(1);
-					}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
 				}
-
-				break;
 			}
-			case LO_TEXT:
-				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_UNSAFE:
-				ctx.flags |= context_t::MAGICMASK_UNSAFE;
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+			break;
+		}
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_UNSAFE:
+			ctx.flags |= context_t::MAGICMASK_UNSAFE;
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -1001,10 +1001,8 @@ int main(int argc, char *const *argv) {
 			app.opt_sidHi = 0;
 	}
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	/*
 	 * Create output database
@@ -1102,9 +1100,9 @@ int main(int argc, char *const *argv) {
 		 * Use separate db as to not to interfere with real imprints
 		 */
 		database_t tempdb(ctx);
-		tempdb.maxHint = 0;
-		tempdb.hintIndexSize = ctx.nextPrime(tempdb.maxHint * app.opt_ratio);
-		tempdb.maxImprint = MAXTRANSFORM + 1;
+		tempdb.maxHint          = 0;
+		tempdb.hintIndexSize    = ctx.nextPrime(tempdb.maxHint * app.opt_ratio);
+		tempdb.maxImprint       = MAXTRANSFORM + 1;
 		tempdb.imprintIndexSize = ctx.nextPrime(tempdb.maxImprint * app.opt_ratio);
 		tempdb.create(0);
 		tempdb.enableVersioned();
@@ -1121,7 +1119,7 @@ int main(int argc, char *const *argv) {
 
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
-			const hint_t *pHint = store.hints + pSignature->hintId;
+			const hint_t      *pHint      = store.hints + pSignature->hintId;
 
 			printf("%s\t", pSignature->name);
 
@@ -1139,11 +1137,11 @@ int main(int argc, char *const *argv) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize = 0;
-			store.imprintIndexSize = 0;
-			store.numImprint = 0;
-			store.interleave = 0;
-			store.interleaveStep = 0;
+			store.hintIndexSize      = 0;
+			store.imprintIndexSize   = 0;
+			store.numImprint         = 0;
+			store.interleave         = 0;
+			store.interleaveStep     = 0;
 		}
 
 		// unexpected termination should unlink the outputs
@@ -1154,7 +1152,6 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-#if defined(ENABLE_JANSSON)
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.opt_taskLast) {
@@ -1169,14 +1166,6 @@ int main(int argc, char *const *argv) {
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-#else
-		if (app.opt_taskLast)
-			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_sidLo, app.opt_sidHi);
-		else if (app.opt_sidLo || app.opt_sidHi)
-			fprintf(stderr, "{\"done\":\"%s\",\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_sidLo, app.opt_sidHi);
-		else
-			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-#endif
 	}
 
 	return 0;

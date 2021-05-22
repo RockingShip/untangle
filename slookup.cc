@@ -55,14 +55,14 @@ struct slookupContext_t {
 	/// @var {string} name of database
 	const char *opt_database;
 	/// @var {number} search by imprints
-	unsigned opt_imprint;
+	unsigned   opt_imprint;
 	/// @var {number} show signature members
-	unsigned opt_member;
+	unsigned   opt_member;
 	/// @var {number} show signature swaps
-	unsigned opt_swap;
+	unsigned   opt_swap;
 
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
@@ -70,12 +70,12 @@ struct slookupContext_t {
 
 	slookupContext_t(context_t &ctx) : ctx(ctx) {
 		opt_database = "untangle.db";
-		opt_imprint = 0;
-		opt_member = 0;
-		opt_swap = 0;
-		pStore = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
+		opt_imprint  = 0;
+		opt_member   = 0;
+		opt_swap     = 0;
+		pStore       = NULL;
+		pEvalFwd     = NULL;
+		pEvalRev     = NULL;
 	}
 
 	/**
@@ -92,7 +92,7 @@ struct slookupContext_t {
 		// Create worker tree
 
 		signature_t *pSignature = NULL;
-		unsigned sid = 0, tid = 0;
+		unsigned    sid         = 0, tid = 0;
 
 		/*
 		 * Test to see if numeric id
@@ -164,8 +164,8 @@ struct slookupContext_t {
 
 		if (opt_swap) {
 			printf(" swaps=[");
-			const swap_t *pSwap = pStore->swaps + pSignature->swapId;
-			for (unsigned j = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
+			const swap_t  *pSwap = pStore->swaps + pSignature->swapId;
+			for (unsigned j      = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
 				if (j)
 					putchar(',');
 				printf("%u:%.*s", pSwap->tids[j], pSignature->numPlaceholder, pStore->fwdTransformNames[pSwap->tids[j]]);
@@ -176,9 +176,9 @@ struct slookupContext_t {
 		printf(" %s\n", pName);
 
 		if (opt_member) {
-			unsigned lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;
+			unsigned    lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;
 			static char txt[256];
-			tinyTree_t tree(ctx);
+			tinyTree_t  tree(ctx);
 
 			/*
 			 * Determine column widths
@@ -190,23 +190,23 @@ struct slookupContext_t {
 				tree.decodeSafe(pMember->name);
 				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
 
-				len = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
+				len             = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
 				if (lenName < len)
 					lenName = len;
 
 				if (this->opt_member > 1) {
-					len = sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
+					len          = sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
 					if (lenQ < len)
 						lenQ = len;
 
 					if (pMember->Tsid & IBIT)
 						len = sprintf(txt, "-%u:%u:%s", pMember->Tsid & ~IBIT, pMember->Tmid, pStore->members[pMember->Tmid].name);
 					else
-						len = sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
+						len  = sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
 					if (lenT < len)
 						lenT = len;
 
-					len = sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
+					len          = sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
 					if (lenF < len)
 						lenF = len;
 
@@ -318,7 +318,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {slookupContext_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s name [...]\n", argv[0]);
 
 	if (verbose) {
@@ -343,7 +343,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -353,7 +353,7 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG    = 1,
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_PARANOID,
@@ -361,12 +361,12 @@ int main(int argc, char *const *argv) {
 			LO_TIMER,
 			// short opts
 			LO_DATABASE = 'D',
-			LO_HELP = 'h',
-			LO_IMPRINT = 'i',
-			LO_MEMBER = 'm',
-			LO_QUIET = 'q',
-			LO_SWAP = 's',
-			LO_VERBOSE = 'v',
+			LO_HELP     = 'h',
+			LO_IMPRINT  = 'i',
+			LO_MEMBER   = 'm',
+			LO_QUIET    = 'q',
+			LO_SWAP     = 's',
+			LO_VERBOSE  = 'v',
 		};
 
 		// long option descriptions
@@ -403,61 +403,61 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DATABASE:
-				app.opt_database = optarg;
-				break;
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_IMPRINT:
-				app.opt_imprint++;
-				break;
-			case LO_MEMBER:
-				app.opt_member = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_member + 1;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SWAP:
-				app.opt_swap = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_swap + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
+		case LO_DATABASE:
+			app.opt_database = optarg;
+			break;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_IMPRINT:
+			app.opt_imprint++;
+			break;
+		case LO_MEMBER:
+			app.opt_member = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_member + 1;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_SWAP:
+			app.opt_swap = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_swap + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -489,10 +489,8 @@ int main(int argc, char *const *argv) {
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	if (db.numTransform == 0)
 		ctx.fatal("Missing transform section: %s\n", app.opt_database);
@@ -512,7 +510,7 @@ int main(int argc, char *const *argv) {
 	 */
 
 #if 0
-	if (app.opt_verbose >= app.VERBOSE_ACTIONS)
+	if (ctx.opt_verbose >= app.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %.3fG memory\n", app.timeAsString(), app.totalAllocated / 1e9);
 #endif
 

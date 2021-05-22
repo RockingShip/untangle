@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /**
  * Source is based on ancient code and insights.
@@ -99,27 +99,27 @@ int main() {
  */
 
 /// @global {number} --quiet
-unsigned opt_quiet = 0;
+unsigned opt_quiet      = 0;
 /// @global {number} --verbose
-unsigned opt_verbose = 0;
+unsigned opt_verbose    = 0;
 /// @global {number} --skin, display notation with placeholders and skin
-unsigned opt_skin = 0;
+unsigned opt_skin       = 0;
 /// @global {number} --code, output tree as gcc statement expression
-unsigned opt_code = 0;
+unsigned opt_code       = 0;
 /// @global {number} --fast, do not normalise input
-unsigned opt_fast = 0;
+unsigned opt_fast       = 0;
 /// @global {number} --pure, `QTF->QnTF` rewriting
-unsigned opt_pure = 0;
+unsigned opt_pure       = 0;
 /// @global {number} --seed=n, Random seed to generate evaluator test pattern
-unsigned opt_seed = 1;
+unsigned opt_seed       = 1;
 /// @global {number} --shrinkwrap, Adjust nstart to highest found endpount
 unsigned opt_shrinkwrap = 0;
 /// @global {number} --Q, Select the `"question"` part of the top-level node
-unsigned opt_Q = 0;
+unsigned opt_Q          = 0;
 /// @global {number} --T, Select the `"when-true"` part of the top-level node
-unsigned opt_T = 0;
+unsigned opt_T          = 0;
 /// @global {number} --F, Select the `"when-false"` part of the top-level node
-unsigned opt_F = 0;
+unsigned opt_F          = 0;
 
 /**
  * @date 2020-03-06 21:06:01
@@ -129,7 +129,7 @@ unsigned opt_F = 0;
  * @param {string[]} argv - program arguments
  * @param {boolean} verbose - set to true for option descriptions
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-c --code       Output tree as gcc statement expression\n");
@@ -319,7 +319,7 @@ struct tree_t {
 		// first members
 		this->kstart = rhs.kstart;
 		this->nstart = rhs.nstart;
-		this->count = rhs.count;
+		this->count  = rhs.count;
 
 		// then nodes
 		for (unsigned i = rhs.nstart; i < count; i++)
@@ -338,7 +338,7 @@ struct tree_t {
 	 */
 	inline void clear(void) {
 		this->count = this->nstart; // rewind first free node
-		this->root = 0; // set result to zero-reference
+		this->root  = 0; // set result to zero-reference
 	}
 
 	/**
@@ -362,7 +362,7 @@ struct tree_t {
 
 		static uint32_t stackL[NEND * 3]; // there are 3 operands per per opcode
 		static uint32_t stackR[NEND * 3]; // there are 3 operands per per opcode
-		int stackPos = 0;
+		int             stackPos = 0;
 
 		assert(~lhs & IBIT);
 		assert(~rhs & IBIT);
@@ -742,8 +742,8 @@ struct tree_t {
 		}
 
 		// create new entry
-		unsigned nid = this->count++;
-		node_t *pNode = this->N + nid;
+		unsigned nid    = this->count++;
+		node_t   *pNode = this->N + nid;
 
 		// populate
 		pNode->Q = Q;
@@ -765,9 +765,9 @@ struct tree_t {
 	 */
 	void decodeEndpoints(const char *pName, unsigned *pHighestEndpoint, unsigned *pNumSkin, uint32_t *pSkin) const {
 
-		unsigned prefix = 0; // current prefix
+		unsigned prefix          = 0; // current prefix
 		unsigned highestEndpoint = 0; // highest endpoints
-		unsigned numSkin = 0; // number of skin elements
+		unsigned numSkin         = 0; // number of skin elements
 
 		/*
 		 * walk through the notation until end or until placeholder/skin separator
@@ -806,7 +806,7 @@ struct tree_t {
 		if (*pName != '/') {
 			// missing separator
 			*pHighestEndpoint = highestEndpoint; // highest endpoint in basic notation
-			*pNumSkin = 0; // no skin
+			*pNumSkin         = 0; // no skin
 			return;
 		}
 
@@ -853,7 +853,7 @@ struct tree_t {
 
 		// return result
 		*pHighestEndpoint = highestEndpoint; // highest endpoint in skin
-		*pNumSkin = numSkin; // number of skin elements
+		*pNumSkin         = numSkin; // number of skin elements
 	}
 
 	/**
@@ -873,17 +873,17 @@ struct tree_t {
 
 		// initialise tree
 		this->count = this->nstart;
-		this->root = 0;
+		this->root  = 0;
 
 		// initialise state
-		nextNode = this->nstart;
+		nextNode                     = this->nstart;
 
 		// temporary stack storage for postfix notation
 		static uint32_t stack[NEND];
-		int stackPos = 0;
-		unsigned prefix = 0;
-		uint32_t nestStack[16];
-		unsigned nestStackPos = 0;
+		int             stackPos     = 0;
+		unsigned        prefix       = 0;
+		uint32_t        nestStack[16];
+		unsigned        nestStackPos = 0;
 
 
 		// walk through the notation until end or until placeholder/skin separator
@@ -1014,213 +1014,213 @@ struct tree_t {
 			}
 
 			switch (*pCh) {
-				case '>': {
-					// GT (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(L, R ^ IBIT, 0);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '^': {
-					// XOR (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(L, R ^ IBIT, R);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '+': {
-					// OR (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(L, 0 ^ IBIT, R);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '!': {
-					// QnTF (appreciated)
-					if (stackPos < 3) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
-
-					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(Q, T ^ IBIT, F);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '&': {
-					// AND (depreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(L, R, 0);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '?': {
-					// QTF (depreciated)
-					if (stackPos < 3) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
-
-					if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(Q, T, F);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				case '~': {
-					// NOT (support)
-					if (stackPos < 1) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// invert top-of-stack
-					stack[stackPos - 1] ^= IBIT;
-
-					break;
-				}
-
-				case '<': {
-					// LT (support)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					unsigned nid = addNode(L, 0, R);
-
-					// push
-					stack[stackPos++] = nid;
-
-					// save actual index for back references
-					beenThere[nextNode++] = nid;
-					break;
-				}
-
-				default:
-					printf("[bad token: %c]\n", *pCh);
+			case '>': {
+				// GT (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
 					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(L, R ^ IBIT, 0);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '^': {
+				// XOR (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(L, R ^ IBIT, R);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '+': {
+				// OR (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(L, 0 ^ IBIT, R);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '!': {
+				// QnTF (appreciated)
+				if (stackPos < 3) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
+
+				if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(Q, T ^ IBIT, F);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '&': {
+				// AND (depreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(L, R, 0);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '?': {
+				// QTF (depreciated)
+				if (stackPos < 3) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
+
+				if ((Q & ~IBIT) >= this->count || (T & ~IBIT) >= this->count || (F & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(Q, T, F);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			case '~': {
+				// NOT (support)
+				if (stackPos < 1) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// invert top-of-stack
+				stack[stackPos - 1] ^= IBIT;
+
+				break;
+			}
+
+			case '<': {
+				// LT (support)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & ~IBIT) >= this->count || (R & ~IBIT) >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				unsigned nid = addNode(L, 0, R);
+
+				// push
+				stack[stackPos++] = nid;
+
+				// save actual index for back references
+				beenThere[nextNode++] = nid;
+				break;
+			}
+
+			default:
+				printf("[bad token: %c]\n", *pCh);
+				return 1;
 			}
 		}
 
@@ -1250,13 +1250,13 @@ struct tree_t {
 	int decodeFast(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
-		this->count = this->nstart;
-		this->root = 0;
+		this->count              = this->nstart;
+		this->root               = 0;
 
 		// temporary stack storage for postfix notation
 		static uint32_t stack[NEND];
-		int stackPos = 0;
-		unsigned prefix = 0;
+		int             stackPos = 0;
+		unsigned        prefix   = 0;
 
 		// walk through the notation until end or until placeholder/skin separator
 		for (const char *pCh = pName; *pCh != 0 && *pCh != '/'; pCh++) {
@@ -1360,233 +1360,233 @@ struct tree_t {
 			}
 
 			switch (*pCh) {
-				case '>': {
-					// GT (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & IBIT) || (R & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (L >= this->count || R >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = L;
-					this->N[this->count].T = R ^ IBIT;
-					this->N[this->count].F = 0;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '^': {
-					// XOR (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & IBIT) || (R & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (L >= this->count || R >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = L;
-					this->N[this->count].T = R ^ IBIT;
-					this->N[this->count].F = R;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '+': {
-					// OR (appreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & IBIT) || (R & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (L >= this->count || R >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = L;
-					this->N[this->count].T = 0 ^ IBIT;
-					this->N[this->count].F = R;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '!': {
-					// QnTF (appreciated)
-					if (stackPos < 3) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
-
-					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (Q >= this->count || T >= this->count || F >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = Q;
-					this->N[this->count].T = T ^ IBIT;
-					this->N[this->count].F = F;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '&': {
-					// AND (depreciated)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & IBIT) || (R & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (L >= this->count || R >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = L;
-					this->N[this->count].T = R;
-					this->N[this->count].F = 0;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '?': {
-					// QTF (depreciated)
-					if (stackPos < 3) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
-
-					if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (Q >= this->count || T >= this->count || F >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					this->N[this->count].Q = Q;
-					this->N[this->count].T = T;
-					this->N[this->count].F = F;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				case '~': {
-					// NOT (support)
-					if (stackPos < 1) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					// invert top-of-stack
-					stack[stackPos - 1] ^= IBIT;
-
-					break;
-				}
-
-				case '<': {
-					// LT (support)
-					if (stackPos < 2) {
-						printf("[stack underflow]\n");
-						return 1;
-					}
-
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
-
-					if ((L & IBIT) || (R & IBIT)) {
-						printf("[invert not normalised]\n");
-						return 1;
-					}
-					if (L >= this->count || R >= this->count) {
-						printf("[operand out-of-range]\n");
-						return 1;
-					}
-
-					// create operator
-					this->N[this->count].Q = L;
-					this->N[this->count].T = 0;
-					this->N[this->count].F = R;
-
-					// push
-					stack[stackPos++] = this->count++;
-					break;
-				}
-
-				default:
-					printf("[bad token: %c]\n", *pCh);
+			case '>': {
+				// GT (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
 					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & IBIT) || (R & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (L >= this->count || R >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = L;
+				this->N[this->count].T = R ^ IBIT;
+				this->N[this->count].F = 0;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '^': {
+				// XOR (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & IBIT) || (R & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (L >= this->count || R >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = L;
+				this->N[this->count].T = R ^ IBIT;
+				this->N[this->count].F = R;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '+': {
+				// OR (appreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & IBIT) || (R & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (L >= this->count || R >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = L;
+				this->N[this->count].T = 0 ^ IBIT;
+				this->N[this->count].F = R;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '!': {
+				// QnTF (appreciated)
+				if (stackPos < 3) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
+
+				if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (Q >= this->count || T >= this->count || F >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = Q;
+				this->N[this->count].T = T ^ IBIT;
+				this->N[this->count].F = F;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '&': {
+				// AND (depreciated)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & IBIT) || (R & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (L >= this->count || R >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = L;
+				this->N[this->count].T = R;
+				this->N[this->count].F = 0;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '?': {
+				// QTF (depreciated)
+				if (stackPos < 3) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
+
+				if ((Q & IBIT) || (T & IBIT) || (F & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (Q >= this->count || T >= this->count || F >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				this->N[this->count].Q = Q;
+				this->N[this->count].T = T;
+				this->N[this->count].F = F;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			case '~': {
+				// NOT (support)
+				if (stackPos < 1) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				// invert top-of-stack
+				stack[stackPos - 1] ^= IBIT;
+
+				break;
+			}
+
+			case '<': {
+				// LT (support)
+				if (stackPos < 2) {
+					printf("[stack underflow]\n");
+					return 1;
+				}
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				if ((L & IBIT) || (R & IBIT)) {
+					printf("[invert not normalised]\n");
+					return 1;
+				}
+				if (L >= this->count || R >= this->count) {
+					printf("[operand out-of-range]\n");
+					return 1;
+				}
+
+				// create operator
+				this->N[this->count].Q = L;
+				this->N[this->count].T = 0;
+				this->N[this->count].F = R;
+
+				// push
+				stack[stackPos++] = this->count++;
+				break;
+			}
+
+			default:
+				printf("[bad token: %c]\n", *pCh);
+				return 1;
 			}
 		}
 
@@ -1647,7 +1647,7 @@ struct tree_t {
 	/// @var {number} First free node
 	unsigned nextNode;
 	/// @var {string} Storage for notation
-	char sbuf[SBUFMAX];
+	char     sbuf[SBUFMAX];
 	/// @var {number} length of notation
 	unsigned spos;
 	/// @var {number[]} for endpoints the placeholder/skin index, for nodes the nodeId of already emitted notations
@@ -1655,7 +1655,7 @@ struct tree_t {
 	/// @var {number[]} the actual nodeId indexed by endpoint placeholder
 	uint32_t skin[NEND];
 	/// @var {boolean} non-zero if placeholders are in sync with skin
-	bool placeholdersInSync;
+	bool     placeholdersInSync;
 
 	/**
 	 * @date 2020-03-10 20:20:55
@@ -1669,10 +1669,10 @@ struct tree_t {
 	void encodePlaceholders(unsigned id) {
 
 		// extract all parts of the node
-		unsigned T = this->N[id].T;
+		unsigned T  = this->N[id].T;
 		unsigned Tu = T & ~IBIT; // index to `T` operand
-		unsigned Q = this->N[id].Q;
-		unsigned F = this->N[id].F;
+		unsigned Q  = this->N[id].Q;
+		unsigned F  = this->N[id].F;
 
 		// assert node is invert normalised
 		assert((~Q & IBIT) && (~F & IBIT));
@@ -1758,7 +1758,7 @@ struct tree_t {
 
 			// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
 			char prefixStack[16];
-			int prefixStackPos = 0;
+			int  prefixStackPos = 0;
 
 			// flag endpoint was encountered
 			if (beenThere[id] == 0)
@@ -1786,11 +1786,11 @@ struct tree_t {
 		} else if (beenThere[id] != 0) {
 
 			// already been there. Calculate the back-reference
-			unsigned v = nextNode - beenThere[id];
+			unsigned v          = nextNode - beenThere[id];
 
 			// back-references are notated as a non-zero digit base26 prefixed by uppercase letters
 			char prefixStack[16];
-			int prefixStackPos = 0;
+			int  prefixStackPos = 0;
 
 			// base10 encoded back-reference
 			prefixStack[prefixStackPos++] = (char) ('0' + (v % 10));
@@ -1826,11 +1826,11 @@ struct tree_t {
 	void encodeQTF(unsigned id) {
 
 		// extract all parts of the node
-		unsigned T = this->N[id].T;
+		unsigned T  = this->N[id].T;
 		unsigned Ti = T & IBIT; // non-zero if result of `T` should be inverted
 		unsigned Tu = T & ~IBIT; // index to `T` operand
-		unsigned Q = this->N[id].Q;
-		unsigned F = this->N[id].F;
+		unsigned Q  = this->N[id].Q;
+		unsigned F  = this->N[id].F;
 
 		// assert node is invert normalised
 		assert((~Q & IBIT) && (~F & IBIT));
@@ -1926,8 +1926,8 @@ struct tree_t {
 
 		// setup state
 		nextPlaceholder = withPlaceholders ? this->kstart : 0;
-		nextNode = this->nstart;
-		spos = 0;
+		nextNode        = this->nstart;
+		spos            = 0;
 		::memset(beenThere, 0, this->count * sizeof(beenThere[0]));
 		// `skin[]` is a list sized by nextPlaceholder
 		placeholdersInSync = true; // assume placeholders are in sync. Implying that no explicit skin is needed
@@ -1948,7 +1948,7 @@ struct tree_t {
 			// placeholder/skin
 			if ((id & ~IBIT) < this->nstart) {
 				// 'a/<id>'
-				beenThere[id & ~IBIT] = this->kstart;
+				beenThere[id & ~IBIT]   = this->kstart;
 				skin[nextPlaceholder++] = id & ~IBIT;
 				if ((id & ~IBIT) != this->kstart)
 					placeholdersInSync = false;
@@ -1986,7 +1986,7 @@ struct tree_t {
 
 				// endpoints are notated as a lowercase letter (`'a'` resembling KSTART) base26 prefixed by uppercase letters
 				char prefixStack[16];
-				int prefixStackPos = 0;
+				int  prefixStackPos = 0;
 
 				// zero-based copy of placeholder
 				unsigned v = skin[ph] - this->kstart;
@@ -2045,7 +2045,7 @@ struct tree_t {
 			// point to the first chunk of the `"when-false"`
 			const uint64_t *F = v[this->N[i].F].bits;
 			// point to the first chunk of the `"result"`
-			uint64_t *R = v[i].bits;
+			uint64_t       *R = v[i].bits;
 
 			// determine if the operator is `QTF` or `QnTF`
 			if (this->N[i].T & IBIT) {
@@ -2180,7 +2180,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 		printf("({ unsigned kstart=%u, nstart=%u, _[] = {0,", pTree->kstart, pTree->nstart);
 
 		char prefixStack[16];
-		int prefixStackPos = 0;
+		int  prefixStackPos = 0;
 
 		/*
 		 * emit endpoints
@@ -2294,7 +2294,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 		 */
 		for (unsigned i = 0; i < pTree->nstart; i++)
 			weight[i] = 0;
-		for (unsigned i = pTree->nstart; i < pTree->count; i++) {
+		for (unsigned i   = pTree->nstart; i < pTree->count; i++) {
 			unsigned Q = pTree->N[i].Q;
 			unsigned T = pTree->N[i].T & ~IBIT; // IBIT removed
 			unsigned F = pTree->N[i].F;
@@ -2336,7 +2336,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
  */
 void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
-	unsigned testNr = 0;
+	unsigned testNr    = 0;
 	unsigned numPassed = 0;
 
 	/*
@@ -2346,8 +2346,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 		// load tree
 		pTree->nstart = r + 1;
-		pTree->count = pTree->nstart;
-		pTree->root = r;
+		pTree->count  = pTree->nstart;
+		pTree->root   = r;
 
 		// convert to prefix and back
 		const char *treeName = pTree->encode(pTree->root, false);
@@ -2397,8 +2397,8 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			opt_pure = iPure; // expand `QTF->QnTF` rewriting
 
 			pTree->nstart = pTree->kstart + 3;
-			pTree->count = pTree->nstart;
-			pTree->root = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+			pTree->count  = pTree->nstart;
+			pTree->root   = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
 
 			/*
 			 * save with placeholders and reload
@@ -2411,7 +2411,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			 */
 
 			// load test vector
-			pEval[0].bits[0] = 0b00000000; // v[0]
+			pEval[0].bits[0]                 = 0b00000000; // v[0]
 			pEval[pTree->kstart + 0].bits[0] = 0b10101010; // v[1]
 			pEval[pTree->kstart + 1].bits[0] = 0b11001100; // v[2]
 			pEval[pTree->kstart + 2].bits[0] = 0b11110000; // v[3]
@@ -2441,26 +2441,26 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				 */
 				// @formatter:off
 				switch (Qo) {
-					case 0:            q = 0; break;
-					case (KSTART + 0): q = a; break;
-					case (KSTART + 1): q = b; break;
-					case (KSTART + 2): q = c; break;
+				case 0:            q = 0; break;
+				case (KSTART + 0): q = a; break;
+				case (KSTART + 1): q = b; break;
+				case (KSTART + 2): q = c; break;
 				}
 				if (Qi) q ^= 1;
 
 				switch (To) {
-					case 0:            t = 0; break;
-					case (KSTART + 0): t = a; break;
-					case (KSTART + 1): t = b; break;
-					case (KSTART + 2): t = c; break;
+				case 0:            t = 0; break;
+				case (KSTART + 0): t = a; break;
+				case (KSTART + 1): t = b; break;
+				case (KSTART + 2): t = c; break;
 				}
 				if (Ti) t ^= 1;
 
 				switch (Fo) {
-					case 0:            f = 0; break;
-					case (KSTART + 0): f = a; break;
-					case (KSTART + 1): f = b; break;
-					case (KSTART + 2): f = c; break;
+				case 0:            f = 0; break;
+				case (KSTART + 0): f = a; break;
+				case (KSTART + 1): f = b; break;
+				case (KSTART + 2): f = c; break;
 				}
 				if (Fi) f ^= 1;
 				// @formatter:on
@@ -2472,14 +2472,14 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				unsigned expected = q ? t : f;
 
 				// extract encountered from footprint.
-				unsigned ix = c << 2 | b << 1 | a;
+				unsigned ix          = c << 2 | b << 1 | a;
 				unsigned encountered = pEval[pTree->root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
 				if (pTree->root & IBIT)
 					encountered ^= 1; // invert result
 
 				if (expected != encountered) {
 					fprintf(stderr, "fail: testNr=%u iFast=%u iPure=%u iSkin=%u expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
-					        testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
 				numPassed++;
@@ -2499,11 +2499,11 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	// create an empty tree
-	tree_t *pTree = new tree_t(KSTART, KSTART);
+	tree_t      *pTree       = new tree_t(KSTART, KSTART);
 	// create an evaluation vector
 	footprint_t *pFootprints = new footprint_t[NEND];
 
@@ -2514,19 +2514,19 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_FAST = 1,
+			LO_FAST    = 1,
 			LO_PURE,
 			LO_SEED,
 			LO_SELFTEST,
 			LO_SHRINKWRAP,
 			// short opts
-			LO_CODE = 'c',
-			LO_F = 'F',
-			LO_HELP = 'h',
-			LO_Q = 'Q',
-			LO_QUIET = 'q',
-			LO_SKIN = 's',
-			LO_T = 'T',
+			LO_CODE    = 'c',
+			LO_F       = 'F',
+			LO_HELP    = 'h',
+			LO_Q       = 'Q',
+			LO_QUIET   = 'q',
+			LO_SKIN    = 's',
+			LO_T       = 'T',
 			LO_VERBOSE = 'v',
 		};
 
@@ -2564,61 +2564,61 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_CODE:
-				opt_code++;
-				break;
-			case LO_F:
-				opt_F++;
-				break;
-			case LO_FAST:
-				opt_fast++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_Q:
-				opt_Q++;
-				break;
-			case LO_PURE:
-				opt_pure++;
-				break;
-			case LO_QUIET:
-				opt_quiet++;
-				break;
-			case LO_SEED:
-				opt_seed = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_SELFTEST:
-				performSelfTest(pTree, pFootprints);
-				exit(0);
-				break;
-			case LO_SHRINKWRAP:
-				opt_shrinkwrap++;
-				break;
-			case LO_SKIN:
-				opt_skin++;
-				break;
-			case LO_T:
-				opt_T++;
-				break;
-			case LO_VERBOSE:
-				opt_verbose++;
-				break;
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+		case LO_CODE:
+			opt_code++;
+			break;
+		case LO_F:
+			opt_F++;
+			break;
+		case LO_FAST:
+			opt_fast++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_Q:
+			opt_Q++;
+			break;
+		case LO_PURE:
+			opt_pure++;
+			break;
+		case LO_QUIET:
+			opt_quiet++;
+			break;
+		case LO_SEED:
+			opt_seed = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_SELFTEST:
+			performSelfTest(pTree, pFootprints);
+			exit(0);
+			break;
+		case LO_SHRINKWRAP:
+			opt_shrinkwrap++;
+			break;
+		case LO_SKIN:
+			opt_skin++;
+			break;
+		case LO_T:
+			opt_T++;
+			break;
+		case LO_VERBOSE:
+			opt_verbose++;
+			break;
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -2630,7 +2630,7 @@ int main(int argc, char *const *argv) {
 
 	// storage for testing difference between arguments
 	unsigned crc32;
-	bool differ = false;
+	bool     differ          = false;
 
 	for (int iArg = optind; iArg < argc; iArg++) {
 		const char *pName = argv[iArg];
@@ -2643,8 +2643,8 @@ int main(int argc, char *const *argv) {
 				differ |= (crc32 != mainloop(pName, pTree, pFootprints));
 		} else {
 			// read from stdin
-			char *pBuffer = (char *) malloc(10000000);
-			size_t rval = fread(pBuffer, 1, 10000000, stdin);
+			char   *pBuffer = (char *) malloc(10000000);
+			size_t rval     = fread(pBuffer, 1, 10000000, stdin);
 			if (rval == 10000000) {
 				fprintf(stderr, "stdin too long\n");
 				exit(1);

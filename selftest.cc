@@ -64,20 +64,20 @@ struct selftestContext_t : dbtool_t {
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
 	/// @var {number} Tree size in nodes to be generated for this invocation;
-	unsigned arg_numNodes;
+	unsigned   arg_numNodes;
 	/// @var {number} Collect metrics intended for "metrics.h"
-	unsigned opt_metrics;
+	unsigned   opt_metrics;
 	/// @var {number} index/data ratio
-	double opt_ratio;
+	double     opt_ratio;
 	/// @var {number} textual output instead of binary database
-	unsigned opt_text;
+	unsigned   opt_text;
 
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for referse transforms
 	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 
 	/// @var {string[]} tree notation for `progress` points
 	char **selftestWindowResults;
@@ -86,15 +86,15 @@ struct selftestContext_t : dbtool_t {
 	 * Constructor
 	 */
 	selftestContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
-		arg_inputDatabase = NULL;
-		arg_numNodes = 0;
-		opt_metrics = 0;
-		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
-		opt_text = 0;
+		arg_inputDatabase     = NULL;
+		arg_numNodes          = 0;
+		opt_metrics           = 0;
+		opt_ratio             = METRICS_DEFAULT_RATIO / 10.0;
+		opt_text              = 0;
 		selftestWindowResults = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
-		pStore = NULL;
+		pEvalFwd              = NULL;
+		pEvalRev              = NULL;
+		pStore                = NULL;
 	}
 
 	/**
@@ -161,7 +161,7 @@ struct selftestContext_t : dbtool_t {
 	 */
 	void performSelfTestTreeEval(void) {
 
-		unsigned testNr = 0;
+		unsigned testNr    = 0;
 		unsigned numPassed = 0;
 
 		// needs 32 byte alignment for AVX2
@@ -242,7 +242,7 @@ struct selftestContext_t : dbtool_t {
 				 */
 
 				// load test vector
-				pEval[0].bits[0] = 0b00000000; // v[0]
+				pEval[0].bits[0]                               = 0b00000000; // v[0]
 				pEval[tinyTree_t::TINYTREE_KSTART + 0].bits[0] = 0b10101010; // v[1]
 				pEval[tinyTree_t::TINYTREE_KSTART + 1].bits[0] = 0b11001100; // v[2]
 				pEval[tinyTree_t::TINYTREE_KSTART + 2].bits[0] = 0b11110000; // v[3]
@@ -270,26 +270,26 @@ struct selftestContext_t : dbtool_t {
 					 */
 					// @formatter:off
 					switch (Qo) {
-						case 0:            q = 0; break;
-						case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
-						case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
-						case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
+					case 0:            q = 0; break;
+					case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
+					case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
+					case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
 					}
 					if (Qi) q ^= 1;
 
 					switch (To) {
-						case 0:            t = 0; break;
-						case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
-						case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
-						case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
+					case 0:            t = 0; break;
+					case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
+					case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
+					case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
 					}
 					if (Ti) t ^= 1;
 
 					switch (Fo) {
-						case 0:            f = 0; break;
-						case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
-						case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
-						case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
+					case 0:            f = 0; break;
+					case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
+					case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
+					case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
 					}
 					if (Fi) f ^= 1;
 					// @formatter:on
@@ -301,7 +301,7 @@ struct selftestContext_t : dbtool_t {
 					unsigned expected = q ? t : f;
 
 					// extract encountered from footprint.
-					unsigned ix = c << 2 | b << 1 | a;
+					unsigned ix          = c << 2 | b << 1 | a;
 					unsigned encountered = pEval[generator.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
 					if (generator.root & IBIT)
 						encountered ^= 1; // invert result
@@ -431,13 +431,13 @@ struct selftestContext_t : dbtool_t {
 
 		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
 			// apply settings
-			ctx.flags = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-			generator.windowLo = windowLo;
-			generator.windowHi = windowLo + 1;
+			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
+			generator.windowLo     = windowLo;
+			generator.windowHi     = windowLo + 1;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
-			ctx.progressHi = pMetrics->numProgress;
-			ctx.progress = 0;
-			ctx.tick = 0;
+			ctx.progressHi         = pMetrics->numProgress;
+			ctx.progress           = 0;
+			ctx.tick               = 0;
 
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
@@ -453,13 +453,13 @@ struct selftestContext_t : dbtool_t {
 
 		{
 			// apply settings
-			ctx.flags = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-			generator.windowLo = 0;
-			generator.windowHi = 0;
+			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
+			generator.windowLo     = 0;
+			generator.windowHi     = 0;
 			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
-			ctx.progressHi = pMetrics->numProgress;
-			ctx.progress = 0;
-			ctx.tick = 0;
+			ctx.progressHi         = pMetrics->numProgress;
+			ctx.progress           = 0;
+			ctx.tick               = 0;
 
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
@@ -568,7 +568,7 @@ struct selftestContext_t : dbtool_t {
 		for (unsigned round = 0; round < 2; round++) {
 			// setup data for this round
 			transformName_t *pNames;
-			uint32_t *pIndex;
+			uint32_t        *pIndex;
 
 			if (round == 0) {
 				pNames = pStore->fwdTransformNames;
@@ -589,8 +589,8 @@ struct selftestContext_t : dbtool_t {
 					/*
 					 * Test if substring is a short name
 					 */
-					bool isShort = true;
-					for (unsigned k = iLen; k < MAXSLOTS; k++) {
+					bool          isShort = true;
+					for (unsigned k       = iLen; k < MAXSLOTS; k++) {
 						if (name[k] != (char) ('a' + k)) {
 							isShort = false;
 							break;
@@ -666,7 +666,7 @@ struct selftestContext_t : dbtool_t {
 		 * add names to signatures until a collision occurs
 		 */
 
-		unsigned ix1 = 0, collision1 = 0;
+		unsigned      ix1        = 0, collision1 = 0;
 		for (unsigned iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
 
 			// reset counter
@@ -679,7 +679,7 @@ struct selftestContext_t : dbtool_t {
 				collision1 = iTransform;
 				break;
 			}
-			pStore->signatureIndex[ix1] = pStore->addSignature(pStore->fwdTransformNames[iTransform]); // mark as used
+			pStore->signatureIndex[ix1]   = pStore->addSignature(pStore->fwdTransformNames[iTransform]); // mark as used
 			pStore->signatureVersion[ix1] = pStore->iVersion;
 		}
 		if (!collision1) {
@@ -698,10 +698,10 @@ struct selftestContext_t : dbtool_t {
 
 		// add the collision victim
 		ix1 = pStore->lookupSignature(pStore->fwdTransformNames[collision1]);
-		pStore->signatureIndex[ix1] = pStore->addSignature(pStore->fwdTransformNames[collision1]); // mark as used
+		pStore->signatureIndex[ix1]   = pStore->addSignature(pStore->fwdTransformNames[collision1]); // mark as used
 		pStore->signatureVersion[ix1] = pStore->iVersion;
 
-		unsigned ix2 = 0, collision2 = 0;
+		unsigned      ix2        = 0, collision2 = 0;
 		for (unsigned iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
 
 			// reset counter
@@ -714,7 +714,7 @@ struct selftestContext_t : dbtool_t {
 				collision2 = iTransform;
 				break;
 			}
-			pStore->signatureIndex[ix2] = pStore->addSignature(pStore->fwdTransformNames[iTransform]); // mark as used
+			pStore->signatureIndex[ix2]   = pStore->addSignature(pStore->fwdTransformNames[iTransform]); // mark as used
 			pStore->signatureVersion[ix2] = pStore->iVersion;
 		}
 		if (!ix1) {
@@ -737,10 +737,10 @@ struct selftestContext_t : dbtool_t {
 		// add the collisions
 		ctx.cntHash = ctx.cntCompare = 0;
 		ix1 = pStore->lookupSignature(pStore->fwdTransformNames[collision1]);
-		pStore->signatureIndex[ix1] = pStore->addSignature(pStore->fwdTransformNames[collision1]); // mark as used
+		pStore->signatureIndex[ix1]   = pStore->addSignature(pStore->fwdTransformNames[collision1]); // mark as used
 		pStore->signatureVersion[ix1] = pStore->iVersion;
 		ix2 = pStore->lookupSignature(pStore->fwdTransformNames[collision2]);
-		pStore->signatureIndex[ix2] = pStore->addSignature(pStore->fwdTransformNames[collision2]); // mark as used
+		pStore->signatureIndex[ix2]   = pStore->addSignature(pStore->fwdTransformNames[collision2]); // mark as used
 		pStore->signatureVersion[ix2] = pStore->iVersion;
 		assert(ctx.cntHash == 2 && ctx.cntCompare == 3);
 
@@ -872,7 +872,7 @@ struct selftestContext_t : dbtool_t {
 		transformName_t *pFwdNames = pStore->fwdTransformNames;
 		transformName_t *pRevNames = pStore->revTransformNames;
 
-		unsigned numPassed = 0;
+		unsigned numPassed        = 0;
 
 		unsigned numRows, numCols = 1;
 
@@ -1002,7 +1002,7 @@ struct selftestContext_t : dbtool_t {
 			 */
 
 			// mode
-			pStore->interleave = pInterleave->numStored;
+			pStore->interleave     = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// clear database imprint and index
@@ -1022,7 +1022,7 @@ struct selftestContext_t : dbtool_t {
 			 * Lookup all possible permutations
 			 */
 
-			time_t seconds = ::time(NULL);
+			time_t        seconds    = ::time(NULL);
 			for (unsigned iTransform = 0; iTransform < MAXTRANSFORM; iTransform++) {
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -1057,14 +1057,14 @@ struct selftestContext_t : dbtool_t {
 				fprintf(stderr, "\r\e[K");
 
 
-			seconds = ::time(NULL) - seconds;
+			seconds         = ::time(NULL) - seconds;
 			if (seconds == 0)
 				seconds = 1;
 
 			// base estimated size on 791647 signatures
 			fprintf(stderr, "[%s] metricsInterleave_t { /*numSlot=*/%u, /*interleave=*/%u, /*numStored=*/%u, /*numRuntime=*/%u, /*speed=*/%u, /*storage=*/%.3f},\n",
-			        ctx.timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
-			        (int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
+				ctx.timeAsString(), MAXSLOTS, pStore->interleave, pStore->numImprint - 1, MAXTRANSFORM / (pStore->numImprint - 1),
+				(int) (MAXTRANSFORM / seconds), (sizeof(imprint_t) * 791647 * pStore->numImprint) / 1.0e9);
 
 			// test that number of imprints match
 			if (pInterleave->numStored != pStore->numImprint - 1) {
@@ -1124,7 +1124,7 @@ struct selftestContext_t : dbtool_t {
 
 		const signature_t *pSignatureL = static_cast<const signature_t *>(lhs);
 		const signature_t *pSignatureR = static_cast<const signature_t *>(rhs);
-		context_t *pApp = static_cast<context_t *>(arg);
+		context_t         *pApp        = static_cast<context_t *>(arg);
 
 		// load trees
 		tinyTree_t treeL(*pApp);
@@ -1159,15 +1159,15 @@ struct selftestContext_t : dbtool_t {
 		pStore->numSignature = 1; // skip reserved first entry
 
 		// apply settings
-		ctx.flags = 0;
+		ctx.flags          = 0;
 		generator.windowLo = 0;
 		generator.windowHi = 0;
-		ctx.tick = 0;
+		ctx.tick           = 0;
 		ctx.setupSpeed(16033780); // no consequences if value is off
 
 		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 		generator.clearGenerator();
-		unsigned numNodes = 4;
+		unsigned numNodes     = 4;
 		unsigned numEndpoints = numNodes * 2 + 1;
 		generator.generateTrees(numNodes, numEndpoints, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeCompare));
 
@@ -1177,8 +1177,8 @@ struct selftestContext_t : dbtool_t {
 		if (ctx.progressHi != pStore->numSignature)
 			printf("WARNING: performSelfTestCompare() numSignature=%u\n", pStore->numSignature);
 
-		unsigned maxRound = 4;
-		for (unsigned iRound = 0; iRound < maxRound; iRound++) {
+		unsigned      maxRound = 4;
+		for (unsigned iRound   = 0; iRound < maxRound; iRound++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				fprintf(stderr, "\r\e[K[%s] collecting %u/%u", ctx.timeAsString(), iRound + 1, maxRound);
 				ctx.tick = 0;
@@ -1256,10 +1256,10 @@ struct selftestContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        (double) ctx.cntCompare / ctx.cntHash);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					(double) ctx.cntCompare / ctx.cntHash);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1270,10 +1270,10 @@ struct selftestContext_t : dbtool_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | hash=%.3f",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        (double) ctx.cntCompare / ctx.cntHash);
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+					pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					(double) ctx.cntCompare / ctx.cntHash);
 			}
 
 			ctx.tick = 0;
@@ -1322,9 +1322,9 @@ struct selftestContext_t : dbtool_t {
 			// prepare database
 			::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 			::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
-			pStore->numImprint = 1; // skip reserved first entry
-			pStore->numSignature = 1; // skip reserved first entry
-			pStore->interleave = pInterleave->numStored;
+			pStore->numImprint     = 1; // skip reserved first entry
+			pStore->numSignature   = 1; // skip reserved first entry
+			pStore->interleave     = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 
 			// prepare generator
@@ -1352,10 +1352,10 @@ struct selftestContext_t : dbtool_t {
 				fprintf(stderr, "\r\e[K");
 
 			// estimate speed and storage for default ratio
-			double speed = 0; // in M/s
+			double speed   = 0; // in M/s
 			double storage = 0; // in Gb
 
-			ctx.cntHash = 0;
+			ctx.cntHash    = 0;
 			ctx.cntCompare = 0;
 
 			if (this->opt_metrics) {
@@ -1379,14 +1379,14 @@ struct selftestContext_t : dbtool_t {
 				}
 			}
 
-			speed = ctx.cntHash / 5.0 / 1e6;
+			speed   = ctx.cntHash / 5.0 / 1e6;
 			storage = ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9;
 
 			fprintf(stderr, "[%s] numSlot=%u pure=%u interleave=%-4d numNode=%u numSignature=%u(%.0f%%) numImprint=%u(%.0f%% speed=%.3fM/s storage=%.3fGb\n",
-			        ctx.timeAsString(), MAXSLOTS, pRound->pure, pRound->interleave, pRound->numNode,
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        speed, storage);
+				ctx.timeAsString(), MAXSLOTS, pRound->pure, pRound->interleave, pRound->numNode,
+				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				speed, storage);
 
 			if (ctx.progress != ctx.progressHi) {
 				printf("{\"error\":\"progressHi failed\",\"where\":\"%s:%s:%d\",\"encountered\":%lu,\"expected\":%lu,\"numNode\":%u}\n",
@@ -1411,8 +1411,8 @@ struct selftestContext_t : dbtool_t {
 				// clear imprint index
 				::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 				pStore->numImprint = 1; // skip mandatory reserved entry
-				ctx.cntHash = 0;
-				ctx.cntCompare = 0;
+				ctx.cntHash        = 0;
+				ctx.cntCompare     = 0;
 
 				fprintf(stderr, "[numImprint=%u imprintIndexSize=%u ratio=%.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
 
@@ -1430,7 +1430,7 @@ struct selftestContext_t : dbtool_t {
 				 * perform a speedtest
 				 */
 
-				ctx.cntHash = 0;
+				ctx.cntHash    = 0;
 				ctx.cntCompare = 0;
 
 				// wait for a tick
@@ -1454,9 +1454,9 @@ struct selftestContext_t : dbtool_t {
 				}
 
 				fprintf(stderr, "[speed=%7.3fM/s storage=%7.3fG hits=%.5f]\n",
-				        ctx.cntHash / 5.0 / 1e6,
-				        ((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
-				        (double) ctx.cntCompare / ctx.cntHash);
+					ctx.cntHash / 5.0 / 1e6,
+					((sizeof(*pStore->imprints) * pStore->numImprint) + (sizeof(*pStore->imprintIndex) * pStore->imprintIndexSize)) / 1e9,
+					(double) ctx.cntCompare / ctx.cntHash);
 			}
 
 		}
@@ -1505,7 +1505,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> [<numnode> [<output.db>]]   -- Add signatures of given node size\n", argv[0]);
 	fprintf(stderr, "       %s --metrics=1 <input.db>                 -- Collect medium metrics for `metricsImprint[]`\n", argv[0]);
 	fprintf(stderr, "       %s --metrics=2 <input.db>                 -- Collect slow metrics for `ratioMetrics[]`\n", argv[0]);
@@ -1536,7 +1536,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -1546,7 +1546,7 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG   = 1,
 			LO_IMPRINTINDEXSIZE,
 			LO_METRICS,
 			LO_NOPARANOID,
@@ -1555,8 +1555,8 @@ int main(int argc, char *const *argv) {
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -1592,55 +1592,55 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_METRICS:
-				app.opt_metrics = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_metrics + 1;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_TEXT:
-				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_IMPRINTINDEXSIZE:
+			app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_METRICS:
+			app.opt_metrics = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_metrics + 1;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_SIGNATUREINDEXSIZE:
+			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -1724,10 +1724,8 @@ int main(int argc, char *const *argv) {
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
 	}
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	/*
 	 * create output

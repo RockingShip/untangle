@@ -156,7 +156,7 @@ struct tinyTree_t {
 	 */
 	inline void clearTree(void) {
 		this->count = TINYTREE_NSTART; // rewind first free node
-		this->root = 0; // set result to zero-reference
+		this->root  = 0; // set result to zero-reference
 	}
 
 	/**
@@ -176,7 +176,7 @@ struct tinyTree_t {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int stackPos = 0;
+		int      stackPos = 0;
 
 		assert(~lhs & IBIT);
 		assert(~rhs & IBIT);
@@ -469,9 +469,9 @@ struct tinyTree_t {
 			if (this->compare(Q, *this, F) > 0) {
 				// swap
 				unsigned savQ = Q;
-				Q = F;
-				F = savQ;
-				T = savQ ^ IBIT;
+				Q             = F;
+				F             = savQ;
+				T             = savQ ^ IBIT;
 			}
 		}
 		if (F == 0 && (~T & IBIT)) {
@@ -479,8 +479,8 @@ struct tinyTree_t {
 			if (this->compare(Q, *this, T) > 0) {
 				// swap
 				unsigned savQ = Q;
-				Q = T;
-				T = savQ;
+				Q             = T;
+				T             = savQ;
 			}
 		}
 
@@ -607,7 +607,7 @@ struct tinyTree_t {
 
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int stackPos = 0;
+		int      stackPos = 0;
 		uint32_t beenThere[TINYTREE_NEND]; // track id's of display operators.
 		unsigned nextNode = TINYTREE_NSTART; // next visual node
 
@@ -622,199 +622,199 @@ struct tinyTree_t {
 				return DERR_PLACEHOLDER;
 
 			switch (*pCh) {
-				case '0':
-					stack[stackPos++] = 0;
-					break;
-				case 'a':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
-					break;
-				case 'b':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
-					break;
-				case 'c':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
-					break;
-				case 'd':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
-					break;
-				case 'e':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
-					break;
-				case 'f':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
-					break;
-				case 'g':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
-					break;
-				case 'h':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
-					break;
-				case 'i':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
-					break;
-				case '1':
-					stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
-					break;
-				case '2':
-					stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
-					break;
-				case '3':
-					stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
-					break;
-				case '4':
-					stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
-					break;
-				case '5':
-					stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
-					break;
-				case '6':
-					stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
-					break;
-				case '7':
-					stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
-					break;
-				case '8':
-					stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
-					break;
-				case '9':
-					stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
-					break;
+			case '0':
+				stack[stackPos++] = 0;
+				break;
+			case 'a':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
+				break;
+			case 'b':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
+				break;
+			case 'c':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
+				break;
+			case 'd':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
+				break;
+			case 'e':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
+				break;
+			case 'f':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
+				break;
+			case 'g':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
+				break;
+			case 'h':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
+				break;
+			case 'i':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
+				break;
+			case '1':
+				stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
+				break;
+			case '2':
+				stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
+				break;
+			case '3':
+				stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
+				break;
+			case '4':
+				stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
+				break;
+			case '5':
+				stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
+				break;
+			case '6':
+				stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
+				break;
+			case '7':
+				stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
+				break;
+			case '8':
+				stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
+				break;
+			case '9':
+				stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
+				break;
 
-				case '>': {
-					// GT (appreciated)
-					if (stackPos < 2)
-						return DERR_UNDERFLOW;
+			case '>': {
+				// GT (appreciated)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = addNode(L, R ^ IBIT, 0);
+				// create operator
+				unsigned nid = addNode(L, R ^ IBIT, 0);
 
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '+': {
-					// OR (appreciated)
-					if (stackPos < 2)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '+': {
+				// OR (appreciated)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
 
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = addNode(L, 0 ^ IBIT, R);
+				// create operator
+				unsigned nid = addNode(L, 0 ^ IBIT, R);
 
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '^': {
-					// XOR/NE (appreciated)
-					if (stackPos < 2)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = addNode(L, R ^ IBIT, R);
+				// create operator
+				unsigned nid = addNode(L, R ^ IBIT, R);
 
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '!': {
-					// QnTF (appreciated)
-					if (stackPos < 3)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+				if (stackPos < 3)
+					return DERR_UNDERFLOW;
 
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
 
-					// create operator
-					unsigned nid = addNode(Q, T ^ IBIT, F);
+				// create operator
+				unsigned nid = addNode(Q, T ^ IBIT, F);
 
-					// push
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '&': {
-					// AND (depreciated)
-					if (stackPos < 2)
-						return DERR_UNDERFLOW;
+				// push
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
 
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = addNode(L, R, 0);
+				// create operator
+				unsigned nid = addNode(L, R, 0);
 
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '<': {
-					// LT (obsolete)
-					if (stackPos < 2)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '<': {
+				// LT (obsolete)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = addNode(L, 0, R);
+				// create operator
+				unsigned nid = addNode(L, 0, R);
 
-					stack[stackPos++] = nid; // push
-					beenThere[stackPos++] = nid; // save actual index for back references
-					break;
-				}
-				case '?': {
-					// QTF (depreciated)
-					if (stackPos < 3)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[stackPos++] = nid; // save actual index for back references
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+				if (stackPos < 3)
+					return DERR_UNDERFLOW;
 
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
 
-					// create operator
-					unsigned nid = addNode(Q, T, F);
+				// create operator
+				unsigned nid = addNode(Q, T, F);
 
-					stack[stackPos++] = nid; // push
-					beenThere[nextNode++] = nid; // save actual index for back references
-					break;
-				}
-				case '~': {
-					// NOT (support)
-					if (stackPos < 1)
-						return DERR_UNDERFLOW;
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '~': {
+				// NOT (support)
+				if (stackPos < 1)
+					return DERR_UNDERFLOW;
 
-					// invert top-of-stack
-					stack[stackPos - 1] ^= IBIT;
-					break;
-				}
+				// invert top-of-stack
+				stack[stackPos - 1] ^= IBIT;
+				break;
+			}
 
-				case '/':
-					// separator between placeholder/skin
-					while (pCh[1])
-						pCh++;
-					break;
-				case ' ':
-					// skip spaces
-					break;
-				default:
-					return DERR_SYNTAX;
+			case '/':
+				// separator between placeholder/skin
+				while (pCh[1])
+					pCh++;
+				break;
+			case ' ':
+				// skip spaces
+				break;
+			default:
+				return DERR_SYNTAX;
 			}
 		}
 
@@ -846,203 +846,203 @@ struct tinyTree_t {
 
 		// temporary stack storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int stackPos = 0;
+		int      stackPos = 0;
 
 		// walk through the notation
 		for (const char *pCh = pName; *pCh; pCh++) {
 
 			switch (*pCh) {
-				case '0':
-					stack[stackPos++] = 0;
-					break;
-				case 'a':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
-					break;
-				case 'b':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
-					break;
-				case 'c':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
-					break;
-				case 'd':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
-					break;
-				case 'e':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
-					break;
-				case 'f':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
-					break;
-				case 'g':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
-					break;
-				case 'h':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
-					break;
-				case 'i':
-					stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
-					break;
-				case '1':
-					stack[stackPos++] = this->count - ('1' - '0');
-					break;
-				case '2':
-					stack[stackPos++] = this->count - ('2' - '0');
-					break;
-				case '3':
-					stack[stackPos++] = this->count - ('3' - '0');
-					break;
-				case '4':
-					stack[stackPos++] = this->count - ('4' - '0');
-					break;
-				case '5':
-					stack[stackPos++] = this->count - ('5' - '0');
-					break;
-				case '6':
-					stack[stackPos++] = this->count - ('6' - '0');
-					break;
-				case '7':
-					stack[stackPos++] = this->count - ('7' - '0');
-					break;
-				case '8':
-					stack[stackPos++] = this->count - ('8' - '0');
-					break;
-				case '9':
-					stack[stackPos++] = this->count - ('9' - '0');
-					break;
-				case '>': {
-					// GT (appreciated)
+			case '0':
+				stack[stackPos++] = 0;
+				break;
+			case 'a':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
+				break;
+			case 'b':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
+				break;
+			case 'c':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
+				break;
+			case 'd':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
+				break;
+			case 'e':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
+				break;
+			case 'f':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
+				break;
+			case 'g':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
+				break;
+			case 'h':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
+				break;
+			case 'i':
+				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
+				break;
+			case '1':
+				stack[stackPos++] = this->count - ('1' - '0');
+				break;
+			case '2':
+				stack[stackPos++] = this->count - ('2' - '0');
+				break;
+			case '3':
+				stack[stackPos++] = this->count - ('3' - '0');
+				break;
+			case '4':
+				stack[stackPos++] = this->count - ('4' - '0');
+				break;
+			case '5':
+				stack[stackPos++] = this->count - ('5' - '0');
+				break;
+			case '6':
+				stack[stackPos++] = this->count - ('6' - '0');
+				break;
+			case '7':
+				stack[stackPos++] = this->count - ('7' - '0');
+				break;
+			case '8':
+				stack[stackPos++] = this->count - ('8' - '0');
+				break;
+			case '9':
+				stack[stackPos++] = this->count - ('9' - '0');
+				break;
+			case '>': {
+				// GT (appreciated)
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = L;
-					this->N[nid].T = R ^ IBIT;
-					this->N[nid].F = 0;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = R ^ IBIT;
+				this->N[nid].F = 0;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '+': {
-					// OR (appreciated)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '+': {
+				// OR (appreciated)
 
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = L;
-					this->N[nid].T = 0 ^ IBIT;
-					this->N[nid].F = R;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = 0 ^ IBIT;
+				this->N[nid].F = R;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '^': {
-					// XOR/NE (appreciated)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = L;
-					this->N[nid].T = R ^ IBIT;
-					this->N[nid].F = R;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = R ^ IBIT;
+				this->N[nid].F = R;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '!': {
-					// QnTF (appreciated)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
 
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = Q;
-					this->N[nid].T = T ^ IBIT;
-					this->N[nid].F = F;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = Q;
+				this->N[nid].T = T ^ IBIT;
+				this->N[nid].F = F;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '&': {
-					// AND (depreciated)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
 
-					// pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				// pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = L;
-					this->N[nid].T = R;
-					this->N[nid].F = 0;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = R;
+				this->N[nid].F = 0;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '<': {
-					// LT (obsolete)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '<': {
+				// LT (obsolete)
 
-					//pop operands
-					unsigned R = stack[--stackPos]; // right hand side
-					unsigned L = stack[--stackPos]; // left hand side
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = L;
-					this->N[nid].T = 0;
-					this->N[nid].F = R;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = 0;
+				this->N[nid].F = R;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '?': {
-					// QTF (depreciated)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
 
-					// pop operands
-					unsigned F = stack[--stackPos];
-					unsigned T = stack[--stackPos];
-					unsigned Q = stack[--stackPos];
+				// pop operands
+				unsigned F = stack[--stackPos];
+				unsigned T = stack[--stackPos];
+				unsigned Q = stack[--stackPos];
 
-					// create operator
-					unsigned nid = this->count++;
-					this->N[nid].Q = Q;
-					this->N[nid].T = T;
-					this->N[nid].F = F;
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = Q;
+				this->N[nid].T = T;
+				this->N[nid].F = F;
 
-					// push
-					stack[stackPos++] = nid;
-					break;
-				}
-				case '~': {
-					// NOT (support)
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '~': {
+				// NOT (support)
 
-					// invert top-of-stack
-					stack[stackPos - 1] ^= IBIT;
-					break;
-				}
-				case '/':
-					// skip delimiter
+				// invert top-of-stack
+				stack[stackPos - 1] ^= IBIT;
+				break;
+			}
+			case '/':
+				// skip delimiter
 
-					// store result into root
-					this->root = stack[stackPos - 1];
-					return;
+				// store result into root
+				this->root = stack[stackPos - 1];
+				return;
 			}
 		}
 
@@ -1062,11 +1062,11 @@ struct tinyTree_t {
 	 */
 	void encode(unsigned id, char *pName, char *pSkin) const {
 
-		unsigned nameLen = 0;
+		unsigned nameLen  = 0;
 
 		// temporary stack storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int stackPos = 0;
+		int      stackPos = 0;
 
 		unsigned nextNode;
 
@@ -1077,10 +1077,10 @@ struct tinyTree_t {
 			if (pSkin) {
 				if ((id & ~IBIT) == 0) {
 					pName[nameLen++] = '0';
-					pSkin[0] = 0;
+					pSkin[0]         = 0;
 				} else {
-					pSkin[0] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
-					pSkin[1] = 0;
+					pSkin[0]         = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
+					pSkin[1]         = 0;
 					pName[nameLen++] = 'a';
 				}
 
@@ -1122,10 +1122,10 @@ struct tinyTree_t {
 				unsigned curr = stack[--stackPos];
 
 				const tinyNode_t *pNode = this->N + curr;
-				const unsigned Q = pNode->Q;
-				const unsigned To = pNode->T & ~IBIT;
+				const unsigned   Q      = pNode->Q;
+				const unsigned   To     = pNode->T & ~IBIT;
 //				const unsigned Ti = pNode->T & IBIT;
-				const unsigned F = pNode->F;
+				const unsigned   F      = pNode->F;
 
 				// determine if node already handled
 				if (~beenThere & (1 << curr)) {
@@ -1151,19 +1151,19 @@ struct tinyTree_t {
 
 					if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
 						beenThere |= (1 << Q);
-						beenWhat[Q] = TINYTREE_KSTART + numPlaceholder;
+						beenWhat[Q]             = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
 					}
 
 					if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
 						beenThere |= (1 << To);
-						beenWhat[To] = TINYTREE_KSTART + numPlaceholder;
+						beenWhat[To]            = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
 					}
 
 					if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
 						beenThere |= (1 << F);
-						beenWhat[F] = TINYTREE_KSTART + numPlaceholder;
+						beenWhat[F]             = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
 					}
 
@@ -1181,7 +1181,7 @@ struct tinyTree_t {
 		stack[stackPos++] = id & ~IBIT;
 
 		// re-walk the tree
-		nextNode = TINYTREE_NSTART;
+		nextNode  = TINYTREE_NSTART;
 		beenThere = (1 << 0);
 
 		do {
@@ -1201,10 +1201,10 @@ struct tinyTree_t {
 			}
 
 			const tinyNode_t *pNode = this->N + curr;
-			const unsigned Q = pNode->Q;
-			const unsigned To = pNode->T & ~IBIT;
-			const unsigned Ti = pNode->T & IBIT;
-			const unsigned F = pNode->F;
+			const unsigned   Q      = pNode->Q;
+			const unsigned   To     = pNode->T & ~IBIT;
+			const unsigned   Ti     = pNode->T & IBIT;
+			const unsigned   F      = pNode->F;
 
 			// determine if node already handled
 			if (~beenThere & (1 << curr)) {
@@ -1413,7 +1413,7 @@ struct tinyTree_t {
 			// point to the first chunk of the `"when-false"`
 			const __m128i *F = (const __m128i *) v[N[i].F].bits;
 			// point to the first chunk of the `"result"`
-			__m128i *R = (__m128i *) v[i].bits;
+			__m128i       *R = (__m128i *) v[i].bits;
 
 			// determine if the operator is `QTF` or `QnTF`
 			if (N[i].T & IBIT) {
@@ -1577,7 +1577,6 @@ struct tinyTree_t {
 				uint64_t transformMask = *pTransformData;
 
 				// v[(i/64)+0*4] should be 0
-				// @formatter:off
 				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 1 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
 				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 2 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
@@ -1595,7 +1594,6 @@ struct tinyTree_t {
 				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 8 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
 				transformMask >>= 4;
 				if (i & (1LL << (transformMask & 15))) v[(i / 64) + 9 * footprint_t::QUADPERFOOTPRINT] |= 1LL << (i % 64);
-				// @formatter:on
 			}
 
 			v += footprint_t::QUADPERFOOTPRINT * TINYTREE_NEND;

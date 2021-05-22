@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O3")
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * kslice.cc
@@ -39,7 +39,7 @@
  * Resource context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {ksliceContext_t} Application context
+ * @global {context_t} Application context
  */
 context_t ctx;
 
@@ -68,30 +68,24 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  */
 struct ksliceContext_t {
 
-	/// @var {string} input tree name
-	const char *arg_inputName;
-	/// @var {string} output tree name
-	const char *arg_outputName;
 	/// @var {number} header flags
-	uint32_t   opt_flags;
+	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
-	unsigned   opt_force;
+	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned   opt_maxnode;
+	unsigned opt_maxnode;
 	/// @var {number} --threshold, Nodes referenced at least this number of times get their own file
-	unsigned   opt_threshold;
+	unsigned opt_threshold;
 
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
 	ksliceContext_t() {
-		arg_inputName  = NULL;
-		arg_outputName = NULL;
-		opt_flags      = 0;
-		opt_force      = 0;
-		opt_maxnode    = DEFAULT_MAXNODE;
-		opt_threshold  = 2;
-		pInputTree     = NULL;
+		opt_flags     = 0;
+		opt_force     = 0;
+		opt_maxnode   = DEFAULT_MAXNODE;
+		opt_threshold = 2;
+		pInputTree    = NULL;
 	}
 
 	/**
@@ -99,20 +93,20 @@ struct ksliceContext_t {
 	 *
 	 * Main entrypoint
 	 */
-	int main(void) {
+	int main(const char *outputTemplate, const char *inputFilename) {
 		// load oldTree
 		baseTree_t *pOldTree = new baseTree_t(ctx);
 
-		if (pOldTree->loadFile(arg_inputName)) {
+		if (pOldTree->loadFile(inputFilename)) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
-			json_object_set_new_nocheck(jError, "filename", json_string(arg_inputName));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
 			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(arg_inputName));
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
 			pOldTree->headerInfo(jResult);
 			pOldTree->extraInfo(jResult);
 			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -122,14 +116,14 @@ struct ksliceContext_t {
 		if (pOldTree->estart != pOldTree->nstart || pOldTree->estart != pOldTree->numRoots) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Tree already has extended keys/roots"));
-			json_object_set_new_nocheck(jError, "filename", json_string(arg_inputName));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
 		if (pOldTree->kstart == 1) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
-			json_object_set_new_nocheck(jError, "filename", json_string(arg_inputName));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -173,7 +167,7 @@ struct ksliceContext_t {
 		}
 
 		/*
-		 * Create new oldTree
+		 * Create newTree
 		 */
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
@@ -270,7 +264,7 @@ struct ksliceContext_t {
 				continue; // no
 
 			char *filename;
-			asprintf(&filename, arg_outputName, nextExtend);
+			asprintf(&filename, outputTemplate, nextExtend);
 
 			/*
 			 * file may not exist
@@ -357,7 +351,6 @@ struct ksliceContext_t {
 
 			// save head in roots
 			pNewTree->roots[nextExtend] = pMap[iHead];
-			pMap[iHead]                 = nextExtend++;
 
 			// export existing roots
 			for (uint32_t iRoot = pOldTree->kstart; iRoot < pOldTree->estart; iRoot++) {
@@ -371,13 +364,16 @@ struct ksliceContext_t {
 				}
 			}
 
+			// next time, node reference will result in extended key
+			pMap[iHead] = nextExtend++;
+
 			/*
 			 * Save tree
 			 */
 			pNewTree->saveFile(filename, false);
 			numSaves++;
-			
-			if (iHead != pOldTree->ncount-1 ) {
+
+			if (iHead != pOldTree->ncount - 1) {
 				// invalidate non-heads of selection
 				for (uint32_t iNode = pOldTree->nstart; iNode < iHead; iNode++) {
 					if (pVersion[iNode] == thisVersion)
@@ -407,6 +403,8 @@ struct ksliceContext_t {
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
+		pOldTree->freeMap(pMap);
+		pOldTree->freeVersion(pVersion);
 		delete pNewTree;
 		delete pOldTree;
 
@@ -424,8 +422,8 @@ struct ksliceContext_t {
  */
 ksliceContext_t app;
 
-void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s <outputTemplate> <inputName> # NOTE: 'outputTemplate' is a sprintf template\n", argv[0]);
+void usage(char *argv[], bool verbose) {
+	fprintf(stderr, "usage: %s <outputTemplate.dat> <input.dat> # NOTE: 'outputTemplate' is a sprintf template\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
@@ -437,8 +435,8 @@ void usage(char *const *argv, bool verbose) {
 		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  app.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  app.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -453,11 +451,10 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	for (;;) {
-		int option_index = 0;
 		enum {
 			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_THRESHOLD,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
@@ -466,16 +463,29 @@ int main(int argc, char *const *argv) {
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",     1, 0, LO_DEBUG},
-			{"force",     0, 0, LO_FORCE},
-			{"help",      0, 0, LO_HELP},
-			{"maxnode",   1, 0, LO_MAXNODE},
-			{"quiet",     2, 0, LO_QUIET},
-			{"timer",     1, 0, LO_TIMER},
-			{"threshold", 1, 0, LO_THRESHOLD},
-			{"verbose",   2, 0, LO_VERBOSE},
-
-			{NULL,        0, 0, 0}
+			{"debug",       1, 0, LO_DEBUG},
+			{"force",       0, 0, LO_FORCE},
+			{"help",        0, 0, LO_HELP},
+			{"maxnode",     1, 0, LO_MAXNODE},
+			{"quiet",       2, 0, LO_QUIET},
+			{"timer",       1, 0, LO_TIMER},
+			{"threshold",   1, 0, LO_THRESHOLD},
+			{"verbose",     2, 0, LO_VERBOSE},
+			//
+			{"paranoid",    0, 0, LO_PARANOID},
+			{"no-paranoid", 0, 0, LO_NOPARANOID},
+			{"pure",        0, 0, LO_PURE},
+			{"no-pure",     0, 0, LO_NOPURE},
+			{"rewrite",     0, 0, LO_REWRITE},
+			{"no-rewrite",  0, 0, LO_NOREWRITE},
+			{"cascade",     0, 0, LO_CASCADE},
+			{"no-cascade",  0, 0, LO_NOCASCADE},
+//			{"shrink",      0, 0, LO_SHRINK},
+//			{"no-shrink",   0, 0, LO_NOSHRINK},
+//			{"pivot3",      0, 0, LO_PIVOT3},
+//			{"no-pivot3",   0, 0, LO_NOPIVOT3},
+			//
+			{NULL,          0, 0, 0}
 		};
 
 		char optstring[128], *cp;
@@ -494,84 +504,88 @@ int main(int argc, char *const *argv) {
 
 		*cp = '\0';
 
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int option_index = 0;
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_MAXNODE:
-				app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_THRESHOLD:
-				app.opt_threshold = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_MAXNODE:
+			app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_THRESHOLD:
+			app.opt_threshold = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
+			break;
 
-			case LO_PARANOID:
-				app.opt_flags |= ctx.MAGICMASK_PARANOID;
-				break;
-			case LO_NOPARANOID:
-				app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				app.opt_flags |= ctx.MAGICMASK_PURE;
-				break;
-			case LO_NOPURE:
-				app.opt_flags &= ~ctx.MAGICMASK_PURE;
-				break;
-			case LO_REWRITE:
-				app.opt_flags |= ctx.MAGICMASK_REWRITE;
-				break;
-			case LO_NOREWRITE:
-				app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
-				break;
-			case LO_CASCADE:
-				app.opt_flags |= ctx.MAGICMASK_CASCADE;
-				break;
-			case LO_NOCASCADE:
-				app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
-				break;
+		case LO_PARANOID:
+			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_NOPARANOID:
+			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			app.opt_flags |= ctx.MAGICMASK_PURE;
+			break;
+		case LO_NOPURE:
+			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			break;
+		case LO_REWRITE:
+			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_NOREWRITE:
+			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_CASCADE:
+			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			break;
+		case LO_NOCASCADE:
+			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			break;
 //			case LO_SHRINK:
-//				app.opt_flags |=  app.MAGICMASK_SHRINK;
+//				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_NOSHRINK:
-//				app.opt_flags &=  ~app.MAGICMASK_SHRINK;
+//				app.opt_flags &=  ~ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_PIVOT3:
-//				app.opt_flags |=  app.MAGICMASK_PIVOT3;
+//				app.opt_flags |=  ctx.MAGICMASK_PIVOT3;
 //				break;
 //			case LO_NOPIVOT3:
-//				app.opt_flags &=  ~app.MAGICMASK_PIVOT3;
+//				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
 
 
-			case '?':
-				ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
-			default:
-				ctx.fatal("getopt returned character code %d\n", c);
+		case '?':
+			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
+		default:
+			ctx.fatal("getopt returned character code %d\n", c);
 		}
 	}
 
+	char *outputTemplate;
+	char *inputFilename;
+
 	if (argc - optind >= 2) {
-		app.arg_outputName = argv[optind++];
-		app.arg_inputName  = argv[optind++];
+		outputTemplate = argv[optind++];
+		inputFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -588,5 +602,5 @@ int main(int argc, char *const *argv) {
 		::alarm(ctx.opt_timer);
 	}
 
-	return app.main();
+	return app.main(outputTemplate, inputFilename);
 }

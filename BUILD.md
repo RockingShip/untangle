@@ -507,3 +507,44 @@ or use pre-determined member list created with `genmember --text=1` or `genmembe
     ./genmember member-2n9-pure.db 3 member-3n9-pure.db --pure --no-generate --load=member-3n9-pure-1.lst
     ./genmember member-3n9-pure.db 4 member-4n9-pure.db --pure --no-generate --load=member-4n9-pure-1.lst
 ```
+# Building systems
+
+Create a system meta+data file
+
+```sh
+    ./buildX X.json X.dat
+    ./validate X.json X.dat 
+```
+
+Normalisation can be influenced with related program switches, default is only critial normalisations enabled.
+An important normalisation is the OR/NE/AND cascade unrolling. enabling this might greatly increase the number of nodes.  
+For md5 this is an increase from 38460 to 15830341 nodes.
+
+Test basic slicing/joining.  
+Nodes that are referenced more than <threshold> times are considered head of sub-trees.  
+`kslice` will save each sub-tree in separate files.  
+Default threshold=2. The number of files created can be reduced by raising the threshold, but that might have consequences for follow-up steps.
+
+`kjoin` can be used to merge the separate sub-trees into larger trees.
+This can be done in a single run or in incremental steps vor very large collection of files.
+With incremental steps, it is important to read the files in such a sequence to avoid forward-references.
+
+single run:
+
+```sh
+    mkdir tmp
+    ./kslice tmp/md5-%05d.dat md5.dat
+    ./kjoin join.dat tmp/md5-*.dat
+    ./validate md5.json join.dat 
+```
+
+incremental:
+
+```sh
+    mkdir tmp
+    ./kslice tmp/md5-%05d.dat md5.dat
+    ./kjoin join0.dat tmp/md5-0*.dat
+    ./kjoin join1.dat tmp/md5-1*.dat
+    ./kjoin join.dat join0.dat join1.dat
+    ./validate md5.json join.dat 
+```

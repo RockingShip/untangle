@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * builddes.cc
@@ -34,6 +34,14 @@
 #include "context.h"
 #include "basetree.h"
 #include "builddes.h"
+
+/*
+ * Resource context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {context_t} Application context
+ */
+context_t ctx;
 
 /// @var {baseTree_t*} global reference to tree
 baseTree_t *gTree = NULL;
@@ -89,97 +97,23 @@ struct NODE {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct builddesContext_t : context_t {
+struct builddesContext_t {
 
-	/// @var {string} output metadata filename
-	const char *arg_json;
-	/// @var {string} output filename
-	const char *arg_data;
 	/// @var {number} header flags
-	uint32_t   opt_flags;
+	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
-	unsigned   opt_force;
-	/// @var {number} --split, split the tree into round
-	unsigned   opt_split;
+	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned   opt_maxnode;
+	unsigned opt_maxnode;
 	/// @var {NODE} variables referencing zero/false and nonZero/true
-	NODE       vFalse, vTrue;
+	NODE     vFalse, vTrue;
 
 	builddesContext_t() {
-		arg_json    = NULL;
-		arg_data    = NULL;
 		opt_flags   = 0;
 		opt_force   = 0;
-		opt_split   = 0;
 		opt_maxnode = DEFAULT_MAXNODE;
 		vFalse.id = 0;
 		vTrue.id  = IBIT;
-	}
-
-	/*
-	 * Split and Save intermediate tree
-	 * The current round intermediates are stored as roots/entrypoints
-	 * The new tree will find the intermediates as 'extended' keys
-	 */
-	void splitTree(NODE *V, uint32_t vstart, int roundNr) {
-		unsigned savNumRoots = gTree->numRoots;
-
-		assert(!"todo:");
-
-		// output 32 round intermediates
-		assert(gTree->numRoots >= 32);
-		gTree->numRoots = 32;
-
-		for (uint32_t i = vstart; i < vstart + 32; i++) {
-			gTree->rootNames[i - vstart] = allNames[i]; // assign root name
-			gTree->roots[i - vstart]     = V[i].id; // node id of intermediate
-		}
-
-		// save
-		{
-			char *filename;
-			asprintf(&filename, arg_data, roundNr);
-
-			gTree->saveFile(filename);
-
-			free(filename);
-		}
-
-		// save metadata
-		{
-			json_t *jOutput = json_object();
-			gTree->headerInfo(jOutput);
-
-			char *filename;
-			asprintf(&filename, arg_data, roundNr);
-
-			FILE *f = fopen(filename, "w");
-			if (!f)
-				fatal("fopen(%s) returned: %m\n", filename);
-
-			fprintf(f, "%s\n", json_dumps(jOutput, JSON_PRESERVE_ORDER | JSON_COMPACT));
-
-			if (fclose(f))
-				fatal("fclose(%s) returned: %m\n", arg_json);
-
-			free(filename);
-		}
-
-		// setup continuation tree
-		gTree->keysId   = gTree->rootsId; // keys of this tree must match previous tree
-		gTree->rootsId  = rand(); // this tree roots gets new unique id
-		gTree->ncount   = gTree->nstart;
-		gTree->numRoots = savNumRoots;
-		// invalidate lookup cache
-		++gTree->nodeIndexVersionNr;
-
-		// setup intermediate keys for continuation
-//		for (uint32_t i = vstart; i < vstart + 32; i++) {
-//			V[i].id = NSTART + i - vstart;
-//			gTree->keyNames[V[i].id] = allNames[i];
-//		}
-
 	}
 
 	/*
@@ -223,9 +157,6 @@ struct builddesContext_t : context_t {
 		V[v0021] = V[i32] ^ box_7_21(V[i77]^V[k31],V[i01]^V[k61],V[i11]^V[k72],V[i21]^V[k13],V[i31]^V[k12],V[i41]^V[k53]);
 		V[v0027] = V[i50] ^ box_7_27(V[i77]^V[k31],V[i01]^V[k61],V[i11]^V[k72],V[i21]^V[k13],V[i31]^V[k12],V[i41]^V[k53]);
 
-		if (opt_split)
-			splitTree(V, v0000, 0);
-
 		V[v0109] = V[i75] ^ box_0_9 (V[v0005]^V[k17],V[v0004]^V[k57],V[v0003]^V[k64],V[v0002]^V[k36],V[v0001]^V[k55],V[v0000]^V[k06]);
 		V[v0117] = V[i73] ^ box_0_17(V[v0005]^V[k17],V[v0004]^V[k57],V[v0003]^V[k64],V[v0002]^V[k36],V[v0001]^V[k55],V[v0000]^V[k06]);
 		V[v0123] = V[i13] ^ box_0_23(V[v0005]^V[k17],V[v0004]^V[k57],V[v0003]^V[k64],V[v0002]^V[k36],V[v0001]^V[k55],V[v0000]^V[k06]);
@@ -258,9 +189,6 @@ struct builddesContext_t : context_t {
 		V[v0115] = V[i15] ^ box_7_15(V[v0001]^V[k21],V[v0000]^V[k51],V[v0031]^V[k62],V[v0030]^V[k03],V[v0029]^V[k02],V[v0028]^V[k43]);
 		V[v0121] = V[i33] ^ box_7_21(V[v0001]^V[k21],V[v0000]^V[k51],V[v0031]^V[k62],V[v0030]^V[k03],V[v0029]^V[k02],V[v0028]^V[k43]);
 		V[v0127] = V[i51] ^ box_7_27(V[v0001]^V[k21],V[v0000]^V[k51],V[v0031]^V[k62],V[v0030]^V[k03],V[v0029]^V[k02],V[v0028]^V[k43]);
-
-		if (opt_split)
-			splitTree(V, v0100, 1);
 
 		V[v0209] = V[v0009] ^ box_0_9 (V[v0105]^V[k76],V[v0104]^V[k37],V[v0103]^V[k44],V[v0102]^V[k16],V[v0101]^V[k35],V[v0100]^V[k65]);
 		V[v0217] = V[v0017] ^ box_0_17(V[v0105]^V[k76],V[v0104]^V[k37],V[v0103]^V[k44],V[v0102]^V[k16],V[v0101]^V[k35],V[v0100]^V[k65]);
@@ -295,9 +223,6 @@ struct builddesContext_t : context_t {
 		V[v0221] = V[v0021] ^ box_7_21(V[v0101]^V[k01],V[v0100]^V[k31],V[v0131]^V[k42],V[v0130]^V[k24],V[v0129]^V[k63],V[v0128]^V[k23]);
 		V[v0227] = V[v0027] ^ box_7_27(V[v0101]^V[k01],V[v0100]^V[k31],V[v0131]^V[k42],V[v0130]^V[k24],V[v0129]^V[k63],V[v0128]^V[k23]);
 
-		if (opt_split)
-			splitTree(V, v0200, 2);
-
 		V[v0309] = V[v0109] ^ box_0_9 (V[v0205]^V[k56],V[v0204]^V[k17],V[v0203]^V[k67],V[v0202]^V[k75],V[v0201]^V[k15],V[v0200]^V[k45]);
 		V[v0317] = V[v0117] ^ box_0_17(V[v0205]^V[k56],V[v0204]^V[k17],V[v0203]^V[k67],V[v0202]^V[k75],V[v0201]^V[k15],V[v0200]^V[k45]);
 		V[v0323] = V[v0123] ^ box_0_23(V[v0205]^V[k56],V[v0204]^V[k17],V[v0203]^V[k67],V[v0202]^V[k75],V[v0201]^V[k15],V[v0200]^V[k45]);
@@ -330,9 +255,6 @@ struct builddesContext_t : context_t {
 		V[v0315] = V[v0115] ^ box_7_15(V[v0201]^V[k62],V[v0200]^V[k11],V[v0231]^V[k22],V[v0230]^V[k04],V[v0229]^V[k43],V[v0228]^V[k03]);
 		V[v0321] = V[v0121] ^ box_7_21(V[v0201]^V[k62],V[v0200]^V[k11],V[v0231]^V[k22],V[v0230]^V[k04],V[v0229]^V[k43],V[v0228]^V[k03]);
 		V[v0327] = V[v0127] ^ box_7_27(V[v0201]^V[k62],V[v0200]^V[k11],V[v0231]^V[k22],V[v0230]^V[k04],V[v0229]^V[k43],V[v0228]^V[k03]);
-
-		if (opt_split)
-			splitTree(V, v0300, 3);
 
 		V[v0409] = V[v0209] ^ box_0_9 (V[v0305]^V[k36],V[v0304]^V[k76],V[v0303]^V[k47],V[v0302]^V[k55],V[v0301]^V[k74],V[v0300]^V[k25]);
 		V[v0417] = V[v0217] ^ box_0_17(V[v0305]^V[k36],V[v0304]^V[k76],V[v0303]^V[k47],V[v0302]^V[k55],V[v0301]^V[k74],V[v0300]^V[k25]);
@@ -367,9 +289,6 @@ struct builddesContext_t : context_t {
 		V[v0421] = V[v0221] ^ box_7_21(V[v0301]^V[k42],V[v0300]^V[k72],V[v0331]^V[k02],V[v0330]^V[k61],V[v0329]^V[k23],V[v0328]^V[k24]);
 		V[v0427] = V[v0227] ^ box_7_27(V[v0301]^V[k42],V[v0300]^V[k72],V[v0331]^V[k02],V[v0330]^V[k61],V[v0329]^V[k23],V[v0328]^V[k24]);
 
-		if (opt_split)
-			splitTree(V, v0400, 4);
-
 		V[v0509] = V[v0309] ^ box_0_9 (V[v0405]^V[k16],V[v0404]^V[k56],V[v0403]^V[k27],V[v0402]^V[k35],V[v0401]^V[k54],V[v0400]^V[k05]);
 		V[v0517] = V[v0317] ^ box_0_17(V[v0405]^V[k16],V[v0404]^V[k56],V[v0403]^V[k27],V[v0402]^V[k35],V[v0401]^V[k54],V[v0400]^V[k05]);
 		V[v0523] = V[v0323] ^ box_0_23(V[v0405]^V[k16],V[v0404]^V[k56],V[v0403]^V[k27],V[v0402]^V[k35],V[v0401]^V[k54],V[v0400]^V[k05]);
@@ -402,9 +321,6 @@ struct builddesContext_t : context_t {
 		V[v0515] = V[v0315] ^ box_7_15(V[v0401]^V[k22],V[v0400]^V[k52],V[v0431]^V[k63],V[v0430]^V[k41],V[v0429]^V[k03],V[v0428]^V[k04]);
 		V[v0521] = V[v0321] ^ box_7_21(V[v0401]^V[k22],V[v0400]^V[k52],V[v0431]^V[k63],V[v0430]^V[k41],V[v0429]^V[k03],V[v0428]^V[k04]);
 		V[v0527] = V[v0327] ^ box_7_27(V[v0401]^V[k22],V[v0400]^V[k52],V[v0431]^V[k63],V[v0430]^V[k41],V[v0429]^V[k03],V[v0428]^V[k04]);
-
-		if (opt_split)
-			splitTree(V, v0500, 5);
 
 		V[v0609] = V[v0409] ^ box_0_9 (V[v0505]^V[k75],V[v0504]^V[k36],V[v0503]^V[k07],V[v0502]^V[k15],V[v0501]^V[k77],V[v0500]^V[k64]);
 		V[v0617] = V[v0417] ^ box_0_17(V[v0505]^V[k75],V[v0504]^V[k36],V[v0503]^V[k07],V[v0502]^V[k15],V[v0501]^V[k77],V[v0500]^V[k64]);
@@ -439,9 +355,6 @@ struct builddesContext_t : context_t {
 		V[v0621] = V[v0421] ^ box_7_21(V[v0501]^V[k02],V[v0500]^V[k32],V[v0531]^V[k43],V[v0530]^V[k21],V[v0529]^V[k24],V[v0528]^V[k61]);
 		V[v0627] = V[v0427] ^ box_7_27(V[v0501]^V[k02],V[v0500]^V[k32],V[v0531]^V[k43],V[v0530]^V[k21],V[v0529]^V[k24],V[v0528]^V[k61]);
 
-		if (opt_split)
-			splitTree(V, v0600, 6);
-
 		V[v0709] = V[v0509] ^ box_0_9 (V[v0605]^V[k55],V[v0604]^V[k16],V[v0603]^V[k66],V[v0602]^V[k74],V[v0601]^V[k57],V[v0600]^V[k44]);
 		V[v0717] = V[v0517] ^ box_0_17(V[v0605]^V[k55],V[v0604]^V[k16],V[v0603]^V[k66],V[v0602]^V[k74],V[v0601]^V[k57],V[v0600]^V[k44]);
 		V[v0723] = V[v0523] ^ box_0_23(V[v0605]^V[k55],V[v0604]^V[k16],V[v0603]^V[k66],V[v0602]^V[k74],V[v0601]^V[k57],V[v0600]^V[k44]);
@@ -474,9 +387,6 @@ struct builddesContext_t : context_t {
 		V[v0715] = V[v0515] ^ box_7_15(V[v0601]^V[k63],V[v0600]^V[k12],V[v0631]^V[k23],V[v0630]^V[k01],V[v0629]^V[k04],V[v0628]^V[k41]);
 		V[v0721] = V[v0521] ^ box_7_21(V[v0601]^V[k63],V[v0600]^V[k12],V[v0631]^V[k23],V[v0630]^V[k01],V[v0629]^V[k04],V[v0628]^V[k41]);
 		V[v0727] = V[v0527] ^ box_7_27(V[v0601]^V[k63],V[v0600]^V[k12],V[v0631]^V[k23],V[v0630]^V[k01],V[v0629]^V[k04],V[v0628]^V[k41]);
-
-		if (opt_split)
-			splitTree(V, v0700, 7);
 
 		V[v0809] = V[v0609] ^ box_0_9 (V[v0705]^V[k45],V[v0704]^V[k06],V[v0703]^V[k56],V[v0702]^V[k64],V[v0701]^V[k47],V[v0700]^V[k77]);
 		V[v0817] = V[v0617] ^ box_0_17(V[v0705]^V[k45],V[v0704]^V[k06],V[v0703]^V[k56],V[v0702]^V[k64],V[v0701]^V[k47],V[v0700]^V[k77]);
@@ -511,9 +421,6 @@ struct builddesContext_t : context_t {
 		V[v0821] = V[v0621] ^ box_7_21(V[v0701]^V[k53],V[v0700]^V[k02],V[v0731]^V[k13],V[v0730]^V[k72],V[v0729]^V[k71],V[v0728]^V[k31]);
 		V[v0827] = V[v0627] ^ box_7_27(V[v0701]^V[k53],V[v0700]^V[k02],V[v0731]^V[k13],V[v0730]^V[k72],V[v0729]^V[k71],V[v0728]^V[k31]);
 
-		if (opt_split)
-			splitTree(V, v0800, 8);
-
 		V[v0909] = V[v0709] ^ box_0_9 (V[v0805]^V[k25],V[v0804]^V[k65],V[v0803]^V[k36],V[v0802]^V[k44],V[v0801]^V[k27],V[v0800]^V[k57]);
 		V[v0917] = V[v0717] ^ box_0_17(V[v0805]^V[k25],V[v0804]^V[k65],V[v0803]^V[k36],V[v0802]^V[k44],V[v0801]^V[k27],V[v0800]^V[k57]);
 		V[v0923] = V[v0723] ^ box_0_23(V[v0805]^V[k25],V[v0804]^V[k65],V[v0803]^V[k36],V[v0802]^V[k44],V[v0801]^V[k27],V[v0800]^V[k57]);
@@ -546,9 +453,6 @@ struct builddesContext_t : context_t {
 		V[v0915] = V[v0715] ^ box_7_15(V[v0801]^V[k33],V[v0800]^V[k63],V[v0831]^V[k34],V[v0830]^V[k52],V[v0829]^V[k51],V[v0828]^V[k11]);
 		V[v0921] = V[v0721] ^ box_7_21(V[v0801]^V[k33],V[v0800]^V[k63],V[v0831]^V[k34],V[v0830]^V[k52],V[v0829]^V[k51],V[v0828]^V[k11]);
 		V[v0927] = V[v0727] ^ box_7_27(V[v0801]^V[k33],V[v0800]^V[k63],V[v0831]^V[k34],V[v0830]^V[k52],V[v0829]^V[k51],V[v0828]^V[k11]);
-
-		if (opt_split)
-			splitTree(V, v0900, 9);
 
 		V[v1009] = V[v0809] ^ box_0_9 (V[v0905]^V[k05],V[v0904]^V[k45],V[v0903]^V[k16],V[v0902]^V[k67],V[v0901]^V[k07],V[v0900]^V[k37]);
 		V[v1017] = V[v0817] ^ box_0_17(V[v0905]^V[k05],V[v0904]^V[k45],V[v0903]^V[k16],V[v0902]^V[k67],V[v0901]^V[k07],V[v0900]^V[k37]);
@@ -583,9 +487,6 @@ struct builddesContext_t : context_t {
 		V[v1021] = V[v0821] ^ box_7_21(V[v0901]^V[k13],V[v0900]^V[k43],V[v0931]^V[k14],V[v0930]^V[k32],V[v0929]^V[k31],V[v0928]^V[k72]);
 		V[v1027] = V[v0827] ^ box_7_27(V[v0901]^V[k13],V[v0900]^V[k43],V[v0931]^V[k14],V[v0930]^V[k32],V[v0929]^V[k31],V[v0928]^V[k72]);
 
-		if (opt_split)
-			splitTree(V, v1000, 10);
-
 		V[v1109] = V[v0909] ^ box_0_9 (V[v1005]^V[k64],V[v1004]^V[k25],V[v1003]^V[k75],V[v1002]^V[k47],V[v1001]^V[k66],V[v1000]^V[k17]);
 		V[v1117] = V[v0917] ^ box_0_17(V[v1005]^V[k64],V[v1004]^V[k25],V[v1003]^V[k75],V[v1002]^V[k47],V[v1001]^V[k66],V[v1000]^V[k17]);
 		V[v1123] = V[v0923] ^ box_0_23(V[v1005]^V[k64],V[v1004]^V[k25],V[v1003]^V[k75],V[v1002]^V[k47],V[v1001]^V[k66],V[v1000]^V[k17]);
@@ -618,9 +519,6 @@ struct builddesContext_t : context_t {
 		V[v1115] = V[v0915] ^ box_7_15(V[v1001]^V[k34],V[v1000]^V[k23],V[v1031]^V[k71],V[v1030]^V[k12],V[v1029]^V[k11],V[v1028]^V[k52]);
 		V[v1121] = V[v0921] ^ box_7_21(V[v1001]^V[k34],V[v1000]^V[k23],V[v1031]^V[k71],V[v1030]^V[k12],V[v1029]^V[k11],V[v1028]^V[k52]);
 		V[v1127] = V[v0927] ^ box_7_27(V[v1001]^V[k34],V[v1000]^V[k23],V[v1031]^V[k71],V[v1030]^V[k12],V[v1029]^V[k11],V[v1028]^V[k52]);
-
-		if (opt_split)
-			splitTree(V, v1100, 11);
 
 		V[v1209] = V[v1009] ^ box_0_9 (V[v1105]^V[k44],V[v1104]^V[k05],V[v1103]^V[k55],V[v1102]^V[k27],V[v1101]^V[k46],V[v1100]^V[k76]);
 		V[v1217] = V[v1017] ^ box_0_17(V[v1105]^V[k44],V[v1104]^V[k05],V[v1103]^V[k55],V[v1102]^V[k27],V[v1101]^V[k46],V[v1100]^V[k76]);
@@ -655,9 +553,6 @@ struct builddesContext_t : context_t {
 		V[v1221] = V[v1021] ^ box_7_21(V[v1101]^V[k14],V[v1100]^V[k03],V[v1131]^V[k51],V[v1130]^V[k73],V[v1129]^V[k72],V[v1128]^V[k32]);
 		V[v1227] = V[v1027] ^ box_7_27(V[v1101]^V[k14],V[v1100]^V[k03],V[v1131]^V[k51],V[v1130]^V[k73],V[v1129]^V[k72],V[v1128]^V[k32]);
 
-		if (opt_split)
-			splitTree(V, v1200, 12);
-
 		V[v1309] = V[v1109] ^ box_0_9 (V[v1205]^V[k67],V[v1204]^V[k64],V[v1203]^V[k35],V[v1202]^V[k07],V[v1201]^V[k26],V[v1200]^V[k56]);
 		V[v1317] = V[v1117] ^ box_0_17(V[v1205]^V[k67],V[v1204]^V[k64],V[v1203]^V[k35],V[v1202]^V[k07],V[v1201]^V[k26],V[v1200]^V[k56]);
 		V[v1323] = V[v1123] ^ box_0_23(V[v1205]^V[k67],V[v1204]^V[k64],V[v1203]^V[k35],V[v1202]^V[k07],V[v1201]^V[k26],V[v1200]^V[k56]);
@@ -691,9 +586,6 @@ struct builddesContext_t : context_t {
 		V[v1321] = V[v1121] ^ box_7_21(V[v1201]^V[k71],V[v1200]^V[k24],V[v1231]^V[k31],V[v1230]^V[k53],V[v1229]^V[k52],V[v1228]^V[k12]);
 		V[v1327] = V[v1127] ^ box_7_27(V[v1201]^V[k71],V[v1200]^V[k24],V[v1231]^V[k31],V[v1230]^V[k53],V[v1229]^V[k52],V[v1228]^V[k12]);
 
-		if (opt_split)
-			splitTree(V, v1300, 13);
-
 		V[v1409] = V[v1209] ^ box_0_9 (V[v1305]^V[k47],V[v1304]^V[k44],V[v1303]^V[k15],V[v1302]^V[k66],V[v1301]^V[k06],V[v1300]^V[k36]);
 		V[v1417] = V[v1217] ^ box_0_17(V[v1305]^V[k47],V[v1304]^V[k44],V[v1303]^V[k15],V[v1302]^V[k66],V[v1301]^V[k06],V[v1300]^V[k36]);
 		V[v1423] = V[v1223] ^ box_0_23(V[v1305]^V[k47],V[v1304]^V[k44],V[v1303]^V[k15],V[v1302]^V[k66],V[v1301]^V[k06],V[v1300]^V[k36]);
@@ -726,9 +618,6 @@ struct builddesContext_t : context_t {
 		V[v1415] = V[v1215] ^ box_7_15(V[v1301]^V[k51],V[v1300]^V[k04],V[v1331]^V[k11],V[v1330]^V[k33],V[v1329]^V[k32],V[v1328]^V[k73]);
 		V[v1421] = V[v1221] ^ box_7_21(V[v1301]^V[k51],V[v1300]^V[k04],V[v1331]^V[k11],V[v1330]^V[k33],V[v1329]^V[k32],V[v1328]^V[k73]);
 		V[v1427] = V[v1227] ^ box_7_27(V[v1301]^V[k51],V[v1300]^V[k04],V[v1331]^V[k11],V[v1330]^V[k33],V[v1329]^V[k32],V[v1328]^V[k73]);
-
-		if (opt_split)
-			splitTree(V, v1400, 14);
 
 		V[v1509] = V[v1309] ^ box_0_9 (V[v1405]^V[k37],V[v1404]^V[k77],V[v1403]^V[k05],V[v1402]^V[k56],V[v1401]^V[k75],V[v1400]^V[k26]);
 		V[v1517] = V[v1317] ^ box_0_17(V[v1405]^V[k37],V[v1404]^V[k77],V[v1403]^V[k05],V[v1402]^V[k56],V[v1401]^V[k75],V[v1400]^V[k26]);
@@ -830,7 +719,7 @@ struct builddesContext_t : context_t {
 		V[o10] = V[v1531];
 	}
 
-	void main(void) {
+	void main(const char *jsonFilename, const char *datFilename) {
 		/*
 		 * allocate and initialise placeholder/helper array references to variables
 		 * NOTE: use NSTART because this is the last intermediate as gTree->nstart might point to ESTART)
@@ -840,13 +729,8 @@ struct builddesContext_t : context_t {
 		/*
 		 * Allocate the build tree containing the complete formula
 		 */
-		if (opt_split) {
-			// use extended keys for inermediates
-			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ELAST/*NSTART*/, ELAST/*numRoots*/, opt_maxnode, opt_flags);
-		} else {
-			// basic keys
-			gTree = new baseTree_t(*this, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
-		}
+		// basic keys
+		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
 
 		// setup key names
 		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
@@ -878,7 +762,7 @@ struct builddesContext_t : context_t {
 		 * Assign the roots/entrypoints.
 		 */
 		gTree->numRoots = gTree->estart;
-		for (unsigned iRoot =0; iRoot < gTree->estart; iRoot++)
+		for (unsigned iRoot = 0; iRoot < gTree->estart; iRoot++)
 			gTree->roots[iRoot] = V[iRoot].id;
 
 		/*
@@ -892,14 +776,7 @@ struct builddesContext_t : context_t {
 		 * Save the tree
 		 */
 
-		if (opt_split) {
-			char *filename;
-			asprintf(&filename, arg_data, 15);
-			gTree->saveFile(filename);
-			free(filename);
-		} else {
-			gTree->saveFile(arg_data);
-		}
+		gTree->saveFile(datFilename);
 
 		/*
 		 * Create the meta json
@@ -914,22 +791,22 @@ struct builddesContext_t : context_t {
 		// add validations tests
 		json_object_set_new_nocheck(jOutput, "tests", gTests);
 
-		FILE *f = fopen(arg_json, "w");
+		FILE *f = fopen(jsonFilename, "w");
 		if (!f)
-			fatal("fopen(%s) returned: %m\n", arg_json);
+			ctx.fatal("fopen(%s) returned: %m\n", jsonFilename);
 
 		fprintf(f, "%s\n", json_dumps(jOutput, JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 		if (fclose(f))
-			fatal("fclose(%s) returned: %m\n", arg_json);
+			ctx.fatal("fclose(%s) returned: %m\n", jsonFilename);
 
 		/*
 		 * Display json
 		 */
 
-		if (opt_verbose >= VERBOSE_SUMMARY) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(arg_data));
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(datFilename));
 			gTree->headerInfo(jResult);
 			gTree->extraInfo(jResult);
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -947,21 +824,20 @@ struct builddesContext_t : context_t {
  */
 builddesContext_t app;
 
-void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s <json> <data>\n", argv[0]);
+void usage(char *argv[], bool verbose) {
+	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
 		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t   --split\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", app.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & app.MAGICMASK_PARANOID ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & app.MAGICMASK_PURE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & app.MAGICMASK_REWRITE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & app.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  app.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  app.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -976,13 +852,12 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	for (;;) {
-		int option_index = 0;
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_SPLIT,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -994,7 +869,6 @@ int main(int argc, char *const *argv) {
 			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
 			{"quiet",       2, 0, LO_QUIET},
-			{"split",       0, 0, LO_SPLIT},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
 			//
@@ -1030,83 +904,84 @@ int main(int argc, char *const *argv) {
 
 		*cp = '\0';
 
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int option_index = 0;
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_MAXNODE:
-				app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
-				break;
-			case LO_SPLIT:
-				app.opt_split++;
-				break;
-			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_MAXNODE:
+			app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
+			break;
 
-			case LO_PARANOID:
-				app.opt_flags |= app.MAGICMASK_PARANOID;
-				break;
-			case LO_NOPARANOID:
-				app.opt_flags &= ~app.MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				app.opt_flags |= app.MAGICMASK_PURE;
-				break;
-			case LO_NOPURE:
-				app.opt_flags &= ~app.MAGICMASK_PURE;
-				break;
-			case LO_REWRITE:
-				app.opt_flags |= app.MAGICMASK_REWRITE;
-				break;
-			case LO_NOREWRITE:
-				app.opt_flags &= ~app.MAGICMASK_REWRITE;
-				break;
-			case LO_CASCADE:
-				app.opt_flags |= app.MAGICMASK_CASCADE;
-				break;
-			case LO_NOCASCADE:
-				app.opt_flags &= ~app.MAGICMASK_CASCADE;
-				break;
+		case LO_PARANOID:
+			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_NOPARANOID:
+			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			app.opt_flags |= ctx.MAGICMASK_PURE;
+			break;
+		case LO_NOPURE:
+			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			break;
+		case LO_REWRITE:
+			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_NOREWRITE:
+			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_CASCADE:
+			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			break;
+		case LO_NOCASCADE:
+			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			break;
 //			case LO_SHRINK:
-//				app.opt_flags |=  app.MAGICMASK_SHRINK;
+//				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_NOSHRINK:
-//				app.opt_flags &=  ~app.MAGICMASK_SHRINK;
+//				app.opt_flags &=  ~ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_PIVOT3:
-//				app.opt_flags |=  app.MAGICMASK_PIVOT3;
+//				app.opt_flags |=  ctx.MAGICMASK_PIVOT3;
 //				break;
 //			case LO_NOPIVOT3:
-//				app.opt_flags &=  ~app.MAGICMASK_PIVOT3;
+//				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
 
-			case '?':
-				app.fatal("Try `%s --help' for more information.\n", argv[0]);
-			default:
-				app.fatal("getopt returned character code %d\n", c);
+		case '?':
+			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
+		default:
+			ctx.fatal("getopt returned character code %d\n", c);
 		}
 	}
 
+	char *jsonFilename;
+	char *datFilename;
+
 	if (argc - optind >= 2) {
-		app.arg_json = argv[optind++];
-		app.arg_data = argv[optind++];
+		jsonFilename = argv[optind++];
+		datFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -1117,16 +992,16 @@ int main(int argc, char *const *argv) {
 	 */
 	if (!app.opt_force) {
 		struct stat sbuf;
-		if (!stat(app.arg_json, &sbuf))
-			app.fatal("%s already exists. Use --force to overwrite\n", app.arg_json);
-		if (!stat(app.arg_data, &sbuf))
-			app.fatal("%s already exists. Use --force to overwrite\n", app.arg_data);
+		if (!stat(jsonFilename, &sbuf))
+			ctx.fatal("%s already exists. Use --force to overwrite\n", jsonFilename);
+		if (!stat(datFilename, &sbuf))
+			ctx.fatal("%s already exists. Use --force to overwrite\n", datFilename);
 	}
 
 	/*
 	 * Main
 	 */
-	app.main();
+	app.main(jsonFilename, datFilename);
 
 	return 0;
 }

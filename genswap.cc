@@ -106,9 +106,9 @@ struct genswapContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		OPTTEXT_WON = 1,
+		OPTTEXT_WON     = 1,
 		OPTTEXT_COMPARE = 2,
-		OPTTEXT_BRIEF = 3,
+		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
 
 	};
@@ -122,26 +122,26 @@ struct genswapContext_t : dbtool_t {
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 	/// @var {number} force overwriting of database if already exists
-	unsigned opt_force;
+	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
-	unsigned opt_generate;
+	unsigned   opt_generate;
 	/// @var {string} name of file containing swaps
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned opt_saveIndex;
+	unsigned   opt_saveIndex;
 	/// @var {number} Sid range upper bound
-	unsigned opt_sidHi;
+	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
-	unsigned opt_sidLo;
+	unsigned   opt_sidLo;
 	/// @var {number} task Id. First task=1
-	unsigned opt_taskId;
+	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
-	unsigned opt_taskLast;
+	unsigned   opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
+	unsigned   opt_text;
 
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
@@ -165,27 +165,27 @@ struct genswapContext_t : dbtool_t {
 	 */
 	genswapContext_t(context_t &ctx) : dbtool_t(ctx) {
 		// arguments and options
-		opt_force = 0;
-		opt_generate = 1;
-		arg_inputDatabase = NULL;
-		opt_load = NULL;
+		opt_force          = 0;
+		opt_generate       = 1;
+		arg_inputDatabase  = NULL;
+		opt_load           = NULL;
 		arg_outputDatabase = NULL;
-		opt_saveIndex = 1;
-		opt_sidHi = 0;
-		opt_sidLo = 0;
-		opt_taskId = 0;
-		opt_taskLast = 0;
-		opt_text = 0;
+		opt_saveIndex      = 1;
+		opt_sidHi          = 0;
+		opt_sidLo          = 0;
+		opt_taskId         = 0;
+		opt_taskLast       = 0;
+		opt_text           = 0;
 
 		iVersion = 0;
-		pStore = NULL;
+		pStore   = NULL;
 		pEvalFwd = NULL;
 		pEvalRev = NULL;
 
 		skipDuplicate = 0;
-		swapsActive = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsActive", MAXTRANSFORM, sizeof(*swapsActive));
-		swapsFound = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsFound", MAXTRANSFORM, sizeof(*swapsFound));
-		swapsWeight = (uint64_t *) ctx.myAlloc("genswapContext_t::swapsWeight", MAXTRANSFORM, sizeof(*swapsWeight));
+		swapsActive   = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsActive", MAXTRANSFORM, sizeof(*swapsActive));
+		swapsFound    = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsFound", MAXTRANSFORM, sizeof(*swapsFound));
+		swapsWeight   = (uint64_t *) ctx.myAlloc("genswapContext_t::swapsWeight", MAXTRANSFORM, sizeof(*swapsWeight));
 		for (unsigned j = 0; j <= MAXSLOTS; j++)
 			tidHi[j] = 0;
 	}
@@ -227,12 +227,12 @@ struct genswapContext_t : dbtool_t {
 
 		for (unsigned j = 0; j < numFound; j++) {
 			// get transform
-			unsigned tidOrig = pFound[j];
-			const char *pOrig = pStore->fwdTransformNames[tidOrig & ~IBIT];
+			unsigned   tidOrig = pFound[j];
+			const char *pOrig  = pStore->fwdTransformNames[tidOrig & ~IBIT];
 
 			// apply transform to slots
-			unsigned tidSwapped = pStore->lookupTransformSlot(pOrig, pFocus, pStore->fwdTransformNameIndex);
-			const char *pSwapped = pStore->fwdTransformNames[tidSwapped];
+			unsigned   tidSwapped = pStore->lookupTransformSlot(pOrig, pFocus, pStore->fwdTransformNameIndex);
+			const char *pSwapped  = pStore->fwdTransformNames[tidSwapped];
 
 			// skip if disabled
 			if (tidOrig & IBIT)
@@ -241,8 +241,8 @@ struct genswapContext_t : dbtool_t {
 			/*
 			 * Compare pOrig/pSwap
 			 */
-			int cmp = 0;
-			for (unsigned k = 0; k < MAXSLOTS; k++) {
+			int           cmp = 0;
+			for (unsigned k   = 0; k < MAXSLOTS; k++) {
 				cmp = pOrig[k] - pSwapped[k];
 				if (cmp)
 					break;
@@ -307,9 +307,9 @@ struct genswapContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numSwap=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+					skipDuplicate);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -320,9 +320,9 @@ struct genswapContext_t : dbtool_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d numSwap=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
-				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - this->opt_sidLo) * 100.0 / (ctx.progressHi - this->opt_sidLo), etaH, etaM, etaS,
+					pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+					skipDuplicate);
 			}
 
 			ctx.tick = 0;
@@ -332,11 +332,11 @@ struct genswapContext_t : dbtool_t {
 		 * lookup signature
 		 */
 
-		unsigned ix = pStore->lookupSignature(pName);
+		unsigned       ix  = pStore->lookupSignature(pName);
 		const unsigned sid = pStore->signatureIndex[ix];
 		if (sid == 0)
 			ctx.fatal("\n{\"error\":\"missing signature\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"progress\":%lu}\n",
-			          __FUNCTION__, __FILE__, __LINE__, pName, ctx.progress);
+				  __FUNCTION__, __FILE__, __LINE__, pName, ctx.progress);
 
 		tinyTree_t tree(ctx);
 
@@ -352,8 +352,8 @@ struct genswapContext_t : dbtool_t {
 		tree.eval(this->pEvalRev);
 
 		this->iVersion++;
-		unsigned numSwaps = 0;
-		for (unsigned tid = 0; tid < tidHi[pSignature->numPlaceholder]; tid++) {
+		unsigned      numSwaps = 0;
+		for (unsigned tid      = 0; tid < tidHi[pSignature->numPlaceholder]; tid++) {
 			// point to evaluator for given transformId
 			footprint_t *v = this->pEvalFwd + tid * tinyTree_t::TINYTREE_NEND;
 
@@ -366,7 +366,7 @@ struct genswapContext_t : dbtool_t {
 				assert(numSwaps < MAXTRANSFORM);
 				this->swapsFound[numSwaps++] = tid;
 				// mark it as in use
-				this->swapsActive[tid] = iVersion;
+				this->swapsActive[tid]       = iVersion;
 			}
 		}
 
@@ -397,15 +397,15 @@ struct genswapContext_t : dbtool_t {
 				continue;
 
 			const char *pSelect = pStore->fwdTransformNames[tidSelect];
-			bool okay = true;
+			bool       okay     = true;
 
 			/*
 			 * apply selected transform to collection and locate pair
 			 */
 			for (unsigned j = 0; j < numSwaps; j++) {
-				unsigned tidOrig = this->swapsFound[j] & ~IBIT;
-				const char *pOrig = pStore->fwdTransformNames[tidOrig];
-				unsigned tidSwapped = pStore->lookupTransformSlot(pOrig, pSelect, pStore->fwdTransformNameIndex);
+				unsigned   tidOrig    = this->swapsFound[j] & ~IBIT;
+				const char *pOrig     = pStore->fwdTransformNames[tidOrig];
+				unsigned   tidSwapped = pStore->lookupTransformSlot(pOrig, pSelect, pStore->fwdTransformNameIndex);
 
 				// test if other half pair present
 				if (this->swapsActive[tidSwapped] != iVersion)
@@ -430,9 +430,9 @@ struct genswapContext_t : dbtool_t {
 			/*
 				 * NOTE: consider all swaps including those disabled because this allows the possibility that some transforms can be applied multiple times
 			 */
-			unsigned bestTid = 0;
-			unsigned bestCount = 0;
-			for (unsigned iFocus = 0; iFocus < numSwaps; iFocus++) {
+			unsigned      bestTid   = 0;
+			unsigned      bestCount = 0;
+			for (unsigned iFocus    = 0; iFocus < numSwaps; iFocus++) {
 				unsigned tidFocus = this->swapsFound[iFocus] & ~IBIT;
 				if (tidFocus == 0)
 					continue; // skip transparent or disabled transform
@@ -442,7 +442,7 @@ struct genswapContext_t : dbtool_t {
 
 				// remember which is best
 				if (bestTid == 0 || activeLeft < bestCount || (activeLeft == bestCount && swapsWeight[tidFocus] < swapsWeight[bestTid])) {
-					bestTid = tidFocus;
+					bestTid   = tidFocus;
 					bestCount = activeLeft;
 				}
 			}
@@ -484,7 +484,7 @@ struct genswapContext_t : dbtool_t {
 		// add to database
 		if (!this->readOnlyMode) {
 			// lookup/add swapId
-			unsigned ix = pStore->lookupSwap(&swap);
+			unsigned ix     = pStore->lookupSwap(&swap);
 			unsigned swapId = pStore->swapIndex[ix];
 			if (swapId == 0)
 				pStore->swapIndex[ix] = swapId = pStore->addSwap(&swap);
@@ -515,7 +515,7 @@ struct genswapContext_t : dbtool_t {
 		FILE *f = ::fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("\n{\"error\":\"fopen() failed\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"reason\":\"%m\"}\n",
-			          __FUNCTION__, __FILE__, __LINE__, this->opt_load);
+				  __FUNCTION__, __FILE__, __LINE__, this->opt_load);
 
 		// reset ticker
 		ctx.setupSpeed(0);
@@ -528,17 +528,17 @@ struct genswapContext_t : dbtool_t {
 				int perSecond = ctx.updateSpeed();
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) numSwap=%u(%.0f%%) | skipDuplicate=%u",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
-				        skipDuplicate);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+					skipDuplicate);
 
 				ctx.tick = 0;
 			}
 
 			static char line[512];
-			char *pLine = line;
-			char *endptr;
-			swap_t swap;
+			char        *pLine = line;
+			char        *endptr;
+			swap_t      swap;
 
 			::memset(&swap, 0, sizeof(swap));
 
@@ -558,11 +558,11 @@ struct genswapContext_t : dbtool_t {
 
 			while (*pLine && !::isspace(*pLine))
 				*pName++ = *pLine++;
-			*pName = 0; // terminator
+			*pName           = 0; // terminator
 
 			if (!name[0])
 				ctx.fatal("\n{\"error\":\"bad or empty line\",\"where\":\"%s:%s:%d\",\"line\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			/*
 			 * load entries
@@ -589,7 +589,7 @@ struct genswapContext_t : dbtool_t {
 
 				if (pLine == endptr || numEntry >= swap_t::MAXENTRY || tid >= MAXTRANSFORM)
 					ctx.fatal("\n{\"error\":\"bad or too many columns\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+						  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 				swap.tids[numEntry++] = tid;
 				pLine = endptr;
@@ -603,11 +603,11 @@ struct genswapContext_t : dbtool_t {
 			 */
 
 			// lookup signature
-			unsigned ix = pStore->lookupSignature(name);
+			unsigned ix  = pStore->lookupSignature(name);
 			unsigned sid = pStore->signatureIndex[ix];
 			if (sid == 0)
 				ctx.fatal("\n{\"error\":\"missing signature\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 
 			if (!this->readOnlyMode) {
 				// lookup/add swapId
@@ -623,7 +623,7 @@ struct genswapContext_t : dbtool_t {
 					pStore->signatures[sid].swapId = swapId;
 				} else if (pStore->signatures[sid].swapId != swapId)
 					ctx.fatal("\n{\"error\":\"inconsistent swap\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"line\":%lu}\n",
-					          __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
+						  __FUNCTION__, __FILE__, __LINE__, name, ctx.progress);
 			}
 
 			if (opt_text == OPTTEXT_WON) {
@@ -645,9 +645,9 @@ struct genswapContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read swaps. numSwap=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(),
-			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
-			        skipDuplicate);
+				ctx.timeAsString(),
+				pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+				skipDuplicate);
 	}
 
 	/**
@@ -705,9 +705,9 @@ struct genswapContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSwap=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(),
-			        pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
-			        skipDuplicate);
+				ctx.timeAsString(),
+				pStore->numSwap, pStore->numSwap * 100.0 / pStore->maxSwap,
+				skipDuplicate);
 	}
 
 };
@@ -769,7 +769,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> [<output.db>]\n", argv[0]);
 
 	if (verbose) {
@@ -803,7 +803,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -813,7 +813,7 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG   = 1,
 			LO_FORCE,
 			LO_GENERATE,
 			LO_LOAD,
@@ -832,8 +832,8 @@ int main(int argc, char *const *argv) {
 			LO_TEXT,
 			LO_TIMER,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -879,140 +879,140 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_GENERATE:
-				app.opt_generate++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_LOAD:
-				app.opt_load = optarg;
-				break;
-			case LO_MAXSWAP:
-				app.opt_maxSwap = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_NOGENERATE:
-				app.opt_generate = 0;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_NOSAVEINDEX:
-				app.opt_saveIndex = 0;
-				break;
-			case LO_NOUNSAFE:
-				ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SAVEINDEX:
-				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
-				break;
-			case LO_SID: {
-				unsigned m, n;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_GENERATE:
+			app.opt_generate++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_LOAD:
+			app.opt_load = optarg;
+			break;
+		case LO_MAXSWAP:
+			app.opt_maxSwap = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_NOGENERATE:
+			app.opt_generate = 0;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_NOSAVEINDEX:
+			app.opt_saveIndex = 0;
+			break;
+		case LO_NOUNSAFE:
+			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_SAVEINDEX:
+			app.opt_saveIndex     = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+			break;
+		case LO_SID: {
+			unsigned m, n;
 
-				int ret = sscanf(optarg, "%u,%u", &m, &n);
-				if (ret == 2) {
-					app.opt_sidLo = m;
-					app.opt_sidHi = n;
-				} else if (ret == 1) {
-					app.opt_sidHi = m;
-				} else {
+			int ret = sscanf(optarg, "%u,%u", &m, &n);
+			if (ret == 2) {
+				app.opt_sidLo = m;
+				app.opt_sidHi = n;
+			} else if (ret == 1) {
+				app.opt_sidHi = m;
+			} else {
+				usage(argv, true);
+				exit(1);
+			}
+			if (app.opt_sidHi && app.opt_sidLo >= app.opt_sidHi) {
+				fprintf(stderr, "--sid low exceeds high\n");
+				exit(1);
+			}
+			break;
+		}
+		case LO_SWAPINDEXSIZE:
+			app.opt_swapIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_TASK: {
+			if (::strcmp(optarg, "sge") == 0) {
+				const char *p;
+
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
+				}
+
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
+					exit(1);
+				}
+
+				// set ticker interval to 60 seconds
+				ctx.opt_timer = 60;
+			} else {
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
 					usage(argv, true);
 					exit(1);
 				}
-				if (app.opt_sidHi && app.opt_sidLo >= app.opt_sidHi) {
-					fprintf(stderr, "--sid low exceeds high\n");
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
 					exit(1);
 				}
-				break;
-			}
-			case LO_SWAPINDEXSIZE:
-				app.opt_swapIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_TASK: {
-				if (::strcmp(optarg, "sge") == 0) {
-					const char *p;
-
-					p = getenv("SGE_TASK_ID");
-					app.opt_taskId = p ? atoi(p) : 0;
-					if (app.opt_taskId < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-						exit(0);
-					}
-
-					p = getenv("SGE_TASK_LAST");
-					app.opt_taskLast = p ? atoi(p) : 0;
-					if (app.opt_taskLast < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-						exit(0);
-					}
-
-					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
-						exit(1);
-					}
-
-					// set ticker interval to 60 seconds
-					ctx.opt_timer = 60;
-				} else {
-					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-						usage(argv, true);
-						exit(1);
-					}
-					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-						fprintf(stderr, "Task id/last must be non-zero\n");
-						exit(1);
-					}
-					if (app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "Task id exceeds last\n");
-						exit(1);
-					}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
 				}
-
-				break;
 			}
-			case LO_TEXT:
-				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+			break;
+		}
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -1104,10 +1104,8 @@ int main(int argc, char *const *argv) {
 			app.opt_sidHi = 0;
 	}
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	/*
 	 * Create output database
@@ -1207,12 +1205,12 @@ int main(int argc, char *const *argv) {
 		app.swapsWeight[iTid] = 0;
 
 		// count cycles
-		unsigned found = 0;
-		const char *pName = store.fwdTransformNames[iTid];
-		for (unsigned j = 0; j < MAXSLOTS; j++) {
+		unsigned      found  = 0;
+		const char    *pName = store.fwdTransformNames[iTid];
+		for (unsigned j      = 0; j < MAXSLOTS; j++) {
 			if (~found & (1 << (pName[j] - 'a'))) {
 				// new starting point
-				unsigned w = 1;
+				unsigned      w = 1;
 				// walk cycle
 				for (unsigned k = pName[j] - 'a'; ~found & (1 << k); k = pName[k] - 'a') {
 					w *= (MAXSLOTS + 1); // weight is power of length
@@ -1251,7 +1249,7 @@ int main(int argc, char *const *argv) {
 
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
-			const swap_t *pSwap = store.swaps + pSignature->swapId;
+			const swap_t      *pSwap      = store.swaps + pSignature->swapId;
 
 			if (pSwap->tids[0]) {
 				printf("%s\t", pSignature->name);
@@ -1271,11 +1269,11 @@ int main(int argc, char *const *argv) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize = 0;
-			store.imprintIndexSize = 0;
-			store.numImprint = 0;
-			store.interleave = 0;
-			store.interleaveStep = 0;
+			store.hintIndexSize      = 0;
+			store.imprintIndexSize   = 0;
+			store.numImprint         = 0;
+			store.interleave         = 0;
+			store.interleaveStep     = 0;
 		}
 
 		// unexpected termination should unlink the outputs
@@ -1287,7 +1285,6 @@ int main(int argc, char *const *argv) {
 
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-#if defined(ENABLE_JANSSON)
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.opt_taskLast) {
@@ -1302,14 +1299,6 @@ int main(int argc, char *const *argv) {
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-#else
-		if (app.opt_taskLast)
-			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_sidLo, app.opt_sidHi);
-		else if (app.opt_sidLo || app.opt_sidHi)
-			fprintf(stderr, "{\"done\":\"%s\",\"sidLo\":%u,\"sidHi\":%u}\n", argv[0], app.opt_sidLo, app.opt_sidHi);
-		else
-			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-#endif
 	}
 
 	return 0;

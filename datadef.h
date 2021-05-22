@@ -167,7 +167,7 @@ struct signature_t {
 		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
 
 		// @formatter: off
-		SIGMASK_SAFE = 1 << SIGFLAG_SAFE,
+		SIGMASK_SAFE     = 1 << SIGFLAG_SAFE,
 		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
 		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
 		// @formatter: on

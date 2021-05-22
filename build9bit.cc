@@ -23,10 +23,22 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
+#include <ctype.h>
 #include <getopt.h>
+#include <jansson.h>
+#include <stdint.h>
 #include <sys/stat.h>
-#include "jansson.h"
+
 #include "basetree.h"
+
+/*
+ * Resource context.
+ * Needs to be global to be accessible by signal handlers.
+ *
+ * @global {context_t} Application context
+ */
+context_t ctx;
 
 #define TABLEBITS 9
 #define TABLESIZE (1 << TABLEBITS)
@@ -49,11 +61,11 @@ const char *allNames[] = {
 };
 
 /// @var {baseTree_t*} global reference to tree
-baseTree_t     *gTree    = NULL;
+baseTree_t *gTree = NULL;
 /// @var {json_t*} validation tests
-json_t         *gTests; // validation tests
+json_t     *gTests; // validation tests
 /// @var {unsigned*} data lookup table 
-unsigned       databits[TABLESIZE];
+unsigned   databits[TABLESIZE];
 
 struct NODE {
 	uint32_t id;
@@ -114,28 +126,22 @@ void validateAll(void) {
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
 
-struct build9bitContext_t : context_t {
+struct build9bitContext_t {
 
-	/// @var {string} output metadata filename
-	const char *arg_json;
-	/// @var {string} output filename
-	const char *arg_data;
 	/// @var {number} header flags
-	uint32_t   opt_flags;
+	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
-	unsigned   opt_force;
+	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned   opt_maxnode;
+	unsigned opt_maxnode;
 	/// @var {number} --seed, randon number generator seed
-	unsigned   opt_seed;
+	unsigned opt_seed;
 
 	build9bitContext_t() {
-		arg_json  = NULL;
-		arg_data  = NULL;
-		opt_flags = 0;
-		opt_force = 0;
+		opt_flags   = 0;
+		opt_force   = 0;
 		opt_maxnode = DEFAULT_MAXNODE;
-		opt_seed  = 0x20171010;
+		opt_seed    = 0x20171010;
 	}
 
 	/*
@@ -192,12 +198,12 @@ struct build9bitContext_t : context_t {
 		}
 	}
 
-	void main(void) {
+	void main(const char *jsonFilename, const char *datFilename) {
 		/*
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(*this, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxnode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxnode, opt_flags);
 
 		// setup key names
 		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
@@ -231,7 +237,7 @@ struct build9bitContext_t : context_t {
 		 * Save the tree
 		 */
 
-		gTree->saveFile(arg_data);
+		gTree->saveFile(datFilename);
 
 		/*
 		 * Create the meta json
@@ -246,22 +252,22 @@ struct build9bitContext_t : context_t {
 		// add validations tests
 		json_object_set_new_nocheck(jOutput, "tests", gTests);
 
-		FILE *f = fopen(arg_json, "w");
+		FILE *f = fopen(jsonFilename, "w");
 		if (!f)
-			fatal("fopen(%s) returned: %m\n", arg_json);
+			ctx.fatal("fopen(%s) returned: %m\n", jsonFilename);
 
 		fprintf(f, "%s\n", json_dumps(jOutput, JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 		if (fclose(f))
-			fatal("fclose(%s) returned: %m\n", arg_json);
+			ctx.fatal("fclose(%s) returned: %m\n", jsonFilename);
 
 		/*
 		 * Display json
 		 */
 
-		if (opt_verbose >= VERBOSE_SUMMARY) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(arg_data));
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(datFilename));
 			gTree->headerInfo(jResult);
 			gTree->extraInfo(jResult);
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -279,21 +285,21 @@ struct build9bitContext_t : context_t {
  */
 build9bitContext_t app;
 
-void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s <json> <data>\n", argv[0]);
+void usage(char *argv[], bool verbose) {
+	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t   --seed=<number> [default=%d]\n", app.opt_seed);
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", app.opt_timer);
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & app.MAGICMASK_PARANOID ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & app.MAGICMASK_PURE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & app.MAGICMASK_REWRITE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & app.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  app.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  app.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -308,11 +314,10 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	for (;;) {
-		int option_index = 0;
 		enum {
 			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_SEED,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
@@ -362,83 +367,87 @@ int main(int argc, char *const *argv) {
 
 		*cp = '\0';
 
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int option_index = 0;
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				app.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_MAXNODE:
-				app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_QUIET:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose - 1;
-				break;
-			case LO_SEED:
-				app.opt_seed = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_TIMER:
-				app.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_VERBOSE:
-				app.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : app.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_MAXNODE:
+			app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
+			break;
+		case LO_SEED:
+			app.opt_seed = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
+			break;
 
-			case LO_PARANOID:
-				app.opt_flags |= app.MAGICMASK_PARANOID;
-				break;
-			case LO_NOPARANOID:
-				app.opt_flags &= ~app.MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				app.opt_flags |= app.MAGICMASK_PURE;
-				break;
-			case LO_NOPURE:
-				app.opt_flags &= ~app.MAGICMASK_PURE;
-				break;
-			case LO_REWRITE:
-				app.opt_flags |= app.MAGICMASK_REWRITE;
-				break;
-			case LO_NOREWRITE:
-				app.opt_flags &= ~app.MAGICMASK_REWRITE;
-				break;
-			case LO_CASCADE:
-				app.opt_flags |= app.MAGICMASK_CASCADE;
-				break;
-			case LO_NOCASCADE:
-				app.opt_flags &= ~app.MAGICMASK_CASCADE;
-				break;
+		case LO_PARANOID:
+			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_NOPARANOID:
+			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			app.opt_flags |= ctx.MAGICMASK_PURE;
+			break;
+		case LO_NOPURE:
+			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			break;
+		case LO_REWRITE:
+			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_NOREWRITE:
+			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_CASCADE:
+			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			break;
+		case LO_NOCASCADE:
+			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			break;
 //			case LO_SHRINK:
-//				app.opt_flags |=  app.MAGICMASK_SHRINK;
+//				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_NOSHRINK:
-//				app.opt_flags &=  ~app.MAGICMASK_SHRINK;
+//				app.opt_flags &=  ~ctx.MAGICMASK_SHRINK;
 //				break;
 //			case LO_PIVOT3:
-//				app.opt_flags |=  app.MAGICMASK_PIVOT3;
+//				app.opt_flags |=  ctx.MAGICMASK_PIVOT3;
 //				break;
 //			case LO_NOPIVOT3:
-//				app.opt_flags &=  ~app.MAGICMASK_PIVOT3;
+//				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
 
-			case '?':
-				app.fatal("Try `%s --help' for more information.\n", argv[0]);
-			default:
-				app.fatal("getopt returned character code %d\n", c);
+		case '?':
+			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
+		default:
+			ctx.fatal("getopt returned character code %d\n", c);
 		}
 	}
 
+	char *jsonFilename;
+	char *datFilename;
+
 	if (argc - optind >= 2) {
-		app.arg_json = argv[optind++];
-		app.arg_data = argv[optind++];
+		jsonFilename = argv[optind++];
+		datFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -449,16 +458,16 @@ int main(int argc, char *const *argv) {
 	 */
 	if (!app.opt_force) {
 		struct stat sbuf;
-		if (!stat(app.arg_json, &sbuf))
-			app.fatal("%s already exists. Use --force to overwrite\n", app.arg_json);
-		if (!stat(app.arg_data, &sbuf))
-			app.fatal("%s already exists. Use --force to overwrite\n", app.arg_data);
+		if (!stat(jsonFilename, &sbuf))
+			ctx.fatal("%s already exists. Use --force to overwrite\n", jsonFilename);
+		if (!stat(datFilename, &sbuf))
+			ctx.fatal("%s already exists. Use --force to overwrite\n", datFilename);
 	}
 
 	/*
 	 * Main
 	 */
-	app.main();
+	app.main(jsonFilename, datFilename);
 
 	return 0;
 }

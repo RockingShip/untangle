@@ -97,7 +97,7 @@ struct genrestartdataContext_t : callable_t {
 		// arguments and options
 		arg_numNodes = 0;
 
-		opt_taskId = 0;
+		opt_taskId   = 0;
 		opt_taskLast = 0;
 
 		numRestart = 0;
@@ -140,7 +140,7 @@ struct genrestartdataContext_t : callable_t {
 		 * Run generator
 		 */
 
-		unsigned numNode = 1 + generator.restartTabDepth - tinyTree_t::TINYTREE_NSTART; // one level deeper than `restartTabDepth`
+		unsigned numNode       = 1 + generator.restartTabDepth - tinyTree_t::TINYTREE_NSTART; // one level deeper than `restartTabDepth`
 		unsigned endpointsLeft = numNode * 2 + 1;
 
 		generator.clearGenerator();
@@ -234,7 +234,7 @@ struct genrestartdataContext_t : callable_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s)",
-				        ctx.timeAsString(), ctx.progress, perSecond);
+					ctx.timeAsString(), ctx.progress, perSecond);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -245,7 +245,7 @@ struct genrestartdataContext_t : callable_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-				        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
 			}
 
 			ctx.tick = 0;
@@ -255,10 +255,10 @@ struct genrestartdataContext_t : callable_t {
 		printf("%12ldLL/*", ctx.progress);
 		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
 			unsigned qtf = tree.packedN[iNode];
-			unsigned Q = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
-			unsigned To = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
-			unsigned F = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
-			unsigned Ti = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
+			unsigned Q   = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
+			unsigned To  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
+			unsigned F   = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
+			unsigned Ti  = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
 
 			if (Q >= tinyTree_t::TINYTREE_NSTART)
 				putchar("123456789"[Q - tinyTree_t::TINYTREE_NSTART]);
@@ -361,7 +361,7 @@ struct genrestartdataContext_t : callable_t {
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 					fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numProgress=%lu\n",
-					        ctx.timeAsString(), MAXSLOTS, iPure, numArgs, ctx.progress);
+						ctx.timeAsString(), MAXSLOTS, iPure, numArgs, ctx.progress);
 			}
 		}
 
@@ -411,7 +411,7 @@ genrestartdataContext_t app(ctx);
 const char *timeAsString(void) {
 	static char tstr[256];
 
-	time_t t = time(0);
+	time_t    t   = time(0);
 	struct tm *tm = localtime(&t);
 	strftime(tstr, sizeof(tstr), "%F %T", tm);
 
@@ -445,7 +445,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s                  -- generate contents for \"restartdata.h\"\n", argv[0]);
 	fprintf(stderr, "       %s --text <numnode> -- display all unique candidates with given node size\n", argv[0]);
 	fprintf(stderr, "       %s --task=n,m <numnode> -- display single line for requested task/tab\n", argv[0]);
@@ -472,7 +472,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -492,8 +492,8 @@ int main(int argc, char *const *argv) {
 			LO_TASK,
 			LO_TIMER,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -529,87 +529,87 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_HELP:
-				usage(argv, true);
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_SGE: {
+			const char *p;
+
+			p = getenv("SGE_TASK_ID");
+			app.opt_taskId = p ? atoi(p) : 0;
+			if (app.opt_taskId < 1) {
+				fprintf(stderr, "Missing environment SGE_TASK_ID\n");
 				exit(0);
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_SGE: {
-				const char *p;
-
-				p = getenv("SGE_TASK_ID");
-				app.opt_taskId = p ? atoi(p) : 0;
-				if (app.opt_taskId < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-					exit(0);
-				}
-
-				p = getenv("SGE_TASK_LAST");
-				app.opt_taskLast = p ? atoi(p) : 0;
-				if (app.opt_taskLast < 1) {
-					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-					exit(0);
-				}
-
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "task id exceeds last\n");
-					exit(1);
-				}
-
-				break;
 			}
-			case LO_TASK:
-				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-					usage(argv, true);
-					exit(1);
-				}
-				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-					fprintf(stderr, "Task id/last must be non-zero\n");
-					exit(1);
-				}
-				if (app.opt_taskId > app.opt_taskLast) {
-					fprintf(stderr, "Task id exceeds last\n");
-					exit(1);
-				}
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			p = getenv("SGE_TASK_LAST");
+			app.opt_taskLast = p ? atoi(p) : 0;
+			if (app.opt_taskLast < 1) {
+				fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+				exit(0);
+			}
+
+			if (app.opt_taskId > app.opt_taskLast) {
+				fprintf(stderr, "task id exceeds last\n");
 				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			}
+
+			break;
+		}
+		case LO_TASK:
+			if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+				usage(argv, true);
 				exit(1);
+			}
+			if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+				fprintf(stderr, "Task id/last must be non-zero\n");
+				exit(1);
+			}
+			if (app.opt_taskId > app.opt_taskLast) {
+				fprintf(stderr, "Task id exceeds last\n");
+				exit(1);
+			}
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 

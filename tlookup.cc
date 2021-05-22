@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-13 12:56:11
@@ -76,7 +76,7 @@ struct tlookupContext_t {
 		/*
 		 * Convert argument into number if possible
 		 */
-		char *endptr;
+		char     *endptr;
 		unsigned tid;
 
 		errno = 0; // To distinguish success/failure after call
@@ -111,13 +111,13 @@ struct tlookupContext_t {
 			 */
 
 			// validate
-			for (const char *p=pArg; *p; p++) {
+			for (const char *p = pArg; *p; p++) {
 				// check if all lowercase
 				if (!islower(*p)) {
 					printf("invalid transform: \"%s\"\n", pArg);
 					return;
 				}
-				if (*p < 'a' || *p >= (char)('a' + MAXSLOTS)) {
+				if (*p < 'a' || *p >= (char) ('a' + MAXSLOTS)) {
 					printf("transform out-of-bounds: \"%s\"\n", pArg);
 					return;
 				}
@@ -135,31 +135,31 @@ struct tlookupContext_t {
 		}
 
 #if 0
-                /*
-                 * Copy name to working area
-                 */
-                char trimmedName[MAXSLOTS + 1];
+		/*
+		 * Copy name to working area
+		 */
+		char trimmedName[MAXSLOTS + 1];
 
-                strncpy(trimmedName, pName, MAXSLOTS);
-                trimmedName[MAXSLOTS] = '\0';
+		strncpy(trimmedName, pName, MAXSLOTS);
+		trimmedName[MAXSLOTS] = '\0';
 
-                /*
-                 * Normalise to maximum length
-                 */
-                database_t::trimTransform(trimmedName, (unsigned) strlen(trimmedName));
+		/*
+		 * Normalise to maximum length
+		 */
+		database_t::trimTransform(trimmedName, (unsigned) strlen(trimmedName));
 
-                /*
-                 * Find the transform
-                 */
-                int tread = -1, twrite = -1;
-                for (unsigned i = 0; i < db.maxTransform; i++) {
-                        if (!strcmp((*db.colTransformString)[i], trimmedName))
-                                tread = i;
-                        if (!strcmp((*db.rowTransformString)[i], trimmedName))
-                                twrite = i;
-                }
+		/*
+		 * Find the transform
+		 */
+		int tread = -1, twrite = -1;
+		for (unsigned i = 0; i < db.maxTransform; i++) {
+			if (!strcmp((*db.colTransformString)[i], trimmedName))
+				tread = i;
+			if (!strcmp((*db.rowTransformString)[i], trimmedName))
+				twrite = i;
+		}
 
-                printf("%s: read:%x write:%x\n", trimmedName, tread, twrite);
+		printf("%s: read:%x write:%x\n", trimmedName, tread, twrite);
 #endif
 	}
 
@@ -207,7 +207,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.db>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename> [default=%s]\n", app.arg_database);
@@ -229,7 +229,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -239,12 +239,12 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG = 1,
+			LO_DEBUG    = 1,
 			// short opts
 			LO_DATABASE = 'D',
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
-			LO_VERBOSE = 'v',
+			LO_HELP     = 'h',
+			LO_QUIET    = 'q',
+			LO_VERBOSE  = 'v',
 		};
 
 		// long option descriptions
@@ -272,34 +272,34 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DATABASE:
-				app.arg_database = optarg;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
+		case LO_DATABASE:
+			app.arg_database = optarg;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
 
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
-				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -318,18 +318,18 @@ int main(int argc, char *const *argv) {
 
 	db.open(app.arg_database, 0);
 
-        if (db.maxTransform == 0)
-	        ctx.fatal("Missing transform section: %s\n", app.arg_database);
+	if (db.maxTransform == 0)
+		ctx.fatal("Missing transform section: %s\n", app.arg_database);
 
-        /*
-         * Invoke main entrypoint of application context for every argument
-         */
+	/*
+	 * Invoke main entrypoint of application context for every argument
+	 */
 
-        while (argc - optind > 0) {
-                const char *pName = argv[optind++];
+	while (argc - optind > 0) {
+		const char *pName = argv[optind++];
 
-	        app.main(&db, pName);
-        }
+		app.main(&db, pName);
+	}
 
 	return 0;
 }

@@ -161,6 +161,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
+#include <jansson.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -176,10 +177,6 @@
 #include "restartdata.h"
 #include "tinytree.h"
 
-#if defined(ENABLE_JANSSON)
-#include "jansson.h"
-#endif
-
 /**
  * @date 2020-03-14 11:10:15
  *
@@ -192,9 +189,9 @@ struct gensignatureContext_t : dbtool_t {
 
 	enum {
 		/// @constant {number} - `--text` modes
-		OPTTEXT_WON = 1,
+		OPTTEXT_WON     = 1,
 		OPTTEXT_COMPARE = 2,
-		OPTTEXT_BRIEF = 3,
+		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
 
 	};
@@ -206,76 +203,76 @@ struct gensignatureContext_t : dbtool_t {
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
 	/// @var {number} Tree size in nodes to be generated for this invocation;
-	unsigned arg_numNodes;
+	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
 	/// @var {number} --force, force overwriting of database if already exists
-	unsigned opt_force;
+	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
-	unsigned opt_generate;
+	unsigned   opt_generate;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned opt_saveIndex;
+	unsigned   opt_saveIndex;
 	/// @var {number} save imprints with given interleave
-	unsigned opt_saveInterleave;
+	unsigned   opt_saveInterleave;
 	/// @var {number} sort signatures before saving
-	unsigned opt_sort;
+	unsigned   opt_sort;
 	/// @var {number} task Id. First task=1
-	unsigned opt_taskId;
+	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
-	unsigned opt_taskLast;
+	unsigned   opt_taskLast;
 	/// @var {number} --text, textual output instead of binary database
-	unsigned opt_text;
+	unsigned   opt_text;
 	/// @var {number} truncate on database overflow
-	double opt_truncate;
+	double     opt_truncate;
 	/// @var {number} generator upper bound
-	uint64_t opt_windowHi;
+	uint64_t   opt_windowHi;
 	/// @var {number} generator lower bound
-	uint64_t opt_windowLo;
+	uint64_t   opt_windowLo;
 
 	/// @var {footprint_t[]} - Evaluator for forward transforms
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
-	database_t *pStore;
+	database_t  *pStore;
 
 	/// @var {number} - THE generator
 	generatorTree_t generator;
 	/// @var {number} `foundTree()` duplicate by name
-	unsigned skipDuplicate;
+	unsigned        skipDuplicate;
 	/// @var {number} Where database overflow was caught
-	uint64_t truncated;
+	uint64_t        truncated;
 	/// @var {number} Name of signature causing overflow
-	char truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
+	char            truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
 	/**
 	 * Constructor
 	 */
 	gensignatureContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		// arguments and options
-		arg_inputDatabase = NULL;
-		arg_numNodes = 0;
+		arg_inputDatabase  = NULL;
+		arg_numNodes       = 0;
 		arg_outputDatabase = NULL;
-		opt_force = 0;
-		opt_generate = 1;
-		opt_load = NULL;
-		opt_saveIndex = 1;
+		opt_force          = 0;
+		opt_generate       = 1;
+		opt_load           = NULL;
+		opt_saveIndex      = 1;
 		opt_saveInterleave = 0;
-		opt_sort = 1;
-		opt_taskId = 0;
-		opt_taskLast = 0;
-		opt_text = 0;
-		opt_truncate = 0;
-		opt_windowHi = 0;
-		opt_windowLo = 0;
+		opt_sort           = 1;
+		opt_taskId         = 0;
+		opt_taskLast       = 0;
+		opt_text           = 0;
+		opt_truncate       = 0;
+		opt_windowHi       = 0;
+		opt_windowLo       = 0;
 
-		pStore = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
+		pStore        = NULL;
+		pEvalFwd      = NULL;
+		pEvalRev      = NULL;
 		skipDuplicate = 0;
-		truncated = 0;
+		truncated     = 0;
 		truncatedName[0] = 0;
 	}
 
@@ -317,10 +314,10 @@ struct gensignatureContext_t : dbtool_t {
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress, perSecond,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -338,10 +335,10 @@ struct gensignatureContext_t : dbtool_t {
 				 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
 				 */
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
-				        ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
-				        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
+					pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+					pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
 #if 0
@@ -392,7 +389,7 @@ struct gensignatureContext_t : dbtool_t {
 		 * If imprints are writable perform fast 'add-if-not-found'
 		 */
 
-		unsigned sid = 0;
+		unsigned sid     = 0;
 		unsigned markSid = pStore->numSignature;
 
 		if ((ctx.flags & context_t::MAGICMASK_AINF) && !this->readOnlyMode) {
@@ -435,11 +432,11 @@ struct gensignatureContext_t : dbtool_t {
 
 				signature_t *pSignature = pStore->signatures + sid;
 				pSignature->flags = 0;
-				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+				pSignature->size  = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
-				pSignature->numEndpoint = numEndpoint;
-				pSignature->numBackRef = numBackRef;
+				pSignature->numEndpoint    = numEndpoint;
+				pSignature->numBackRef     = numBackRef;
 			}
 
 			return true;
@@ -506,10 +503,10 @@ struct gensignatureContext_t : dbtool_t {
 			// only add if signatures are writable
 			if (!this->readOnlyMode) {
 				::strcpy(pSignature->name, pNameR);
-				pSignature->size = treeR.count - tinyTree_t::TINYTREE_NSTART;
+				pSignature->size           = treeR.count - tinyTree_t::TINYTREE_NSTART;
 				pSignature->numPlaceholder = numPlaceholder;
-				pSignature->numEndpoint = numEndpoint;
-				pSignature->numBackRef = numBackRef;
+				pSignature->numEndpoint    = numEndpoint;
+				pSignature->numBackRef     = numBackRef;
 			}
 		}
 
@@ -532,7 +529,7 @@ struct gensignatureContext_t : dbtool_t {
 
 		const signature_t *pSignatureL = static_cast<const signature_t *>(lhs);
 		const signature_t *pSignatureR = static_cast<const signature_t *>(rhs);
-		context_t *pApp = static_cast<context_t *>(arg);
+		context_t         *pApp        = static_cast<context_t *>(arg);
 
 		// load trees
 		tinyTree_t treeL(*pApp);
@@ -608,9 +605,9 @@ struct gensignatureContext_t : dbtool_t {
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						(double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -621,9 +618,9 @@ struct gensignatureContext_t : dbtool_t {
 					int etaS = eta;
 
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) | hash=%.3f",
-					        ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-					        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-					        (double) ctx.cntCompare / ctx.cntHash);
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+						(double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
@@ -664,9 +661,9 @@ struct gensignatureContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Imprints built. numImprint=%u(%.0f%%) | hash=%.3f\n",
-			        ctx.timeAsString(),
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        (double) ctx.cntCompare / ctx.cntHash);
+				ctx.timeAsString(),
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				(double) ctx.cntCompare / ctx.cntHash);
 	}
 
 	/**
@@ -686,7 +683,7 @@ struct gensignatureContext_t : dbtool_t {
 		FILE *f = fopen(this->opt_load, "r");
 		if (f == NULL)
 			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
-			          this->opt_load, __FUNCTION__, __FILE__, __LINE__);
+				  this->opt_load, __FUNCTION__, __FILE__, __LINE__);
 
 		// apply settings for `--window`
 		generator.windowLo = this->opt_windowLo;
@@ -697,7 +694,7 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.tick = 0;
 		skipDuplicate = 0;
 
-		char name[64];
+		char     name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
 		this->truncated = 0;
 
@@ -712,9 +709,9 @@ struct gensignatureContext_t : dbtool_t {
 			int ret = ::sscanf(line, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef);
 
 			// calculate values
-			unsigned newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
-			unsigned beenThere = 0;
-			for (const char *p = name; *p; p++) {
+			unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
+			unsigned        beenThere      = 0;
+			for (const char *p             = name; *p; p++) {
 				if (::islower(*p)) {
 					if (~beenThere & (1 << (*p - 'a'))) {
 						newPlaceholder++;
@@ -728,10 +725,10 @@ struct gensignatureContext_t : dbtool_t {
 
 			if (ret < 1)
 				ctx.fatal("\n{\"error\":\"bad/empty line\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 			if (ret == 4)
 				ctx.fatal("\n{\"error\":\"line has incorrect values\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-				          __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
 
 			// test if line is within progress range
 			// NOTE: first line has `progress==0`
@@ -763,7 +760,7 @@ struct gensignatureContext_t : dbtool_t {
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
-				        ctx.timeAsString(), this->truncated, this->truncatedName);
+					ctx.timeAsString(), this->truncated, this->truncatedName);
 
 			// save position for final status
 			this->opt_windowHi = this->truncated;
@@ -771,11 +768,11 @@ struct gensignatureContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "[%s] Read %ld candidates. numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f\n",
-			        ctx.timeAsString(),
-			        ctx.progress,
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        skipDuplicate, (double) ctx.cntCompare / ctx.cntHash);
+				ctx.timeAsString(),
+				ctx.progress,
+				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				skipDuplicate, (double) ctx.cntCompare / ctx.cntHash);
 	}
 
 	/**
@@ -858,15 +855,15 @@ struct gensignatureContext_t : dbtool_t {
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
 				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
-				        ctx.timeAsString(), this->truncated, this->truncatedName);
+					ctx.timeAsString(), this->truncated, this->truncatedName);
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u interleave=%u numCandidate=%lu numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u\n",
-			        ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, pStore->interleave, ctx.progress,
-			        pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-			        pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-			        skipDuplicate);
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, pStore->interleave, ctx.progress,
+				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
+				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
+				skipDuplicate);
 
 	}
 
@@ -929,7 +926,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {boolean} verbose - set to true for option descriptions
  * @param {userArguments_t} args - argument context
  */
-void usage(char *const *argv, bool verbose) {
+void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]  -- Add signatures of given node size\n", argv[0]);
 
 	if (verbose) {
@@ -975,7 +972,7 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	/*
@@ -985,7 +982,7 @@ int main(int argc, char *const *argv) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_AINF = 0,
+			LO_AINF    = 0,
 			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
@@ -1013,8 +1010,8 @@ int main(int argc, char *const *argv) {
 			LO_TRUNCATE,
 			LO_WINDOW,
 			// short opts
-			LO_HELP = 'h',
-			LO_QUIET = 'q',
+			LO_HELP    = 'h',
+			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
 		};
 
@@ -1069,166 +1066,166 @@ int main(int argc, char *const *argv) {
 					*cp++ = ':';
 			}
 		}
-		*cp = '\0';
+		*cp        = '\0';
 
 		// parse long options
 		int option_index = 0;
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_AINF:
-				ctx.flags |= context_t::MAGICMASK_AINF;
-				break;
-			case LO_FORCE:
-				app.opt_force++;
-				break;
-			case LO_GENERATE:
-				app.opt_generate++;
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_IMPRINTINDEXSIZE:
-				app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_INTERLEAVE:
-				app.opt_interleave = ::strtoul(optarg, NULL, 0);
-				if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
-					ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
-				break;
-			case LO_LOAD:
-				app.opt_load = optarg;
-				break;
-			case LO_MAXIMPRINT:
-				app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
-				break;
-			case LO_MAXSIGNATURE:
-				app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
-				break;
-			case LO_NOAINF:
-				ctx.flags &= ~context_t::MAGICMASK_AINF;
-				break;
-			case LO_NOGENERATE:
-				app.opt_generate = 0;
-				break;
-			case LO_NOPARANOID:
-				ctx.flags &= ~context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_NOPURE:
-				ctx.flags &= ~context_t::MAGICMASK_PURE;
-				break;
-			case LO_NOSAVEINDEX:
-				app.opt_saveIndex = 0;
-				break;
-			case LO_NOSORT:
-				app.opt_sort = 0;
-				break;
-			case LO_SAVEINTERLEAVE:
-				app.opt_saveInterleave = ::strtoul(optarg, NULL, 0);
-				if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
-					ctx.fatal("--saveinterleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
-				break;
-			case LO_PARANOID:
-				ctx.flags |= context_t::MAGICMASK_PARANOID;
-				break;
-			case LO_PURE:
-				ctx.flags |= context_t::MAGICMASK_PURE;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
-				break;
-			case LO_RATIO:
-				app.opt_ratio = strtof(optarg, NULL);
-				break;
-			case LO_SAVEINDEX:
-				app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
-				break;
-			case LO_SIGNATUREINDEXSIZE:
-				app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-				break;
-			case LO_SORT:
-				app.opt_sort = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_sort + 1;
-				break;
-			case LO_TASK: {
-				if (::strcmp(optarg, "sge") == 0) {
-					const char *p;
+		case LO_DEBUG:
+			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_AINF:
+			ctx.flags |= context_t::MAGICMASK_AINF;
+			break;
+		case LO_FORCE:
+			app.opt_force++;
+			break;
+		case LO_GENERATE:
+			app.opt_generate++;
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_IMPRINTINDEXSIZE:
+			app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_INTERLEAVE:
+			app.opt_interleave = ::strtoul(optarg, NULL, 0);
+			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
+				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+			break;
+		case LO_LOAD:
+			app.opt_load = optarg;
+			break;
+		case LO_MAXIMPRINT:
+			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXSIGNATURE:
+			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_NOAINF:
+			ctx.flags &= ~context_t::MAGICMASK_AINF;
+			break;
+		case LO_NOGENERATE:
+			app.opt_generate = 0;
+			break;
+		case LO_NOPARANOID:
+			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_NOPURE:
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_NOSAVEINDEX:
+			app.opt_saveIndex = 0;
+			break;
+		case LO_NOSORT:
+			app.opt_sort = 0;
+			break;
+		case LO_SAVEINTERLEAVE:
+			app.opt_saveInterleave = ::strtoul(optarg, NULL, 0);
+			if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
+				ctx.fatal("--saveinterleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+			break;
+		case LO_PARANOID:
+			ctx.flags |= context_t::MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			ctx.flags |= context_t::MAGICMASK_PURE;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+			break;
+		case LO_RATIO:
+			app.opt_ratio = strtof(optarg, NULL);
+			break;
+		case LO_SAVEINDEX:
+			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
+			break;
+		case LO_SIGNATUREINDEXSIZE:
+			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_SORT:
+			app.opt_sort = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_sort + 1;
+			break;
+		case LO_TASK: {
+			if (::strcmp(optarg, "sge") == 0) {
+				const char *p;
 
-					p = getenv("SGE_TASK_ID");
-					app.opt_taskId = p ? atoi(p) : 0;
-					if (app.opt_taskId < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-						exit(0);
-					}
-
-					p = getenv("SGE_TASK_LAST");
-					app.opt_taskLast = p ? atoi(p) : 0;
-					if (app.opt_taskLast < 1) {
-						fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-						exit(0);
-					}
-
-					if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
-						exit(1);
-					}
-
-					// set ticker interval to 60 seconds
-					ctx.opt_timer = 60;
-				} else {
-					if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
-						usage(argv, true);
-						exit(1);
-					}
-					if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
-						fprintf(stderr, "Task id/last must be non-zero\n");
-						exit(1);
-					}
-					if (app.opt_taskId > app.opt_taskLast) {
-						fprintf(stderr, "Task id exceeds last\n");
-						exit(1);
-					}
+				p = getenv("SGE_TASK_ID");
+				app.opt_taskId = p ? atoi(p) : 0;
+				if (app.opt_taskId < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
+					exit(0);
 				}
-				break;
-			}
-			case LO_TEXT:
-				app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-				break;
-			case LO_TRUNCATE:
-				app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
-				break;
-			case LO_WINDOW: {
-				uint64_t m, n;
 
-				int ret = sscanf(optarg, "%lu,%lu", &m, &n);
-				if (ret == 2) {
-					app.opt_windowLo = m;
-					app.opt_windowHi = n;
-				} else if (ret == 1) {
-					app.opt_windowHi = m;
-				} else {
-					usage(argv, true);
+				p = getenv("SGE_TASK_LAST");
+				app.opt_taskLast = p ? atoi(p) : 0;
+				if (app.opt_taskLast < 1) {
+					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
+					exit(0);
+				}
+
+				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "sge id/last out of bounds: %u,%u\n", app.opt_taskId, app.opt_taskLast);
 					exit(1);
 				}
 
-				break;
+				// set ticker interval to 60 seconds
+				ctx.opt_timer = 60;
+			} else {
+				if (sscanf(optarg, "%u,%u", &app.opt_taskId, &app.opt_taskLast) != 2) {
+					usage(argv, true);
+					exit(1);
+				}
+				if (app.opt_taskId == 0 || app.opt_taskLast == 0) {
+					fprintf(stderr, "Task id/last must be non-zero\n");
+					exit(1);
+				}
+				if (app.opt_taskId > app.opt_taskLast) {
+					fprintf(stderr, "Task id exceeds last\n");
+					exit(1);
+				}
 			}
-			case '?':
-				fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			break;
+		}
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_TRUNCATE:
+			app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+		case LO_WINDOW: {
+			uint64_t m, n;
+
+			int ret = sscanf(optarg, "%lu,%lu", &m, &n);
+			if (ret == 2) {
+				app.opt_windowLo = m;
+				app.opt_windowHi = n;
+			} else if (ret == 1) {
+				app.opt_windowHi = m;
+			} else {
+				usage(argv, true);
 				exit(1);
-			default:
-				fprintf(stderr, "getopt_long() returned character code %d\n", c);
-				exit(1);
+			}
+
+			break;
+		}
+		case '?':
+			fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+			exit(1);
+		default:
+			fprintf(stderr, "getopt_long() returned character code %d\n", c);
+			exit(1);
 		}
 	}
 
@@ -1354,10 +1351,8 @@ int main(int argc, char *const *argv) {
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
 	}
 
-#if defined(ENABLE_JANSSON)
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
-#endif
 
 	/*
 	 * create output
@@ -1496,7 +1491,7 @@ int main(int argc, char *const *argv) {
 		}
 
 		store.numImprint = 0;
-		store.numMember = 0;
+		store.numMember  = 0;
 	}
 
 	/*
@@ -1523,11 +1518,11 @@ int main(int argc, char *const *argv) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize = 0;
-			store.imprintIndexSize = 0;
-			store.numImprint = 0;
-			store.interleave = 0;
-			store.interleaveStep = 0;
+			store.hintIndexSize      = 0;
+			store.imprintIndexSize   = 0;
+			store.numImprint         = 0;
+			store.interleave         = 0;
+			store.interleaveStep     = 0;
 		} else if (app.opt_sort) {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
@@ -1535,7 +1530,7 @@ int main(int argc, char *const *argv) {
 				const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave);
 				assert(pMetrics);
 
-				store.interleave = pMetrics->numStored;
+				store.interleave     = pMetrics->numStored;
 				store.interleaveStep = pMetrics->interleaveStep;
 			}
 
@@ -1555,7 +1550,6 @@ int main(int argc, char *const *argv) {
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-#if defined(ENABLE_JANSSON)
 		json_t *jResult = json_object();
 		json_object_set_new_nocheck(jResult, "done", json_string_nocheck(argv[0]));
 		if (app.opt_taskLast) {
@@ -1570,14 +1564,6 @@ int main(int argc, char *const *argv) {
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
 		store.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-#else
-		if (app.opt_taskLast)
-			fprintf(stderr, "{\"done\":\"%s\",\"taskId\":%u,\"taskLast\":%u,\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_taskId, app.opt_taskLast, app.opt_windowLo, app.opt_windowHi);
-		else if (app.opt_windowLo || app.opt_windowHi)
-			fprintf(stderr, "{\"done\":\"%s\",\"windowLo\":\"%lu\",\"windowHi\":\"%lu\"}\n", argv[0], app.opt_windowLo, app.opt_windowHi);
-		else
-			fprintf(stderr, "{\"done\":\"%s\"}\n", argv[0]);
-#endif
 	}
 
 	return 0;

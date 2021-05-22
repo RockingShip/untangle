@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0")
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * validate.cc
@@ -37,7 +37,7 @@
  * Resource context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {validateContext_t} Application context
+ * @global {context_t} Application context
  */
 context_t ctx;
 
@@ -80,6 +80,7 @@ struct validateContext_t {
 	uint32_t   kstart;
 	uint32_t   ostart;
 	uint32_t   estart;
+	// NOTE: Trees may have additional extended keys which will effect the following 
 	uint32_t   nstart;
 	uint32_t   ncount;
 	uint32_t   numRoots;
@@ -262,9 +263,9 @@ struct validateContext_t {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("key/root name missmatch"));
 					json_object_set_new_nocheck(jError, "filename", json_string(arg_json));
-					json_object_set_new_nocheck(jError, "ix", json_integer(iKey));
-					json_object_set_new_nocheck(jError, "key", json_string(keyNames[iKey]));
-					json_object_set_new_nocheck(jError, "root", json_string(rootNames[iKey]));
+					json_object_set_new_nocheck(jError, "ikey", json_integer(iKey));
+					json_object_set_new_nocheck(jError, "keyname", json_string(keyNames[iKey]));
+					json_object_set_new_nocheck(jError, "rootname", json_string(rootNames[iKey]));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 			}
@@ -284,9 +285,9 @@ struct validateContext_t {
 		}
 
 		// allocate buffers for keys/roots
-		gTestKeys = (uint8_t *) calloc(gNumTests, nstart - kstart);
+		gTestKeys = (uint8_t *) calloc(gNumTests, ostart - kstart);
 		assert(gTestKeys);
-		gTestRoots = (uint8_t *) calloc(gNumTests, numRoots);
+		gTestRoots = (uint8_t *) calloc(gNumTests, estart - ostart);
 		assert(gTestRoots);
 
 		// convert ascii to hex and inject at the appropriate location
@@ -443,7 +444,7 @@ struct validateContext_t {
 		}
 
 		// check dimensions
-		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.nstart != nstart || tree.numRoots != numRoots) {
+		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.numRoots < estart) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
 			json_object_set_new_nocheck(jError, "filename", json_string(fname));
@@ -465,25 +466,25 @@ struct validateContext_t {
 		}
 
 		// check names
-		for (uint32_t iName = 0; iName < nstart; iName++) {
-			if (strcmp(keyNames[iName], keyNames[iName]) != 0) {
+		for (uint32_t iName = 0; iName < estart; iName++) {
+			if (strcmp(keyNames[iName], tree.keyNames[iName]) != 0) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "ix", json_integer(iName));
+				json_object_set_new_nocheck(jError, "key", json_integer(iName));
 				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(keyNames[iName]));
-				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(keyNames[iName]));
+				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.keyNames[iName]));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 		}
-		for (unsigned iName = 0; iName < numRoots; iName++) {
-			if (strcmp(rootNames[iName], rootNames[iName]) != 0) {
+		for (unsigned iName = 0; iName < estart; iName++) {
+			if (strcmp(rootNames[iName], tree.rootNames[iName]) != 0) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
 				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "ix", json_integer(iName));
+				json_object_set_new_nocheck(jError, "key", json_integer(iName));
 				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(rootNames[iName]));
-				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(rootNames[iName]));
+				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.rootNames[iName]));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 		}
@@ -491,55 +492,13 @@ struct validateContext_t {
 		if (tree.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			ctx.logFlags(tree.flags);
 
-		/*
-		 * Count references
-		 */
-		{
-			uint32_t *pRefCount = tree.allocMap();
-			json_t   *jList     = json_array();
-
-			for (uint32_t i = 0; i < nstart; i++)
-				pRefCount[i] = 0;
-
-			for (uint32_t i = nstart; i < ncount; i++) {
-				const baseNode_t *pNode = tree.N + i;
-				const uint32_t   Q      = pNode->Q;
-				const uint32_t   Tu     = pNode->T & ~IBIT;
-//				const uint32_t   Ti     = pNode->T & IBIT;
-				const uint32_t   F      = pNode->F;
-
-				pRefCount[Q]++;
-				pRefCount[Tu]++;
-				if (Tu != F)
-					pRefCount[F]++;
-			}
-
-			/*
-			 * Count externals
-			 */
-			for (uint32_t iKey = estart; iKey < nstart; iKey++) {
-				if (pRefCount[iKey] > 0)
-					json_array_append_new(jList, json_string_nocheck(keyNames[iKey]));
-			}
-
-			if (json_array_size(jList) > 0) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("unresolved externals"));
-				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "k", jList);
-				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			}
-
-			json_delete(jList);
-		}
-
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
 			json_t *jList = json_array();
 
 			/*
 			 * Which roots are not keys
 			 */
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			for (uint32_t iRoot = ostart; iRoot < estart; iRoot++) {
 				if ((tree.roots[iRoot] & ~IBIT) >= tree.nstart)
 					json_array_append_new(jList, json_string_nocheck(rootNames[iRoot]));
 			}
@@ -584,14 +543,14 @@ struct validateContext_t {
 			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
 
 			for (uint32_t iKey = 0; iKey < kstart; iKey++)
-				pEval[iKey] = iKey; // all non-zero de-references will trigger an error
+				pEval[iKey] = iKey; // all de-references (except pEval[0]) will trigger an error
 			for (uint32_t iKey  = kstart; iKey < ostart; iKey++)
 				pEval[iKey] = pData[iKey - kstart] ? IBIT : 0;
 
 			/*
 			 * Run the test
 			 */
-			for (uint32_t iNode = nstart; iNode < ncount; iNode++) {
+			for (uint32_t iNode = tree.nstart; iNode < tree.ncount; iNode++) {
 				const baseNode_t *pNode = tree.N + iNode;
 				const uint32_t   Q      = pNode->Q;
 				const uint32_t   Tu     = pNode->T & ~IBIT;
@@ -599,7 +558,7 @@ struct validateContext_t {
 				const uint32_t   F      = pNode->F;
 
 				// test range
-				if (Q >= ncount || Tu >= ncount || F >= ncount) {
+				if (Q >= tree.ncount || Tu >= tree.ncount || F >= tree.ncount) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node references out-of-range"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
@@ -648,7 +607,7 @@ struct validateContext_t {
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Root loads undefined"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "root", json_integer(iRoot));
+					json_object_set_new_nocheck(jError, "root", json_string(tree.rootNames[iRoot]));
 					json_object_set_new_nocheck(jError, "eval-root", json_integer(pEval[r & ~IBIT] & ~IBIT));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
@@ -659,24 +618,24 @@ struct validateContext_t {
 
 				if ((!opt_onlyIfSet || encountered) && expected != encountered) {
 					// convert outputs to hex string
-					char     strExpected[numRoots / 4 + 2];
+					char     strExpected[estart / 4 + 2];
 					unsigned strExpectedLen    = 0;
-					char     strEncountered[numRoots / 4 + 2];
+					char     strEncountered[estart / 4 + 2];
 					unsigned strEncounteredLen = 0;
 
-					for (unsigned i = 0; i <= (numRoots - 1) / 8 * 8; i += 8) {
+					for (unsigned i = tree.ostart; i <= (estart - 1) / 8 * 8; i += 8) {
 						unsigned byte;
 
 						byte = 0;
 						for (unsigned j = 0; j < 8; j++)
-							byte |= (i + j < numRoots && pData[i + j]) ? 1 << j : 0;
+							byte |= (i + j < (estart - ostart) && pData[i + j]) ? 1 << j : 0;
 
 						strExpected[strExpectedLen++] = "0123456789abcdef"[byte >> 4];
 						strExpected[strExpectedLen++] = "0123456789abcdef"[byte & 15];
 
 						byte = 0;
 						for (unsigned j = 0; j < 8; j++)
-							byte |= (i + j < numRoots && (pEval[tree.roots[i + j] & ~IBIT] ^ (tree.roots[i + j] & IBIT)) == IBIT) ? 1 << j : 0;
+							byte |= (i + j < (estart - ostart) && (pEval[tree.roots[i + j] & ~IBIT] ^ (tree.roots[i + j] & IBIT)) == IBIT) ? 1 << j : 0;
 
 						strEncountered[strEncounteredLen++] = "0123456789abcdef"[byte >> 4];
 						strEncountered[strEncounteredLen++] = "0123456789abcdef"[byte & 15];
@@ -689,8 +648,7 @@ struct validateContext_t {
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("validation failed"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "bit", json_integer(iRoot));
-					json_object_set_new_nocheck(jError, "root", json_string(rootNames[iRoot]));
+					json_object_set_new_nocheck(jError, "bit", json_string(rootNames[iRoot]));
 					json_object_set_new_nocheck(jError, "expected", json_string(strExpected));
 					json_object_set_new_nocheck(jError, "encountered", json_string(strEncountered));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -712,8 +670,8 @@ struct validateContext_t {
  */
 validateContext_t app;
 
-void usage(char *const *argv, bool verbose) {
-	fprintf(stderr, "usage: %s <json> <data>\n", argv[0]);
+void usage(char *argv[], bool verbose) {
+	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
@@ -733,11 +691,10 @@ void usage(char *const *argv, bool verbose) {
  * @param  {string[]} argv - program arguments
  * @return {number} 0 on normal return, non-zero when attention is required
  */
-int main(int argc, char *const *argv) {
+int main(int argc, char *argv[]) {
 	setlinebuf(stdout);
 
 	for (;;) {
-		int option_index = 0;
 		enum {
 			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_ONLYIFSET,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
@@ -771,34 +728,35 @@ int main(int argc, char *const *argv) {
 
 		*cp = '\0';
 
-		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int option_index = 0;
+		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
 		switch (c) {
-			case LO_DEBUG:
-				ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-				break;
-			case LO_HELP:
-				usage(argv, true);
-				exit(0);
-			case LO_ONLYIFSET:
-				app.opt_onlyIfSet++;
-				break;
-			case LO_QUIET:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
-				break;
-			case LO_TIMER:
-				ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
-				break;
-			case LO_VERBOSE:
-				ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
-				break;
+		case LO_DEBUG:
+			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_HELP:
+			usage(argv, true);
+			exit(0);
+		case LO_ONLYIFSET:
+			app.opt_onlyIfSet++;
+			break;
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
+			break;
+		case LO_TIMER:
+			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
+			break;
 
-			case '?':
-				ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
-			default:
-				ctx.fatal("getopt returned character code %d\n", c);
+		case '?':
+			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
+		default:
+			ctx.fatal("getopt returned character code %d\n", c);
 		}
 	}
 
@@ -829,11 +787,11 @@ int main(int argc, char *const *argv) {
 	 * Main
 	 */
 
-        // register timer handler
-        if (ctx.opt_timer) {
-                signal(SIGALRM, sigalrmHandler);
-                ::alarm(ctx.opt_timer);
-        }
+	// register timer handler
+	if (ctx.opt_timer) {
+		signal(SIGALRM, sigalrmHandler);
+		::alarm(ctx.opt_timer);
+	}
 
 	/*
 	 * Load json into context

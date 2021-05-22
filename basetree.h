@@ -1789,6 +1789,7 @@ struct baseTree_t {
 			thisVersion = ++mapVersionNr;
 		}
 
+		// select keys
 		for (uint32_t iKey = 0; iKey < nstart; iKey++) {
 			pSelect[iKey] = thisVersion;
 			pMap[iKey]    = iKey;

@@ -305,7 +305,9 @@ The "8" representing all the combinations were `"NOT"` can appear.
 | a ? ~b : false |   GT     | `">"`
 | a ? ~b : b     |   XOR    | `"^"`
 | a ?  b : c     |   QTF    | `"?"`
-| a ? ~b : c     |   QnTF   | `"!"`
+| a ? ~b : c     |   QnTF   | `"#"`
+
+NOTE: `"#"` is used instead of `"!"` because of the visual ambiguity.
 
 NOTE: `"|"` is not used as symbol for `"OR"` because of the visual ambiguity.
 
@@ -475,7 +477,7 @@ Operators:
 |:----:|:----:|
 | `a~`   | `!a`|
 | `abc?` | `a ? b  : c` |
-| `abc!` | `a ? !b : c` |
+| `abc#` | `a ? !b : c` |
 | `ab+` | `a OR b` |
 | `ab^` | `a XOR b`, `a != b` |
 | `ab>` | `a > b` |
@@ -666,6 +668,7 @@ System creation:
 [genvalidatedes.js](genvalidatedes.js)  
 [genvalidatemd5.js](genvalidatemd5.js)  
 [genvalidatespongent.js](genvalidatespongent.js)  
+[ksplit.cc](ksplit.cc)  
 [spongent.cc](spongent.cc)  
 [spongent.h](spongent.h)  
 [validateaes.h](validateaes.h)  
