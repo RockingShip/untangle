@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-20 22:26:32 Added: `kjoin.cc`.
 2021-05-21 23:27:00 Changed: General consistency.
 2021-05-20 22:26:32 Added: `ksplit.cc`.
 2021-05-20 16:40:32 Fixed: Tree initialisation, `ostart` and program consistency.
