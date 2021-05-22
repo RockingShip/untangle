@@ -79,7 +79,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kjoin kslice spongent validate
+PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kjoin kslice spongent validate validateprefix
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-05-15 18:53:07
@@ -121,3 +121,7 @@ spongent_CXXFLAGS = -D_SPONGENT088080008_
 # @date 2021-05-13 15:47:59
 validate_SOURCES = validate.cc basetree.h context.h
 validate_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-05-22 18:54:24
+validateprefix_SOURCES = validateprefix.cc basetree.h context.h
+validateprefix_LDADD = $(LDADD) $(AM_LDADD)
