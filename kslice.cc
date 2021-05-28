@@ -209,8 +209,6 @@ struct ksliceContext_t {
 			asprintf((char **) &pNewTree->keyNames[iKey], "e%0*d", keyNameLength, iKey);
 
 		// root has same names as keys
-		if (pNewTree->rootNames != pNewTree->keyNames)
-			ctx.myFree("baseTree_t::rootNames", pNewTree->rootNames);
 		pNewTree->rootNames = pNewTree->keyNames;
 
 		// setup keys
@@ -360,7 +358,7 @@ struct ksliceContext_t {
 
 					// display in which files the keys are located
 					if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-						fprintf(stderr, "\r\e[K%s: %s\n", pNewTree->rootNames[iRoot], filename);
+						fprintf(stderr, "\r\e[K%s: %s\n", pNewTree->rootNames[iRoot].c_str(), filename);
 				}
 			}
 

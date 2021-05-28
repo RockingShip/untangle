@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-05-28 00:43:14 Changed: `keyNames`+`rootNames` as `vector<string>`.
 2021-05-28 00:36:09 Changed: `getopt_long()` again.
 2021-05-22 19:02:50 Added: `valdateprefix.cc`.
 2021-05-20 22:26:32 Added: `kjoin.cc`.

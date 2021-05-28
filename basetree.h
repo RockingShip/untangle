@@ -3,8 +3,10 @@
 
 #include <fcntl.h>
 #include <jansson.h>
+#include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <vector>
 #include "context.h"
 
 /*
@@ -163,9 +165,8 @@ struct baseTree_t {
 	uint32_t   maxNodes;		// maximum tree capacity
 	uint32_t   numRoots;		// entries in roots[]
 	// names
-	const char **keyNames;		// sliced version of `keyNameData`
-	const char **rootNames;		// sliced version of `rootNameData`
-	const char *nameData;		// unsliced key names
+	std::vector<std::string>keyNames;  // sliced version of `keyNameData`
+	std::vector<std::string>rootNames; // sliced version of `rootNameData`
 	// primary storage
 	baseNode_t *N;			// nodes
 	uint32_t   *roots;		// entry points. can be inverted. first estart entries should match keys
@@ -218,9 +219,8 @@ struct baseTree_t {
 		maxNodes(0),
 		numRoots(0),
 		// names
-		keyNames(NULL),
-		rootNames(NULL),
-		nameData(NULL),
+		keyNames(),
+		rootNames(),
 		// primary storage (allocated by storage context)
 		N(NULL),
 		roots(NULL),
@@ -275,9 +275,8 @@ struct baseTree_t {
 		maxNodes(maxNodes),
 		numRoots(numRoots),
 		// names
-		keyNames((const char **) ctx.myAlloc("baseTree_t::keyNames", nstart, sizeof *keyNames) ),
-		rootNames((const char **) ctx.myAlloc("baseTree_t::rootNames", numRoots, sizeof *rootNames) ),
-		nameData(NULL),
+		keyNames(),
+		rootNames(),
 		// primary storage (allocated by storage context)
 		N((baseNode_t *) ctx.myAlloc("baseTree_t::N", maxNodes, sizeof *N)),
 		roots((uint32_t *) ctx.myAlloc("baseTree_t::roots", numRoots, sizeof *roots)),
@@ -307,8 +306,6 @@ struct baseTree_t {
 		numCompare(0)
 	//@formatter:on
 	{
-		if (this->nameData)
-			allocFlags |= ALLOCMASK_NAMES;
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
 		if (this->roots)
@@ -317,6 +314,10 @@ struct baseTree_t {
 			allocFlags |= ALLOCMASK_HISTORY;
 		if (this->nodeIndex)
 			allocFlags |= ALLOCMASK_INDEX;
+
+		// make all `keyNames`+`rootNames` indices valid
+		keyNames.resize(nstart);
+		rootNames.resize(numRoots);
 
 #if ENABLE_BASEEVALUATOR
 		gBaseEvaluator = new baseEvaluator_t(kstart, ostart, nstart, maxNodes);
@@ -328,12 +329,6 @@ struct baseTree_t {
 	 */
 	~baseTree_t() {
 		// release allocations if not mmapped
-		if (keyNames)
-			ctx.myFree("baseTree_t::keyNames", this->keyNames);
-		if (rootNames && rootNames != keyNames)
-			ctx.myFree("baseTree_t::rootNames", this->rootNames);
-		if (allocFlags & ALLOCMASK_NAMES)
-			ctx.myFree("baseTree_t::nameData", (char *) this->nameData); // this has been `malloc()` and cast to const
 		if (allocFlags & ALLOCMASK_NODES)
 			ctx.myFree("baseTree_t::N", this->N);
 		if (allocFlags & ALLOCMASK_ROOTS)
@@ -1553,7 +1548,7 @@ struct baseTree_t {
 	 */
 	unsigned loadFile(const char *fileName, bool shared = true) {
 
-		if (keyNames || rootNames || allocFlags)
+		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
 			ctx.fatal("baseTree_t::loadFile() on non-initial tree\n");
 
 		/*
@@ -1652,9 +1647,6 @@ struct baseTree_t {
 		maxNodes = ncount; // used for map allocations
 
 		// primary
-		keyNames      = (const char **) ctx.myAlloc("baseTree_t::keyNames", nstart, sizeof *keyNames);
-		rootNames     = (const char **) ctx.myAlloc("baseTree_t::rootNames", numRoots, sizeof *rootNames);
-		nameData      = (const char *) (rawDatabase + fileHeader->offNames);
 		N             = (baseNode_t *) (rawDatabase + fileHeader->offNodes);
 		roots         = (uint32_t *) (rawDatabase + fileHeader->offRoots);
 		history       = (uint32_t *) (rawDatabase + fileHeader->offHistory);
@@ -1670,15 +1662,21 @@ struct baseTree_t {
 		compVersionR  = allocMap();  // allocate as node-id map because of local version numbering
 		compVersionNr = 1;
 
+		// make all `keyNames`+`rootNames` indices valid
+		keyNames.resize(nstart);
+		rootNames.resize(numRoots);
+
 		// slice names
 		{
-			const char *pData = nameData;
+			const char *pData = (const char *) (rawDatabase + fileHeader->offNames);
 
 			for (uint32_t iKey  = 0; iKey < nstart; iKey++) {
+				assert(*pData != 0);
 				keyNames[iKey] = pData;
 				pData += strlen(pData) + 1;
 			}
 			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+				assert(*pData != 0);
 				rootNames[iRoot] = pData;
 				pData += strlen(pData) + 1;
 			}
@@ -1693,7 +1691,7 @@ struct baseTree_t {
 	/*
 	 * @date 2021-05-13 12:06:33
 	 *
-	 * Save database to file
+	 * Save database to binary data file
 	 * NOTE: Tree is compacted on writing
 	 * NOTE: With larger trees over NFS, this may take fome time
 	 */
@@ -1751,14 +1749,14 @@ struct baseTree_t {
 
 		// write keyNames
 		for (uint32_t i = 0; i < nstart; i++) {
-			size_t len = strlen(keyNames[i]) + 1;
-			fwrite(keyNames[i], len, 1, outf);
+			size_t len = keyNames[i].length() + 1;
+			fwrite(keyNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
 		// write rootNames
 		for (uint32_t i = 0; i < numRoots; i++) {
-			size_t len = strlen(rootNames[i]) + 1;
-			fwrite(rootNames[i], len, 1, outf);
+			size_t len = rootNames[i].length() + 1;
+			fwrite(rootNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
 		// write zero byte
@@ -1985,14 +1983,14 @@ struct baseTree_t {
 		json_t *jKeyNames = json_array();
 
 		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(this->keyNames[iKey]));
+			json_array_append_new(jKeyNames, json_string_nocheck(this->keyNames[iKey].c_str()));
 		json_object_set_new_nocheck(jResult, "keys", jKeyNames);
 
 		bool rootsDiffer = (this->nstart != this->numRoots);
 		if (!rootsDiffer) {
 			for (uint32_t iKey = 0; iKey < this->nstart; iKey++) {
-				if (strcmp(keyNames[iKey], rootNames[iKey]) != 0) {
-					fprintf(stderr, "\n%d %s %s\n", iKey, keyNames[iKey], rootNames[iKey]);
+				if (keyNames[iKey].compare(rootNames[iKey]) != 0) {
+					fprintf(stderr, "\n%d %s %s\n", iKey, keyNames[iKey].c_str(), rootNames[iKey].c_str());
 					rootsDiffer = true;
 					break;
 				}
@@ -2004,7 +2002,7 @@ struct baseTree_t {
 			jKeyNames = json_array();
 
 			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++)
-				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot]));
+				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot].c_str()));
 			json_object_set_new_nocheck(jResult, "roots", jKeyNames);
 		}
 
@@ -2014,7 +2012,7 @@ struct baseTree_t {
 		jKeyNames = json_array();
 		for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
 			if (this->roots[iRoot] != iRoot)
-				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot]));
+				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot].c_str()));
 		}
 		json_object_set_new_nocheck(jResult, "output", jKeyNames);
 

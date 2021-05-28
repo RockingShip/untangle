@@ -139,10 +139,10 @@ struct kjoinContext_t {
 
 		// Setup key/root names
 		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
-			pNewTree->keyNames[iKey] = strdup(pOldTree->keyNames[iKey]); // NOTE: memory leak
+			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
 
 		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++)
-			pNewTree->rootNames[iRoot] = strdup(pOldTree->rootNames[iRoot]); // NOTE: memory leak
+			pNewTree->rootNames[iRoot] = pOldTree->rootNames[iRoot];
 
 		// allocate counter map to detect 'write-after-read'
 		uint32_t *pKeyRefCount = pNewTree->allocMap();
@@ -219,24 +219,24 @@ struct kjoinContext_t {
 
 				// check names
 				for (uint32_t iName = 0; iName < pOldTree->nstart; iName++) {
-					if (strcmp(pOldTree->keyNames[iName], pNewTree->keyNames[iName]) != 0) {
+					if (pOldTree->keyNames[iName].compare(pNewTree->keyNames[iName]) != 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 						json_object_set_new_nocheck(jError, "key", json_integer(iName));
-						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->keyNames[iName]));
-						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->keyNames[iName]));
+						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->keyNames[iName].c_str()));
+						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->keyNames[iName].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 				}
 				for (unsigned iName = 0; iName < pOldTree->numRoots; iName++) {
-					if (strcmp(pOldTree->rootNames[iName], pNewTree->rootNames[iName]) != 0) {
+					if (pOldTree->rootNames[iName].compare(pNewTree->rootNames[iName]) != 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 						json_object_set_new_nocheck(jError, "key", json_integer(iName));
-						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->rootNames[iName]));
-						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->rootNames[iName]));
+						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->rootNames[iName].c_str()));
+						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->rootNames[iName].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 				}
@@ -307,7 +307,7 @@ struct kjoinContext_t {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key defined after being used"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot]));
+						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot].c_str()));
 						json_object_set_new_nocheck(jError, "refcount", json_integer(pKeyRefCount[iRoot]));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
@@ -315,7 +315,7 @@ struct kjoinContext_t {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key multiply defined"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot]));
+						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 
