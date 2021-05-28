@@ -341,12 +341,18 @@ struct baseTree_t {
 		}
 
 		// release maps
-		freeMap(stackL);
-		freeMap(stackR);
-		freeMap(compVersionL);
-		freeMap(compVersionR);
-		freeMap(compNodeL);
-		freeMap(compNodeR);
+		if (stackL)
+			freeMap(stackL);
+		if (stackR)
+			freeMap(stackR);
+		if (compVersionL)
+			freeMap(compVersionL);
+		if (compVersionR)
+			freeMap(compVersionR);
+		if (compNodeL)
+			freeMap(compNodeL);
+		if (compNodeR)
+			freeMap(compNodeR);
 
 		// release pools
 		while (numPoolMap > 0)
@@ -740,6 +746,10 @@ struct baseTree_t {
 	 * lookup/create a basic (normalised) node.
 	 */
 	inline uint32_t basicNode(uint32_t Q, uint32_t T, uint32_t F) {
+
+		assert(Q != 1 /*KERROR*/);
+		assert((T & ~IBIT) != 1 /*KERROR*/);
+		assert(F != 1 /*KERROR*/);
 
 		/*
 		 *  [ 2] a ? !0 : b                  "+" or
@@ -1540,9 +1550,695 @@ struct baseTree_t {
 	}
 
 	/*
+	 * @date 2021-05-22 21:25:45
+	 *
+	 * Find the highest endpoint in a pattern, excluding any transform (relative)
+	 *
+	 * return highest id, or -1 if name was "0"
+	 *
+	 * NOTE: first endpoint `a` will return 0.
+	 * NOTE: static to allow calling without loaded tree
+	 */
+	static int highestEndpoint(context_t &ctx, const char *pPattern) {
+		int highest = -1;
+
+		while (*pPattern) {
+
+			switch (*pPattern) {
+			case '0': //
+				break;
+
+				// @formatter:off
+			case '1': case '2': case '3': case '4':
+			case '5': case '6': case '7': case '8':
+			case '9':
+			// @formatter:on
+				// back-link
+				break;
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+			// @formatter:on
+			{
+				// endpoint
+				int v = (*pPattern - 'a');
+				if (v > highest)
+					highest = v;
+				break;
+
+			}
+
+				// @formatter:off
+			case 'A': case 'B': case 'C': case 'D':
+			case 'E': case 'F': case 'G': case 'H':
+			case 'I': case 'J': case 'K': case 'L':
+			case 'M': case 'N': case 'O': case 'P':
+			case 'Q': case 'R': case 'S': case 'T':
+			case 'U': case 'V': case 'W': case 'X':
+			case 'Y': case 'Z':
+			// @formatter:on
+			{
+				// prefix
+				int v = 0;
+				while (isupper(*pPattern))
+					v = v * 26 + *pPattern++ - 'A';
+
+				if (isdigit(*pPattern)) {
+					// follow by back-link
+				} else if (islower(*pPattern)) {
+					// followed by endpoint
+					v = (v * 26 + *pPattern - 'a');
+
+					if (v > highest)
+						highest = v;
+				} else {
+					ctx.fatal("[bad token '%c' in pattern]\n", *pPattern);
+				}
+				break;
+			}
+
+			case '+':
+			case '>':
+			case '#':
+			case '^':
+			case '&':
+			case '?':
+			case '!':
+			case '~':
+				break;
+			case '/':
+				// skip transform
+				return highest;
+			case ' ':
+				// skip spaces
+				break;
+			default:
+				ctx.fatal("[bad token '%c' in pattern]\n", *pPattern);
+			}
+		}
+
+		return highest;
+	}
+
+	/*
+	 * @date 2021-05-22 23:17:43
+	 *
+	 * Unpack transform string into an array
+	 *
+	 * NOTE: static to allow calling before loading trees
+	 */
+	static uint32_t *decodeTransform(context_t &ctx, uint32_t kstart, uint32_t nstart, const char *pTransform) {
+		uint32_t *transformList = (uint32_t *) ctx.myAlloc("baseTree_t::transformList", nstart, sizeof *transformList);
+
+		// invalidate list, except for `0`
+		transformList[0] = 0;
+
+		// invalidate all entries
+		for (uint32_t i = kstart; i < nstart; i++)
+			transformList[i] = 1 /* KERROR */;
+
+		// start decoding
+		for (uint32_t t = kstart; t < nstart; t++) {
+			if (!*pTransform) {
+				// transform string is shorter than available keys
+				// assume uninitialised entries are unused
+				break;
+			}
+
+			if (islower(*pTransform)) {
+				// endpoint
+				transformList[t] = *pTransform++ - 'a' + kstart;
+
+			} else if (isupper(*pTransform)) {
+				// prefix
+				unsigned value = 0;
+
+				while (isupper(*pTransform))
+					value = value * 26 + *pTransform++ - 'A';
+
+				if (!islower(*pTransform))
+					ctx.fatal("[transform string non alphabetic]\n");
+
+				transformList[t] = (value + 1) * 26 + *pTransform++ - 'a' + kstart;
+
+			} else {
+				ctx.fatal("[bad token '%c' in transform]\n", *pTransform);
+			}
+		}
+
+		if (*pTransform)
+			ctx.fatal("[transform string too long]\n");
+
+		return transformList;
+	}
+
+	/*
+	 * @date 2021-05-22 21:22:41
+	 *
+	 * NOTE: !!! Apply any changes here also to `loadBasicString()`
+	 *
+	 * Import a string into tree.
+	 * NOTE: Will use `normaliseNode()`.
+	 */
+	uint32_t loadNormaliseString(const char *pPattern, const char *pTransform = NULL) {
+
+		// modify if transform is present
+		uint32_t *transformList = NULL;
+		if (pTransform && *pTransform)
+			transformList = decodeTransform(ctx, kstart, nstart, pTransform);
+
+		/*
+		 * init
+		 */
+
+		uint32_t stackpos = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap();
+		uint32_t *pMap    = allocMap();
+		uint32_t nid;
+
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = pPattern; *pattern; pattern++) {
+
+			switch (*pattern) {
+			case '0': //
+				pStack[stackpos++] = 0;
+				break;
+
+				// @formatter:off
+			case '1': case '2': case '3': case '4':
+			case '5': case '6': case '7': case '8':
+			case '9':
+			// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				if (v < this->nstart || v >= nextNode)
+					ctx.fatal("[node out of range: %d]\n", v);
+				if (stackpos >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[stackpos++] = pMap[v];
+
+				break;
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+			// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = this->kstart + (*pattern - 'a');
+
+				if (v < this->kstart || v >= this->nstart)
+					ctx.fatal("[endpoint out of range: %d]\n", v);
+				if (stackpos >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				if (transformList)
+					pStack[stackpos++] = transformList[v];
+				else
+					pStack[stackpos++] = v;
+				break;
+
+			}
+
+				// @formatter:off
+			case 'A': case 'B': case 'C': case 'D':
+			case 'E': case 'F': case 'G': case 'H':
+			case 'I': case 'J': case 'K': case 'L':
+			case 'M': case 'N': case 'O': case 'P':
+			case 'Q': case 'R': case 'S': case 'T':
+			case 'U': case 'V': case 'W': case 'X':
+			case 'Y': case 'Z':
+			// @formatter:on
+			{
+				/*
+				 * Prefix
+				 */
+				uint32_t v = 0;
+				while (isupper(*pattern))
+					v = v * 26 + *pattern++ - 'A';
+
+				if (isdigit(*pattern)) {
+					/*
+					 * prefixed back-reference
+					 */
+					v = nextNode - (v * 10 + *pattern - '0');
+
+					if (v < this->nstart || v >= nextNode)
+						ctx.fatal("[node out of range: %d]\n", v);
+					if (stackpos >= this->ncount)
+						ctx.fatal("[stack overflow]\n");
+
+					pStack[stackpos++] = pMap[v];
+				} else if (islower(*pattern)) {
+					/*
+					 * prefixed endpoint
+					 */
+					v = this->kstart + ((v + 1) * 26 + *pattern - 'a');
+
+					if (v < this->kstart || v >= this->nstart)
+						ctx.fatal("[endpoint out of range: %d]\n", v);
+					if (stackpos >= this->ncount)
+						ctx.fatal("[stack overflow]\n");
+
+					if (transformList)
+						pStack[stackpos++] = transformList[v];
+					else
+						pStack[stackpos++] = v;
+				} else {
+					ctx.fatal("[bad token '%c']\n", *pattern);
+				}
+				break;
+			}
+
+			case '+': {
+				// OR
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				if (compare(this, Q, this, F) < 0)
+					nid = normaliseNode(Q, IBIT, F);
+				else
+					nid = normaliseNode(F, IBIT, Q);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '>': {
+				// GT
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = normaliseNode(Q, T ^ IBIT, 0);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '#': {
+				// QnTF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = normaliseNode(Q, T ^ IBIT, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '^': {
+				// NE
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				if (compare(this, Q, this, F) < 0)
+					nid = normaliseNode(Q, F ^ IBIT, F);
+				else
+					nid = normaliseNode(F, Q ^ IBIT, Q);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '&': {
+				// AND
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				if (compare(this, Q, this, T) < 0)
+					nid = normaliseNode(Q, T, 0);
+				else
+					nid = normaliseNode(T, Q, 0);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '?': {
+				// QTF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = normaliseNode(Q, T, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '!': {
+				// QTnF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = normaliseNode(Q, T, F ^ IBIT);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '~': {
+				// NOT
+				if (stackpos < 1)
+					ctx.fatal("[stack underflow]\n");
+
+				pStack[stackpos - 1] ^= IBIT;
+				break;
+			}
+			case '/':
+				// separator between pattern/transform
+				while (pattern[1])
+					pattern++;
+				break;
+			case ' ':
+				// skip spaces
+				break;
+			default:
+				ctx.fatal("[bad token '%c']\n", *pattern);
+			}
+
+			if (stackpos > maxNodes)
+				ctx.fatal("[stack overflow]\n");
+		}
+		if (stackpos != 1)
+			ctx.fatal("[stack not empty]\n");
+
+		uint32_t ret = pStack[stackpos - 1];
+
+		freeMap(pStack);
+		freeMap(pMap);
+		if (transformList)
+			freeMap(transformList);
+
+		return ret;
+	}
+
+	/*
+	 * @date 2021-05-26 21:01:25
+	 *
+	 * NOTE: !!! Apply any changes here also to `loadNormaliseString()`
+	 *
+	 * Import a string into tree.
+	 * NOTE: Will use `basicNode()`.
+	 */
+	uint32_t loadBasicString(const char *pPattern, const char *pTransform = NULL) {
+
+		// modify if transform is present
+		uint32_t *transformList = NULL;
+		if (pTransform)
+			transformList = decodeTransform(ctx, kstart, nstart, pTransform);
+
+		/*
+		 * init
+		 */
+
+		uint32_t stackpos = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap();
+		uint32_t *pMap    = allocMap();
+		uint32_t nid;
+
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = pPattern; *pattern; pattern++) {
+
+			switch (*pattern) {
+			case '0': //
+				pStack[stackpos++] = 0;
+				break;
+
+				// @formatter:off
+			case '1': case '2': case '3': case '4':
+			case '5': case '6': case '7': case '8':
+			case '9':
+			// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				if (v < this->nstart || v >= nextNode)
+					ctx.fatal("[node out of range: %d]\n", v);
+				if (stackpos >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[stackpos++] = pMap[v];
+
+				break;
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+			// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = this->kstart + (*pattern - 'a');
+
+				if (v < this->kstart || v >= this->nstart)
+					ctx.fatal("[endpoint out of range: %d]\n", v);
+				if (stackpos >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				if (transformList)
+					pStack[stackpos++] = transformList[v];
+				else
+					pStack[stackpos++] = v;
+				break;
+
+			}
+
+				// @formatter:off
+			case 'A': case 'B': case 'C': case 'D':
+			case 'E': case 'F': case 'G': case 'H':
+			case 'I': case 'J': case 'K': case 'L':
+			case 'M': case 'N': case 'O': case 'P':
+			case 'Q': case 'R': case 'S': case 'T':
+			case 'U': case 'V': case 'W': case 'X':
+			case 'Y': case 'Z':
+			// @formatter:on
+			{
+				/*
+				 * Prefix
+				 */
+				uint32_t v = 0;
+				while (isupper(*pattern))
+					v = v * 26 + *pattern++ - 'A';
+
+				if (isdigit(*pattern)) {
+					/*
+					 * prefixed back-reference
+					 */
+					v = nextNode - (v * 10 + *pattern - '0');
+
+					if (v < this->nstart || v >= nextNode)
+						ctx.fatal("[node out of range: %d]\n", v);
+					if (stackpos >= this->ncount)
+						ctx.fatal("[stack overflow]\n");
+
+					pStack[stackpos++] = pMap[v];
+				} else if (islower(*pattern)) {
+					/*
+					 * prefixed endpoint
+					 */
+					v = this->kstart + ((v + 1) * 26 + *pattern - 'a');
+
+					if (v < this->kstart || v >= this->nstart)
+						ctx.fatal("[endpoint out of range: %d]\n", v);
+					if (stackpos >= this->ncount)
+						ctx.fatal("[stack overflow]\n");
+
+					if (transformList)
+						pStack[stackpos++] = transformList[v];
+					else
+						pStack[stackpos++] = v;
+				} else {
+					ctx.fatal("[bad token '%c']\n", *pattern);
+				}
+				break;
+			}
+
+			case '+': {
+				// OR
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, IBIT, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '>': {
+				// GT
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, T ^ IBIT, 0);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '#': {
+				// QnTF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, T ^ IBIT, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '^': {
+				// NE
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, F ^ IBIT, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '&': {
+				// AND
+				if (stackpos < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, T, 0);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '?': {
+				// QTF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, T, F);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '!': {
+				// QTnF
+				if (stackpos < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				uint32_t F = pStack[--stackpos];
+				uint32_t T = pStack[--stackpos];
+				uint32_t Q = pStack[--stackpos];
+
+				nid = basicNode(Q, T, F ^ IBIT);
+
+				pStack[stackpos++] = pMap[nextNode++] = nid;
+				break;
+			}
+			case '~': {
+				// NOT
+				if (stackpos < 1)
+					ctx.fatal("[stack underflow]\n");
+
+				pStack[stackpos - 1] ^= IBIT;
+				break;
+			}
+			case '/':
+				// separator between pattern/transform
+				while (pattern[1])
+					pattern++;
+				break;
+			case ' ':
+				// skip spaces
+				break;
+			default:
+				ctx.fatal("[bad token '%c']\n", *pattern);
+			}
+
+			if (stackpos > maxNodes)
+				ctx.fatal("[stack overflow]\n");
+		}
+		if (stackpos != 1)
+			ctx.fatal("[stack not empty]\n");
+
+		uint32_t ret = pStack[stackpos - 1];
+
+		freeMap(pStack);
+		freeMap(pMap);
+		if (transformList)
+			freeMap(transformList);
+
+		return ret;
+	}
+
+	/*
 	 * @date 2021-05-14 21:18:32
 	 *
-	 * Load database from file
+	 * Load database from binary data file
 	 *
 	 * return 0 for ok.
 	 */
@@ -1943,6 +2639,219 @@ struct baseTree_t {
 	}
 
 	/*
+	 * @date 2021-05-27 12:33:41
+	 *
+	 * Load metadata from text json file.
+	 * NOTE: Tree has no other allocations and is unsuited to work with
+	 * NOTE: `inputFilename` is only for error messages
+	 */
+	void loadFileJson(json_t *jInput, const char *inputFilename) {
+
+		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
+			ctx.fatal("baseTree_t::loadFileJson() on non-initial tree\n");
+
+		/*
+		 * import dimensions
+		 */
+		kstart   = json_integer_value(json_object_get(jInput, "kstart"));
+		ostart   = json_integer_value(json_object_get(jInput, "ostart"));
+		estart   = json_integer_value(json_object_get(jInput, "estart"));
+		nstart   = json_integer_value(json_object_get(jInput, "nstart"));
+		ncount   = json_integer_value(json_object_get(jInput, "ncount"));
+		numRoots = json_integer_value(json_object_get(jInput, "numroots"));
+
+		if (kstart == 0 || kstart >= ncount) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "kstart", json_integer(kstart));
+			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+		if (ostart < kstart || ostart >= ncount) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("ostart out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "kstart", json_integer(kstart));
+			json_object_set_new_nocheck(jError, "ostart", json_integer(ostart));
+			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+		if (estart < ostart || estart >= ncount) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("estart out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "ostart", json_integer(ostart));
+			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
+			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+		if (nstart < estart || nstart >= ncount) {
+			/*
+			 * NOTE: this test should be dropped as extended keys should always be set to uninitialised
+			 */
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("nstart out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
+			json_object_set_new_nocheck(jError, "nstart", json_integer(nstart));
+			json_object_set_new_nocheck(jError, "ncount", json_integer(ncount));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+		if (numRoots < estart) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("numroots out of range"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
+			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		// make all `keyNames`+`rootNames` indices valid
+		keyNames.resize(nstart);
+		rootNames.resize(numRoots);
+
+		/*
+		 * Reserved names
+		 */
+		keyNames[0]            = "0";
+		keyNames[1 /*KERROR*/] = "KERROR";
+
+		/*
+		 * import knames
+		 */
+
+		json_t *jNames = json_object_get(jInput, "knames");
+		if (!jNames) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'knames'"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		unsigned numNames = json_array_size(jNames);
+		if (numNames != ostart - kstart) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of knames"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "expected", json_integer(ostart - kstart));
+			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		for (uint32_t iName = 0; iName < numNames; iName++)
+			keyNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
+
+		/*
+		 * import onames
+		 */
+
+		jNames = json_object_get(jInput, "onames");
+		if (!jNames) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'onames'"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		numNames = json_array_size(jNames);
+		if (numNames != estart - ostart) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of onames"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "expected", json_integer(estart - ostart));
+			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		for (uint32_t iName = 0; iName < numNames; iName++)
+			keyNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
+
+		/*
+		 * import enames
+		 */
+
+		jNames = json_object_get(jInput, "enames");
+		if (!jNames) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'enames'"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		numNames = json_array_size(jNames);
+		if (numNames != nstart - estart) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of enames"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "expected", json_integer(nstart - estart));
+			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		for (uint32_t iName = 0; iName < numNames; iName++)
+			keyNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
+
+		/*
+		 * import rnames (extended root names)
+		 */
+
+		// copy fixed part
+		for (unsigned iRoot = 0; iRoot < estart; iRoot++)
+			rootNames[iRoot] = keyNames[iRoot];
+
+		jNames = json_object_get(jInput, "rnames");
+		if (!jNames) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'rnames'"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+
+		numNames = json_array_size(jNames);
+
+		if (json_is_string(jNames) && strcasecmp(json_string_value(jNames), "enames") == 0) {
+			// roots identical to keys
+			if (nstart != numRoots) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("rnames == enames AND nstart != numRoots"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+				json_object_set_new_nocheck(jError, "nstart", json_integer(nstart));
+				json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
+				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				exit(1);
+			}
+			// copy collection
+			rootNames = keyNames;
+		} else if (numNames != numRoots - estart) {
+			// count mismatch
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of rnames"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots - estart));
+			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		} else {
+			// load root names
+			for (uint32_t iName = 0; iName < numNames; iName++)
+				rootNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
+		}
+	}
+
+	/*
 	 * Extract details into json
 	 */
 	json_t *headerInfo(json_t *jResult) {
@@ -1982,39 +2891,42 @@ struct baseTree_t {
 		 */
 		json_t *jKeyNames = json_array();
 
-		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(this->keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "keys", jKeyNames);
+		for (uint32_t iKey = kstart; iKey < ostart; iKey++)
+			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
+		json_object_set_new_nocheck(jResult, "knames", jKeyNames);
 
-		bool rootsDiffer = (this->nstart != this->numRoots);
+		jKeyNames = json_array();
+
+		for (uint32_t iKey = ostart; iKey < estart; iKey++)
+			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
+		json_object_set_new_nocheck(jResult, "onames", jKeyNames);
+
+		jKeyNames = json_array();
+
+		for (uint32_t iKey = estart; iKey < nstart; iKey++)
+			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
+		json_object_set_new_nocheck(jResult, "enames", jKeyNames);
+
+		bool rootsDiffer = (nstart != numRoots);
 		if (!rootsDiffer) {
-			for (uint32_t iKey = 0; iKey < this->nstart; iKey++) {
+			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
 				if (keyNames[iKey].compare(rootNames[iKey]) != 0) {
-					fprintf(stderr, "\n%d %s %s\n", iKey, keyNames[iKey].c_str(), rootNames[iKey].c_str());
 					rootsDiffer = true;
 					break;
 				}
 			}
 		}
 
-		// with extended keys, keys/roots are considered different
-		if (rootsDiffer) {
+		if (rootsDiffer || nstart == numRoots) {
+			// either roots are different or an empty set.
 			jKeyNames = json_array();
 
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++)
-				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot].c_str()));
-			json_object_set_new_nocheck(jResult, "roots", jKeyNames);
+			for (uint32_t iRoot = estart; iRoot < numRoots; iRoot++)
+				json_array_append_new(jKeyNames, json_string_nocheck(rootNames[iRoot].c_str()));
+			json_object_set_new_nocheck(jResult, "rnames", jKeyNames);
+		} else {
+			json_object_set_new_nocheck(jResult, "rnames", json_string_nocheck("enames"));
 		}
-
-		/*
-		 * Outputs
-		 */
-		jKeyNames = json_array();
-		for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
-			if (this->roots[iRoot] != iRoot)
-				json_array_append_new(jKeyNames, json_string_nocheck(this->rootNames[iRoot].c_str()));
-		}
-		json_object_set_new_nocheck(jResult, "output", jKeyNames);
 
 #if 0
 

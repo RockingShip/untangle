@@ -124,7 +124,7 @@ struct kjoinContext_t {
 			json_delete(jResult);
 		}
 
-		if (pOldTree->kstart == 1) {
+		if (pOldTree->kstart == 1 /*KERROR*/ ) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
@@ -184,7 +184,7 @@ struct kjoinContext_t {
 					json_delete(jResult);
 				}
 
-				if (pOldTree->kstart == 1) {
+				if (pOldTree->kstart == 1 /*KERROR*/ ) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
 					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));

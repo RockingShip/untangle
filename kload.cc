@@ -1,10 +1,9 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * buildtest0.cc
- *	Test naming, alignment, offsets, evaluating, basics. For two bits.
- *
- *	!!! NOTE: test #8 is designed to throw an "undefined" error when validating
+ * kload.cc
+ *      Create a tree file based on json meta data
+ *      Load the optional 'data' tag to populate the nodes.
  */
 
 /*
@@ -25,15 +24,19 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <assert.h>
+#include <iostream>
+#include <fstream>
+#include <string>
 #include <ctype.h>
+#include <errno.h>
 #include <getopt.h>
 #include <jansson.h>
-#include <stdint.h>
-#include <sys/stat.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "context.h"
 #include "basetree.h"
+#include "cpp2json.h"
 
 /*
  * Resource context.
@@ -43,95 +46,31 @@
  */
 context_t ctx;
 
-// used key/root names
-enum {
-	kZero = 0, kError, // reserved
-	k0, k1, k2, k3, // keys
-	o0, o1, o2, // roots
-	NSTART, // last
-
-	KSTART = k0,
-	OSTART = o0,
-};
-
-const char *allNames[] = {
-	"0", "ERROR",
-	"k0", "k1", "k2", "k3",
-	"o0", "o1", "o2"
-};
-
-/// @var {baseTree_t*} global reference to tree
-baseTree_t *gTree = NULL;
-/// @var {json_t*} validation tests
-json_t     *gTests; // validation tests
-
-struct NODE {
-	uint32_t id;
-
-	NODE() { id = 0; }
-
-	NODE(uint32_t id) {
-		assert(id == 0 || (id >= gTree->kstart && id < gTree->ncount));
-		this->id = id;
+/**
+ * @date 2021-05-17 22:45:37
+ *
+ * Signal handlers
+ *
+ * Bump interval timer
+ *
+ * @param {number} sig - signal (ignored)
+ */
+void sigalrmHandler(int __attribute__ ((unused)) sig) {
+	if (ctx.opt_timer) {
+		ctx.tick++;
+		alarm(ctx.opt_timer);
 	}
-
-	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->normaliseNode(Q.id, T.id, F.id); }
-
-	NODE operator|(const NODE &other) const { return NODE(this->id, IBIT, other.id); }
-
-	NODE operator*(const NODE &other) const { return NODE(this->id, other.id, 0); }
-
-	NODE operator^(const NODE &other) const { return NODE(this->id, other.id ^ IBIT, other.id); }
-};
-
-/*
- * @date 2021-05-13 01:29:09
- *
- * Convert test to json entry
- */
-void validate(const char *keyStr, const char *rootStr) {
-
-	json_t *jTest = json_array();
-	json_array_append_new(jTest, json_string_nocheck(keyStr));
-	json_array_append_new(jTest, json_string_nocheck(rootStr));
-
-	json_array_append_new(gTests, jTest);
 }
 
-/*
- * generate tests
- * NOTE: string character is a nibble representing the first 4-bits. Bits are read right-to-left. Thus: k0K1K2K3
- *
- * o0 = k1 ? !k2 : k3
- * o1 = k1 ?  k2 : k3
- * o2 = k0 ?  ERROR : 0
- */
-void validateAll() {
-	//         k3-k2-k1-k0   o2-o1-o0     o1           o0
-	validate("05", "01"); // (1?0:1)=0   (1?!0:1)=1
-	validate("02", "00"); // (0?1:0)=0   (0?!1:0)=0
-
-	validate("00", "00"); // (0?0:0)=0   (0?!0:0)=0
-	validate("01", "07"); // (0:1:1)=1   (0?!0:1)=1
-	validate("03", "07"); // (0?1:1)=1   (0?!1:1)=1
-	validate("04", "01"); // (1?0:0)=0   (1?!0:0)=1
-	validate("06", "06"); // (1?1:0)=1   (1?!1:0)=0
-	validate("07", "06"); // (1?1:1)=1   (1?!1:1)=0
-
-	// this one should trigger an undefined error on verification in combination with `--error`
-	validate("08", "00");
-}
 
 /**
- * @date 2021-05-10 13:23:43
+ * @date 2021-05-13 15:30:14
  *
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct buildtest0Context_t {
+struct kloadContext_t {
 
-	/// @var {number} --error, create a node referencing `kError`
-	unsigned opt_error;
 	/// @var {number} header flags
 	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
@@ -139,128 +78,149 @@ struct buildtest0Context_t {
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
-	buildtest0Context_t() {
-		opt_error   = 0;
-		opt_flags   = 0;
-		opt_force   = 0;
+	/// @var {baseTree_t*} input tree
+	baseTree_t *pInputTree;
+
+	kloadContext_t() {
+		opt_flags = 0;
+		opt_force = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 	}
 
-	void main(const char *jsonFilename, const char *datFilename) {
+	/**
+	 * @date 2021-05-20 23:15:36
+	 *
+	 * Main entrypoint.
+	 * NOTE: Most code taken from `validate.cc`.
+	 */
+	int main(const char *outputFilename, const char *inputFilename) {
+
 		/*
-		 * Allocate the build tree containing the complete formula
+		 * Load json
 		 */
 
-		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
-
-		// setup key names
-		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
-			gTree->keyNames[iKey] = allNames[iKey];
-
-			gTree->N[iKey].Q = 0;
-			gTree->N[iKey].T = 0;
-			gTree->N[iKey].F = iKey;
+		// load json
+		FILE *f              = fopen(inputFilename, "r");
+		if (!f) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("fopen()"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "errno", json_integer(errno));
+			json_object_set_new_nocheck(jError, "errtxt", json_string(strerror(errno)));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
 		}
 
-		// setup root names
-		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
-			gTree->rootNames[iRoot] = allNames[iRoot];
+		json_error_t jLoadError;
+		json_t       *jInput = json_loadf(f, 0, &jLoadError);
+		if (jInput == 0) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to decode json"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "line", json_integer(jLoadError.line));
+			json_object_set_new_nocheck(jError, "text", json_string(jLoadError.text));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
+		}
+		fclose(f);
 
-			gTree->roots[iRoot] = iRoot;
+		/*
+		 * Create an incomplete tree based on json
+		 */
+		baseTree_t jsonTree(ctx);
+
+		jsonTree.loadFileJson(jInput, inputFilename);
+
+		/*
+		 * Create a real tree
+		 */
+
+		baseTree_t newTree(ctx, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, opt_flags);
+
+		newTree.keyNames = jsonTree.keyNames;
+		newTree.rootNames = jsonTree.rootNames;
+
+		/*
+		 * Import the roots
+		 */
+
+		json_t *jData = json_object_get(jInput, "data");
+		if (!jData) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+				fprintf(stderr, "[%s] WARNING: `data' tag not available\n", ctx.timeAsString());
+			return 0;
 		}
 
-		// setup nodes
-
-		// gTree->roots[0] = gTree->N[k2] ?   gTree->N[k1]     : gTree->N[k0] ;
-		// gTree->roots[1] = gTree->N[k2] ? ! gTree->N[k1]     : gTree->N[k0] ;
-		// gTree->roots[2] = gTree->N[k3] ? ! gTree->N[kError] : gTree->N[0]  ;
-		// because there is no operator overload available for the above
-
-//		uint32_t N0 = gTree->ncount;
-		gTree->N[gTree->ncount].Q = k2;
-		gTree->N[gTree->ncount].T = k1 ^ IBIT;
-		gTree->N[gTree->ncount].F = k0;
-		gTree->roots[o0] = gTree->ncount++; // referenced once
-
-		uint32_t N1 = gTree->ncount;
-		gTree->N[gTree->ncount].Q = k2;
-		gTree->N[gTree->ncount].T = k1;
-		gTree->N[gTree->ncount].F = k0;
-		gTree->roots[o1] = gTree->ncount++; // referenced twice
-
-//		uint32_t N2 = gTree->ncount;
-		gTree->N[gTree->ncount].Q = k3;
-		gTree->N[gTree->ncount].T = opt_error ? kError : 0;
-		gTree->N[gTree->ncount].F = N1;
-		gTree->roots[o2] = gTree->ncount++; // referenced once
-
 		/*
-		 * Create tests as json object
+		 * Iterate through all roots
 		 */
+		void *iter = json_object_iter(jData);
+		while (iter) {
+			const char *rootName = json_object_iter_key(iter);
+			json_t     *value    = json_object_iter_value(iter);
 
-		gTests = json_array();
-		validateAll();
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+				fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), rootName);
 
-		/*
-		 * Save the tree
-		 */
+			/*
+			 * decode name
+			 */
+			bool     found = false;
+			unsigned iRoot = 0;
+			for (iRoot = 0; iRoot < newTree.numRoots; iRoot++) {
+				if (strcmp(rootName, newTree.rootNames[iRoot].c_str()) == 0) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Unknown root name in 'data'"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+				json_object_set_new_nocheck(jError, "root", json_string(rootName));
+				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				exit(1);
+			}
 
-		gTree->saveFile(datFilename);
+			/*
+			 * Load string
+			 */
+			const char *rootValue = json_string_value(value);
 
-		/*
-		 * Create the meta json
-		 */
+			// is there a transform?
+			const char *pSlash = strchr(rootValue, '/');
+			newTree.roots[iRoot] = newTree.loadNormaliseString(rootValue, pSlash ? pSlash + 1 : NULL);
 
-		json_t *jOutput = json_object();
-
-		// add tree meta
-		gTree->headerInfo(jOutput);
-		// add names/history
-		gTree->extraInfo(jOutput);
-		// add validations tests
-		json_object_set_new_nocheck(jOutput, "tests", gTests);
-
-		FILE *f = fopen(jsonFilename, "w");
-		if (!f)
-			ctx.fatal("fopen(%s) returned: %m\n", jsonFilename);
-
-		fprintf(f, "%s\n", json_dumps(jOutput, JSON_PRESERVE_ORDER | JSON_COMPACT));
-
-		if (fclose(f))
-			ctx.fatal("fclose(%s) returned: %m\n", jsonFilename);
-
-		/*
-		 * Display json
-		 */
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
-			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(datFilename));
-			gTree->headerInfo(jResult);
-			gTree->extraInfo(jResult);
-			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			/* use key and value ... */
+			iter = json_object_iter_next(jData, iter);
 		}
 
-		delete gTree;
+		/*
+		 * Save data
+		 */
+		newTree.saveFile(outputFilename);
+
+		json_delete(jInput);
+		return 0;
 	}
+
+
 };
 
 /*
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {buildtest0Context_t} Application context
+ * @global {kloadContext_t} Application context
  */
-buildtest0Context_t app;
+kloadContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.dat> <input.json>\n", argv[0]);
 	if (verbose) {
-		fprintf(stderr, "\t   --error\n");
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
 		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
@@ -272,7 +232,7 @@ void usage(char *argv[], bool verbose) {
 }
 
 /**
- * @date 2021-05-10 13:13:44
+ * @date 2021-05-13 15:28:31
  *
  * Program main entry point
  * Process all user supplied arguments to construct a application context.
@@ -287,21 +247,20 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_ERROR,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",       1, 0, LO_DEBUG},
-			{"error",       0, 0, LO_ERROR},
-			{"force",       0, 0, LO_FORCE},
-			{"help",        0, 0, LO_HELP},
+			{"debug",   1, 0, LO_DEBUG},
+			{"force",   0, 0, LO_FORCE},
+			{"help",    0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
-			{"quiet",       2, 0, LO_QUIET},
-			{"timer",       1, 0, LO_TIMER},
-			{"verbose",     2, 0, LO_VERBOSE},
+			{"quiet",   2, 0, LO_QUIET},
+			{"timer",   1, 0, LO_TIMER},
+			{"verbose", 2, 0, LO_VERBOSE},
 			//
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},
@@ -343,9 +302,6 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
-			break;
-		case LO_ERROR:
-			app.opt_error++;
 			break;
 		case LO_FORCE:
 			app.opt_force++;
@@ -410,12 +366,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	char *jsonFilename;
-	char *datFilename;
+	char *outputFilename;
+	char *inputFilename;
 
 	if (argc - optind >= 2) {
-		jsonFilename = argv[optind++];
-		datFilename  = argv[optind++];
+		outputFilename = argv[optind++];
+		inputFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -426,16 +382,19 @@ int main(int argc, char *argv[]) {
 	 */
 	if (!app.opt_force) {
 		struct stat sbuf;
-		if (!stat(jsonFilename, &sbuf))
-			ctx.fatal("%s already exists. Use --force to overwrite\n", jsonFilename);
-		if (!stat(datFilename, &sbuf))
-			ctx.fatal("%s already exists. Use --force to overwrite\n", datFilename);
+		if (!stat(outputFilename, &sbuf))
+			ctx.fatal("%s already exists. Use --force to overwrite\n", outputFilename);
 	}
 
 	/*
 	 * Main
 	 */
-	app.main(jsonFilename, datFilename);
 
-	return 0;
+	// register timer handler
+	if (ctx.opt_timer) {
+		signal(SIGALRM, sigalrmHandler);
+		::alarm(ctx.opt_timer);
+	}
+
+	return app.main(outputFilename, inputFilename);
 }
