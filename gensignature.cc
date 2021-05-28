@@ -1052,8 +1052,9 @@ int main(int argc, char *argv[]) {
 			{NULL,                 0, 0, 0}
 		};
 
-		char optstring[128], *cp;
-		cp = optstring;
+		char optstring[64];
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		/* construct optarg */
 		for (int i = 0; long_options[i].name; i++) {
@@ -1066,11 +1067,11 @@ int main(int argc, char *argv[]) {
 					*cp++ = ':';
 			}
 		}
-		*cp        = '\0';
+
+		*cp = '\0';
 
 		// parse long options
-		int option_index = 0;
-		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 

@@ -712,8 +712,9 @@ int main(int argc, char *argv[]) {
 			{NULL,        0, 0, 0}
 		};
 
-		char optstring[128], *cp;
-		cp = optstring;
+		char optstring[64];
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -728,8 +729,7 @@ int main(int argc, char *argv[]) {
 
 		*cp = '\0';
 
-		int option_index = 0;
-		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 

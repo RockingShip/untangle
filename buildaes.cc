@@ -104,14 +104,14 @@ struct buildaesContext_t {
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned opt_maxnode;
+	unsigned opt_maxNode;
 	/// @var {NODE} variables referencing zero/false and nonZero/true
 	NODE     vFalse, vTrue;
 
 	buildaesContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
-		opt_maxnode = DEFAULT_MAXNODE;
+		opt_maxNode = DEFAULT_MAXNODE;
 		vFalse.id = 0;
 		vTrue.id  = IBIT;
 	}
@@ -2536,7 +2536,7 @@ _b7 = (V[A##2])^V[A##7]^V[B##2]^V[B##3]^V[B##4]^V[B##5]^V[B##6]^V[C##3]^V[C##4]^
 		 * Allocate the build tree containing the complete formula
 		 */
 		// basic keys
-		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxnode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxNode, opt_flags);
 
 		// setup key names
 		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
@@ -2634,7 +2634,7 @@ void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
-		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
+		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
@@ -2694,8 +2694,9 @@ int main(int argc, char *argv[]) {
 			{NULL,          0, 0, 0}
 		};
 
-		char optstring[128], *cp;
-		cp = optstring;
+		char optstring[64];
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -2710,8 +2711,7 @@ int main(int argc, char *argv[]) {
 
 		*cp = '\0';
 
-		int option_index = 0;
-		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -2726,7 +2726,7 @@ int main(int argc, char *argv[]) {
 			usage(argv, true);
 			exit(0);
 		case LO_MAXNODE:
-			app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
+			app.opt_maxNode = (unsigned) strtoul(optarg, NULL, 10);
 			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;

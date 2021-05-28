@@ -270,7 +270,7 @@ struct selftestContext_t : dbtool_t {
 					 */
 					// @formatter:off
 					switch (Qo) {
-					case 0:            q = 0; break;
+					case 0:                                 q = 0; break;
 					case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
@@ -278,7 +278,7 @@ struct selftestContext_t : dbtool_t {
 					if (Qi) q ^= 1;
 
 					switch (To) {
-					case 0:            t = 0; break;
+					case 0:                                 t = 0; break;
 					case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
@@ -286,7 +286,7 @@ struct selftestContext_t : dbtool_t {
 					if (Ti) t ^= 1;
 
 					switch (Fo) {
-					case 0:            f = 0; break;
+					case 0:                                 f = 0; break;
 					case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
@@ -1578,8 +1578,9 @@ int main(int argc, char *argv[]) {
 			{NULL,                 0, 0, 0}
 		};
 
-		char optstring[128], *cp;
-		cp = optstring;
+		char optstring[64];
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		/* construct optarg */
 		for (int i = 0; long_options[i].name; i++) {
@@ -1595,8 +1596,7 @@ int main(int argc, char *argv[]) {
 		*cp        = '\0';
 
 		// parse long options
-		int option_index = 0;
-		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 

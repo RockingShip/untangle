@@ -137,13 +137,13 @@ struct buildtest0Context_t {
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned opt_maxnode;
+	unsigned opt_maxNode;
 
 	buildtest0Context_t() {
 		opt_error   = 0;
 		opt_flags   = 0;
 		opt_force   = 0;
-		opt_maxnode = DEFAULT_MAXNODE;
+		opt_maxNode = DEFAULT_MAXNODE;
 	}
 
 	void main(const char *jsonFilename, const char *datFilename) {
@@ -151,7 +151,7 @@ struct buildtest0Context_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART, NSTART, NSTART/*numRoots*/, opt_maxnode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
 
 		// setup key names
 		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
@@ -258,7 +258,7 @@ void usage(char *argv[], bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t   --error\n");
 		fprintf(stderr, "\t   --force\n");
-		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxnode);
+		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
@@ -319,8 +319,9 @@ int main(int argc, char *argv[]) {
 			{NULL,          0, 0, 0}
 		};
 
-		char optstring[128], *cp;
-		cp = optstring;
+		char optstring[64];
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -335,8 +336,7 @@ int main(int argc, char *argv[]) {
 
 		*cp = '\0';
 
-		int option_index = 0;
-		int c            = getopt_long(argc, argv, optstring, long_options, &option_index);
+		int c = getopt_long(argc, argv, optstring, long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -354,7 +354,7 @@ int main(int argc, char *argv[]) {
 			usage(argv, true);
 			exit(0);
 		case LO_MAXNODE:
-			app.opt_maxnode = (unsigned) strtoul(optarg, NULL, 10);
+			app.opt_maxNode = (unsigned) strtoul(optarg, NULL, 10);
 			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
