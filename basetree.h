@@ -1550,6 +1550,373 @@ struct baseTree_t {
 	}
 
 	/*
+	 * @date 2021-05-22 19:10:33
+	 *
+	 * Encode a prefix into given parameter `pNode`.
+	 *
+	 * NOTE: `std::string` usage exception because this is NOT speed critical code AND strings can become gigantically large
+	 */
+	void encodePrefix(std::string &name, unsigned value) const {
+
+		// NOTE: 0x7fffffff = `GYTISXx`
+
+		// creating is right-to-left. Storage to reverse
+		char stack[10], *pStack = stack;
+
+		// push terminator
+		*pStack++ = 0;
+
+		// process the value
+		do {
+			*pStack++ = 'A' + (value % 26);
+			value /= 26;
+		} while (value);
+
+		// append, including trailing zero
+		while (*--pStack) {
+			name += *pStack;
+		}
+	}
+
+	/*
+	 * @date 2021-05-22 19:18:33
+	 *
+	 * Export a sub-tree with a given head id as siting.
+	 * Optionally endpoint normalised with a separate transform.
+	 * Return string is static allocated
+	 *
+	 * NOTE: `std::string` usage exception because this is NOT speed critical code AND strings can become gigantically large
+	 */
+	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
+
+		std::string name;
+		uint32_t    nextKey  = this->kstart;
+		uint32_t    nextNode = this->nstart;
+
+		/*
+		 * Endpoints are simple
+		 */
+		if ((id & ~IBIT) < this->nstart) {
+			if (pTransform) {
+				pTransform->clear();
+				if ((id & ~IBIT) == 0) {
+					name += '0';
+				} else {
+					uint32_t value = (id & ~IBIT) - this->kstart;
+
+					if (value < 26) {
+						*pTransform += (char) ('a' + value);
+					} else {
+						encodePrefix(*pTransform, value / 26);
+						*pTransform += 'a' + (value % 26);
+					}
+
+					name += 'a';
+				}
+
+			} else {
+				if ((id & ~IBIT) == 0) {
+					name += '0';
+				} else {
+					uint32_t value = (id & ~IBIT) - this->kstart;
+					if (value < 26) {
+						name += (char) ('a' + value);
+					} else {
+						encodePrefix(name, value / 26);
+						name += 'a' + (value % 26);
+					}
+				}
+			}
+
+
+			// test for invert
+			if (id & IBIT)
+				name += '~';
+
+			return name;
+		}
+
+		uint32_t *pStack     = allocMap();
+		uint32_t *pMap       = allocMap();
+		uint32_t *pVersion   = allocVersion();
+		uint32_t thisVersion = ++mapVersionNr;
+		uint32_t numStack    = 0; // top of stack
+
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
+		}
+
+		/*
+		 * For transforms, walk the tree depth-first to collect the transform map
+		 */
+		if (pTransform) {
+			numStack = 0;
+			pStack[numStack++] = id & ~IBIT;
+
+			do {
+				// pop stack
+				uint32_t curr = pStack[--numStack];
+
+				if (curr < this->nstart) {
+					// ignore
+					continue;
+				}
+
+				const baseNode_t *pNode = this->N + curr;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
+
+				// determine if already handled
+				if (pVersion[curr] != thisVersion) {
+					/*
+					 * First time visit
+					 */
+					pVersion[curr] = thisVersion;
+					pMap[curr]     = 0;
+
+					// push id so it visits again a second time
+					pStack[numStack++] = curr;
+
+					if (Ti) {
+						if (Tu == 0) {
+							// Q?!0:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+						} else if (F == 0) {
+							// Q?!T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else if (F == Tu) {
+							// Q?!F:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+
+						} else {
+							// Q?!T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					} else {
+						if (F == 0) {
+							// Q?T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else {
+							// Q?T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					}
+					assert(numStack < maxNodes);
+
+				} else if (pMap[curr] == 0) {
+					/*
+					 * Second time visit
+					 */
+					pMap[curr] = nextNode++;
+
+					// node complete, assign slots
+					if (Q && Q < this->nstart && pVersion[Q] != thisVersion) {
+						pVersion[Q] = thisVersion;
+						pMap[Q]     = nextKey++;
+
+						uint32_t value = Q - this->kstart;
+						if (value < 26) {
+							*pTransform += (char) ('a' + value);
+						} else {
+							encodePrefix(*pTransform, value / 26);
+							*pTransform += 'a' + (value % 26);
+						}
+					}
+
+					if (Tu && Tu < this->nstart && pVersion[Tu] != thisVersion) {
+						// not for NE
+						if (!Ti || Tu != F) {
+							pVersion[Tu] = thisVersion;
+							pMap[Tu]     = nextKey++;
+
+							uint32_t value = Tu - this->kstart;
+							if (value < 26) {
+								*pTransform += (char) ('a' + value);
+							} else {
+								encodePrefix(*pTransform, value / 26);
+								*pTransform += 'a' + (value % 26);
+							}
+						}
+					}
+
+					if (F && F < this->nstart && pVersion[F] != thisVersion) {
+						pVersion[F] = thisVersion;
+						pMap[F]     = nextKey++;
+
+						uint32_t value = F - this->kstart;
+						if (value < 26) {
+							*pTransform += (char) ('a' + value);
+						} else {
+							encodePrefix(*pTransform, value / 26);
+							*pTransform += 'a' + (value % 26);
+						}
+					}
+
+					assert(numStack < maxNodes);
+
+				}
+
+			} while (numStack > 0);
+
+			// bump version, need to walk tree again
+			thisVersion = ++mapVersionNr;
+		}
+
+		numStack = 0;
+		pStack[numStack++] = id & ~IBIT;
+
+		/*
+		 * Walk the tree depth-first
+		 */
+		do {
+			// pop stack
+			uint32_t curr = pStack[--numStack];
+
+			if (curr < this->nstart) {
+
+				if (curr == 0) {
+					name += '0';
+				} else {
+					uint32_t value;
+
+					if (!pTransform)
+						value = curr - this->kstart;
+					else
+						value = pMap[curr] - this->kstart;
+
+					// convert id to (prefixed) letter
+					if (value < 26) {
+						name += 'a' + value;
+					} else {
+						encodePrefix(name, value / 26);
+						name += 'a' + (value % 26);
+					}
+				}
+
+				continue;
+			}
+
+			const baseNode_t *pNode = this->N + curr;
+			const uint32_t   Q      = pNode->Q;
+			const uint32_t   Tu     = pNode->T & ~IBIT;
+			const uint32_t   Ti     = pNode->T & IBIT;
+			const uint32_t   F      = pNode->F;
+
+			// determine if already handled
+			if (pVersion[curr] != thisVersion) {
+				/*
+				 * First time visit
+				 */
+				pVersion[curr] = thisVersion;
+				pMap[curr]     = 0;
+
+				// push id so it visits again after expanding
+				pStack[numStack++] = curr;
+
+				if (Ti) {
+					if (Tu == 0) {
+						// Q?!0:F
+						pStack[numStack++] = F;
+						pStack[numStack++] = Q;
+					} else if (F == 0) {
+						// Q?!T:0
+						pStack[numStack++] = Tu;
+						pStack[numStack++] = Q;
+					} else if (F == Tu) {
+						// Q?!F:F
+						pStack[numStack++] = F;
+						pStack[numStack++] = Q;
+
+					} else {
+						// Q?!T:F
+						pStack[numStack++] = F;
+						pStack[numStack++] = Tu;
+						pStack[numStack++] = Q;
+					}
+				} else {
+					if (F == 0) {
+						// Q?T:0
+						pStack[numStack++] = Tu;
+						pStack[numStack++] = Q;
+					} else {
+						// Q?T:F
+						pStack[numStack++] = F;
+						pStack[numStack++] = Tu;
+						pStack[numStack++] = Q;
+					}
+				}
+				assert(numStack < maxNodes);
+
+			} else if (pMap[curr] == 0) {
+				/*
+				 * Second time visit
+				 */
+				pMap[curr] = nextNode++;
+
+				if (Ti) {
+					if (Tu == 0) {
+						// Q?!0:F
+						name += '+';
+					} else if (F == 0) {
+						// Q?!T:0
+						name += '>';
+					} else if (F == Tu) {
+						// Q?!F:F
+						name += '^';
+					} else {
+						// Q?!T:F
+						name += '#';
+					}
+				} else {
+					if (F == 0) {
+						// Q?T:0
+						name += '&';
+					} else {
+						// Q?T:F
+						name += '?';
+					}
+				}
+				assert(numStack < maxNodes);
+
+			} else {
+
+				uint32_t dist = nextNode - pMap[curr];
+
+				// convert id to (prefixed) back-link
+				if (dist < 10) {
+					name += '0' + dist;
+				} else {
+					encodePrefix(name, dist / 10);
+					name += '0' + (dist % 10);
+				}
+			}
+
+		} while (numStack > 0);
+
+		// test for invert
+		if (id & IBIT)
+			name += '~';
+
+		freeMap(pMap);
+		freeMap(pStack);
+		freeVersion(pVersion);
+
+		return name;
+	}
+
+	/*
 	 * @date 2021-05-22 21:25:45
 	 *
 	 * Find the highest endpoint in a pattern, excluding any transform (relative)
@@ -1815,7 +2182,7 @@ struct baseTree_t {
 					/*
 					 * prefixed endpoint
 					 */
-					v = this->kstart + ((v + 1) * 26 + *pattern - 'a');
+					v = this->kstart + (v * 26 + *pattern - 'a');
 
 					if (v < this->kstart || v >= this->nstart)
 						ctx.fatal("[endpoint out of range: %d]\n", v);

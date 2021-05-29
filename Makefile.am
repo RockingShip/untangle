@@ -79,7 +79,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kjoin kload kslice spongent validate validateprefix
+PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kjoin kload ksave kslice spongent validate validateprefix
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-05-15 18:53:07
@@ -113,6 +113,10 @@ kjoin_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-05-26 23:42:25
 kload_SOURCES = kload.cc basetree.h context.h
 kload_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-05-21 00:41:38
+ksave_SOURCES = ksave.cc basetree.h context.h
+ksave_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-19 14:20:16
 kslice_SOURCES = kslice.cc basetree.h context.h

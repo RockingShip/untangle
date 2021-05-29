@@ -82,8 +82,8 @@ struct kloadContext_t {
 	baseTree_t *pInputTree;
 
 	kloadContext_t() {
-		opt_flags = 0;
-		opt_force = 0;
+		opt_flags   = 0;
+		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 	}
 
@@ -137,13 +137,24 @@ struct kloadContext_t {
 
 		baseTree_t newTree(ctx, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, opt_flags);
 
-		newTree.keyNames = jsonTree.keyNames;
+		newTree.keyNames  = jsonTree.keyNames;
 		newTree.rootNames = jsonTree.rootNames;
+
+		/*
+		 * Set defaults
+		 */
+		for (uint32_t iKey = 0; iKey < newTree.nstart; iKey++) {
+			newTree.N[iKey].Q = 0;
+			newTree.N[iKey].T = 0;
+			newTree.N[iKey].F = iKey;
+		}
+
+		for (unsigned iRoot = 0; iRoot < newTree.numRoots; iRoot++)
+			newTree.roots[iRoot] = iRoot;
 
 		/*
 		 * Import the roots
 		 */
-
 		json_t *jData = json_object_get(jInput, "data");
 		if (!jData) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
@@ -254,13 +265,13 @@ int main(int argc, char *argv[]) {
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",   1, 0, LO_DEBUG},
-			{"force",   0, 0, LO_FORCE},
-			{"help",    0, 0, LO_HELP},
+			{"debug",       1, 0, LO_DEBUG},
+			{"force",       0, 0, LO_FORCE},
+			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
-			{"quiet",   2, 0, LO_QUIET},
-			{"timer",   1, 0, LO_TIMER},
-			{"verbose", 2, 0, LO_VERBOSE},
+			{"quiet",       2, 0, LO_QUIET},
+			{"timer",       1, 0, LO_TIMER},
+			{"verbose",     2, 0, LO_VERBOSE},
 			//
 			{"paranoid",    0, 0, LO_PARANOID},
 			{"no-paranoid", 0, 0, LO_NOPARANOID},

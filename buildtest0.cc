@@ -102,24 +102,25 @@ void validate(const char *keyStr, const char *rootStr) {
  * generate tests
  * NOTE: string character is a nibble representing the first 4-bits. Bits are read right-to-left. Thus: k0K1K2K3
  *
- * o0 = k1 ? !k2 : k3
- * o1 = k1 ?  k2 : k3
- * o2 = k0 ?  ERROR : 0
+ * gTree->roots[0] =  gTree->N[k2] ? ! gTree->N[k1]     : gTree->N[k0] ;
+ * gTree->roots[1] = (gTree->N[k2] ?   gTree->N[k0]     : gTree->N[k1] ) ^ IBIT;
+ * gTree->roots[2] =  gTree->N[k3] ? ! 0                : gTree->roots[0]  ;
  */
 void validateAll() {
 	//         k3-k2-k1-k0   o2-o1-o0     o1           o0
-	validate("05", "01"); // (1?0:1)=0   (1?!0:1)=1
-	validate("02", "00"); // (0?1:0)=0   (0?!1:0)=0
+	validate("05", "05"); // !(1?1:0)=0`   (1?!0:1)=1
+	validate("02", "00"); // !(0?0:1)=0   (0?!1:0)=0
 
-	validate("00", "00"); // (0?0:0)=0   (0?!0:0)=0
-	validate("01", "07"); // (0:1:1)=1   (0?!0:1)=1
-	validate("03", "07"); // (0?1:1)=1   (0?!1:1)=1
-	validate("04", "01"); // (1?0:0)=0   (1?!0:0)=1
-	validate("06", "06"); // (1?1:0)=1   (1?!1:0)=0
-	validate("07", "06"); // (1?1:1)=1   (1?!1:1)=0
+	validate("00", "02"); // !(0?0:0)=1   (0?!0:0)=0
+	validate("01", "07"); // !(0:1:0)=1   (0?!0:1)=1 <
+	validate("03", "05"); // !(0?1:1)=0   (0?!1:1)=1
+	validate("04", "07"); // !(1?0:0)=1   (1?!0:0)=1
+
+	validate("06", "02"); // !(1?0:1)=1   (1?!1:0)=0
+	validate("07", "00"); // !(1?1:1)=0   (1?!1:1)=0
 
 	// this one should trigger an undefined error on verification in combination with `--error`
-	validate("08", "00");
+	validate("08", "06"); // !(0?0:0)=1   (0?!0:0)=0
 }
 
 /**
@@ -171,28 +172,28 @@ struct buildtest0Context_t {
 
 		// setup nodes
 
-		// gTree->roots[0] = gTree->N[k2] ?   gTree->N[k1]     : gTree->N[k0] ;
-		// gTree->roots[1] = gTree->N[k2] ? ! gTree->N[k1]     : gTree->N[k0] ;
-		// gTree->roots[2] = gTree->N[k3] ? ! gTree->N[kError] : gTree->N[0]  ;
+		// gTree->roots[0] =  gTree->N[k2] ? ! gTree->N[k1]     : gTree->N[k0] ;
+		// gTree->roots[1] = (gTree->N[k2] ?   gTree->N[k0]     : gTree->N[k1] ) ^ IBIT;
+		// gTree->roots[2] =  gTree->N[k3] ? ! 0                : gTree->roots[0]  ;
 		// because there is no operator overload available for the above
 
-//		uint32_t N0 = gTree->ncount;
+		uint32_t N0 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k2;
 		gTree->N[gTree->ncount].T = k1 ^ IBIT;
 		gTree->N[gTree->ncount].F = k0;
-		gTree->roots[o0] = gTree->ncount++; // referenced once
+		gTree->roots[o0] = gTree->ncount++; // o0 referenced once
 
-		uint32_t N1 = gTree->ncount;
+//		uint32_t N1 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k2;
-		gTree->N[gTree->ncount].T = k1;
-		gTree->N[gTree->ncount].F = k0;
-		gTree->roots[o1] = gTree->ncount++; // referenced twice
+		gTree->N[gTree->ncount].T = k0;
+		gTree->N[gTree->ncount].F = k1;
+		gTree->roots[o1] = gTree->ncount++ ^ IBIT; // o1 referenced twice
 
 //		uint32_t N2 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k3;
-		gTree->N[gTree->ncount].T = opt_error ? kError : 0;
-		gTree->N[gTree->ncount].F = N1;
-		gTree->roots[o2] = gTree->ncount++; // referenced once
+		gTree->N[gTree->ncount].T = opt_error ? kError : IBIT;
+		gTree->N[gTree->ncount].F = N0;
+		gTree->roots[o2] = gTree->ncount++; // o2 referenced once
 
 		/*
 		 * Create tests as json object
