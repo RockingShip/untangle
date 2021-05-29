@@ -26,7 +26,7 @@ extern void validate(const char *keyStr, const char *rootStr);
 /*
  * Generates tests
  */
-void validateAll(void) {
+void __attribute__((optimize("O0"))) validateAll(void) {
 	// classic test
 	validate("53706f6e67655072657365", "B45EFC09BE3C1C085BA7B1"); // SpongePrese
 	validate("6162636465666768696a6b", "75C17E4763A2FB08CE2F98"); // abcdefghijk

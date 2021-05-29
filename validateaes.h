@@ -27,7 +27,7 @@ extern void validate(const char *keyStr, const char *rootStr);
 /*
  * Generates tests
  */
-void validateAll(void) {
+void __attribute__((optimize("O0"))) validateAll(void) {
 	validate("88c261421719c96fd71652f5d38923c3 37c76cebfddec09086060da62fd0fc10", "f93094899ba8c856044ecfdd1a02a521");
 	validate("eec3c184c80c24cac9794e5bfda87413 9bb7aafca1bed40f7be97ef902a7ec13", "48412657f748f1e168524531fb23794f");
 	validate("54079856537b32cf191353ea1260db02 191353ea1260db02846b9f0c8c680211", "1c9a60133dda725dddf5a3590c9eefca");

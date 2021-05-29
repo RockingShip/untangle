@@ -1,4 +1,4 @@
-NODE ZBOX0(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX0(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -63,7 +63,7 @@ NODE _60 = NODE(in5,_56,_58^IBIT);
 NODE _61 = NODE(in3,_59,_60^IBIT);
 return _61^IBIT;
 }
-NODE ZBOX1(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX1(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -128,7 +128,7 @@ NODE _111 = NODE(in5,_107,_109);
 NODE _112 = NODE(in3,_110,_111);
 return _112^IBIT;
 }
-NODE ZBOX2(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX2(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -195,7 +195,7 @@ NODE _160 = NODE(in5,_156,_158^IBIT);
 NODE _161 = NODE(in3,_159,_160);
 return _161;
 }
-NODE ZBOX3(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX3(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -263,7 +263,7 @@ NODE _203 = NODE(in5,_199,_201^IBIT);
 NODE _204 = NODE(in3,_202,_203^IBIT);
 return _204;
 }
-NODE ZBOX4(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX4(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -332,7 +332,7 @@ NODE _242 = NODE(in5,_238,_240);
 NODE _243 = NODE(in3,_241,_242^IBIT);
 return _243;
 }
-NODE ZBOX5(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX5(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -393,7 +393,7 @@ NODE _279 = NODE(in5,_275,_277);
 NODE _280 = NODE(in3,_278,_279^IBIT);
 return _280;
 }
-NODE ZBOX6(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX6(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -458,7 +458,7 @@ NODE _317 = NODE(in5,_313,_315);
 NODE _318 = NODE(in3,_316,_317);
 return _318;
 }
-NODE ZBOX7(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) ZBOX7(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,0,in7);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,IBIT);
@@ -525,7 +525,7 @@ NODE _351 = NODE(in5,_347,_349^IBIT);
 NODE _352 = NODE(in3,_350,_351^IBIT);
 return _352^IBIT;
 }
-NODE SBOX0(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX0(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -588,7 +588,7 @@ NODE _58 = NODE(in1,_54,_56);
 NODE _59 = NODE(in6,_57,_58);
 return _59;
 }
-NODE SBOX1(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX1(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -654,7 +654,7 @@ NODE _113 = NODE(in1,_109,_111^IBIT);
 NODE _114 = NODE(in6,_112,_113^IBIT);
 return _114;
 }
-NODE SBOX2(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX2(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -717,7 +717,7 @@ NODE _158 = NODE(in1,_154,_156);
 NODE _159 = NODE(in6,_157,_158^IBIT);
 return _159;
 }
-NODE SBOX3(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX3(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -786,7 +786,7 @@ NODE _204 = NODE(in1,_200,_202);
 NODE _205 = NODE(in6,_203,_204);
 return _205;
 }
-NODE SBOX4(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX4(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -854,7 +854,7 @@ NODE _246 = NODE(in1,_242,_244^IBIT);
 NODE _247 = NODE(in6,_245,_246);
 return _247^IBIT;
 }
-NODE SBOX5(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX5(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -919,7 +919,7 @@ NODE _282 = NODE(in1,_278,_280);
 NODE _283 = NODE(in6,_281,_282);
 return _283;
 }
-NODE SBOX6(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX6(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);
@@ -983,7 +983,7 @@ NODE _314 = NODE(in1,_310,_312^IBIT);
 NODE _315 = NODE(in6,_313,_314);
 return _315;
 }
-NODE SBOX7(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) { 
+NODE __attribute__((optimize("O0"))) SBOX7(NODE in7, NODE in6, NODE in5, NODE in4, NODE in3, NODE in2, NODE in1, NODE in0) {
 NODE _00 = NODE(in0,in7,IBIT);
 NODE _01 = NODE(in0,in7,0);
 NODE _02 = NODE(in0,in7,in7^IBIT);

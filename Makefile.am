@@ -88,18 +88,22 @@ build9bit_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-17 16:49:11
 buildaes_SOURCES = buildaes.cc buildaes.h buildaesbox.h validateaes.h
+buildaes_CXXFLAGS = -fno-var-tracking-assignments # was expecting this disabled with `__attribute__((optimize("O0")))`
 buildaes_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-09 23:51:48
 builddes_SOURCES = builddes.cc builddes.h builddesbox.h validatedes.h
+builddes_CXXFLAGS = -fno-var-tracking-assignments
 builddes_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-16 22:47:55
 buildmd5_SOURCES = buildmd5.cc buildmd5.h validatemd5.h
+buildmd5_CXXFLAGS = -fno-var-tracking-assignments
 buildmd5_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-17 14:36:48
 buildspongent_SOURCES = buildspongent.cc buildspongent.h buildspongentbox.h validatespongent.h
+buildspongent_CXXFLAGS = -fno-var-tracking-assignments
 buildspongent_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-15 12:41:29
