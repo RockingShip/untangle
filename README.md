@@ -12,7 +12,7 @@ image: assets/favimage-472x472.jpg
 
 Extract essence of information and store/contain in fractal structures
 
-Content grows on-demand as parts of v1 get merged, currently at about 20%
+Content grows on-demand as parts of v1 get merged, currently at about 40%
 
 ### Welcome to the Wonderful World of fractal logic and computing
 
@@ -671,6 +671,7 @@ System creation:
 [kjoin.cc](kjoin.cc)
 [kload.cc](kload.cc)
 [ksave.cc](ksave.cc)
+[kslice.cc](kslice.cc)
 [spongent.cc](spongent.cc)  
 [spongent.h](spongent.h)  
 [validateaes.h](validateaes.h)  

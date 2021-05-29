@@ -36,7 +36,6 @@
 
 #include "context.h"
 #include "basetree.h"
-#include "cpp2json.h"
 
 /*
  * Resource context.

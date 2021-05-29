@@ -2432,7 +2432,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				// bump test number
 				testNr++;
 
-				unsigned q, t, f;
+				unsigned q = 0, t = 0, f = 0;
 
 				assert(pTree->kstart == KSTART); // for switch/case values
 
@@ -2630,18 +2630,21 @@ int main(int argc, char *argv[]) {
 	}
 
 	// storage for testing difference between arguments
-	unsigned crc32;
-	bool     differ          = false;
+	unsigned crc32  = 0;
+	bool     differ = false;
 
 	for (int iArg = optind; iArg < argc; iArg++) {
 		const char *pName = argv[iArg];
 
 		if (pName[0] != '-' || pName[1] != 0) {
 			// read from arg
-			if (iArg == optind)
+			if (iArg == optind) {
+				// first arguments
 				crc32 = mainloop(pName, pTree, pFootprints);
-			else
+			} else {
+				// followup arguments
 				differ |= (crc32 != mainloop(pName, pTree, pFootprints));
+			}
 		} else {
 			// read from stdin
 			char   *pBuffer = (char *) malloc(10000000);

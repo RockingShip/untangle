@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+2021-05-29 21:19:07 [Version 2.3.0]
+
+baseTree version "20210613"
+
+This release is the second part/chapter of the project.
+
+ - `basetree.h` contains `baseTree_t`
+ - `buildX.cc` builds trees containing different example systems
+ - `validateX.h` validations tests for the example systems
+ - `genvalidateX.js` creates validation tests for the example systems
+ - `kslice.cc` slices a tree into multiple smaller trees
+ - `kjoin.cc` combines multiple trees into a larger tree
+ - `ksave.cc` export a tree as JSON
+ - `kload.cc` import/create a tree from JSON
+ - `spongent.cc` spongent, lightweight hash function
+
 ```
 2021-05-29 21:47:39 Fixed: Disabled `-fno-var-tracking-assignments` for buildX functions.
 2021-05-29 00:22:35 Added: `ksave.cc`.
