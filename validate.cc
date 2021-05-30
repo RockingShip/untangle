@@ -67,18 +67,18 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
 struct validateContext_t {
 
 	/// @var {number} --onlyifset, only validate non-zero root (consider them a cascading of OR intermediates)
-	unsigned   opt_onlyIfSet;
+	unsigned opt_onlyIfSet;
 
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
 	// json data
-	uint32_t   kstart;
-	uint32_t   ostart;
-	uint32_t   estart;
+	uint32_t                 kstart;
+	uint32_t                 ostart;
+	uint32_t                 estart;
 	// NOTE: Trees may have additional extended keys which will effect the following 
-	uint32_t   nstart;
-	uint32_t   numRoots;
+	uint32_t                 nstart;
+	uint32_t                 numRoots;
 	std::vector<std::string> keyNames;
 	std::vector<std::string> rootNames;
 
@@ -92,11 +92,11 @@ struct validateContext_t {
 		opt_onlyIfSet = 0;
 		pInputTree    = NULL;
 
-		kstart    = 0;
-		ostart    = 0;
-		estart    = 0;
-		nstart    = 0;
-		numRoots  = 0;
+		kstart   = 0;
+		ostart   = 0;
+		estart   = 0;
+		nstart   = 0;
+		numRoots = 0;
 
 		// test data
 		gNumTests  = 0;
@@ -117,6 +117,7 @@ struct validateContext_t {
 
 		// load json
 		FILE *f = fopen(jsonFilename, "r");
+
 		if (!f) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("fopen()"));
@@ -150,12 +151,12 @@ struct validateContext_t {
 		/*
 		 * import dimensions
 		 */
-		kstart   = jsonTree.kstart;
-		ostart   = jsonTree.ostart;
-		estart   = jsonTree.estart;
-		nstart   = jsonTree.nstart;
-		numRoots = jsonTree.numRoots;
-		keyNames = jsonTree.keyNames;
+		kstart    = jsonTree.kstart;
+		ostart    = jsonTree.ostart;
+		estart    = jsonTree.estart;
+		nstart    = jsonTree.nstart;
+		numRoots  = jsonTree.numRoots;
+		keyNames  = jsonTree.keyNames;
 		rootNames = jsonTree.rootNames;
 
 		/*
@@ -420,19 +421,20 @@ struct validateContext_t {
 			}
 
 			/*
-			 * prepare the data vector
+			 * prepare the data vector.
+			 * For validation, either all bits are set or all bits are clear
 			 */
 
 			for (uint32_t iKey = 0; iKey < tree.ncount; iKey++)
-				pEval[iKey] = iKey; // non-zero is error marker
+				pEval[iKey] = 0x5a5a5a5a; // set to invalid value
+
+			pEval[0] = 0; // only zero is defined
 
 			// load the test data into K region
 			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
 
-			for (uint32_t iKey = 0; iKey < kstart; iKey++)
-				pEval[iKey] = iKey; // all de-references (except pEval[0]) will trigger an error
-			for (uint32_t iKey  = kstart; iKey < ostart; iKey++)
-				pEval[iKey] = pData[iKey - kstart] ? IBIT : 0;
+			for (uint32_t iKey = kstart; iKey < ostart; iKey++)
+				pEval[iKey] = pData[iKey - kstart] ? ~0U : 0;
 
 			/*
 			 * Run the test
@@ -458,24 +460,35 @@ struct validateContext_t {
 				}
 
 				// test for undefined
-				if ((pEval[Q] & ~IBIT) != 0 ||
-				    (pEval[Q] != 0 && (pEval[Tu] & ~IBIT) != 0) ||
-				    (pEval[Q] == 0 && (pEval[F] & ~IBIT) != 0)) {
-
+				if ((pEval[Q] != 0 && pEval[Q] != ~0U) ||
+				    (pEval[Tu] != 0 && pEval[Tu] != ~0U) ||
+				    (pEval[F] != 0 && pEval[F] != ~0U)) {
 					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node loads undefined"));
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node values out-of-range"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "node", json_integer(iNode));
-					json_object_set_new_nocheck(jError, "eval-q", json_integer(pEval[Q] & ~IBIT));
-					json_object_set_new_nocheck(jError, "eval-tu", json_integer(pEval[Tu] & ~IBIT));
-					json_object_set_new_nocheck(jError, "eval-f", json_integer(pEval[F] & ~IBIT));
+					json_object_set_new_nocheck(jError, "q", json_integer(Q));
+					json_object_set_new_nocheck(jError, "tu", json_integer(Tu));
+					json_object_set_new_nocheck(jError, "f", json_integer(F));
+					json_object_set_new_nocheck(jError, "q-val", json_integer(pEval[Q]));
+					json_object_set_new_nocheck(jError, "tu-val", json_integer(pEval[Tu]));
+					json_object_set_new_nocheck(jError, "f-val", json_integer(pEval[F]));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
-				unsigned result = pEval[Q] ? (pEval[Tu] ^ Ti) : pEval[F];
+				/*
+				 * Apply QTF operator
+				 */
 
-				pEval[iNode] = result;
+				// determine if the operator is `QTF` or `QnTF`
+				if (Ti) {
+					// `QnTF` apply the operator `"Q ? ~T : F"`
+					pEval[iNode] = (pEval[Q] & ~pEval[Tu]) ^ (~pEval[Q] & pEval[F]);
+				} else {
+					// `QTF` apply the operator `"Q ? T : F"`
+					pEval[iNode] = (pEval[Q] & pEval[Tu]) ^ (~pEval[Q] & pEval[F]);
+				}
 			}
 
 			// load the result data
@@ -489,18 +502,24 @@ struct validateContext_t {
 				uint32_t r = tree.roots[iRoot];
 
 				// test for undefined
-				if ((pEval[r & ~IBIT] & ~IBIT) != 0) {
+				if (pEval[r & ~IBIT] != 0 && pEval[r & ~IBIT] != ~0U) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Root loads undefined"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "root", json_string(tree.rootNames[iRoot].c_str()));
-					json_object_set_new_nocheck(jError, "eval-root", json_integer(pEval[r & ~IBIT] & ~IBIT));
+					json_object_set_new_nocheck(jError, "value", json_integer(pEval[r & ~IBIT]));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
-				uint32_t expected    = pData[iRoot - ostart] ? IBIT : 0;
-				uint32_t encountered = pEval[r & ~IBIT] ^(r & IBIT);
+				/*
+				 * @date 2021-05-30 12:57:24
+				 * The expression has been applied to all bits the register.
+				 * The final result is either all bits clear (0) or all bits set (~0)
+				 */
+
+				uint32_t expected    = pData[iRoot - ostart] ? ~0U : 0;
+				uint32_t encountered = (r & IBIT) ? pEval[r & ~IBIT] ^ ~0U : pEval[r & ~IBIT];
 
 
 				if ((!opt_onlyIfSet || encountered) && expected != encountered) {
@@ -522,8 +541,13 @@ struct validateContext_t {
 
 						byte = 0;
 						for (unsigned j = 0; j < 8; j++) {
-							uint32_t r = tree.roots[i + j];
-							byte |= (i + j < estart && (pEval[r & ~IBIT] ^ (r & IBIT)) == IBIT) ? 1 << j : 0;
+							if (i + j < estart) {
+								uint32_t r2 = tree.roots[i + j];
+								if (r2 & IBIT)
+									byte |= pEval[r2 & ~IBIT] ? 0 : 1 << j;
+								else
+									byte |= pEval[r2] ? 1 << j : 0;
+							}
 						}
 
 						strEncountered[strEncounteredLen++] = "0123456789abcdef"[byte >> 4];
@@ -602,8 +626,8 @@ int main(int argc, char *argv[]) {
 		};
 
 		char optstring[64];
-		char *cp          = optstring;
-		int  option_index = 0;
+		char *cp                            = optstring;
+		int  option_index                   = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {

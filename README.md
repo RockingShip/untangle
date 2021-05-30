@@ -540,67 +540,79 @@ Examples (assuming `kstart=1`):
 
 ## Anatomy of a fractal tree file
 
-The programs building the trees should usually generate two files:
- - the tree data file (extension .dat)
- - the metadata description, optionally containing validation tests (extension .json).
+Fractal structures are vectors of QTF instructions.  
+When evaluating structures, the instruction results are stored in a data vector with matching index.  
+The first entry in the vector is 0, which is equivalent to the instruction `"0?0:0"`, which is also a self-reference.  
+The first of three sections in the instruction vector holds the placeholders for the input values (the "keys").  
+The second section holds the `QTF` instructions, ideally they are also `QnTF` (`ternary operator "Q ? !T : F"`).  
+The last section holds the placeholders referencing the output values (the "roots").
 
-The data file is basically a vector of QTF operators with a number of regions:
+Placeholders are non-normalised QTF instructions representing `"0 ? !0 : n"` where n is the index of the instruction.  
+Normalisation would require `Q` to be non-zero and "n" less than the self-reference.  
+The placeholder is an allowed exception as it writes the read value of the same location.  
+Basically a self-reference, the run-time engine will provide the initial contents in the data vector.  
+Although non-normalised, they are valid instructions.
 
-|Offset | Region |
-|:----:|:-----|
-| 0    | 0, zero, reference value |
-| kstart+0 | first input value, non normalised notation: `0 ? 0 : <value>` |
-| ... | |
-| kstart+? | last input value |
-| estart+0 | first extended value, non normalised notation: `0 ? 0 : <value>` |
-| ... | |
-| estart+? | last extended value |
-| nstart+0 | first QTF operator of expression/system |
-| ... | |
-| nstart+? | last QTF operator |
+The roots are references to the evaluated result found in the data vector.  
+They are also placeholder `QTF`, with a valid "n" referencing the location of the result.  
+Roots store the "top-level negate" indicator in the highest bit.  
+When active, all bits in the result will be inverted.
 
-Following the data vector is a vector containing the location of the roots/entrypoints/results.  
+The `QTF` operator is bitwise oriented, this makes it possible with 64-bit registers to have 64 instances in parallel.
+
+```c
+			if (N[i].T & IBIT) {
+				// `QnTF` apply the operator `"Q ? !T : F"`
+				R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
+			} else {
+				// `QTF` apply the operator `"Q ? T : F"`
+				R[j] = (Q[j] & T[j]) ^ (~Q[j] & F[j]);
+			}
+```
+
+When concatenating trees, the runtime-engine will typically slice the data vector into the three sections.  
+Using the root section from the previous tree as the initial data for the key area.  
+The placeholder sections have three areas indicating their function.  
+Input values (keys), output values (roots), intermediates (extended).  
+The first two are present and identical in all smaller trees.  
+Extended keys are side effect intermediate values when slicing trees.
+
+```
+  0 kstart  ostart  estart  nstart       ncount  ncount+numRoots
+  v v       v       v       v            v       v
+  +-+-------+-------+-------+------------+-------+
+  |0| KEYS  | KEYS  | KEYS  | QTF expr   | ROOTS |
+  +-+-------+-------+-------+------------+-------+
+                                          |||||||  <- transport/connection
+                                          vvvvvvv
+                                       +-+-------+-------+-------+
+                                       |0| KEYS  |  QTF  | ROOTS |
+                                       +-+-------+-------+-------+
+                                                          ^^^^^^^--result
+```
+
+Following the data vector is a vector containing the location of the roots/entrypoints/results.
 
 Tree meta fields
 | name | description |
 |:-----|:------------|
 |  0        | reference value
-|  KSTART   | start of first input
-|  OSTART   | start of first output
-|  ESTART   | start of extended keys
-|  NSTART   | start of nodes
-|  NCOUNT   | start of roots
+|  KSTART   | start of inputs
+|  OSTART   | start of outputs
+|  ESTART   | start of extended
+|  NSTART   | start of `QTF` nodes
+|  NCOUNT   | last node, start of roots
 |  NUMROOTS | number of roots
-
-When concatenating trees, the result of the roots are placed in the key region of the next tree.  
-The roots are the collection of original (global) input keys followed by intermediate (local) values.  
-This allows for larger systems to be sliced/split into smaller trees.  
-The idea is that after processing a tree, the roots are a copy of the entry values (< nstart) and that updates/substitutions are ids of nodes containing the results (>= nstart).
-
-Normally keyNames and rootNames are identical.  
-They should only differ for the range >= estart.
-Extended keys are reserved for concatenating two consecutive trees.
-
-```
- 0 kstart  nstart       ncount    ncount+numRoots
- v v       v            V       v
-+-+-------+------------+-------+
-|0| KEYS  | QTF expr   | ROOTS |
-+-+-------+------------+-------+
-                        |||||||  <- transport/connection
-                        vvvvvvv
-                     +-+-------+------------+-------+
-                     |0| KEYS  | QTF expr   | ROOTS |
-                     +-+-------+------------+-------+
-                                             ^^^^^^^--result
-```
 
 When using extended keys:
 
- - The first `estart` entries of `roots[]` should match `N[]`
- - `ekeys` are valid for the scope of a single tree
+ - All root entries must have a defined value, or an explicit self-reference
+ - Roots may not contain extended keys
+ - Extended keys must be named in `keyNames[]` and `rootNames[]`
  - `keyNames[]` and `rootnames[]` are considered different
- - 
+
+Tree-files have an accompanying json containing meta-data.  
+The json files can also contain additional data such as validation tests.
 
 ## Structure based compare
 

@@ -22,6 +22,7 @@ This release is the second part/chapter of the project.
  - `ksave.cc` export a tree as JSON
  - `kload.cc` import/create a tree from JSON
  - `spongent.cc` spongent, lightweight hash function
+ - `validateprefix.cc` validate the endpoint/back-reference prefix logic
 
 ```
 2021-05-29 21:47:39 Fixed: Disabled `-fno-var-tracking-assignments` for buildX functions.
