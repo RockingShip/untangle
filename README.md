@@ -562,7 +562,7 @@ The `QTF` operator is bitwise oriented, this makes it possible with 64-bit regis
 
 ```c
 			if (N[i].T & IBIT) {
-				// `QnTF` apply the operator `"Q ? !T : F"`
+				// `QnTF` apply the operator `"Q ? ~T : F"`
 				R[j] = (Q[j] & ~T[j]) ^ (~Q[j] & F[j])
 			} else {
 				// `QTF` apply the operator `"Q ? T : F"`
@@ -607,7 +607,6 @@ Tree meta fields
 When using extended keys:
 
  - All root entries must have a defined value, or an explicit self-reference
- - Roots may not contain extended keys
  - Extended keys must be named in `keyNames[]` and `rootNames[]`
  - `keyNames[]` and `rootnames[]` are considered different
 
@@ -616,9 +615,34 @@ The json files can also contain additional data such as validation tests.
 
 ## Structure based compare
 
-TODO
+*You are in a maze of twisty little passages, mostly all alike.*  
+The structure-based-compare algorithm helps you identify your location and orientation.
 
-The compare return value can be one of:
+Normalisation requires the ability to compare structures and determine which are identical or most significant.  
+When comparing, the structure is first compared, then the endpoints.  
+Index locations of nodes are volatile and unfit for comparison, it compares only with itself.  
+The non-volatile locations are the key placeholders.  
+Comparison requires walking both tree structures in a depth-first fashion.  
+Walking continues, comparing nodes side-by-side until a difference or a key is found.  
+Identical structures have identical paths and identical visited endpoints.  
+Having the path suddenly end in one tree yet it continues in the other is a valid situation.  
+This is an effect of slicing tree files into smaller trees.  
+The depth-first walk for the notation and compares are and should be the same algorithm.  
+It is important to note the endpoints in notations can also be heads of smaller trees.
+
+As volatile references can be compared with itself, it is possible to determine the function.
+Only when `a`, `b` or optionally `c` are key values (non-volatile) can they be compared and ordered.
+
+|  Reference | Operator | Symbol |
+|:-----------|:--------:|:------:|
+| a ?  b : 0 |   AND    | `"&"`  |
+| a ?  b : c |   QTF    | `"?"`  |
+| a ? ~0 : b |   OR     | `"+"`  |
+| a ? ~b : 0 |   GT     | `">"`  |
+| a ? ~b : b |   XOR    | `"^"`  |
+| a ? ~b : c |   QnTF   | `"#"`  |
+
+The compare outcome can be one of:
 ```
       -3 structure leftHandSide LESS rightHandSide
       -2 same structure but endpoints leftHandSide LESS rightHandSide
