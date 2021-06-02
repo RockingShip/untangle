@@ -2836,77 +2836,137 @@ struct baseTree_t {
 		}
 
 		/*
-		 * Isolate active nodes
-		 */
-
-		uint32_t *pSelect    = allocVersion();
-		uint32_t *pMap       = allocMap();
-		uint32_t thisVersion = ++mapVersionNr;
-		uint32_t numNodes    = 0;
-
-		// clear version map when wraparound
-		if (thisVersion == 0) {
-			::memset(pSelect, 0, maxNodes * sizeof *pSelect);
-			thisVersion = ++mapVersionNr;
-		}
-
-		// select keys
-		for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-			pSelect[iKey] = thisVersion;
-			pMap[iKey]    = iKey;
-			numNodes++;
-		}
-
-		// mark roots
-		for (uint32_t i = 0; i < numRoots; i++)
-			pSelect[roots[i] & ~IBIT] = thisVersion;
-
-		// collect counts
-		for (uint32_t i = ncount - 1; i >= nstart; --i) {
-			if (pSelect[i] == thisVersion) {
-				const baseNode_t *pNode = N + i;
-
-				pSelect[pNode->Q]         = thisVersion;
-				pSelect[pNode->T & ~IBIT] = thisVersion;
-				pSelect[pNode->F]         = thisVersion;
-				numNodes++;
-			}
-		}
-
-		/*
 		 * Write nodes
 		 */
 		header.offNodes = fpos;
 
-		if (showProgress)
-			ctx.tick = 0; // clear ticker timer
-		uint32_t nextId = 0; // next free node id
+		/*
+		 * Select  active nodes
+		 */
 
-		for (uint32_t i = 0; i < ncount; i++) {
-			if (pSelect[i] == thisVersion) {
-				const baseNode_t *pNode = N + i;
+		uint32_t *pStack     = allocMap();
+		uint32_t *pVersion   = allocVersion();
+		uint32_t *pMap       = allocMap();
+		uint32_t thisVersion = ++mapVersionNr;
+		uint32_t nextId      = 0; // next assignable node id
+		uint32_t numStack    = 0; // top of stack
 
-				// get remapped
-				baseNode_t newNode;
-				newNode.Q = pMap[pNode->Q];
-				newNode.T = pMap[pNode->T & ~IBIT] ^ (pNode->T & IBIT);
-				newNode.F = pMap[pNode->F];
-				pMap[i] = nextId++;
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
+		}
 
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
+		// output keys
+		for (uint32_t iKey = 0; iKey < nstart; iKey++) {
+			pVersion[iKey] = thisVersion;
+			pMap[iKey]     = iKey;
 
-				size_t len = sizeof newNode;
-				fwrite(&newNode, len, 1, outf);
-				fpos += len;
+			// get remapped
+			baseNode_t newNode;
+			newNode.Q = 0;
+			newNode.T = ~0;
+			newNode.F = iKey;
+			pMap[iKey] = nextId++;
 
-				// update ticker for slow files across NFS
-				if (showProgress && ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					fprintf(stderr, "\r\e[K%.5f%%", nextId * 100.0 / numNodes);
-					ctx.tick = 0;
+			size_t len = sizeof newNode;
+			fwrite(&newNode, len, 1, outf);
+			fpos += len;
+
+			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
+			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
+			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
+
+		}
+
+		// trace roots, one at a time
+		for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+
+			numStack = 0;
+			pStack[numStack++] = roots[iRoot] & ~IBIT;
+
+			/*
+			 * Walk the tree depth-first
+			 */
+			do {
+				// pop stack
+				uint32_t curr = pStack[--numStack];
+
+				if (curr < this->nstart)
+					continue; // endpoints have already been output
+
+				const baseNode_t *pNode = this->N + curr;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
+
+				// determine if already handled
+				if (pVersion[curr] != thisVersion) {
+					/*
+					 * First time visit
+					 */
+					pVersion[curr] = thisVersion;
+					pMap[curr]     = 0;
+
+					// push id so it visits again after expanding
+					pStack[numStack++] = curr;
+
+					if (Ti) {
+						if (Tu == 0) {
+							// Q?!0:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+						} else if (F == 0) {
+							// Q?!T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else if (F == Tu) {
+							// Q?!F:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+
+						} else {
+							// Q?!T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					} else {
+						if (F == 0) {
+							// Q?T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else {
+							// Q?T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					}
+					assert(numStack < maxNodes);
+
+				} else if (pMap[curr] == 0) {
+					/*
+					 * Second time visit
+					 */
+
+					baseNode_t newNode;
+					newNode.Q = pMap[Q];
+					newNode.T = pMap[Tu] ^ Ti;
+					newNode.F = pMap[F];
+					pMap[curr] = nextId++;
+
+					size_t len = sizeof newNode;
+					fwrite(&newNode, len, 1, outf);
+					fpos += len;
+
+					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
+					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
+					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
 				}
-			}
+
+			} while (numStack > 0);
 		}
 
 		/*
@@ -2955,7 +3015,8 @@ struct baseTree_t {
 
 		// release maps
 		freeMap(pMap);
-		freeVersion(pSelect);
+		freeVersion(pVersion);
+		freeMap(pStack);
 
 		/*
 		 * Rewrite header and close

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-02 11:06:38 Changed: `baseTree_t::saveFile()` saves nodes in tree walking order.
 2021-05-31 22:43:27 Changed: `README.md`.
 ```
 
