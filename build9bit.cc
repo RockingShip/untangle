@@ -206,13 +206,8 @@ struct build9bitContext_t {
 		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
 
 		// setup key names
-		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++)
 			gTree->keyNames[iKey] = allNames[iKey];
-
-			gTree->N[iKey].Q = 0;
-			gTree->N[iKey].T = 0;
-			gTree->N[iKey].F = iKey;
-		}
 
 		// setup root names
 		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {

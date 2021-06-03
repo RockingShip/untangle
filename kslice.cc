@@ -214,7 +214,7 @@ struct ksliceContext_t {
 		// setup keys
 		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++) {
 			pNewTree->N[iKey].Q = 0;
-			pNewTree->N[iKey].T = 0;
+			pNewTree->N[iKey].T = iKey ? IBIT : 0;
 			pNewTree->N[iKey].F = iKey;
 		}
 

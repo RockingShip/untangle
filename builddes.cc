@@ -737,11 +737,6 @@ struct builddesContext_t {
 			// key name
 			gTree->keyNames[iKey] = allNames[iKey];
 
-			// tree key
-			gTree->N[iKey].Q = 0;
-			gTree->N[iKey].T = 0;
-			gTree->N[iKey].F = iKey;
-
 			// key variable
 			V[iKey].id = iKey;
 		}

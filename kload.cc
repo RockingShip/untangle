@@ -142,12 +142,6 @@ struct kloadContext_t {
 		/*
 		 * Set defaults
 		 */
-		for (uint32_t iKey = 0; iKey < newTree.nstart; iKey++) {
-			newTree.N[iKey].Q = 0;
-			newTree.N[iKey].T = 0;
-			newTree.N[iKey].F = iKey;
-		}
-
 		for (unsigned iRoot = 0; iRoot < newTree.numRoots; iRoot++)
 			newTree.roots[iRoot] = iRoot;
 

@@ -2543,11 +2543,6 @@ _b7 = (V[A##2])^V[A##7]^V[B##2]^V[B##3]^V[B##4]^V[B##5]^V[B##6]^V[C##3]^V[C##4]^
 			// key name
 			gTree->keyNames[iKey] = allNames[iKey];
 
-			// tree key
-			gTree->N[iKey].Q = 0;
-			gTree->N[iKey].T = 0;
-			gTree->N[iKey].F = iKey;
-
 			// key variable
 			V[iKey].id = iKey;
 		}
