@@ -326,7 +326,6 @@ struct ksliceContext_t {
 			 */
 
 			// clear tree
-			pNewTree->rootsId = rand(); // this tree roots gets new unique id
 			pNewTree->ncount  = pNewTree->nstart;
 			// invalidate lookup cache
 			++pNewTree->nodeIndexVersionNr;

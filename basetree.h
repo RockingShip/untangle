@@ -100,8 +100,8 @@ struct baseTreeHeader_t {
 	// meta
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
-	uint32_t keysId;              // if non-zero, keys must match roots of specific tree
-	uint32_t rootsId;             // id of this trees roots/results
+	uint32_t unused1;             //
+	uint32_t unused2;             //
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 
 	// primary fields
@@ -154,8 +154,8 @@ struct baseTree_t {
 	// meta
 	uint32_t   flags;		// creation constraints
 	uint32_t   allocFlags;		// memory constraints
-	uint32_t   keysId;		// if non-zero, keys must match roots of specific tree
-	uint32_t   rootsId;		// id of this trees roots/results
+	uint32_t   unused1;		//
+	uint32_t   unused2;		//
 	// primary fields
 	uint32_t   kstart;		// first input key id.
 	uint32_t   ostart;		// first output key id.
@@ -208,8 +208,8 @@ struct baseTree_t {
 		// meta
 		flags(0),
 		allocFlags(0),
-		keysId(0),
-		rootsId(rand()),
+		unused1(0),
+		unused2(),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -264,8 +264,8 @@ struct baseTree_t {
 		// meta
 		flags(flags),
 		allocFlags(0),
-		keysId(0),
-		rootsId(rand()),
+		unused1(0),
+		unused2(0),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -2717,8 +2717,8 @@ struct baseTree_t {
 			ctx.fatal("baseTree size mismatch. Expected %lu, Encountered %lu\n", fileHeader->offEnd, (uint64_t) stbuf.st_size);
 
 		flags      = fileHeader->magic_flags;
-		keysId     = fileHeader->keysId;
-		rootsId    = fileHeader->rootsId;
+		unused1    = fileHeader->unused1;
+		unused2    = fileHeader->unused2;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
 		estart     = fileHeader->estart;
@@ -3081,8 +3081,8 @@ struct baseTree_t {
 
 		header.magic       = BASETREE_MAGIC;
 		header.magic_flags = flags;
-		header.keysId      = keysId;
-		header.rootsId     = rootsId;
+		header.unused1     = unused1;
+		header.unused2     = unused2;
 		header.crc32       = crc32;
 		header.kstart      = kstart;
 		header.ostart      = ostart;
@@ -3347,8 +3347,6 @@ struct baseTree_t {
 		sprintf(crcstr, "%08x", fileHeader->crc32);
 
 		json_object_set_new_nocheck(jResult, "flags", json_integer(fileHeader->magic_flags));
-		json_object_set_new_nocheck(jResult, "keysId", json_integer(fileHeader->keysId));
-		json_object_set_new_nocheck(jResult, "rootsId", json_integer(fileHeader->rootsId));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
 		json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
 		json_object_set_new_nocheck(jResult, "kstart", json_integer(fileHeader->kstart));
