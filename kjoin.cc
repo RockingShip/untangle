@@ -68,6 +68,8 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  */
 struct kjoinContext_t {
 
+	/// @var {number} --extend, save extended keys
+	unsigned opt_extend;
 	/// @var {number} header flags
 	uint32_t opt_flags;
 	/// @var {number} --force, force overwriting of outputs if already exists
@@ -76,6 +78,7 @@ struct kjoinContext_t {
 	unsigned opt_maxNode;
 
 	kjoinContext_t() {
+		opt_extend  = 0;
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -124,18 +127,46 @@ struct kjoinContext_t {
 			json_delete(jResult);
 		}
 
-		if (pOldTree->kstart == 1 /*KERROR*/ ) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		// save metrics to compare input files
+		uint32_t orig_kstart = pOldTree->kstart;
+		uint32_t orig_ostart = pOldTree->ostart;
+		uint32_t orig_estart = pOldTree->estart;
+		uint32_t orig_nstart = pOldTree->nstart;
+		uint32_t orig_numRoots = pOldTree->numRoots;
+
+		// allocate
+		// NOTE: these maps are shared (not cleared) for each input tree
+		uint32_t *pKeyRefCount = pOldTree->allocMap(); // counter map to detect 'write-after-read'
+		uint32_t *pEid         = pOldTree->allocMap(); // extended->node translation
+
+		/*
+		 * @date 2021-06-04 21:06:09
+		 *
+		 * `pMap[]` maps extended id to node id
+		 * Normally the first nstart entries of maps are `pMap[i] = i`
+		 * However: when removing extended keys,
+		 *          the first node in the new tree might have the same location as the first extended entry in the old tree.
+		 * This makes `pMap[i] = i` ambiguous.
+		 *
+		 * For this reason, `pEid[]` is used to shadow `pMap[]` with extended id's set to zero
+		 *
+		 */
+		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++) {
+			pKeyRefCount[iKey] = 0; // init refcount
+			pEid[iKey]         = iKey; // mark as self
 		}
+		for (uint32_t iKey = pOldTree->estart; iKey < pOldTree->nstart; iKey++)
+			pEid[iKey] = 0; // mark as undefined
 
 		/*
 		 * Create newTree
 		 */
 
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
+		baseTree_t *pNewTree;
+		if (opt_extend)
+			pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
+		else
+			pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart, pOldTree->estart, opt_maxNode, opt_flags);
 
 		// Setup key/root names
 		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
@@ -144,13 +175,15 @@ struct kjoinContext_t {
 		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++)
 			pNewTree->rootNames[iRoot] = pOldTree->rootNames[iRoot];
 
-		// allocate counter map to detect 'write-after-read'
-		uint32_t *pKeyRefCount = pNewTree->allocMap();
+		// default roots
+		for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
+			pNewTree->roots[iKey] = iKey;
 
-		for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++) {
-			pKeyRefCount[iKey]    = 0; // init refcount
-			pNewTree->roots[iKey] = iKey; // init roots/eKey substitution
-		}
+		// allocate a node remapper
+		uint32_t *pMap = pNewTree->allocMap();
+
+		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
+			pMap[iKey] = iKey; // mark as self
 
 		// reset ticker
 		ctx.setupSpeed(numInputs);
@@ -184,57 +217,50 @@ struct kjoinContext_t {
 					json_delete(jResult);
 				}
 
-				if (pOldTree->kstart == 1 /*KERROR*/ ) {
-					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
-					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				}
-
 				// check dimensions
-				if (pOldTree->kstart != pNewTree->kstart ||
-				    pOldTree->ostart != pNewTree->ostart ||
-				    pOldTree->estart != pNewTree->estart ||
-				    pOldTree->nstart != pNewTree->nstart ||
-				    pOldTree->numRoots != pNewTree->numRoots) {
+				if (pOldTree->kstart != orig_kstart ||
+				    pOldTree->ostart != orig_ostart ||
+				    pOldTree->estart != orig_estart ||
+				    pOldTree->nstart != orig_nstart ||
+				    pOldTree->numRoots != orig_numRoots) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
 					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 					json_t *jMeta = json_object();
-					json_object_set_new_nocheck(jMeta, "kstart", json_integer(pOldTree->kstart));
-					json_object_set_new_nocheck(jMeta, "ostart", json_integer(pOldTree->ostart));
-					json_object_set_new_nocheck(jMeta, "estart", json_integer(pOldTree->estart));
-					json_object_set_new_nocheck(jMeta, "nstart", json_integer(pOldTree->nstart));
-					json_object_set_new_nocheck(jMeta, "numroots", json_integer(pOldTree->numRoots));
-					json_object_set_new_nocheck(jError, "input", jMeta);
-					json_t *jData = json_object();
-					json_object_set_new_nocheck(jData, "kstart", json_integer(pNewTree->kstart));
-					json_object_set_new_nocheck(jData, "ostart", json_integer(pNewTree->ostart));
-					json_object_set_new_nocheck(jData, "estart", json_integer(pNewTree->estart));
-					json_object_set_new_nocheck(jData, "nstart", json_integer(pNewTree->nstart));
-					json_object_set_new_nocheck(jData, "numroots", json_integer(pNewTree->numRoots));
-					json_object_set_new_nocheck(jError, "output", jData);
+					json_object_set_new_nocheck(jMeta, "kstart", json_integer(orig_kstart));
+					json_object_set_new_nocheck(jMeta, "ostart", json_integer(orig_ostart));
+					json_object_set_new_nocheck(jMeta, "estart", json_integer(orig_estart));
+					json_object_set_new_nocheck(jMeta, "nstart", json_integer(orig_nstart));
+					json_object_set_new_nocheck(jMeta, "numroots", json_integer(orig_numRoots));
+					json_object_set_new_nocheck(jError, "meta", jMeta);
+					json_t *jFile = json_object();
+					json_object_set_new_nocheck(jFile, "kstart", json_integer(pOldTree->kstart));
+					json_object_set_new_nocheck(jFile, "ostart", json_integer(pOldTree->ostart));
+					json_object_set_new_nocheck(jFile, "estart", json_integer(pOldTree->estart));
+					json_object_set_new_nocheck(jFile, "nstart", json_integer(pOldTree->nstart));
+					json_object_set_new_nocheck(jFile, "numroots", json_integer(pOldTree->numRoots));
+					json_object_set_new_nocheck(jError, "file", jFile);
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
 				// check names
-				for (uint32_t iName = 0; iName < pOldTree->nstart; iName++) {
+				for (uint32_t iName = 0; iName < pNewTree->nstart; iName++) {
 					if (pOldTree->keyNames[iName].compare(pNewTree->keyNames[iName]) != 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_integer(iName));
+						json_object_set_new_nocheck(jError, "kid", json_integer(iName));
 						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->keyNames[iName].c_str()));
 						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->keyNames[iName].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 				}
-				for (unsigned iName = 0; iName < pOldTree->numRoots; iName++) {
+				for (unsigned iName = 0; iName < pNewTree->numRoots; iName++) {
 					if (pOldTree->rootNames[iName].compare(pNewTree->rootNames[iName]) != 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_integer(iName));
+						json_object_set_new_nocheck(jError, "rid", json_integer(iName));
 						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->rootNames[iName].c_str()));
 						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->rootNames[iName].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -259,15 +285,6 @@ struct kjoinContext_t {
 				ctx.tick = 0;
 			}
 
-			// allocate a node-id remapper
-			uint32_t *pMap = pOldTree->allocMap();
-
-			//  setup initial substitutions
-			for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
-				pMap[iKey] = pNewTree->roots[iKey];
-
-			uint32_t kError = 1; // error marker
-
 			/*
 			 * Walk tree
 			 */
@@ -278,14 +295,41 @@ struct kjoinContext_t {
 				const uint32_t   Ti     = pNode->T & IBIT;
 				const uint32_t   F      = pNode->F;
 
-				assert(pMap[Q] != kError && pMap[Tu] != kError && pMap[F] != kError);
+				/*
+				 * @date 2021-06-04 19:59:24
+				 * oldTree has extended roots and newTree does not
+				 * if estart=194 and nstart=2914 then pMap[2914]=194 (which is a node and not an extended key)
+				 */
+				if (!opt_extend) {
+					// extended keys unavailable
+					if ((Q >= pOldTree->estart && Q < pOldTree->nstart && pEid[Q] == 0) ||
+					    (Tu >= pOldTree->estart && Tu < pOldTree->nstart && pEid[Tu] == 0) ||
+					    (F >= pOldTree->estart && F < pOldTree->nstart && pEid[F] == 0)) {
+						// using extended key that has not been defined
+						json_t *jError = json_object();
+						json_object_set_new_nocheck(jError, "error", json_string_nocheck("extended keys unavailable"));
+						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+						json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+						json_t *jNode = json_object();
+						json_object_set_new_nocheck(jNode, "q", json_integer(Q));
+						json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
+						json_object_set_new_nocheck(jNode, "f", json_integer(F));
+						json_object_set_new_nocheck(jError, "node", jNode);
+						json_t *jEid = json_object();
+						json_object_set_new_nocheck(jEid, "q", json_integer(pEid[Q]));
+						json_object_set_new_nocheck(jEid, "tu", json_integer(pEid[Tu]));
+						json_object_set_new_nocheck(jEid, "f", json_integer(pEid[F]));
+						json_object_set_new_nocheck(jError, "eid", jEid);
+						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+					}
+				}
 
-				// update refcounters
-				if (Q < pNewTree->nstart)
+				// count key references
+				if (Q < pOldTree->nstart && pEid[Q] == 0)
 					pKeyRefCount[Q]++;
-				if (Tu < pNewTree->nstart)
+				if (Tu < pOldTree->nstart && pEid[Tu] == 0)
 					pKeyRefCount[Tu]++;
-				if (F < pNewTree->nstart)
+				if (F < pOldTree->nstart && pEid[F] == 0)
 					pKeyRefCount[F]++;
 
 				// create new node
@@ -296,40 +340,51 @@ struct kjoinContext_t {
 			 * Process roots
 			 */
 			for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
-				uint32_t r = pOldTree->roots[iRoot];
+				uint32_t R  = pOldTree->roots[iRoot];
+				uint32_t Ru = R & ~IBIT;
 
-				if (r != iRoot) {
+				if (R != iRoot) {
+
 					/*
-					 * Root declared
+					 * Root being defined
 					 */
 
 					if (pKeyRefCount[iRoot] > 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key defined after being used"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot].c_str()));
+						json_object_set_new_nocheck(jError, "rid", json_string(pOldTree->rootNames[iRoot].c_str()));
 						json_object_set_new_nocheck(jError, "refcount", json_integer(pKeyRefCount[iRoot]));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
-					if (pNewTree->roots[iRoot] != iRoot) {
+					if (pMap[iRoot] != iRoot || (iRoot >= pOldTree->estart && iRoot < pOldTree->nstart && pEid[iRoot] != 0)) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key multiply defined"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "key", json_string(pOldTree->rootNames[iRoot].c_str()));
+						json_object_set_new_nocheck(jError, "rid", json_string(pOldTree->rootNames[iRoot].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+					}
+
+					if (!opt_extend) {
+						// extended keys unavailable
+						if (Ru >= pOldTree->estart && Ru < pOldTree->nstart && pEid[Ru] == 0) {
+							assert(0);
+						}
 					}
 
 					/*
 					 * Update master root with location of extended key
 					 */
-					pNewTree->roots[iRoot] = pMap[r & ~IBIT] ^ (r & IBIT);
+					pMap[iRoot] = pEid[iRoot] = pMap[Ru] ^ (R & IBIT);
 				}
+
+				if (iRoot < pNewTree->numRoots)
+					pNewTree->roots[iRoot] = pMap[iRoot];
 			}
 
 			/*
 			 * Release input
 			 */
-			pOldTree->freeMap(pMap);
 			delete pOldTree;
 		}
 		// remove ticker
@@ -351,7 +406,9 @@ struct kjoinContext_t {
 		/*
 		 * release output
 		 */
-		pNewTree->freeMap(pKeyRefCount);
+		pOldTree->freeMap(pKeyRefCount);
+		pNewTree->freeMap(pMap);
+		pOldTree->freeMap(pEid);
 		delete pNewTree;
 
 		return 0;
@@ -371,6 +428,7 @@ kjoinContext_t app;
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.dat> ...\n", argv[0]);
 	if (verbose) {
+		fprintf(stderr, "\t   --extend\n");
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
@@ -401,7 +459,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_EXTEND,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -409,6 +467,7 @@ int main(int argc, char *argv[]) {
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
 			{"debug",       1, 0, LO_DEBUG},
+			{"extend",      0, 0, LO_EXTEND},
 			{"force",       0, 0, LO_FORCE},
 			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
@@ -456,6 +515,9 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_EXTEND:
+			app.opt_extend++;
 			break;
 		case LO_FORCE:
 			app.opt_force++;

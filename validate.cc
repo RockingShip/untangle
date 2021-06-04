@@ -359,7 +359,7 @@ struct validateContext_t {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "key", json_integer(iName));
+				json_object_set_new_nocheck(jError, "kid", json_integer(iName));
 				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(keyNames[iName].c_str()));
 				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.keyNames[iName].c_str()));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -370,7 +370,7 @@ struct validateContext_t {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
 				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "key", json_integer(iName));
+				json_object_set_new_nocheck(jError, "rid", json_integer(iName));
 				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(rootNames[iName].c_str()));
 				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.rootNames[iName].c_str()));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -499,16 +499,16 @@ struct validateContext_t {
 			 */
 			for (uint32_t iRoot = ostart; iRoot < estart; iRoot++) {
 
-				uint32_t r = tree.roots[iRoot];
+				uint32_t R = tree.roots[iRoot];
 
 				// test for undefined
-				if (pEval[r & ~IBIT] != 0 && pEval[r & ~IBIT] != ~0U) {
+				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Root loads undefined"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "root", json_string(tree.rootNames[iRoot].c_str()));
-					json_object_set_new_nocheck(jError, "value", json_integer(pEval[r & ~IBIT]));
+					json_object_set_new_nocheck(jError, "value", json_integer(pEval[R & ~IBIT]));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
@@ -519,7 +519,7 @@ struct validateContext_t {
 				 */
 
 				uint32_t expected    = pData[iRoot - ostart] ? ~0U : 0;
-				uint32_t encountered = (r & IBIT) ? pEval[r & ~IBIT] ^ ~0U : pEval[r & ~IBIT];
+				uint32_t encountered = (R & IBIT) ? pEval[R & ~IBIT] ^ ~0U : pEval[R & ~IBIT];
 
 
 				if ((!opt_onlyIfSet || encountered) && expected != encountered) {

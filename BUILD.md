@@ -548,3 +548,18 @@ incremental:
     ./kjoin join.dat join0.dat join1.dat
     ./validate md5.json join.dat 
 ```
+
+@date 2021-06-04 22:39:25
+Testing again, above can be outdated because concept extended keys has changed and kjoin does not save extended keys as default.
+
+```sh
+    mkdir tmp
+    ./builddes des.json des.dat
+    ./kslice tmp/des-%04d.dat des.dat
+    ./kjoin t0.dat tmp/des-0*.dat --extend
+    ./kjoin t1.dat tmp/des-1*.dat --extend
+    ./kjoin t2.dat tmp/des-2*.dat --extend
+    ./kjoin t.dat t0.dat t1.dat t2.dat
+    ./validate des.json t.dat
+    cmp t.dat des.dat
+```

@@ -217,15 +217,15 @@ struct ksaveContext_t {
 		fprintf(f, "}");
 
 		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
-			uint32_t r = pTree->roots[iRoot];
-			if (r != iRoot || (iRoot >= pTree->estart && iRoot < pTree->numRoots)) {
+			uint32_t R = pTree->roots[iRoot];
 
+			if (R != iRoot) {
 				fprintf(f, ",\n");
 
-				if (r & IBIT) {
-					fprintf(f, "%s=N[%d]^0x80000000", pTree->rootNames[iRoot].c_str(), r & ~IBIT);
+				if (R & IBIT) {
+					fprintf(f, "%s=N[%d]^0x80000000", pTree->rootNames[iRoot].c_str(), R & ~IBIT);
 				} else {
-					fprintf(f, "%s=N[%d]", pTree->rootNames[iRoot].c_str(), r);
+					fprintf(f, "%s=N[%d]", pTree->rootNames[iRoot].c_str(), R);
 				}
 			}
 		}
