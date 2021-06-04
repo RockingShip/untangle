@@ -74,6 +74,8 @@ struct ksliceContext_t {
 	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
+	/// @var {number} --sql, Create sql topology map
+	unsigned opt_sql;
 	/// @var {number} --threshold, Nodes referenced at least this number of times get their own file
 	unsigned opt_threshold;
 
@@ -84,6 +86,7 @@ struct ksliceContext_t {
 		opt_flags     = 0;
 		opt_force     = 0;
 		opt_maxNode   = DEFAULT_MAXNODE;
+		opt_sql       = 0;
 		opt_threshold = 2;
 		pInputTree    = NULL;
 	}
@@ -120,34 +123,39 @@ struct ksliceContext_t {
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
-		if (pOldTree->kstart == 1 /*KERROR*/ ) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("kstart should be at least 2"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
 
 		/*
 		 * Perform a node reference count
 		 */
-		uint32_t *pRefCount = pOldTree->allocMap();
+		uint32_t *pRefCount = pOldTree->allocMap(); // number of references to node
+		uint32_t *pEid      = pOldTree->allocMap(); // extended/file id for heads
+		uint32_t *pMap      = pOldTree->allocMap(); // node ids of extracted tree
+		uint32_t *pSelect   = pOldTree->allocVersion(); // selector map for sub-trees
+		uint32_t thisVersion; // for pSelect/pNewTree
 
 		for (uint32_t iNode = 0; iNode < pOldTree->ncount; iNode++)
-			pRefCount[iNode] = 0;
+			pEid[iNode] = pRefCount[iNode] = 0;
 
-		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
-			const baseNode_t *pNode = pOldTree->N + iNode;
-			const uint32_t   Q      = pNode->Q;
-			const uint32_t   Tu     = pNode->T & ~IBIT;
-//			const uint32_t   Ti     = pNode->T & IBIT;
-			const uint32_t   F      = pNode->F;
+		// mark roots
+		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++)
+			pRefCount[pOldTree->roots[iRoot] & ~IBIT] = opt_threshold;
 
-			pRefCount[Q]++;
-			pRefCount[Tu]++;
-			if (Tu != F)
-				pRefCount[F]++;
+		// start counting
+		for (uint32_t iNode = pOldTree->ncount - 1; iNode >= pOldTree->nstart; --iNode) {
+			if (pRefCount[iNode] > 0) {
+				const baseNode_t *pNode = pOldTree->N + iNode;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   F      = pNode->F;
+
+				pRefCount[Q]++;
+				pRefCount[Tu]++;
+				if (Tu != F)
+					pRefCount[F]++;
+			}
 		}
 
+		// count the number of nodes that will be saved in a file and need an extended key
 		uint32_t numExtended = 0;
 
 		// count the number of nodes that will be saved in a file and need an extended key
@@ -156,19 +164,16 @@ struct ksliceContext_t {
 				numExtended++;
 		}
 
-		// count the number of roots that need to be included
-		for (uint32_t iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
-			uint32_t r = pOldTree->roots[iRoot] & ~IBIT;
-
-			if (r >= pOldTree->nstart && pRefCount[r] < opt_threshold) {
-				pRefCount[r] = opt_threshold;
-				numExtended++;
-			}
-		}
-
 		/*
 		 * Create newTree
 		 */
+
+		if (numExtended == 0) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Tree too small"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Splitting into %d parts\n", ctx.timeAsString(), numExtended);
@@ -204,24 +209,14 @@ struct ksliceContext_t {
 		for (unsigned iKey = 0; iKey < pNewTree->estart; iKey++)
 			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
 
-		// NOTE: memory leak
-		for (unsigned iKey = pNewTree->estart; iKey < pNewTree->nstart; iKey++)
-			asprintf((char **) &pNewTree->keyNames[iKey], "e%0*d", keyNameLength, iKey);
+		for (unsigned iKey = pNewTree->estart; iKey < pNewTree->nstart; iKey++) {
+			char sbuf[32];
+			sprintf(sbuf, "e%0*d", keyNameLength, iKey);
+			pNewTree->keyNames[iKey] = sbuf;
+		}
 
 		// root has same names as keys
 		pNewTree->rootNames = pNewTree->keyNames;
-
-		// setup keys
-		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++) {
-			pNewTree->N[iKey].Q = 0;
-			pNewTree->N[iKey].T = iKey ? IBIT : 0;
-			pNewTree->N[iKey].F = iKey;
-		}
-
-		// setup roots
-		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++) {
-			pNewTree->roots[iRoot] = iRoot;
-		}
 
 		/*
 		 * All preparations done
@@ -235,29 +230,26 @@ struct ksliceContext_t {
 		 *  - assign it a unique extended key
 		 *  - save tree to file
 		 *  - empty newTree
+		 *
+		 * A topography chart also needs to be created
+		 * chart keeps refcounts to delete released files
 		 */
 
-		uint32_t *pMap     = pOldTree->allocMap(); // translation map old->new
-		uint32_t *pVersion = pOldTree->allocVersion(); // selector map for sub-trees
-		uint32_t thisVersion;
-
-		for (uint32_t iNode = 0; iNode < pOldTree->nstart; iNode++)
-			pMap[iNode] = iNode;
-
 		uint32_t nextExtend = pNewTree->estart;
-		uint32_t kError     = 1; // error marker 
 
 		// reset ticker
 		ctx.setupSpeed(pOldTree->ncount - pOldTree->nstart);
 		ctx.tick = 0;
-		unsigned numSaves = 0;
+		unsigned numSaves = 0; // to display progress
 
 		// find node heads
 		for (uint32_t iHead = pOldTree->nstart; iHead < pOldTree->ncount; iHead++) {
 
 			ctx.progress++;
 
-			// is node a head
+			/*
+			 * Only process heads
+			 */
 			if (pRefCount[iHead] < opt_threshold)
 				continue; // no
 
@@ -297,15 +289,29 @@ struct ksliceContext_t {
 			}
 
 			/*
-			 * select tree
+			 * Prepare new tree
+			 */
+			pNewTree->rewind();
+
+			// assign extended key to head
+			assert(nextExtend < pNewTree->nstart);
+			pEid[iHead] = nextExtend++;
+
+			/*
+			 * select sub-tree in old tree
 			 */
 			thisVersion = ++pOldTree->mapVersionNr;
-			assert(thisVersion != 0);
+			if (thisVersion == 0) {
+				::memset(pSelect, 0, pOldTree->maxNodes * sizeof *pSelect);
+				thisVersion = ++pOldTree->mapVersionNr;
+			}
 
-			pVersion[iHead] = thisVersion;
+			// mark head of selection
+			pSelect[iHead] = thisVersion;
 
+			// select tree to export
 			for (uint32_t iNode = iHead; iNode >= pOldTree->nstart; --iNode) {
-				if (pVersion[iNode] == thisVersion) {
+				if (pSelect[iNode] == thisVersion) {
 					const baseNode_t *pNode = pOldTree->N + iNode;
 					const uint32_t   Q      = pNode->Q;
 					const uint32_t   Tu     = pNode->T & ~IBIT;
@@ -313,11 +319,11 @@ struct ksliceContext_t {
 					const uint32_t   F      = pNode->F;
 
 					if (Q >= pOldTree->nstart && pRefCount[Q] < opt_threshold)
-						pVersion[Q]  = thisVersion;
+						pSelect[Q]  = thisVersion;
 					if (Tu >= pOldTree->nstart && pRefCount[Tu] < opt_threshold)
-						pVersion[Tu] = thisVersion;
+						pSelect[Tu] = thisVersion;
 					if (F >= pOldTree->nstart && pRefCount[F] < opt_threshold)
-						pVersion[F]  = thisVersion;
+						pSelect[F]  = thisVersion;
 				}
 			}
 
@@ -325,62 +331,80 @@ struct ksliceContext_t {
 			 * Copy nodes to new tree
 			 */
 
-			// clear tree
-			pNewTree->ncount  = pNewTree->nstart;
-			// invalidate lookup cache
-			++pNewTree->nodeIndexVersionNr;
+			// de-select keys so sql output can detect first occurrence
+			for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++) {
+				pSelect[iKey] = 0;
+				pMap[iKey]    = iKey;
+			}
 
 			// copy nodes
 			for (uint32_t iNode = pOldTree->nstart; iNode <= iHead; iNode++) {
-				if (pVersion[iNode] == thisVersion) {
+				if (pSelect[iNode] == thisVersion) {
 					const baseNode_t *pNode = pOldTree->N + iNode;
-					const uint32_t   Q      = pNode->Q;
-					const uint32_t   Tu     = pNode->T & ~IBIT;
-					const uint32_t   Ti     = pNode->T & IBIT;
-					const uint32_t   F      = pNode->F;
+					uint32_t         Q      = pNode->Q;
+					uint32_t         Tu     = pNode->T & ~IBIT;
+					uint32_t         Ti     = pNode->T & IBIT;
+					uint32_t         F      = pNode->F;
 
-					assert(pMap[Q] != kError && pMap[Tu] != kError && pMap[F] != kError);
+					if (opt_sql) {
+						// record first occurrence when Q references a head,
+						if (Q >= pOldTree->nstart && pRefCount[Q] >= opt_threshold && pSelect[Q] != thisVersion) {
+							assert(pEid[Q] != 0);
+							printf("insert into worker (provides,requires) values(%d,%d); /*Q*/\n", pEid[iHead], pEid[Q]);
+							pSelect[Q] = thisVersion;
+						}
+						if (Tu >= pOldTree->nstart && pRefCount[Tu] >= opt_threshold && pSelect[Tu] != thisVersion) {
+							assert(pEid[Tu] != 0);
+							printf("insert into worker (provides,requires) values(%d,%d); /*T*/\n", pEid[iHead], pEid[Tu]);
+							pSelect[Tu] = thisVersion;
+						}
+						if (F >= pOldTree->nstart && pRefCount[F] >= opt_threshold && pSelect[F] != thisVersion) {
+							assert(pEid[F] != 0);
+							printf("insert into worker (provides,requires) values(%d,%d); /*F*/\n", pEid[iHead], pEid[F]);
+							pSelect[F] = thisVersion;
+						}
+					}
+
+					// extended or local
+					Q  = Q >= pOldTree->nstart && pRefCount[Q] >= opt_threshold ? pEid[Q] : pMap[Q];
+					Tu = Tu >= pOldTree->nstart && pRefCount[Tu] >= opt_threshold ? pEid[Tu] : pMap[Tu];
+					F  = F >= pOldTree->nstart && pRefCount[F] >= opt_threshold ? pEid[F] : pMap[F];
 
 					// create new node
-					pMap[iNode] = pNewTree->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+					pMap[iNode] = pNewTree->normaliseNode(Q, Tu ^ Ti, F);
 				}
 			}
 
+			/*
+			 * setup roots
+			 */
+
+			// setup default roots
+			for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
+				pNewTree->roots[iRoot] = iRoot;
+
 			// save head in roots
-			pNewTree->roots[nextExtend] = pMap[iHead];
+			pNewTree->roots[pEid[iHead]] = pMap[iHead];
 
 			// export existing roots
-			for (uint32_t iRoot = pOldTree->kstart; iRoot < pOldTree->estart; iRoot++) {
-				uint32_t r = pOldTree->roots[iRoot];
-				if ((r & ~IBIT) == iHead) {
-					pNewTree->roots[iRoot] = pMap[r & ~IBIT] ^ (r & IBIT);
+			assert(pOldTree->estart == pOldTree->nstart);
+			for (unsigned iRoot = pOldTree->kstart; iRoot < pOldTree->estart; iRoot++) {
+				uint32_t R = pOldTree->roots[iRoot];
+
+				if ((R & ~IBIT) == iHead) {
+					pNewTree->roots[iRoot] = pMap[R & ~IBIT] ^ (R & IBIT);
 
 					// display in which files the keys are located
 					if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-						fprintf(stderr, "\r\e[K%s: %s\n", pNewTree->rootNames[iRoot].c_str(), filename);
+						fprintf(stderr, "\r\e[K%s: %s\n", pOldTree->rootNames[iRoot].c_str(), filename);
 				}
 			}
-
-			// next time, node reference will result in extended key
-			pMap[iHead] = nextExtend++;
 
 			/*
 			 * Save tree
 			 */
 			pNewTree->saveFile(filename, false);
 			numSaves++;
-
-			if (iHead != pOldTree->ncount - 1) {
-				// invalidate non-heads of selection
-				for (uint32_t iNode = pOldTree->nstart; iNode < iHead; iNode++) {
-					if (pVersion[iNode] == thisVersion)
-						pMap[iNode] = kError;
-				}
-				// clear roots
-				for (uint32_t iRoot = pNewTree->kstart; iRoot < pNewTree->nstart; iRoot++) {
-					pNewTree->roots[iRoot] = iRoot;
-				}
-			}
 
 			// release filename
 			free(filename);
@@ -393,15 +417,18 @@ struct ksliceContext_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Split into %d files\n", ctx.timeAsString(), numSaves);
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
+		// either output json or sql
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && !opt_sql) {
 			json_t *jResult = json_object();
 			pNewTree->headerInfo(jResult);
 			pNewTree->extraInfo(jResult);
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
+		pOldTree->freeMap(pRefCount);
+		pOldTree->freeMap(pEid);
 		pOldTree->freeMap(pMap);
-		pOldTree->freeVersion(pVersion);
+		pOldTree->freeVersion(pSelect);
 		delete pNewTree;
 		delete pOldTree;
 
@@ -425,9 +452,10 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t   --threshold=<seconds> [default=%d]\n", app.opt_threshold);
+		fprintf(stderr, "\t   --sql\n");
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t-v --verbose\n");
 		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
@@ -453,7 +481,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_THRESHOLD,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE, LO_THRESHOLD, LO_SQL,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -465,6 +493,7 @@ int main(int argc, char *argv[]) {
 			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
 			{"quiet",       2, 0, LO_QUIET},
+			{"sql",         0, 0, LO_SQL},
 			{"timer",       1, 0, LO_TIMER},
 			{"threshold",   1, 0, LO_THRESHOLD},
 			{"verbose",     2, 0, LO_VERBOSE},
@@ -486,8 +515,8 @@ int main(int argc, char *argv[]) {
 		};
 
 		char optstring[64];
-		char *cp          = optstring;
-		int  option_index = 0;
+		char *cp                            = optstring;
+		int  option_index                   = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -521,6 +550,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
+			break;
+		case LO_SQL:
+			app.opt_sql++;
 			break;
 		case LO_TIMER:
 			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);

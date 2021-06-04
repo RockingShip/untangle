@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-04 22:48:23 Added: `kslice --sql`.
 2021-06-04 21:39:17 Deleted: `keysId`/`rootsId` are obsolete.
 2021-06-03 22:56:37 Changed: Key nodes needs to be QnTF.
 2021-06-02 11:06:38 Changed: `baseTree_t::saveFile()` saves nodes in tree walking order.

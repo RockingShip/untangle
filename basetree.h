@@ -3374,22 +3374,26 @@ struct baseTree_t {
 		 */
 		json_t *jKeyNames = json_array();
 
+		// input key names
 		for (uint32_t iKey = kstart; iKey < ostart; iKey++)
 			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
 		json_object_set_new_nocheck(jResult, "knames", jKeyNames);
 
 		jKeyNames = json_array();
 
+		// output key names
 		for (uint32_t iKey = ostart; iKey < estart; iKey++)
 			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
 		json_object_set_new_nocheck(jResult, "onames", jKeyNames);
 
 		jKeyNames = json_array();
 
+		// extended key names
 		for (uint32_t iKey = estart; iKey < nstart; iKey++)
 			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
 		json_object_set_new_nocheck(jResult, "enames", jKeyNames);
 
+		// extended root names (which might be identical to enames)
 		bool rootsDiffer = (nstart != numRoots);
 		if (!rootsDiffer) {
 			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
@@ -3400,7 +3404,7 @@ struct baseTree_t {
 			}
 		}
 
-		if (rootsDiffer || nstart == numRoots) {
+		if (rootsDiffer) {
 			// either roots are different or an empty set.
 			jKeyNames = json_array();
 
