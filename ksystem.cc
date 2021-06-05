@@ -1,9 +1,13 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kload.cc
- *      Create a tree file based on json meta data
- *      Load the optional 'data' tag to populate the nodes.
+ * kextrac.cc
+ *      Convert a tree into a balanced system.
+ *
+ *      release all roots and rewrite tree to
+ *      system = (key0 ^ roots[key0]) OR (key1 ^ roots[key1]) ...
+ *
+ *      Evaluating a balanced system should always result in zero.
  */
 
 /*
@@ -24,8 +28,6 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <ctype.h>
 #include <errno.h>
@@ -68,7 +70,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kloadContext_t {
+struct kextractContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -80,143 +82,101 @@ struct kloadContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	kloadContext_t() {
+	kextractContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 	}
 
 	/**
-	 * @date 2021-05-20 23:15:36
+	 * @date 2021-06-05 14:03:20
 	 *
-	 * Main entrypoint.
-	 * NOTE: Most code taken from `validate.cc`.
+	 * Main entrypoint
 	 */
 	int main(const char *outputFilename, const char *inputFilename) {
 
 		/*
-		 * Load json
+		 * Open input tree
 		 */
+		baseTree_t *pOldTree = new baseTree_t(ctx);
 
-		// load json
-		FILE *f              = fopen(inputFilename, "r");
-		if (!f) {
+		if (pOldTree->loadFile(inputFilename)) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("fopen()"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "errno", json_integer(errno));
-			json_object_set_new_nocheck(jError, "errtxt", json_string(strerror(errno)));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
-		json_error_t jLoadError;
-		json_t       *jInput = json_loadf(f, 0, &jLoadError);
-		if (jInput == 0) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+			json_t *jResult = json_object();
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
+			pOldTree->headerInfo(jResult);
+			pOldTree->extraInfo(jResult);
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			json_delete(jResult);
+		}
+
+		if (pOldTree->system) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to decode json"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree already a balanced system"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "line", json_integer(jLoadError.line));
-			json_object_set_new_nocheck(jError, "text", json_string(jLoadError.text));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-		fclose(f);
-
-		/*
-		 * Create an incomplete tree based on json
-		 */
-		baseTree_t jsonTree(ctx);
-
-		jsonTree.loadFileJson(jInput, inputFilename);
-
-		/*
-		 * Create a real tree
-		 */
-
-		baseTree_t newTree(ctx, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, opt_flags);
-
-		newTree.keyNames  = jsonTree.keyNames;
-		newTree.rootNames = jsonTree.rootNames;
-
-		/*
-		 * Set defaults
-		 */
-		for (unsigned iRoot = 0; iRoot < newTree.numRoots; iRoot++)
-			newTree.roots[iRoot] = iRoot;
-
-		/*
-		 * Import the roots
-		 */
-		json_t *jData = json_object_get(jInput, "data");
-		if (!jData) {
-			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-				fprintf(stderr, "[%s] WARNING: `data' tag not available\n", ctx.timeAsString());
-			return 0;
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
 		/*
-		 * Iterate through all roots
+		 * Create new tree
 		 */
-		void *iter = json_object_iter(jData);
-		while (iter) {
-			const char *rootName = json_object_iter_key(iter);
-			json_t     *value    = json_object_iter_value(iter);
+		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
 
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-				fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), rootName);
+		/*
+		 * Setup key/root names
+		 */
 
-			/*
-			 * decode name
-			 */
-			bool     found = false;
-			unsigned iRoot = 0;
-			for (iRoot = 0; iRoot < newTree.numRoots; iRoot++) {
-				if (strcmp(rootName, newTree.rootNames[iRoot].c_str()) == 0) {
-					found = true;
-					break;
-				}
+		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
+			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
+
+		// root has same names as keys
+		pNewTree->rootNames = pNewTree->keyNames;
+
+		/*
+		 * (Simple) Copy all nodes
+		 */
+		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
+			const baseNode_t *pNode = pOldTree->N + iNode;
+
+			uint32_t nid = pNewTree->basicNode(pNode->Q, pNode->T, pNode->F);
+			assert(nid == iNode);
+		}
+
+		// merge all keys into system
+		for (unsigned iKey = pOldTree->kstart; iKey < pOldTree->nstart; iKey++) {
+			if (pOldTree->roots[iKey] != iKey) {
+				// create `keyN ^ roots[keyN]`
+				uint32_t term = pNewTree->normaliseNode(iKey, pOldTree->roots[iKey] ^ IBIT, pOldTree->roots[iKey]);
+
+				// append term as `OR` to system
+				pNewTree->system = pNewTree->normaliseNode(pNewTree->system, IBIT, term);
 			}
-			if (!found) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Unknown root name in 'data'"));
-				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-				json_object_set_new_nocheck(jError, "root", json_string(rootName));
-				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				exit(1);
-			}
-
-			/*
-			 * Load string
-			 */
-			const char *rootValue = json_string_value(value);
-
-			// is there a transform?
-			const char *pSlash = strchr(rootValue, '/');
-			newTree.roots[iRoot] = newTree.loadNormaliseString(rootValue, pSlash ? pSlash + 1 : NULL);
-
-			/* use key and value ... */
-			iter = json_object_iter_next(jData, iter);
 		}
 
-		/*
-		 * Import balanced system
-		 */
-		json_t *jSystem = json_object_get(jInput, "system");
-		if (jSystem) {
-			const char *systemValue = json_string_value(jSystem);
-
-			// is there a transform?
-			const char *pSlash = strchr(systemValue, '/');
-			newTree.system = newTree.loadNormaliseString(systemValue, pSlash ? pSlash + 1 : NULL);
-		}
+		// all roots are defaults
+		for (unsigned iKey = pNewTree->kstart; iKey < pNewTree->nstart; iKey++)
+			pNewTree->roots[iKey] = iKey;
 
 		/*
 		 * Save data
 		 */
-		newTree.saveFile(outputFilename);
+		pNewTree->saveFile(outputFilename);
 
-		json_delete(jInput);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
+			json_t *jResult = json_object();
+			pNewTree->headerInfo(jResult);
+			pNewTree->extraInfo(jResult);
+			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
+
+		delete pOldTree;
+		delete pNewTree;
 		return 0;
 	}
 
@@ -227,16 +187,17 @@ struct kloadContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kloadContext_t} Application context
+ * @global {kextractContext_t} Application context
  */
-kloadContext_t app;
+kextractContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.dat> <input.json>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.json> <input.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
 		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
@@ -263,7 +224,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -295,8 +256,8 @@ int main(int argc, char *argv[]) {
 		};
 
 		char optstring[64];
-		char *cp          = optstring;
-		int  option_index = 0;
+		char *cp                            = optstring;
+		int  option_index                   = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -374,6 +335,7 @@ int main(int argc, char *argv[]) {
 //			case LO_NOPIVOT3:
 //				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
+
 
 		case '?':
 			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);

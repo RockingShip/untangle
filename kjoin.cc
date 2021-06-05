@@ -128,10 +128,10 @@ struct kjoinContext_t {
 		}
 
 		// save metrics to compare input files
-		uint32_t orig_kstart = pOldTree->kstart;
-		uint32_t orig_ostart = pOldTree->ostart;
-		uint32_t orig_estart = pOldTree->estart;
-		uint32_t orig_nstart = pOldTree->nstart;
+		uint32_t orig_kstart   = pOldTree->kstart;
+		uint32_t orig_ostart   = pOldTree->ostart;
+		uint32_t orig_estart   = pOldTree->estart;
+		uint32_t orig_nstart   = pOldTree->nstart;
 		uint32_t orig_numRoots = pOldTree->numRoots;
 
 		// allocate
@@ -382,6 +382,10 @@ struct kjoinContext_t {
 					pNewTree->roots[iRoot] = pMap[iRoot];
 			}
 
+			//
+			if (pOldTree->system)
+				pNewTree->system = pMap[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
+
 			/*
 			 * Release input
 			 */
@@ -405,10 +409,13 @@ struct kjoinContext_t {
 
 		/*
 		 * release output
+		 * @date 2021-06-05 00:27:31
+		 * do NOT free the oldTree buffers. pOldTree has been deleted
+		 *
 		 */
-		pOldTree->freeMap(pKeyRefCount);
+		// pOldTree->freeMap(pKeyRefCount);
 		pNewTree->freeMap(pMap);
-		pOldTree->freeMap(pEid);
+		// pOldTree->freeMap(pEid);
 		delete pNewTree;
 
 		return 0;

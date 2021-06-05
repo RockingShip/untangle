@@ -101,7 +101,7 @@ struct baseTreeHeader_t {
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
 	uint32_t unused1;             //
-	uint32_t unused2;             //
+	uint32_t system;              // node of balanced system (0 if none)
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 
 	// primary fields
@@ -155,7 +155,7 @@ struct baseTree_t {
 	uint32_t   flags;		// creation constraints
 	uint32_t   allocFlags;		// memory constraints
 	uint32_t   unused1;		//
-	uint32_t   unused2;		//
+	uint32_t   system;		// node of balanced system
 	// primary fields
 	uint32_t   kstart;		// first input key id.
 	uint32_t   ostart;		// first output key id.
@@ -209,7 +209,7 @@ struct baseTree_t {
 		flags(0),
 		allocFlags(0),
 		unused1(0),
-		unused2(),
+		system(0),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -265,7 +265,7 @@ struct baseTree_t {
 		flags(flags),
 		allocFlags(0),
 		unused1(0),
-		unused2(0),
+		system(0),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -390,6 +390,22 @@ struct baseTree_t {
 			ctx.myFree("baseTreeFile_t::rawDatabase", rawDatabase);
 		}
 
+		// zombies need to trigger SEGV
+		rawDatabase      = NULL;
+		fileHeader       = NULL;
+		N                = NULL;
+		roots            = NULL;
+		history          = NULL;
+		nodeIndex        = NULL;
+		nodeIndexVersion = NULL;
+		gPoolMap         = NULL;
+		gPoolVersion     = NULL;
+		stackL           = NULL;
+		stackR           = NULL;
+		compNodeL        = NULL;
+		compNodeR        = NULL;
+		compVersionL     = NULL;
+		compVersionR     = NULL;
 	}
 
 	/*
@@ -2718,7 +2734,7 @@ struct baseTree_t {
 
 		flags      = fileHeader->magic_flags;
 		unused1    = fileHeader->unused1;
-		unused2    = fileHeader->unused2;
+		system     = fileHeader->system;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
 		estart     = fileHeader->estart;
@@ -2934,11 +2950,18 @@ struct baseTree_t {
 
 			}
 
-			// trace roots, one at a time
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			/*
+			 * @date 2021-06-05 18:24:37
+			 *
+			 * trace roots, one at a time.
+			 * Last root is a artificial root representing "system"
+			 */
+			for (uint32_t iRoot = 0; iRoot <= numRoots; iRoot++) {
+
+				uint32_t R = (iRoot < numRoots) ? roots[iRoot] : system;
 
 				numStack = 0;
-				pStack[numStack++] = roots[iRoot] & ~IBIT;
+				pStack[numStack++] = R & ~IBIT;
 
 				/*
 				 * Walk the tree depth-first
@@ -3039,12 +3062,15 @@ struct baseTree_t {
 
 		/*
 		 * write roots
+		 * Last root is a virtual root representing "system"
 		 */
 		header.offRoots = fpos;
 
-		for (unsigned i = 0; i < numRoots; i++) {
+		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
+			uint32_t R = (iRoot < numRoots) ? roots[iRoot] : system;
+
 			// new root
-			uint32_t r = pMap[roots[i] & ~IBIT] ^(roots[i] & IBIT);
+			uint32_t r = pMap[R & ~IBIT] ^(R & IBIT);
 
 			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(r));
 
@@ -3082,7 +3108,7 @@ struct baseTree_t {
 		header.magic       = BASETREE_MAGIC;
 		header.magic_flags = flags;
 		header.unused1     = unused1;
-		header.unused2     = unused2;
+		header.system      = system;
 		header.crc32       = crc32;
 		header.kstart      = kstart;
 		header.ostart      = ostart;
@@ -3356,6 +3382,7 @@ struct baseTree_t {
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
 		json_object_set_new_nocheck(jResult, "numnodes", json_integer(fileHeader->ncount - fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "numroots", json_integer(fileHeader->numRoots));
+		json_object_set_new_nocheck(jResult, "system", json_integer(fileHeader->system));
 		json_object_set_new_nocheck(jResult, "numhistory", json_integer(fileHeader->numHistory));
 		json_object_set_new_nocheck(jResult, "poshistory", json_integer(fileHeader->posHistory));
 
@@ -3365,7 +3392,7 @@ struct baseTree_t {
 	/*
 	 * Extract details into json
 	 */
-	json_t *extraInfo(json_t *jResult) const {
+	json_t *extraInfo(json_t *jResult) {
 		if (jResult == NULL)
 			jResult = json_object();
 
@@ -3449,40 +3476,39 @@ struct baseTree_t {
 		}
 
 		json_object_set_new_nocheck(jResult, "history", jHistory);
+#endif
 
 		/*
 		 * Refcounts
 		 */
 
-		uint32_t *pRefCounts = allocMap();
+		uint32_t *pRefCount = allocMap();
 
-		for (uint32_t i = 0; i < this->nstart; i++)
-			pRefCounts[i] = 0;
+		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+			pRefCount[iKey] = 0;
 
-		for (uint32_t k = this->nstart; k < this->xcount; k++) {
+		for (uint32_t k = this->nstart; k < this->ncount; k++) {
 			const baseNode_t *pNode = this->N + k;
 			const uint32_t   Q      = pNode->Q;
 			const uint32_t   Tu     = pNode->T & ~IBIT;
-			const uint32_t   Ti     = pNode->T & IBIT;
+//			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
-			if (Q && Q < this->nstart)
-				pRefCounts[Q]++;
-			if (Tu && Tu < this->nstart && Tu != F)
-				pRefCounts[Tu]++;
-			if (F && F < this->nstart)
-				pRefCounts[F]++;
-
+			pRefCount[Q]++;
+			pRefCount[Tu]++;
+			if (Tu != F)
+				pRefCount[F]++;
 		}
 
-		json_t *jRefCounts = json_object();
+		json_t *jRefCount = json_object();
 
-		for (uint32_t i = this->kstart; i < this->nstart; i++) {
-			if (pRefCounts[i])
-				json_object_set_new_nocheck(jRefCounts, this->kToStr(i), json_integer(pRefCounts[i]));
+		for (uint32_t iKey = this->kstart; iKey < this->nstart; iKey++) {
+			if (pRefCount[iKey])
+				json_object_set_new_nocheck(jRefCount, keyNames[iKey].c_str(), json_integer(pRefCount[iKey]));
 		}
-		json_object_set_new_nocheck(jResult, "refcounts", jRefCounts);
+		json_object_set_new_nocheck(jResult, "refcount", jRefCount);
 
+#if 0
 		/*
 		 * Requires (as decimal number)
 		 */

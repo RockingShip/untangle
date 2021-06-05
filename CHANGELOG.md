@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-05 23:11:30 Added: `ksystem`, `kextract`. 
 2021-06-04 22:57:59 Added: `kjoin --extend`.
 2021-06-04 22:48:23 Added: `kslice --sql`.
 2021-06-04 21:39:17 Deleted: `keysId`/`rootsId` are obsolete.

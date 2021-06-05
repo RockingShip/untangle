@@ -386,9 +386,13 @@ struct validateContext_t {
 			/*
 			 * Which roots are not keys
 			 */
-			for (uint32_t iRoot = ostart; iRoot < estart; iRoot++) {
-				if ((tree.roots[iRoot] & ~IBIT) >= tree.nstart)
-					json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
+			if (tree.system) {
+				json_array_append_new(jList, json_string_nocheck("system"));
+			} else {
+				for (uint32_t iRoot = kstart; iRoot < estart; iRoot++) {
+					if ((tree.roots[iRoot] & ~IBIT) >= tree.nstart)
+						json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
+				}
 			}
 
 			if (json_array_size(jList) > 0)
@@ -399,7 +403,8 @@ struct validateContext_t {
 		ctx.setupSpeed(gNumTests);
 		ctx.tick = 0;
 
-		uint32_t *pEval = tree.allocMap();
+		uint32_t *pFull = tree.allocMap(); // all keys defined based on text data
+		uint32_t *pEval = tree.allocMap(); // only defined for non-root keys
 
 		for (uint32_t iTest = 0; iTest < gNumTests; iTest++) {
 			ctx.progress++;
@@ -421,20 +426,32 @@ struct validateContext_t {
 			}
 
 			/*
-			 * prepare the data vector.
+			 * Load the test data
 			 * For validation, either all bits are set or all bits are clear
 			 */
 
 			for (uint32_t iKey = 0; iKey < tree.ncount; iKey++)
-				pEval[iKey] = 0x5a5a5a5a; // set to invalid value
+				pFull[iKey] = 0x5a5a5a5a; // set to invalid value
 
-			pEval[0] = 0; // only zero is defined
+			pFull[0] = 0; // only zero is defined
 
-			// load the test data into K region
+			// load the test data
 			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
 
 			for (uint32_t iKey = kstart; iKey < ostart; iKey++)
-				pEval[iKey] = pData[iKey - kstart] ? ~0U : 0;
+				pFull[iKey] = pData[iKey - kstart] ? ~0U : 0;
+
+			pData = gTestRoots + iTest * (estart - ostart);
+
+			for (uint32_t iKey = ostart; iKey < estart; iKey++)
+				pFull[iKey] = pData[iKey - ostart] ? ~0U : 0;
+
+			/*
+			 * Copy undefined-roots to data vector.
+			 * If roots defined, then they are not allowed to be read.
+			 */
+			for (uint32_t iRoot = 0; iRoot < nstart; iRoot++)
+				pEval[iRoot] = (tree.roots[iRoot] == iRoot) ? pFull[iRoot] : 0x5a5a5a5a;
 
 			/*
 			 * Run the test
@@ -452,10 +469,12 @@ struct validateContext_t {
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node references out-of-range"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "node", json_integer(iNode));
-					json_object_set_new_nocheck(jError, "q", json_integer(Q));
-					json_object_set_new_nocheck(jError, "tu", json_integer(Tu));
-					json_object_set_new_nocheck(jError, "f", json_integer(F));
+					json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+					json_t *jNode = json_object();
+					json_object_set_new_nocheck(jNode, "q", json_integer(Q));
+					json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
+					json_object_set_new_nocheck(jNode, "f", json_integer(F));
+					json_object_set_new_nocheck(jError, "node", jNode);
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
@@ -467,13 +486,17 @@ struct validateContext_t {
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node values out-of-range"));
 					json_object_set_new_nocheck(jError, "filename", json_string(fname));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "node", json_integer(iNode));
-					json_object_set_new_nocheck(jError, "q", json_integer(Q));
-					json_object_set_new_nocheck(jError, "tu", json_integer(Tu));
-					json_object_set_new_nocheck(jError, "f", json_integer(F));
-					json_object_set_new_nocheck(jError, "q-val", json_integer(pEval[Q]));
-					json_object_set_new_nocheck(jError, "tu-val", json_integer(pEval[Tu]));
-					json_object_set_new_nocheck(jError, "f-val", json_integer(pEval[F]));
+					json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+					json_t *jNode = json_object();
+					json_object_set_new_nocheck(jNode, "q", json_integer(Q));
+					json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
+					json_object_set_new_nocheck(jNode, "f", json_integer(F));
+					json_object_set_new_nocheck(jError, "node", jNode);
+					json_t *jValue = json_object();
+					json_object_set_new_nocheck(jValue, "q", json_integer(pEval[Q]));
+					json_object_set_new_nocheck(jValue, "tu", json_integer(pEval[Tu]));
+					json_object_set_new_nocheck(jValue, "f", json_integer(pEval[F]));
+					json_object_set_new_nocheck(jError, "value", jValue);
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
@@ -491,15 +514,41 @@ struct validateContext_t {
 				}
 			}
 
-			// load the result data
-			pData = gTestRoots + iTest * (estart - ostart);
+			if (tree.system) {
+				uint32_t R = tree.system;
+
+				// test for undefined
+				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("System loads undefined"));
+					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
+					json_object_set_new_nocheck(jError, "value", json_integer(pEval[R & ~IBIT]));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+
+				uint32_t val = (R & IBIT) ? pEval[R & ~IBIT] ^ ~0U : pEval[R & ~IBIT];
+				if (val != 0) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("System unbalanced"));
+					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
+					json_object_set_new_nocheck(jError, "value", json_integer(val));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+
+				continue;
+			}
 
 			/*
 			 * Compare the results for the provides
 			 */
-			for (uint32_t iRoot = ostart; iRoot < estart; iRoot++) {
+			for (uint32_t iRoot = kstart; iRoot < nstart; iRoot++) {
 
 				uint32_t R = tree.roots[iRoot];
+
+				if (R == iRoot)
+					continue; // skip unused root
 
 				// test for undefined
 				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
@@ -518,9 +567,8 @@ struct validateContext_t {
 				 * The final result is either all bits clear (0) or all bits set (~0)
 				 */
 
-				uint32_t expected    = pData[iRoot - ostart] ? ~0U : 0;
+				uint32_t expected    = pFull[iRoot];
 				uint32_t encountered = (R & IBIT) ? pEval[R & ~IBIT] ^ ~0U : pEval[R & ~IBIT];
-
 
 				if ((!opt_onlyIfSet || encountered) && expected != encountered) {
 					// convert outputs to hex string
@@ -529,12 +577,12 @@ struct validateContext_t {
 					char     strEncountered[estart / 4 + 2];
 					unsigned strEncounteredLen = 0;
 
-					for (unsigned i = tree.ostart; i <= (estart - 1) / 8 * 8; i += 8) {
+					for (unsigned i = tree.kstart; i <= (estart - 1) / 8 * 8; i += 8) {
 						unsigned byte;
 
 						byte = 0;
 						for (unsigned j = 0; j < 8; j++)
-							byte |= (i + j < estart && pData[i + j - ostart]) ? 1 << j : 0;
+							byte |= (i + j < estart && pFull[i + j]) ? 1 << j : 0;
 
 						strExpected[strExpectedLen++] = "0123456789abcdef"[byte >> 4];
 						strExpected[strExpectedLen++] = "0123456789abcdef"[byte & 15];
@@ -569,8 +617,12 @@ struct validateContext_t {
 			}
 		}
 
+		tree.freeMap(pFull);
+		tree.freeMap(pEval);
+
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\n");
+
 	}
 
 };

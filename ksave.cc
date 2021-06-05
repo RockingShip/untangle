@@ -120,6 +120,7 @@ struct ksaveContext_t {
 			// add names/history
 			pTree->extraInfo(jOutput);
 
+			// roots
 			json_t *jData = json_object();
 
 			for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
@@ -133,6 +134,12 @@ struct ksaveContext_t {
 
 			// add data as strings
 			json_object_set_new_nocheck(jOutput, "data", jData);
+
+			// system
+			if (pTree->system) {
+				std::string expr = pTree->saveString(pTree->system);
+				json_object_set_new_nocheck(jOutput, "system", json_string_nocheck(expr.c_str()));
+			}
 
 			FILE *f = fopen(outputFilename, "w");
 			if (!f)
@@ -174,6 +181,7 @@ struct ksaveContext_t {
 		for (uint32_t iRoot = 0; iRoot < pTree->numRoots; iRoot++)
 			pRootRef[pTree->roots[iRoot] & ~IBIT]++;
 
+		pRootRef[pTree->system & ~IBIT]++;
 
 		fprintf(f, "N[]=");
 		for (uint32_t iKey = 0; iKey < pTree->kstart; iKey++)
@@ -189,15 +197,23 @@ struct ksaveContext_t {
 			// write labels
 			if (pRootRef[iNode]) {
 				fprintf(f, "// ");
+				// scan roots
 				for (uint32_t iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
-					int32_t r = pTree->roots[iRoot];
+					int32_t R = pTree->roots[iRoot];
 
-					if ((r & ~IBIT) == iNode) {
+					if ((R & ~IBIT) == iNode) {
 						fprintf(f, "%s", pTree->rootNames[iRoot].c_str());
-						if (r & IBIT)
+						if (R & IBIT)
 							fprintf(f, "~");
 						fprintf(f, ":");
 					}
+				}
+				// system
+				if ((pTree->system & ~IBIT) == iNode) {
+					fprintf(f, "system");
+					if (pTree->system & IBIT)
+						fprintf(f, "~");
+					fprintf(f, ":");
 				}
 				fprintf(f, "\n");
 			}
@@ -216,6 +232,7 @@ struct ksaveContext_t {
 		}
 		fprintf(f, "}");
 
+		// roots
 		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
 			uint32_t R = pTree->roots[iRoot];
 
@@ -229,6 +246,13 @@ struct ksaveContext_t {
 				}
 			}
 		}
+
+		// system
+		if (pTree->system) {
+			fprintf(f, ",\n");
+			fprintf(f, "system=N[%d]", pTree->system);
+		}
+
 		fprintf(f, "\n})\n");
 
 		pTree->freeMap(pRootRef);
@@ -254,6 +278,7 @@ ksaveContext_t app;
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <input.dat>\n", argv[0]);
 	if (verbose) {
+		fprintf(stderr, "\t-c --code\n");
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
@@ -348,7 +373,7 @@ int main(int argc, char *argv[]) {
 	char *outputFilename;
 	char *inputFilename;
 
-	if (argc - optind >= 1) {
+	if (argc - optind >= 2) {
 		outputFilename = argv[optind++];
 		inputFilename  = argv[optind++];
 	} else {
