@@ -139,25 +139,68 @@ struct kextractContext_t {
 		pNewTree->rootNames = pNewTree->keyNames;
 
 		/*
+		 * Allocate map
+		 */
+
+		uint32_t *pMap = pOldTree->allocMap();
+
+		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
+			pMap[iKey] = iKey;
+
+		/*
 		 * (Simple) Copy all nodes
 		 */
-		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
-			const baseNode_t *pNode = pOldTree->N + iNode;
 
-			uint32_t nid = pNewTree->basicNode(pNode->Q, pNode->T, pNode->F);
-			assert(nid == iNode);
+		// reset ticker
+		ctx.setupSpeed(pOldTree->ncount - pOldTree->nstart);
+		ctx.tick     = 0;
+		ctx.progress = 0;
+
+		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
+			ctx.progress++;
+			if (ctx.tick && ctx.opt_verbose >= ctx.VERBOSE_TICK) {
+				int perSecond = ctx.updateSpeed();
+
+				int eta  = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% %3d:%02d:%02d ncount=%d",
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pNewTree->ncount);
+
+				ctx.tick = 0;
+			}
+
+			const baseNode_t *pNode = pOldTree->N + iNode;
+			const uint32_t   Q      = pNode->Q;
+			const uint32_t   Tu     = pNode->T & ~IBIT;
+			const uint32_t   Ti     = pNode->T & IBIT;
+			const uint32_t   F      = pNode->F;
+
+			pMap[iNode] = pNewTree->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
 		// merge all keys into system
 		for (unsigned iKey = pOldTree->kstart; iKey < pOldTree->nstart; iKey++) {
-			if (pOldTree->roots[iKey] != iKey) {
+			uint32_t R  = pOldTree->roots[iKey];
+			uint32_t Ru = R & ~IBIT;
+			uint32_t Ri = R & IBIT;
+
+			if (R != iKey) {
 				// create `keyN ^ roots[keyN]`
-				uint32_t term = pNewTree->normaliseNode(iKey, pOldTree->roots[iKey] ^ IBIT, pOldTree->roots[iKey]);
+				uint32_t term = pNewTree->normaliseNode(iKey, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
 
 				// append term as `OR` to system
 				pNewTree->system = pNewTree->normaliseNode(pNewTree->system, IBIT, term);
 			}
 		}
+
+		// remove ticker
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
 
 		// all roots are defaults
 		for (unsigned iKey = pNewTree->kstart; iKey < pNewTree->nstart; iKey++)
@@ -175,6 +218,7 @@ struct kextractContext_t {
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
+		pOldTree->freeMap(pMap);
 		delete pOldTree;
 		delete pNewTree;
 		return 0;
@@ -224,7 +268,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
