@@ -661,7 +661,9 @@ TODO
 
 Resource context:
 
-[GLOSSARY](GLOSSARY.md)
+[BUILD.md](BUILD.md)
+[Evolution.md](Evolution.md)
+[GLOSSARY.md](GLOSSARY.md)
 [context.h](context.h)
 
 Database creation:
@@ -715,6 +717,13 @@ System creation:
 [validatemd5.h](validatemd5.h)  
 [validateprefix.cc](validateprefix.cc)
 [validatespongent.h](validatespongent.h)
+
+Information extraction:
+
+[invert.9bit.sh](invert.9bit.sh)
+[kextract.cc](kextract.cc)
+[kfold.cc](kfold.cc)
+[ksystem.cc](ksystem.cc)
 
 ## Requirements
 
