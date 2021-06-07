@@ -563,3 +563,13 @@ Testing again, above can be outdated because concept extended keys has changed a
     ./validate des.json t.dat
     cmp t.dat des.dat
 ```
+
+@date 2021-06-07 17:40:25
+
+testing `kfold`:
+
+```shell
+    ./ksystem sys.dat 9bit.dat --cascade
+	./kfold t.dat sys.dat --cascade
+	./validate 9bit.json t.dat
+```

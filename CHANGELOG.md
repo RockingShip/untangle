@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-07 17:35:32 Added: `kfold.cc`.
 2021-06-05 23:31:23 Added: `invert-9bit.sh`.
 2021-06-05 23:11:30 Added: `ksystem`, `kextract`. 
 2021-06-04 22:57:59 Added: `kjoin --extend`.

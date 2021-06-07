@@ -395,8 +395,7 @@ struct validateContext_t {
 				}
 			}
 
-			if (json_array_size(jList) > 0)
-				fprintf(stderr, "Validating: %s\n", json_dumps(jList, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			fprintf(stderr, "Validating: %s\n", json_dumps(jList, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			json_delete(jList);
 		}
 

@@ -152,9 +152,9 @@ struct ksliceContext_t {
 				const uint32_t   F      = pNode->F;
 
 				pRefCount[Q]++;
-				pRefCount[Tu]++;
 				if (Tu != F)
-					pRefCount[F]++;
+					pRefCount[Tu]++;
+				pRefCount[F]++;
 			}
 		}
 

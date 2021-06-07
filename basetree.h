@@ -2641,6 +2641,244 @@ struct baseTree_t {
 	}
 
 	/*
+	 * count the number of active nodes in the tree.
+	 * Used to determine the best candidate for folding.
+	 */
+	unsigned countActive(void) {
+		uint32_t *pSelect    = this->allocMap();
+		uint32_t thisVersion = ++this->mapVersionNr;
+
+		if (thisVersion == 0) {
+			::memset(pSelect, 0, this->maxNodes * sizeof *pSelect);
+			thisVersion = ++this->mapVersionNr;
+		}
+
+		unsigned numCount = 0;
+
+		// select the heads
+		// add artificial root for system
+		for (unsigned iRoot = this->kstart; iRoot <= this->numRoots; iRoot++) {
+			uint32_t R = (iRoot < this->numRoots) ?  this->roots[iRoot] :  this->system;
+			uint32_t Ru = R & ~IBIT;
+
+			if (Ru >= this->nstart && pSelect[Ru] != thisVersion)
+				numCount++;
+			pSelect[Ru] = thisVersion;
+		}
+
+		for (uint32_t iNode = this->ncount - 1; iNode >= this->nstart; --iNode) {
+			if (pSelect[iNode] != thisVersion)
+				continue;
+
+			const baseNode_t *pNode = this->N + iNode;
+			const uint32_t   Q      = pNode->Q;
+			const uint32_t   Tu     = pNode->T & ~IBIT;
+//			const uint32_t   Ti     = pNode->T & IBIT;
+			const uint32_t   F      = pNode->F;
+
+			if (Q >= this->nstart && pSelect[Q] != thisVersion)
+				numCount++;
+			pSelect[Q] = thisVersion;
+
+			if (Tu >= this->nstart && pSelect[Tu] != thisVersion)
+				numCount++;
+			pSelect[Tu] = thisVersion;
+
+			if (F >= this->nstart && pSelect[F] != thisVersion)
+				numCount++;
+			pSelect[F] = thisVersion;
+		}
+
+		this->freeMap(pSelect);
+		return numCount;
+	}
+
+	/*
+	 * Import the active area of another tree
+	 * Both trees have/need synced metrics.
+	 * Same tree-walk logic as with `saveFile()`.
+	 * Used when promoting candidate,
+	 * to cleanup and serialize the tree walking order.
+	 */
+	void importActive(baseTree_t *RHS) {
+		/*
+		 * Select  active nodes
+		 */
+
+		uint32_t *pMap       = RHS->allocMap();
+		uint32_t *pStack     = RHS->allocMap();
+		uint32_t *pVersion   = RHS->allocVersion();
+		uint32_t thisVersion = ++RHS->mapVersionNr;
+		uint32_t numStack    = 0; // top of stack
+
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, RHS->maxNodes * sizeof *pVersion);
+			thisVersion = ++RHS->mapVersionNr;
+		}
+
+		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+			pMap[iKey] = iKey;
+
+		/*
+		 * @date 2021-06-05 18:24:37
+		 *
+		 * trace roots, one at a time.
+		 * Last root is a artificial root representing "system"
+		 */
+		for (uint32_t iRoot = 0; iRoot <= this->numRoots; iRoot++) {
+
+			uint32_t R = (iRoot < this->numRoots) ? RHS->roots[iRoot] : RHS->system;
+
+			numStack = 0;
+			pStack[numStack++] = R & ~IBIT;
+
+			/*
+			 * Walk the tree depth-first
+			 */
+			do {
+				// pop stack
+				uint32_t curr = pStack[--numStack];
+
+				if (curr < this->nstart)
+					continue; // endpoints have already been output
+
+				const baseNode_t *pNode = RHS->N + curr;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
+
+				// determine if already handled
+				if (pVersion[curr] != thisVersion) {
+					/*
+					 * First time visit
+					 */
+					pVersion[curr] = thisVersion;
+					pMap[curr]     = 0;
+
+					// push id so it visits again after expanding
+					pStack[numStack++] = curr;
+
+					if (Ti) {
+						if (Tu == 0) {
+							// Q?!0:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+						} else if (F == 0) {
+							// Q?!T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else if (F == Tu) {
+							// Q?!F:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Q;
+
+						} else {
+							// Q?!T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					} else {
+						if (F == 0) {
+							// Q?T:0
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						} else {
+							// Q?T:F
+							pStack[numStack++] = F;
+							pStack[numStack++] = Tu;
+							pStack[numStack++] = Q;
+						}
+					}
+					assert(numStack < maxNodes);
+
+				} else if (pMap[curr] == 0) {
+					/*
+					 * Second time visit
+					 */
+					pMap[curr] = this->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+				}
+
+			} while (numStack > 0);
+		}
+
+		RHS->freeVersion(pVersion);
+		RHS->freeMap(pStack);
+
+		/*
+		 * write roots
+		 * Last root is a virtual root representing "system"
+		 */
+		for (unsigned iRoot = 0; iRoot <= this->numRoots; iRoot++) {
+
+			if (iRoot < this->numRoots)
+				this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
+			else
+				this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
+		}
+
+		RHS->freeMap(pMap);
+	}
+
+	/*
+	 * import/fold
+	 */
+	void importFold(baseTree_t *RHS, uint32_t iFold) {
+
+		uint32_t *pMapSet = RHS->allocMap();
+		uint32_t *pMapClr = RHS->allocMap();
+
+		/*
+		 * Prepare tree
+		 */
+		this->rewind();
+
+		// prepare maps
+		for (unsigned iKey = 0; iKey < RHS->nstart; iKey++)
+			pMapSet[iKey] = pMapClr[iKey] = iKey;
+
+		// make fold constant
+		pMapSet[iFold] = IBIT;
+		pMapClr[iFold] = 0;
+
+		/*
+		 * Copy all nodes
+		 */
+		for (uint32_t iNode = RHS->nstart; iNode < RHS->ncount; iNode++) {
+			const baseNode_t *pNode = RHS->N + iNode;
+			const uint32_t   Q      = pNode->Q;
+			const uint32_t   Tu     = pNode->T & ~IBIT;
+			const uint32_t   Ti     = pNode->T & IBIT;
+			const uint32_t   F      = pNode->F;
+
+			pMapSet[iNode] = this->normaliseNode(pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F]);
+			pMapClr[iNode] = this->normaliseNode(pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F]);
+		}
+
+		/*
+		 * Set roots
+		 */
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
+			uint32_t Ri = RHS->roots[iRoot] & IBIT;
+
+			this->roots[iRoot] = this->normaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+		}
+
+		if (RHS->system) {
+			uint32_t Ru = RHS->system & ~IBIT;
+			uint32_t Ri = RHS->system & IBIT;
+
+			this->system = this->normaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+		}
+
+		RHS->freeMap(pMapSet);
+		RHS->freeMap(pMapClr);
+	}
+
+	/*
 	 * @date 2021-05-14 21:18:32
 	 *
 	 * Load database from binary data file
@@ -2851,12 +3089,14 @@ struct baseTree_t {
 		// write keyNames
 		for (uint32_t i = 0; i < nstart; i++) {
 			size_t len = keyNames[i].length() + 1;
+			assert(len > 1);
 			fwrite(keyNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
 		// write rootNames
 		for (uint32_t i = 0; i < numRoots; i++) {
 			size_t len = rootNames[i].length() + 1;
+			assert(len > 1);
 			fwrite(rootNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
@@ -2891,7 +3131,27 @@ struct baseTree_t {
 			 */
 
 			// output keys
-			for (uint32_t iNode = 0; iNode < ncount; iNode++) {
+			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
+				// get remapped
+				baseNode_t wrtNode;
+				wrtNode.Q = 0;
+				wrtNode.T = IBIT;
+				wrtNode.F = iKey;
+
+				pMap[iKey] = nextId++;
+
+				size_t len = sizeof wrtNode;
+				fwrite(&wrtNode, len, 1, outf);
+				fpos += len;
+
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.Q));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.T));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.F));
+
+			}
+
+			// output keys
+			for (uint32_t iNode = nstart; iNode < ncount; iNode++) {
 				const baseNode_t *pNode = this->N + iNode;
 				const uint32_t   Q      = pNode->Q;
 				const uint32_t   Tu     = pNode->T & ~IBIT;
@@ -2899,20 +3159,20 @@ struct baseTree_t {
 				const uint32_t   F      = pNode->F;
 
 				// get remapped
-				baseNode_t newNode;
-				newNode.Q = pMap[Q];
-				newNode.T = pMap[Tu] ^ Ti;
-				newNode.F = pMap[F];
-
-				size_t len = sizeof newNode;
-				fwrite(&newNode, len, 1, outf);
-				fpos += len;
+				baseNode_t wrtNode;
+				wrtNode.Q = pMap[Q];
+				wrtNode.T = pMap[Tu] ^ Ti;
+				wrtNode.F = pMap[F];
 
 				pMap[iNode] = nextId++;
 
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
+				size_t len = sizeof wrtNode;
+				fwrite(&wrtNode, len, 1, outf);
+				fpos += len;
+
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.Q));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.T));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.F));
 
 			}
 		} else {
@@ -2933,20 +3193,20 @@ struct baseTree_t {
 				pMap[iKey]     = iKey;
 
 				// get remapped
-				baseNode_t newNode;
-				newNode.Q = 0;
-				newNode.T = IBIT;
-				newNode.F = iKey;
+				baseNode_t wrtNode;
+				wrtNode.Q = 0;
+				wrtNode.T = IBIT;
+				wrtNode.F = iKey;
 
-				size_t len = sizeof newNode;
-				fwrite(&newNode, len, 1, outf);
+				size_t len = sizeof wrtNode;
+				fwrite(&wrtNode, len, 1, outf);
 				fpos += len;
 
 				pMap[iKey] = nextId++;
 
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.Q));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.T));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.F));
 
 			}
 
@@ -2990,38 +3250,12 @@ struct baseTree_t {
 						// push id so it visits again after expanding
 						pStack[numStack++] = curr;
 
-						if (Ti) {
-							if (Tu == 0) {
-								// Q?!0:F
-								pStack[numStack++] = F;
-								pStack[numStack++] = Q;
-							} else if (F == 0) {
-								// Q?!T:0
-								pStack[numStack++] = Tu;
-								pStack[numStack++] = Q;
-							} else if (F == Tu) {
-								// Q?!F:F
-								pStack[numStack++] = F;
-								pStack[numStack++] = Q;
+						if (F)
+							pStack[numStack++] = F;
+						if (Tu != F && Tu)
+							pStack[numStack++] = Tu;
+						pStack[numStack++]         = Q;
 
-							} else {
-								// Q?!T:F
-								pStack[numStack++] = F;
-								pStack[numStack++] = Tu;
-								pStack[numStack++] = Q;
-							}
-						} else {
-							if (F == 0) {
-								// Q?T:0
-								pStack[numStack++] = Tu;
-								pStack[numStack++] = Q;
-							} else {
-								// Q?T:F
-								pStack[numStack++] = F;
-								pStack[numStack++] = Tu;
-								pStack[numStack++] = Q;
-							}
-						}
 						assert(numStack < maxNodes);
 
 					} else if (pMap[curr] == 0) {
@@ -3029,20 +3263,20 @@ struct baseTree_t {
 						 * Second time visit
 						 */
 
-						baseNode_t newNode;
-						newNode.Q = pMap[Q];
-						newNode.T = pMap[Tu] ^ Ti;
-						newNode.F = pMap[F];
+						baseNode_t wrtNode;
+						wrtNode.Q = pMap[Q];
+						wrtNode.T = pMap[Tu] ^ Ti;
+						wrtNode.F = pMap[F];
 
-						size_t len = sizeof newNode;
-						fwrite(&newNode, len, 1, outf);
+						size_t len = sizeof wrtNode;
+						fwrite(&wrtNode, len, 1, outf);
 						fpos += len;
 
 						pMap[curr] = nextId++;
 
-						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.Q));
-						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.T));
-						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(newNode.F));
+						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.Q));
+						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.T));
+						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.F));
 					}
 
 				} while (numStack > 0);
@@ -3067,15 +3301,15 @@ struct baseTree_t {
 		header.offRoots = fpos;
 
 		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
-			uint32_t R = (iRoot < numRoots) ? roots[iRoot] : system;
+			uint32_t R = roots[iRoot];
 
-			// new root
-			uint32_t r = pMap[R & ~IBIT] ^(R & IBIT);
+			// new wrtRoot
+			uint32_t wrtRoot = pMap[R & ~IBIT] ^(R & IBIT);
 
-			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(r));
+			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtRoot));
 
-			size_t len = sizeof r;
-			fwrite(&r, len, 1, outf);
+			size_t len = sizeof wrtRoot;
+			fwrite(&wrtRoot, len, 1, outf);
 			fpos += len;
 		}
 
@@ -3098,9 +3332,6 @@ struct baseTree_t {
 			fpos += len;
 		}
 
-		// release maps
-		freeMap(pMap);
-
 		/*
 		 * Rewrite header and close
 		 */
@@ -3108,7 +3339,7 @@ struct baseTree_t {
 		header.magic       = BASETREE_MAGIC;
 		header.magic_flags = flags;
 		header.unused1     = unused1;
-		header.system      = system;
+		header.system      = pMap[system & ~IBIT] ^ (system & IBIT);
 		header.crc32       = crc32;
 		header.kstart      = kstart;
 		header.ostart      = ostart;
@@ -3141,6 +3372,10 @@ struct baseTree_t {
 
 		if (showProgress && ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K"); // erase showProgress
+
+		// release maps
+		freeMap(pMap);
+
 
 //		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 //			fprintf(stderr, "[%s] Written %s, %u nodes, %lu bytes\n", ctx.timeAsString(), fileName, ncount - nstart, header.offEnd);
@@ -3495,9 +3730,9 @@ struct baseTree_t {
 			const uint32_t   F      = pNode->F;
 
 			pRefCount[Q]++;
-			pRefCount[Tu]++;
 			if (Tu != F)
-				pRefCount[F]++;
+				pRefCount[Tu]++;
+			pRefCount[F]++;
 		}
 
 		json_t *jRefCount = json_object();

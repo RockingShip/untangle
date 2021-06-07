@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST = \
 	LICENSE.txt BUILD.md CHANGELOG.md GLOSSARY.md README.md \
-	.gitignore $(EXTRA_PART2)
+	.gitignore $(EXTRA_PART1) $(EXTRA_PART2) $(EXTRA_PART3)
 
 MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
@@ -10,13 +10,14 @@ CLEANFILES =
 BUILT_SOURCES = genrestartdata
 
 noinst_PROGRAMS =
-bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2)
+bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3)
 
 ##
 ## This section for dataset creation utilities
 ##
 
 PROGRAMS_PART1 = eval genhint genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
+EXTRA_PART1 =
 
 # genrestartdata is slow and output is small, include in distribution
 restartdata.h : genrestartdata.cc
@@ -79,7 +80,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kextract kjoin kload ksave kslice ksystem spongent validate validateprefix
+PROGRAMS_PART2 = build9bit buildaes builddes buildmd5 buildspongent buildtest0 kjoin kload ksave kslice spongent validate validateprefix
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-05-15 18:53:07
@@ -110,10 +111,6 @@ buildspongent_LDADD = $(LDADD) $(AM_LDADD)
 buildtest0_SOURCES = buildtest0.cc basetree.h context.h
 buildtest0_LDADD = $(LDADD) $(AM_LDADD)
 
-# @date 2021-06-05 21:35:41
-kextract_SOURCES = kextract.cc basetree.h context.h
-kextract_LDADD = $(LDADD) $(AM_LDADD)
-
 # @date 2021-05-20 22:51:00
 kjoin_SOURCES = kjoin.cc basetree.h context.h
 kjoin_LDADD = $(LDADD) $(AM_LDADD)
@@ -130,10 +127,6 @@ ksave_LDADD = $(LDADD) $(AM_LDADD)
 kslice_SOURCES = kslice.cc basetree.h context.h
 kslice_LDADD = $(LDADD) $(AM_LDADD)
 
-# @date 2021-06-05 13:58:33
-ksystem_SOURCES = ksystem.cc basetree.h context.h
-ksystem_LDADD = $(LDADD) $(AM_LDADD)
-
 # @date 2021-05-17 14:21:07
 spongent_SOURCES = spongent.cc spongent.h
 spongent_CXXFLAGS = -D_SPONGENT088080008_
@@ -145,3 +138,23 @@ validate_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-05-22 18:54:24
 validateprefix_SOURCES = validateprefix.cc basetree.h context.h
 validateprefix_LDADD = $(LDADD) $(AM_LDADD)
+
+##
+## This section for creation of examples
+##
+
+PROGRAMS_PART3 = kextract kfold ksystem
+EXTRA_PART3 =
+
+# @date 2021-06-05 21:35:41
+kextract_SOURCES = kextract.cc basetree.h context.h
+kextract_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-06-05 23:43:44
+kfold_SOURCES = kfold.cc basetree.h context.h
+kfold_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-06-05 13:58:33
+ksystem_SOURCES = ksystem.cc basetree.h context.h
+ksystem_LDADD = $(LDADD) $(AM_LDADD)
+
