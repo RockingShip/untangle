@@ -181,9 +181,9 @@ struct baseTree_t {
 	uint32_t   nodeIndexVersionNr;	// active version number
 	// pools
 	unsigned   numPoolMap;		// Number of node-id pools in use
-	uint32_t   **gPoolMap;		// Pool of available node-id maps
+	uint32_t   **pPoolMap;		// Pool of available node-id maps
 	unsigned   numPoolVersion;	// Number of version-id pools in use
-	uint32_t   **gPoolVersion;	// Pool of available version-id maps
+	uint32_t   **pPoolVersion;	// Pool of available version-id maps
 	uint32_t   mapVersionNr;	// Version number
 	// structure based compare
 	uint32_t   *stackL;		// id of lhs
@@ -194,6 +194,8 @@ struct baseTree_t {
 	uint32_t   *compVersionR;
 	uint32_t   compVersionNr;	// versioned memory for compare - active version number
 	uint64_t   numCompare;		// number of compares performed
+	// reserved for evaluator
+
 	//@formatter:on
 
 	/*
@@ -235,9 +237,9 @@ struct baseTree_t {
 		nodeIndexVersionNr(1),
 		// pools
 		numPoolMap(0),
-		gPoolMap(NULL),
+		pPoolMap(NULL),
 		numPoolVersion(0),
-		gPoolVersion(NULL),
+		pPoolVersion(NULL),
 		mapVersionNr(0),
 		// structure based compare (NOTE: needs to go after pools!)
 		stackL(NULL),
@@ -291,9 +293,9 @@ struct baseTree_t {
 		nodeIndexVersionNr(1), // own version because longer life span
 		// pools
 		numPoolMap(0),
-		gPoolMap((uint32_t **) ctx.myAlloc("baseTree_t::gPoolMap", MAXPOOLARRAY, sizeof(*gPoolMap))),
+		pPoolMap((uint32_t **) ctx.myAlloc("baseTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
 		numPoolVersion(0),
-		gPoolVersion( (uint32_t **) ctx.myAlloc("baseTree_t::gPoolVersion", MAXPOOLARRAY, sizeof(*gPoolVersion))),
+		pPoolVersion( (uint32_t **) ctx.myAlloc("baseTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
 		mapVersionNr(0),
 		// structure based compare (NOTE: needs to go after pools!)
 		stackL(allocMap()),
@@ -367,9 +369,9 @@ struct baseTree_t {
 
 		// release pools
 		while (numPoolMap > 0)
-			ctx.myFree("baseTree_t::nodeMap", gPoolMap[--numPoolMap]);
+			ctx.myFree("baseTree_t::nodeMap", pPoolMap[--numPoolMap]);
 		while (numPoolVersion > 0)
-			ctx.myFree("baseTree_t::versionMap", gPoolVersion[--numPoolVersion]);
+			ctx.myFree("baseTree_t::versionMap", pPoolVersion[--numPoolVersion]);
 
 		// release resources
 		if (hndl >= 0) {
@@ -398,8 +400,8 @@ struct baseTree_t {
 		history          = NULL;
 		nodeIndex        = NULL;
 		nodeIndexVersion = NULL;
-		gPoolMap         = NULL;
-		gPoolVersion     = NULL;
+		pPoolMap         = NULL;
+		pPoolVersion     = NULL;
 		stackL           = NULL;
 		stackR           = NULL;
 		compNodeL        = NULL;
@@ -436,7 +438,7 @@ struct baseTree_t {
 
 		if (numPoolMap > 0) {
 			// get first free node map
-			pMap = gPoolMap[--numPoolMap];
+			pMap = pPoolMap[--numPoolMap];
 		} else {
 			// allocate new map
 			pMap = (uint32_t *) ctx.myAlloc("baseTree_t::versionMap", maxNodes, sizeof *pMap);
@@ -457,7 +459,7 @@ struct baseTree_t {
 			ctx.fatal("context.h:MAXPOOLARRAY too small\n");
 
 		// store the current root in map
-		gPoolMap[numPoolMap++] = pMap;
+		pPoolMap[numPoolMap++] = pMap;
 		pMap = NULL;
 	}
 
@@ -476,7 +478,7 @@ struct baseTree_t {
 
 		if (numPoolVersion > 0) {
 			// get first free version map
-			pVersion = gPoolVersion[--numPoolVersion];
+			pVersion = pPoolVersion[--numPoolVersion];
 		} else {
 			// allocate new map
 			pVersion = (uint32_t *) ctx.myAlloc("baseTree_t::versionMap", maxNodes, sizeof *pVersion);
@@ -497,7 +499,7 @@ struct baseTree_t {
 			ctx.fatal("context.h:MAXPOOLARRAY too small\n");
 
 		// store the current root in Version
-		gPoolVersion[numPoolVersion++] = pVersion;
+		pPoolVersion[numPoolVersion++] = pVersion;
 		pVersion = NULL;
 	}
 
@@ -1971,6 +1973,7 @@ struct baseTree_t {
 
 			switch (*pPattern) {
 			case '0': //
+				pPattern++;
 				break;
 
 				// @formatter:off
@@ -1979,6 +1982,7 @@ struct baseTree_t {
 			case '9':
 			// @formatter:on
 				// back-link
+				pPattern++;
 				break;
 
 				// @formatter:off
@@ -1995,6 +1999,8 @@ struct baseTree_t {
 				int v = (*pPattern - 'a');
 				if (v > highest)
 					highest = v;
+
+				pPattern++;
 				break;
 
 			}
@@ -2025,6 +2031,8 @@ struct baseTree_t {
 				} else {
 					ctx.fatal("[bad token '%c' in pattern]\n", *pPattern);
 				}
+
+				pPattern++;
 				break;
 			}
 
@@ -2036,12 +2044,36 @@ struct baseTree_t {
 			case '?':
 			case '!':
 			case '~':
+				pPattern++;
 				break;
-			case '/':
-				// skip transform
+			case '/': {
+				// scan transform
+				pPattern++;
+
+				while (*pPattern) {
+					if (*pPattern != ' ') {
+						// prefix
+						int v = 0;
+						while (isupper(*pPattern))
+							v = v * 26 + *pPattern++ - 'A';
+
+						if (!islower(*pPattern))
+							ctx.fatal("[bad token '%c' in transform]\n", *pPattern);
+
+						// followed by endpoint
+						v = (v * 26 + *pPattern - 'a');
+
+						if (v > highest)
+							highest = v;
+					}
+					pPattern++;
+				}
+
 				return highest;
+			}
 			case ' ':
 				// skip spaces
+				pPattern++;
 				break;
 			default:
 				ctx.fatal("[bad token '%c' in pattern]\n", *pPattern);
@@ -2990,8 +3022,8 @@ struct baseTree_t {
 		roots         = (uint32_t *) (rawDatabase + fileHeader->offRoots);
 		history       = (uint32_t *) (rawDatabase + fileHeader->offHistory);
 		// pools
-		gPoolMap      = (uint32_t **) ctx.myAlloc("baseTree_t::gPoolMap", MAXPOOLARRAY, sizeof(*gPoolMap));
-		gPoolVersion  = (uint32_t **) ctx.myAlloc("baseTree_t::gPoolVersion", MAXPOOLARRAY, sizeof(*gPoolVersion));
+		pPoolMap      = (uint32_t **) ctx.myAlloc("baseTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap));
+		pPoolVersion  = (uint32_t **) ctx.myAlloc("baseTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
 		// structure based compare
 		stackL        = allocMap();
 		stackR        = allocMap();

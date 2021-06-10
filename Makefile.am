@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST = \
 	LICENSE.txt BUILD.md CHANGELOG.md GLOSSARY.md README.md \
-	.gitignore $(EXTRA_PART1) $(EXTRA_PART2) $(EXTRA_PART3)
+	.gitignore $(EXTRA_PART1) $(EXTRA_PART2) $(EXTRA_PART3) $(EXTRA_PART4)
 
 MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
@@ -10,7 +10,7 @@ CLEANFILES =
 BUILT_SOURCES = genrestartdata
 
 noinst_PROGRAMS =
-bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3)
+bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4)
 
 ##
 ## This section for dataset creation utilities
@@ -140,7 +140,7 @@ validateprefix_SOURCES = validateprefix.cc basetree.h context.h
 validateprefix_LDADD = $(LDADD) $(AM_LDADD)
 
 ##
-## This section for creation of examples
+## This section for extraction of information
 ##
 
 PROGRAMS_PART3 = kextract kfold ksystem
@@ -158,3 +158,13 @@ kfold_LDADD = $(LDADD) $(AM_LDADD)
 ksystem_SOURCES = ksystem.cc basetree.h context.h
 ksystem_LDADD = $(LDADD) $(AM_LDADD)
 
+##
+## This section for baseTree optimisations
+##
+
+PROGRAMS_PART4 = beval
+EXTRA_PART4 =
+
+# @date 2021-06-08 10:19:45
+beval_SOURCES = beval.cc basetree.h context.h
+beval_LDADD = $(LDADD) $(AM_LDADD)

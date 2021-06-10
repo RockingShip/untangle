@@ -1,4 +1,4 @@
-# Changelog
+# Change log
 
 All notable changes to this project will be documented in this file.
 
@@ -7,16 +7,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+```
+2021-06-09 11:26:08 Added: `beval.cc` (without --rewrite).
+```
+
 ## 2021-06-07 22:51:42 [Version 2.4.0]
 
 This release is the third part/chapter of the project.
 
 With the new extended roots, a job scheduler might not be necessary, include on-demand.  
-History which belongs to the schedular is also on-demand.
+History which belongs to the scheduler is also on-demand.
 
  - `kextract` extract key from balanced system
  - `kfold` rotate a balanced system through all its keys
  - `ksystem` converting sets of equations to balanced system
+
+Quick guide to extract a key:
+
+```sh
+    mkdir tmp
+    ./build9bit 9bit.json 9bit.dat         # create system
+    ./ksystem sys.dat 9bit.dat             # convert to balanced system
+    ./kextract 9bit.k0.dat sys.dat k0      # extract key from system
+    ./kfold remain.dat 9bit.k0.dat sys.dat # remove extracted key from system
+
+    # validate correctness
+    ./validate bit.json sys.dat     # balanced system
+    ./validate bit.json 9bit.k0.dat # key
+    ./validate bit.json remain.dat  # remainder
+```
 
 ```
 2021-06-07 22:39:32 Fixed: `ksystem --cascade`.
@@ -47,6 +66,16 @@ This release is the second part/chapter of the project.
  - `kload.cc` import/create a tree from JSON
  - `spongent.cc` spongent, lightweight hash function
  - `validateprefix.cc` validate the endpoint/back-reference prefix logic
+
+Quick guide to construct/test a system:
+
+```sh
+    mkdir tmp
+    ./buildmd5 md5.json md5.dat       # create system
+    ./kslice tmp/md5-%05d.dat md5.dat # slice into smaller trees
+    ./kjoin join.dat tmp/md5-*.dat    # collect and join
+    ./validate md5.json join.dat      # validate contents
+```
 
 ```
 2021-05-29 21:47:39 Fixed: Disabled `-fno-var-tracking-assignments` for buildX functions.
