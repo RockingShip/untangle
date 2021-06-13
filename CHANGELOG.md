@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-13 00:07:11 Added: `validaterewrite.cc`.
 2021-06-09 11:26:08 Added: `beval.cc` (without --rewrite).
 ```
 

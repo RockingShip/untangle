@@ -347,19 +347,17 @@ struct context_t {
 	 * @param {uint64_t} n - number to test
 	 * @return {number} next highest prime, limited to 2^32-5
 	 */
-	unsigned nextPrime(uint64_t d) {
+	unsigned nextPrime(uint64_t n) {
 		// limit to highest possible
-		if (d >= 4294967291)
+		if (n >= 4294967291)
 			return 4294967291;
-		if (d == 0)
+		if (n == 0)
 			return 0; // zero ois zero
-		if (d < 3)
+		if (n < 3)
 			return 3;
 
-		uint64_t n = (uint64_t) d;
-
 		// If even then increment
-		if (~n & 1)
+		if (!(n & 1))
 			n++;
 
 		// increment until prime found;
@@ -380,7 +378,7 @@ struct context_t {
 	 * @param {number} percent - percent to increase with
 	 * @return {number} next highest prime, limited to 2^32-5
 	 */
-	unsigned raisePercent(double n, unsigned percent) {
+	unsigned raisePercent(uint64_t n, unsigned percent) {
 
 		if (n >= 4294967291)
 			return 4294967291; // largest possible prime

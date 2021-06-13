@@ -198,6 +198,15 @@ struct baseTree_t {
 
 	//@formatter:on
 
+	/**
+	 * @date 2021-06-13 00:01:50
+	 *
+	 * Copy/Assign constructors not supported.
+	 * Let usage trigger a "linker not found" error
+	 */
+	baseTree_t(const baseTree_t &rhs);
+	baseTree_t &operator=(const baseTree_t &rhs);
+\
 	/*
 	 * Create an empty tree, placeholder for reading from file
 	 */
@@ -787,10 +796,6 @@ struct baseTree_t {
 	 */
 	inline uint32_t basicNode(uint32_t Q, uint32_t T, uint32_t F) {
 
-		assert(Q != 1 /*KERROR*/);
-		assert((T & ~IBIT) != 1 /*KERROR*/);
-		assert(F != 1 /*KERROR*/);
-
 		/*
 		 *  [ 2] a ? !0 : b                  "+" or
 		 *  [ 6] a ? !b : 0                  ">" greater-than
@@ -802,6 +807,10 @@ struct baseTree_t {
 		 */
 
 		if (this->flags & ctx.MAGICMASK_PARANOID) {
+			assert (!Q || Q >= this->kstart);
+			assert (!(T & ~IBIT) || (T & ~IBIT) >= this->kstart);
+			assert (!F || F >= this->kstart);
+
 			assert (Q < this->ncount);
 			assert ((T & ~IBIT) < this->ncount);
 			assert (F < this->ncount);
@@ -1812,6 +1821,12 @@ struct baseTree_t {
 
 			// bump version, need to walk tree again
 			thisVersion = ++mapVersionNr;
+
+			// clear version map when wraparound
+			if (thisVersion == 0) {
+				::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+				thisVersion = ++mapVersionNr;
+			}
 		}
 
 		numStack = 0;

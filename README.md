@@ -725,6 +725,10 @@ Information extraction:
 [kfold.cc](kfold.cc)
 [ksystem.cc](ksystem.cc)
 
+Optimisations:
+
+[validaterewrite.cc](validaterewrite.cc)
+
 ## Requirements
 
 *   64-bits CPU architecture.

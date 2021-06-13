@@ -165,11 +165,11 @@ struct tinyTree_t {
 	 * Compare trees by content without looking at (internal) references.
 	 *
 	 * Comparing follows tree walking path.
-	 * First layout, when components are satisified then endpoints.
+	 * First layout, when components are satisfied then endpoints.
 	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
-	 * @param {boolean} layoutOnly - ignore enpoint values when `true`
+	 * @param {boolean} layoutOnly - ignore endpoint values when `true`
 	 * @return {number} `<0` if `lhs<rhs`, `0` if `lhs==rhs` and `>0` if `lhs>rhs`
 	 */
 	int compare(unsigned lhs, const tinyTree_t &treeR, unsigned rhs) const {

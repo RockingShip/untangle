@@ -736,9 +736,9 @@ struct database_t {
 	 * To reduce need to copy large chunks of data from input to output, make pages writable and enable copy-on-write
 	 *
          * @param {string} fileName - database filename
-         * @param {boolean} useMmap - `false` to `read()`, `true` to `mmap()`
+         * @param {boolean} writable - Set access to R/W
 	 */
-	void open(const char *fileName, unsigned copyOnWrite) {
+	void open(const char *fileName, unsigned writable) {
 
 		/*
 		 * Open file
@@ -757,7 +757,7 @@ struct database_t {
 		 */
 		void *pMemory;
 
-		if (copyOnWrite) {
+		if (writable) {
 			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
 			if (pMemory == MAP_FAILED)
 				ctx.fatal("\n{\"error\":\"mmap(PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);

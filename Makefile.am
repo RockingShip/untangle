@@ -162,9 +162,14 @@ ksystem_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for baseTree optimisations
 ##
 
-PROGRAMS_PART4 = beval
+PROGRAMS_PART4 = beval validaterewrite
 EXTRA_PART4 =
 
 # @date 2021-06-08 10:19:45
 beval_SOURCES = beval.cc basetree.h context.h
 beval_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-06-10 11:39:02
+validaterewrite_SOURCES = validaterewrite.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
+validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
+validaterewrite.$(OBJEXT) : restartdata.h

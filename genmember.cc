@@ -137,7 +137,7 @@
  *
  *              <name>
  *
- * `--test=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
+ * `--text=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
  *
  *              <cid> <sid> <cmp> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
 
