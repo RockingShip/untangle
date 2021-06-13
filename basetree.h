@@ -800,7 +800,7 @@ struct baseTree_t {
 		 *  [ 2] a ? !0 : b                  "+" or
 		 *  [ 6] a ? !b : 0                  ">" greater-than
 		 *  [ 8] a ? !b : b                  "^" not-equal
-		 *  [ 9] a ? !b : c                  "#" QnTF
+		 *  [ 9] a ? !b : c                  "!" QnTF
 		 *  [12] a ?  0 : b -> b ? !a : 0
 		 *  [16] a ?  b : 0                  "&" and
 		 *  [19] a ?  b : c                  "?" QTF
@@ -1028,7 +1028,7 @@ struct baseTree_t {
 		 *  [ 6] a ? !b : 0                  ">" greater-than
 		 *  [ 7] a ? !b : a  ->  a ? !b : 0
 		 *  [ 8] a ? !b : b                  "^" not-equal
-		 *  [ 9] a ? !b : c                  "#" QnTF
+		 *  [ 9] a ? !b : c                  "!" QnTF
 		 *
 		 * depreciated:
 		 *  [10] a ?  0 : 0 -> 0
@@ -1042,7 +1042,7 @@ struct baseTree_t {
 		 *  [18] a ?  b : b -> b
 		 *  [19] a ?  b : c                  "?" QTF
 		 *
- 		 * ./eval --raw 'a0a#' 'a0b#' 'aaa#' 'aab#' 'aba#' 'abb#' 'abc#' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
+ 		 * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
  		 *
 		 */
 
@@ -1932,7 +1932,7 @@ struct baseTree_t {
 						name += '^';
 					} else {
 						// Q?!T:F
-						name += '#';
+						name += '!';
 					}
 				} else {
 					if (F == 0) {
@@ -2053,7 +2053,6 @@ struct baseTree_t {
 
 			case '+':
 			case '>':
-			case '#':
 			case '^':
 			case '&':
 			case '?':
@@ -2313,20 +2312,6 @@ struct baseTree_t {
 				pStack[stackpos++] = pMap[nextNode++] = nid;
 				break;
 			}
-			case '#': {
-				// QnTF
-				if (stackpos < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t F = pStack[--stackpos];
-				uint32_t T = pStack[--stackpos];
-				uint32_t Q = pStack[--stackpos];
-
-				nid = normaliseNode(Q, T ^ IBIT, F);
-
-				pStack[stackpos++] = pMap[nextNode++] = nid;
-				break;
-			}
 			case '^': {
 				// NE
 				if (stackpos < 2)
@@ -2374,7 +2359,7 @@ struct baseTree_t {
 				break;
 			}
 			case '!': {
-				// QTnF
+				// QnTF
 				if (stackpos < 3)
 					ctx.fatal("[stack underflow]\n");
 
@@ -2382,7 +2367,7 @@ struct baseTree_t {
 				uint32_t T = pStack[--stackpos];
 				uint32_t Q = pStack[--stackpos];
 
-				nid = normaliseNode(Q, T, F ^ IBIT);
+				nid = normaliseNode(Q, T ^ IBIT, F);
 
 				pStack[stackpos++] = pMap[nextNode++] = nid;
 				break;
@@ -2583,20 +2568,6 @@ struct baseTree_t {
 				pStack[stackpos++] = pMap[nextNode++] = nid;
 				break;
 			}
-			case '#': {
-				// QnTF
-				if (stackpos < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t F = pStack[--stackpos];
-				uint32_t T = pStack[--stackpos];
-				uint32_t Q = pStack[--stackpos];
-
-				nid = basicNode(Q, T ^ IBIT, F);
-
-				pStack[stackpos++] = pMap[nextNode++] = nid;
-				break;
-			}
 			case '^': {
 				// NE
 				if (stackpos < 2)
@@ -2638,7 +2609,7 @@ struct baseTree_t {
 				break;
 			}
 			case '!': {
-				// QTnF
+				// QnTF
 				if (stackpos < 3)
 					ctx.fatal("[stack underflow]\n");
 
@@ -2646,7 +2617,7 @@ struct baseTree_t {
 				uint32_t T = pStack[--stackpos];
 				uint32_t Q = pStack[--stackpos];
 
-				nid = basicNode(Q, T, F ^ IBIT);
+				nid = basicNode(Q, T ^ IBIT, F);
 
 				pStack[stackpos++] = pMap[nextNode++] = nid;
 				break;
