@@ -244,6 +244,7 @@ struct tinyTree_t {
 			/*
 			 * Push components
 			 *
+			 *  Evaluation order is reverse order
 			 *	First push if both are endpoints. Should be tested last if layout matches.
 			 *	Second enter depth, let that handle incomplete sides.
 			 */
@@ -1297,6 +1298,77 @@ struct tinyTree_t {
 		encode(id, staticName, pSkin);
 
 		return staticName;
+	}
+
+	/*
+	 * @date 2021-06-12 12:50:26
+	 *
+	 * Determine display score (less is better)
+	 *  numNodes << 8  | numEndpoint << 4 | numQTF
+	 */
+	uint16_t calcScoreTree(uint32_t root) const {
+		if (root == 0)
+			return 0x000; // zero, highest score
+		if (root < TINYTREE_NSTART)
+			return 0x010; // variable, second highest score
+
+		/*
+		 * Select nodes to process
+		 */
+		uint32_t selected = 1U << root;
+		unsigned score    = 0;
+
+		for (uint32_t iNode = count - 1; iNode >= TINYTREE_NSTART; --iNode) {
+			if (selected & (1U << iNode)) {
+				const tinyNode_t *pNode = N + iNode;
+				const unsigned   Q      = pNode->Q;
+				const unsigned   Tu     = pNode->T & ~IBIT;
+				const unsigned   Ti     = pNode->T & IBIT;
+				const unsigned   F      = pNode->F;
+
+				// extend selection
+				selected |= 1U << pNode->Q;
+				selected |= 1U << (pNode->T & ~IBIT);
+				selected |= 1U << pNode->F;
+
+				// collect score
+				score += 1 << 8; // numNode
+				if (!Ti)
+					score += 1 << 0; // numQTF
+				if (Q > 0 && Q < TINYTREE_NSTART)
+					score += 1 << 4; // numEndpoint
+				if (Tu > 0 && Tu < TINYTREE_NSTART)
+					score += 1 << 4; // numEndpoint
+				if (F != Tu && F > 0 && F < TINYTREE_NSTART)
+					score += 1 << 4; // numEndpoint
+			}
+		}
+
+		return score;
+	}
+
+	/*
+	 * @date 2021-06-17 20:39:54
+	 *
+	 * Determine display score (less is better)
+	 *  numNodes << 8  | numEndpoint << 4 | numQTF
+	 */
+	static uint16_t calcScoreName(const char *pName) {
+		// fast score calculation
+		unsigned score    = 0;
+
+		while (*pName) {
+			if (islower(*pName))
+				score += 0x010; // numEndpoint
+			else if (*pName == '&' || *pName == '?')
+				score += 0x101; // numQTF,numNode
+			else if (*pName == '^' || *pName == '+' || *pName == '>' || *pName == '!')
+				score += 0x100; // numNode
+
+			pName++;
+		}
+
+		return score;
 	}
 
 	/**

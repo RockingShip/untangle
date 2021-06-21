@@ -71,7 +71,7 @@ struct bevalContext_t {
 		QUADPERFOOTPRINT = ((1 << MAXSLOTS) / 64)
 	};
 
-		/// @var {string} name of database
+	/// @var {string} name of database
 	const char *opt_databaseName;
 	/// @var {number} --datasize, Data vector size containing test patterns for CRC (units in uint64_t)
 	unsigned opt_dataSize;
@@ -398,7 +398,7 @@ struct bevalContext_t {
 			printf("\n");
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
+		if (pTree->numRewrite > 1 && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 			if (differ)
 				fprintf(stderr, "crc DIFFER\n");
 			else
@@ -422,7 +422,7 @@ struct bevalContext_t {
 bevalContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.dat> <input.dat> ...\n", argv[0]);
+	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
 		fprintf(stderr, "\t   --extend\n");
@@ -467,6 +467,7 @@ int main(int argc, char *argv[]) {
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
+			{"database",    1, 0, LO_DATABASE},
 			{"datasize",    1, 0, LO_DATASIZE},
 			{"debug",       1, 0, LO_DEBUG},
 			{"force",       0, 0, LO_FORCE},

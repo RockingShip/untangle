@@ -158,7 +158,7 @@ struct footprint_t {
 struct signature_t {
 	enum {
 		/// @constant {number} (numnode*3+1+1/*root invert*/+1/*terminator*/) For 5n9 signatures (4n9 is default) that would be 18
-		SIGNATURENAMELENGTH = (5 * 3 + 1 + 1 + 1),
+		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1 + 1),
 	};
 
 	enum {
@@ -205,8 +205,11 @@ struct signature_t {
 	/// @var {number} number of back-references
 	uint8_t numBackRef;
 
-	/// @var {string} Notation/name of signature. With space for inverted root and terminator
+	/// @var {string} Display name of signature. With space for inverted root and terminator
 	char name[SIGNATURENAMELENGTH];
+
+	/// @var {string} Prime structure, use to construct normalised trees.
+	char prime[SIGNATURENAMELENGTH];
 };
 
 /*

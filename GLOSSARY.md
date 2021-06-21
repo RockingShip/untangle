@@ -74,6 +74,10 @@ Collection of used terms and codewords.
     To handle the vast amount of data interference patterns are created between icons creating Moire patterns. 
     Information is located/manipulated in these patterns and stored by the icons creating them.   
 
+* heads
+
+    Group of nodes nearest to root.
+
 * imprint
  
     Extension of `footprint` including all possible endpoint permutations.
@@ -154,6 +158,8 @@ Collection of used terms and codewords.
     
 * polarising    
    
+* prime structure
+
 * pure
      
 * `QTF` / `QnTF` / `QTnF`
@@ -176,6 +182,10 @@ Collection of used terms and codewords.
     Slots is a historic name. It is best comparable with "bus-width" in computer science. 
     It is used to determine the size and number of transforms, skins, structure endpoins, evaluator test vectors.
    
+* tail
+
+    Group of nodes nearest the endpoints
+
 * transform
 
     A connection remapping. It contains instructions on how to attach endpoints to structures to change 

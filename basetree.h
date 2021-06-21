@@ -2154,7 +2154,7 @@ struct baseTree_t {
 	 *
 	 * NOTE: !!! Apply any changes here also to `loadBasicString()`
 	 *
-	 * Import a string into tree.
+	 * Import/add a string into tree.
 	 * NOTE: Will use `normaliseNode()`.
 	 */
 	uint32_t loadNormaliseString(const char *pPattern, const char *pTransform = NULL) {
@@ -2413,7 +2413,7 @@ struct baseTree_t {
 	 *
 	 * NOTE: !!! Apply any changes here also to `loadNormaliseString()`
 	 *
-	 * Import a string into tree.
+	 * Import/add a string into tree.
 	 * NOTE: Will use `basicNode()`.
 	 */
 	uint32_t loadBasicString(const char *pPattern, const char *pTransform = NULL) {

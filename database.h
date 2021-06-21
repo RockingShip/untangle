@@ -79,7 +79,7 @@
 #include "tinytree.h"
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20200506
+#define FILE_MAGIC        0x20210617
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -803,15 +803,15 @@ struct database_t {
 			ctx.fatal("\n{\"error\":\"db magic_maxslots\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_maxSlots, MAXSLOTS);
 		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
 			ctx.fatal("\n{\"error\":\"db size mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%lu\",\"expected\":\"%lu\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.offEnd, sbuf.st_size);
-		if (fileHeader.magic_sizeofSignature != sizeof(signature_t))
+		if (fileHeader.magic_sizeofSignature != sizeof(signature_t) && fileHeader.numSignature > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofSignature\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSignature, (unsigned) sizeof(signature_t));
-		if (fileHeader.magic_sizeofSwap != sizeof(swap_t))
+		if (fileHeader.magic_sizeofSwap != sizeof(swap_t) && fileHeader.numSwap > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofSwap\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSwap, (unsigned) sizeof(swap_t));
-		if (fileHeader.magic_sizeofHint != sizeof(hint_t))
+		if (fileHeader.magic_sizeofHint != sizeof(hint_t) && fileHeader.numHint > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofHint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofHint, (unsigned) sizeof(hint_t));
-		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t))
+		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t) && fileHeader.numImprint > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofImprint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofImprint, (unsigned) sizeof(imprint_t));
-		if (fileHeader.magic_sizeofMember != sizeof(member_t))
+		if (fileHeader.magic_sizeofMember != sizeof(member_t) && fileHeader.numMember > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofMember\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofMember, (unsigned) sizeof(member_t));
 
 		creationFlags = fileHeader.magic_flags;

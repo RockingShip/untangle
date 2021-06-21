@@ -539,9 +539,6 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
-		case LO_DEBUG:
-			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
-			break;
 		case LO_HELP:
 			usage(argv, true);
 			exit(0);
