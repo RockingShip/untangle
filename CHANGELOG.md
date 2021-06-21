@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## 2021-06-07 22:51:42 [Version 2.5.0]
+
+Database version "20210617".
+
+Added primes to `signature_t`.
+
 ```
 2021-06-21 19:26:57 Added: `genprime.cc` and `validateprime.cc`.
 2021-06-13 01:01:01 Removed: Legacy QTnF operator mixup (#/!).
@@ -244,7 +250,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.5.0...HEAD
+[Version 2.5.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...v2.5.0
 [Version 2.4.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.3.0...v2.4.0
 [Version 2.3.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...v2.3.0
 [Version 2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
