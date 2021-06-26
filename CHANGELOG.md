@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-26 16:58:08 Removed: `genmember --score`.
 2021-06-26 16:50:56 Changed: Rewrite all logical `(~X & Y)` into `!(X & Y)`.
 2021-06-26 15:31:07 Added: `rewritedata[]`.
 2021-06-26 09:33:21 Changed: Renamed `encode()` to `saveString` and `decode()` to `loadString()`.

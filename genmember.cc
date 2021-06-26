@@ -242,8 +242,6 @@ struct genmemberContext_t : dbtool_t {
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
 	unsigned   opt_saveIndex;
-	/// @var {number} --score, group by `tinyTree_t::calcScoreName()` instead of node count, for smaller signature groups
-	unsigned   opt_score;
 	/// @var {number} Sid range upper bound
 	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -305,7 +303,6 @@ struct genmemberContext_t : dbtool_t {
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
 		opt_load           = NULL;
-		opt_score          = 0;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
 		opt_text           = 0;
@@ -825,7 +822,6 @@ struct genmemberContext_t : dbtool_t {
 
 		signature_t *pSignature = pStore->signatures + sid;
 		unsigned cmp = 0;
-		unsigned scoreR = 0; // delay calculation of this as long as possible
 
 		/*
 		 * early-reject
@@ -840,18 +836,9 @@ struct genmemberContext_t : dbtool_t {
 			 * Just like primes with component dependency chains, members can be larger than signatures
 			 * Larger candidates will always be rejected, so reject now before doing expensive testing
 			 * Grouping can be either by node size or score
-			 *
-			 * NOTE:
-			 * `pSafeScores[]` contains either score (opt_score!=0) or node count (opt_score==0)
 			 */
 
-			if (opt_score) {
-				if (scoreR == 0)
-					scoreR = treeR.calcScoreName(pNameR);
-
-				if (scoreR > pSafeScores[sid])
-					cmp = '*'; // reject
-			} else if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeScores[sid]) {
+			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeScores[sid]) {
 				cmp = '*'; // reject
 			}
 		} else {
@@ -904,13 +891,6 @@ struct genmemberContext_t : dbtool_t {
 			} else {
 				// group/candidate both safe. Accept
 				cmp = '+';
-
-				if (opt_score) {
-					if (scoreR == 0)
-						scoreR = treeR.calcScoreName(pNameR);
-					if (scoreR < pSafeScores[sid])
-						cmp = '!'; // better score, flush group
-				}
 			}
 		} else {
 			if (tmpMember.flags & member_t::MEMMASK_SAFE) {
@@ -1025,16 +1005,8 @@ struct genmemberContext_t : dbtool_t {
 
 		/*
 		 * update global score
-		 * NOTE: `pSafeScores[]` contains either score (opt_score!=0) or node count (opt_score==0)
 		 */
-
-		if (opt_score) {
-			if (scoreR == 0)
-				scoreR = treeR.calcScoreName(pNameR);
-			pSafeScores[sid] = scoreR;
-		} else {
-			pSafeScores[sid] = treeR.count - tinyTree_t::TINYTREE_NSTART;
-		}
+		pSafeScores[sid] = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 		return true;
 	}
@@ -2326,14 +2298,10 @@ int main(int argc, char *argv[]) {
 
 			const member_t *pMember = db.members + pSignature->firstMember;
 
-			if (app.opt_score) {
-				app.pSafeScores[iSid] = tinyTree_t::calcScoreName(pMember->name);
-			} else {
-				tinyTree_t tree(ctx);
-				tree.loadStringFast(pMember->name);
+			tinyTree_t tree(ctx);
+			tree.loadStringFast(pMember->name);
 
-				app.pSafeScores[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
-			}
+			app.pSafeScores[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
 		}
 	}
 
