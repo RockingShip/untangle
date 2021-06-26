@@ -588,8 +588,8 @@ struct baseTree_t {
 
 		int secondary = 0;
 
-		assert(~lhs & IBIT);
-		assert(~rhs & IBIT);
+		assert(!(lhs & IBIT));
+		assert(!(rhs & IBIT));
 
 		// push arguments on stack
 		treeL->stackL[0] = lhs;
@@ -664,11 +664,11 @@ struct baseTree_t {
 			const baseNode_t *pNodeR = treeR->N + R;
 
 			// compare Ti
-			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1b\n");
-			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT))
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1b\n");
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
 				return -1;
-			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1b\n");
-			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1b\n");
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
 				return +1;
 
 			// compare OR
@@ -844,9 +844,9 @@ struct baseTree_t {
 			assert ((T & ~IBIT) < this->ncount);
 			assert (F < this->ncount);
 
-			assert(~Q & IBIT);            // Q not inverted
+			assert(!(Q & IBIT));          // Q not inverted
 			assert((T & IBIT) || !(this->flags & ctx.MAGICMASK_PURE));
-			assert(~F & IBIT);            // F not inverted
+			assert(!(F & IBIT));          // F not inverted
 			assert(Q != 0);               // Q not zero
 			assert(T != 0);               // Q?0:F -> F?!Q:0
 			assert(F != 0 || T != IBIT);  // Q?!0:0 -> Q
@@ -865,7 +865,7 @@ struct baseTree_t {
 			if ((T & ~IBIT) == F)
 				assert(this->compare(this, Q, this, F) < 0);
 			// AND ordering
-			if (F == 0 && (~T & IBIT))
+			if (F == 0 && !(T & IBIT))
 				assert(this->compare(this, Q, this, T) < 0);
 
 			if (this->flags & ctx.MAGICMASK_CASCADE) {
@@ -873,7 +873,7 @@ struct baseTree_t {
 					assert (!this->isOR(Q) || !this->isOR(F));
 				if ((T & ~IBIT) == F)
 					assert (!this->isNE(Q) || !this->isNE(F));
-				if (F == 0 && (~T & IBIT))
+				if (F == 0 && !(T & IBIT))
 					assert (!this->isAND(Q) || !this->isAND(T & ~IBIT));
 			}
 		}
@@ -1280,7 +1280,7 @@ struct baseTree_t {
 		}
 
 		// AND
-		if ((~T & IBIT) && F == 0) {
+		if (!(T & IBIT) && F == 0) {
 			// test for slow path
 			if (this->flags & ctx.MAGICMASK_CASCADE) {
 				if (isAND(Q)) {
@@ -1338,9 +1338,9 @@ struct baseTree_t {
 			uint32_t ix = rewriteDataFirst;
 
 			if (this->flags & context_t::MAGICMASK_PARANOID) {
-				assert(~Q & IBIT);            // Q not inverted
-				assert(Ti || (~this->flags & context_t::MAGICMASK_PURE));
-				assert(~F & IBIT);            // F not inverted
+				assert(!(Q & IBIT));          // Q not inverted
+				assert(Ti || !(this->flags & context_t::MAGICMASK_PURE));
+				assert(!(F & IBIT));          // F not inverted
 				assert(Q != 0);               // Q not zero
 
 				assert (Q < this->ncount);

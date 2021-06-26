@@ -115,7 +115,7 @@ struct selftestContext_t : dbtool_t {
 		generator.loadStringFast(name);
 
 		// test that tree is what was requested
-		assert(~generator.root & IBIT);
+		assert(!(generator.root & IBIT));
 		assert(::strcmp(name, generator.saveString(generator.root, NULL)) == 0);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)

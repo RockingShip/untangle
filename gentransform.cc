@@ -375,7 +375,7 @@ struct gentransformContext_t {
 		// what to return
 		if (pos == 0)
 			return IBIT; // "not-found"
-		else if (~pos & IBIT)
+		else if (!(pos & IBIT))
 			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
 		else
 			return pos & ~IBIT; // long name

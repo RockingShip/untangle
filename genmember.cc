@@ -352,7 +352,7 @@ struct genmemberContext_t : dbtool_t {
 	 */
 	bool /*__attribute__((optimize("O0")))*/ findHeadTail(member_t *pMember, const tinyTree_t &treeR) {
 
-		assert(~treeR.root & IBIT);
+		assert(!(treeR.root & IBIT));
 
 		// safe until proven otherwise
 		pMember->flags |= member_t::MEMMASK_SAFE;
@@ -546,15 +546,15 @@ struct genmemberContext_t : dbtool_t {
 						const unsigned   F      = pNode->F;
 
 						// assign placeholder to endpoint or `hot`
-						if (~select & (1 << Q)) {
+						if (!(select & (1 << Q))) {
 							what[Q] = nextPlaceholderPlaceholder++;
 							select |= 1 << Q;
 						}
-						if (~select & (1 << To)) {
+						if (!(select & (1 << To))) {
 							what[To] = nextPlaceholderPlaceholder++;
 							select |= 1 << To;
 						}
-						if (~select & (1 << F)) {
+						if (!(select & (1 << F))) {
 							what[F] = nextPlaceholderPlaceholder++;
 							select |= 1 << F;
 						}
@@ -1172,7 +1172,7 @@ struct genmemberContext_t : dbtool_t {
 			 * Add to imprint index, either all or empty/unsafe only
 			 */
 
-			if (!unsafeOnly || (~pSignature->flags & signature_t::SIGMASK_SAFE)) {
+			if (!unsafeOnly || !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
 				// avoid `"storage full"`. Give warning later
 				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0 && this->opt_truncate) {
 					// break now, display text later/ Leave progress untouched
@@ -1191,7 +1191,7 @@ struct genmemberContext_t : dbtool_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			if (~pSignature->flags & signature_t::SIGMASK_SAFE)
+			if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 
 			ctx.progress++;
@@ -1295,7 +1295,7 @@ struct genmemberContext_t : dbtool_t {
 		for (unsigned iSid    = 1; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
-			if (~pSignature->flags & signature_t::SIGMASK_SAFE)
+			if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				pHintMap[numHint++] = iSid;
 
 		}
@@ -1352,7 +1352,7 @@ struct genmemberContext_t : dbtool_t {
 			 * Add to imprint index, either all or empty/unsafe only
 			 */
 
-			if (~pSignature->flags & signature_t::SIGMASK_SAFE) {
+			if (!(pSignature->flags & signature_t::SIGMASK_SAFE)) {
 				// avoid `"storage full"`. Give warning later
 				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0) {
 					// break now, display text later/ Leave progress untouched
@@ -1371,7 +1371,7 @@ struct genmemberContext_t : dbtool_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			if (~pSignature->flags & signature_t::SIGMASK_SAFE)
+			if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 
 			ctx.progress++;
@@ -1443,7 +1443,7 @@ struct genmemberContext_t : dbtool_t {
 			unsigned        beenThere      = 0;
 			for (const char *p             = name; *p; p++) {
 				if (::islower(*p)) {
-					if (~beenThere & (1 << (*p - 'a'))) {
+					if (!(beenThere & (1 << (*p - 'a')))) {
 						newPlaceholder++;
 						beenThere |= 1 << (*p - 'a');
 					}
@@ -1731,7 +1731,7 @@ struct genmemberContext_t : dbtool_t {
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (pStore->signatures[iSid].firstMember == 0)
 				numEmpty++;
-			if (~pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE)
+			if (!(pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 		}
 
@@ -2301,7 +2301,7 @@ int main(int argc, char *argv[]) {
 	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
@@ -2380,7 +2380,7 @@ int main(int argc, char *argv[]) {
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0)
 			app.numEmpty++;
-		if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)
+		if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
 			app.numUnsafe++;
 	}
 
@@ -2424,9 +2424,9 @@ int main(int argc, char *argv[]) {
 		 * Check that all unsafe groups have no safe members (or the group would have been safe)
 		 */
 		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
+			if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)) {
 				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(~store.members[iMid].flags & member_t::MEMMASK_SAFE);
+					assert(!(store.members[iMid].flags & member_t::MEMMASK_SAFE));
 				}
 			}
 		}

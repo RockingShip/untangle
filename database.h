@@ -478,14 +478,14 @@ struct database_t {
 					  __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_SIGNATURE) {
-				assert(~allocFlags & ALLOCMASK_SIGNATURE);
+				assert(!(allocFlags & ALLOCMASK_SIGNATURE));
 				this->maxSignature = pFrom->maxSignature;
 				this->numSignature = pFrom->numSignature;
 				this->signatures   = pFrom->signatures;
 			}
 
 			if (inheritSections & ALLOCMASK_SIGNATUREINDEX) {
-				assert(~allocFlags & ALLOCMASK_SIGNATUREINDEX);
+				assert(!(allocFlags & ALLOCMASK_SIGNATUREINDEX));
 				this->signatureIndexSize = pFrom->signatureIndexSize;
 				this->signatureIndex     = pFrom->signatureIndex;
 			}
@@ -498,14 +498,14 @@ struct database_t {
 					  __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_SWAP) {
-				assert(~allocFlags & ALLOCMASK_SWAP);
+				assert(!(allocFlags & ALLOCMASK_SWAP));
 				this->maxSwap = pFrom->maxSwap;
 				this->numSwap = pFrom->numSwap;
 				this->swaps   = pFrom->swaps;
 			}
 
 			if (inheritSections & ALLOCMASK_SWAPINDEX) {
-				assert(~allocFlags & ALLOCMASK_SWAPINDEX);
+				assert(!(allocFlags & ALLOCMASK_SWAPINDEX));
 				this->swapIndexSize = pFrom->swapIndexSize;
 				this->swapIndex     = pFrom->swapIndex;
 			}
@@ -518,14 +518,14 @@ struct database_t {
 					  __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_HINT) {
-				assert(~allocFlags & ALLOCMASK_HINT);
+				assert(!(allocFlags & ALLOCMASK_HINT));
 				this->maxHint = pFrom->maxHint;
 				this->numHint = pFrom->numHint;
 				this->hints   = pFrom->hints;
 			}
 
 			if (inheritSections & ALLOCMASK_HINTINDEX) {
-				assert(~allocFlags & ALLOCMASK_HINTINDEX);
+				assert(!(allocFlags & ALLOCMASK_HINTINDEX));
 				this->hintIndexSize = pFrom->hintIndexSize;
 				this->hintIndex     = pFrom->hintIndex;
 			}
@@ -541,14 +541,14 @@ struct database_t {
 			this->interleaveStep = pFrom->interleaveStep;
 
 			if (inheritSections & ALLOCMASK_IMPRINT) {
-				assert(~allocFlags & ALLOCMASK_IMPRINT);
+				assert(!(allocFlags & ALLOCMASK_IMPRINT));
 				this->maxImprint = pFrom->maxImprint;
 				this->numImprint = pFrom->numImprint;
 				this->imprints   = pFrom->imprints;
 			}
 
 			if (inheritSections & ALLOCMASK_IMPRINTINDEX) {
-				assert(~allocFlags & ALLOCMASK_IMPRINTINDEX);
+				assert(!(allocFlags & ALLOCMASK_IMPRINTINDEX));
 				this->imprintIndexSize = pFrom->imprintIndexSize;
 				this->imprintIndex     = pFrom->imprintIndex;
 			}
@@ -561,14 +561,14 @@ struct database_t {
 					  __FUNCTION__, __FILE__, __LINE__, pName);
 
 			if (inheritSections & ALLOCMASK_MEMBER) {
-				assert(~allocFlags & ALLOCMASK_MEMBER);
+				assert(!(allocFlags & ALLOCMASK_MEMBER));
 				this->maxMember = pFrom->maxMember;
 				this->numMember = pFrom->numMember;
 				this->members   = pFrom->members;
 			}
 
 			if (inheritSections & ALLOCMASK_MEMBERINDEX) {
-				assert(~allocFlags & ALLOCMASK_MEMBERINDEX);
+				assert(!(allocFlags & ALLOCMASK_MEMBERINDEX));
 				this->memberIndexSize = pFrom->memberIndexSize;
 				this->memberIndex     = pFrom->memberIndex;
 			}
@@ -588,7 +588,7 @@ struct database_t {
 		size_t memUsage = 0;
 
 		// transform store
-		if (maxTransform && (~excludeSections & ALLOCMASK_TRANSFORM)) {
+		if (maxTransform && !(excludeSections & ALLOCMASK_TRANSFORM)) {
 			memUsage += maxTransform * sizeof(*this->fwdTransformData);
 			memUsage += maxTransform * sizeof(*this->revTransformData);
 			memUsage += maxTransform * sizeof(*this->fwdTransformNames);
@@ -599,33 +599,33 @@ struct database_t {
 		}
 
 		// signature store
-		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE))
+		if (maxSignature && !(excludeSections & ALLOCMASK_SIGNATURE))
 			memUsage += maxSignature * sizeof(*signatures); // increase with 5%
-		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX))
+		if (signatureIndexSize && !(excludeSections & ALLOCMASK_SIGNATUREINDEX))
 			memUsage += signatureIndexSize * sizeof(*signatureIndex);
 
 		// swap store
-		if (maxSwap && (~excludeSections & ALLOCMASK_SWAP))
+		if (maxSwap && !(excludeSections & ALLOCMASK_SWAP))
 			memUsage += maxSwap * sizeof(*swaps); // increase with 5%
-		if (swapIndexSize && (~excludeSections & ALLOCMASK_SWAPINDEX))
+		if (swapIndexSize && !(excludeSections & ALLOCMASK_SWAPINDEX))
 			memUsage += swapIndexSize * sizeof(*swapIndex);
 
 		// hint store
-		if (maxHint && (~excludeSections & ALLOCMASK_HINT))
+		if (maxHint && !(excludeSections & ALLOCMASK_HINT))
 			memUsage += maxHint * sizeof(*hints); // increase with 5%
-		if (hintIndexSize && (~excludeSections & ALLOCMASK_HINTINDEX))
+		if (hintIndexSize && !(excludeSections & ALLOCMASK_HINTINDEX))
 			memUsage += hintIndexSize * sizeof(*hintIndex);
 
 		// imprint store
-		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT))
+		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT))
 			memUsage += maxImprint * sizeof(*imprints); // increase with 5%
-		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX))
+		if (imprintIndexSize && !(excludeSections & ALLOCMASK_IMPRINTINDEX))
 			memUsage += imprintIndexSize * sizeof(*imprintIndex);
 
 		// member store
-		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER))
+		if (maxMember && !(excludeSections & ALLOCMASK_MEMBER))
 			memUsage += maxMember * sizeof(*members); // increase with 5%
-		if (memberIndexSize && (~excludeSections & ALLOCMASK_MEMBERINDEX))
+		if (memberIndexSize && !(excludeSections & ALLOCMASK_MEMBERINDEX))
 			memUsage += memberIndexSize * sizeof(*memberIndex);
 
 		return memUsage;
@@ -641,7 +641,7 @@ struct database_t {
 	void create(unsigned excludeSections) {
 
 		// transform store
-		if (maxTransform && (~excludeSections & ALLOCMASK_TRANSFORM)) {
+		if (maxTransform && !(excludeSections & ALLOCMASK_TRANSFORM)) {
 			assert(maxTransform == MAXTRANSFORM);
 			fwdTransformData      = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
 			revTransformData      = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
@@ -654,49 +654,49 @@ struct database_t {
 		}
 
 		// signature store
-		if (maxSignature && (~excludeSections & ALLOCMASK_SIGNATURE)) {
+		if (maxSignature && !(excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
 			maxSignature = maxSignature;
 			numSignature = 1; // do not start at 1
 			signatures   = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
 			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
-		if (signatureIndexSize && (~excludeSections & ALLOCMASK_SIGNATUREINDEX)) {
+		if (signatureIndexSize && !(excludeSections & ALLOCMASK_SIGNATUREINDEX)) {
 			assert(ctx.isPrime(signatureIndexSize));
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATUREINDEX;
 		}
 
 		// swap store
-		if (maxSwap && (~excludeSections & ALLOCMASK_SWAP)) {
+		if (maxSwap && !(excludeSections & ALLOCMASK_SWAP)) {
 			// increase with 5%
 			maxSwap = maxSwap;
 			numSwap = 1; // do not start at 1
 			swaps   = (swap_t *) ctx.myAlloc("database_t::swaps", maxSwap, sizeof(*swaps));
 			allocFlags |= ALLOCMASK_SWAP;
 		}
-		if (swapIndexSize && (~excludeSections & ALLOCMASK_SWAPINDEX)) {
+		if (swapIndexSize && !(excludeSections & ALLOCMASK_SWAPINDEX)) {
 			assert(ctx.isPrime(swapIndexSize));
 			swapIndex = (uint32_t *) ctx.myAlloc("database_t::swapIndex", swapIndexSize, sizeof(*swapIndex));
 			allocFlags |= ALLOCMASK_SWAPINDEX;
 		}
 
 		// hint store
-		if (maxHint && (~excludeSections & ALLOCMASK_HINT)) {
+		if (maxHint && !(excludeSections & ALLOCMASK_HINT)) {
 			// increase with 5%
 			maxHint = maxHint;
 			numHint = 1; // do not start at 1
 			hints   = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
 			allocFlags |= ALLOCMASK_HINT;
 		}
-		if (hintIndexSize && (~excludeSections & ALLOCMASK_HINTINDEX)) {
+		if (hintIndexSize && !(excludeSections & ALLOCMASK_HINTINDEX)) {
 			assert(ctx.isPrime(hintIndexSize));
 			hintIndex = (uint32_t *) ctx.myAlloc("database_t::hintIndex", hintIndexSize, sizeof(*hintIndex));
 			allocFlags |= ALLOCMASK_HINTINDEX;
 		}
 
 		// imprint store
-		if (maxImprint && (~excludeSections & ALLOCMASK_IMPRINT)) {
+		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT)) {
 			assert(interleave && interleaveStep);
 			// increase with 5%
 			maxImprint = maxImprint;
@@ -704,21 +704,21 @@ struct database_t {
 			imprints   = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
-		if (imprintIndexSize && (~excludeSections & ALLOCMASK_IMPRINTINDEX)) {
+		if (imprintIndexSize && !(excludeSections & ALLOCMASK_IMPRINTINDEX)) {
 			assert(ctx.isPrime(imprintIndexSize));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINTINDEX;
 		}
 
 		// member store
-		if (maxMember && (~excludeSections & ALLOCMASK_MEMBER)) {
+		if (maxMember && !(excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
 			maxMember = maxMember;
 			numMember = 1; // do not start at 1
 			members   = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
 			allocFlags |= ALLOCMASK_MEMBER;
 		}
-		if (memberIndexSize && (~excludeSections & ALLOCMASK_MEMBERINDEX)) {
+		if (memberIndexSize && !(excludeSections & ALLOCMASK_MEMBERINDEX)) {
 			assert(ctx.isPrime(memberIndexSize));
 			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
 			allocFlags |= ALLOCMASK_MEMBERINDEX;
@@ -1268,7 +1268,7 @@ struct database_t {
 		// what to return
 		if (pos == 0)
 			return IBIT; // "not-found"
-		else if (~pos & IBIT)
+		else if (!(pos & IBIT))
 			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
 		else
 			return pos & ~IBIT; // long name
@@ -1300,7 +1300,7 @@ struct database_t {
 		// what to return
 		if (pos == 0)
 			return IBIT; // "not-found"
-		else if (~pos & IBIT)
+		else if (!(pos & IBIT))
 			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
 		else
 			return pos & ~IBIT; // long name
@@ -1344,7 +1344,7 @@ struct database_t {
 		// what to return
 		if (pos == 0)
 			return IBIT; // "not-found"
-		else if (~pos & IBIT)
+		else if (!(pos & IBIT))
 			return pIndex[pos + MAXSLOTS] & ~IBIT; // short names
 		else
 			return pos & ~IBIT; // long name

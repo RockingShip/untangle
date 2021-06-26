@@ -364,8 +364,8 @@ struct tree_t {
 		static uint32_t stackR[NEND * 3]; // there are 3 operands per per opcode
 		int             stackPos = 0;
 
-		assert(~lhs & IBIT);
-		assert(~rhs & IBIT);
+		assert(!(lhs & IBIT));
+		assert(!(rhs & IBIT));
 
 		stackL[stackPos] = lhs;
 		stackR[stackPos] = rhs;
@@ -425,9 +425,9 @@ struct tree_t {
 			/*
 			 * compare structure
 			 */
-			if ((pNodeL->T & IBIT) && (~pNodeR->T & IBIT))
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
 				return -1; // `QnTF` < `QTF`
-			if ((~pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
 				return +1; // `QTF` > `QnTF`
 			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
 				return -1; // `OR` < !`OR`
@@ -678,7 +678,7 @@ struct tree_t {
 		}
 
 		// `AND` `Q?T:0` where Q>T
-		if ((~T & IBIT) && F == 0 && this->compare(Q, T) > 0) {
+		if (!(T & IBIT) && F == 0 && this->compare(Q, T) > 0) {
 			// swap
 			unsigned savQ = Q;
 			Q = T;
@@ -697,7 +697,7 @@ struct tree_t {
 		 * ./eval --pure 'ab&' 'abc?'
 		 */
 
-		if (opt_pure && (~T & IBIT)) {
+		if (opt_pure && !(T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
@@ -706,8 +706,8 @@ struct tree_t {
 		// sanity checking
 		if (true) {
 			// level-1
-			assert(~Q & IBIT);                     // Q not inverted
-			assert(~F & IBIT);                     // F not inverted
+			assert(!(Q & IBIT));                   // Q not inverted
+			assert(!(F & IBIT));                   // F not inverted
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0
 			assert(T != IBIT || F != 0);           // Q?!0:0 -> Q
@@ -1675,7 +1675,7 @@ struct tree_t {
 		unsigned F  = this->N[id].F;
 
 		// assert node is invert normalised
-		assert((~Q & IBIT) && (~F & IBIT));
+		assert(!(Q & IBIT) && !(F & IBIT));
 
 		/*
 		 * Handle oldest children first
@@ -1833,7 +1833,7 @@ struct tree_t {
 		unsigned F  = this->N[id].F;
 
 		// assert node is invert normalised
-		assert((~Q & IBIT) && (~F & IBIT));
+		assert((~Q & IBIT) && !(F & IBIT));
 
 		// decode
 		if (T == 0 && F != 0) {

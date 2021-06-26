@@ -596,7 +596,7 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (inheritSections & database_t::ALLOCMASK_TRANSFORM) {
-			assert(~store.allocFlags & database_t::ALLOCMASK_TRANSFORM);
+			assert(!(store.allocFlags & database_t::ALLOCMASK_TRANSFORM));
 
 			assert(db.numTransform == MAXTRANSFORM);
 			store.maxTransform = db.numTransform;
@@ -627,7 +627,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SIGNATURE));
 				store.signatures = db.signatures;
 				store.numSignature = db.numSignature;
 			} else if (!db.numSignature) {
@@ -636,10 +636,10 @@ struct dbtool_t : callable_t {
 				store.numSignature = 1;
 			} else if (store.maxSignature <= db.numSignature && copyOnWrite) {
 				// small enough to use copy-on-write
-				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATURE);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SIGNATURE));
 				store.signatures = db.signatures;
 				store.numSignature = db.numSignature;
-			} else if (~rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
+			} else if (!(rebuildSections & database_t::ALLOCMASK_SIGNATURE)) {
 				fprintf(stderr, "[%s] Copying signature section\n", ctx.timeAsString());
 
 				assert(store.maxSignature >= db.numSignature);
@@ -650,7 +650,7 @@ struct dbtool_t : callable_t {
 
 			if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX));
 				store.signatureIndexSize = db.signatureIndexSize;
 				store.signatureIndex = db.signatureIndex;
 			} else if (rebuildSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
@@ -663,7 +663,7 @@ struct dbtool_t : callable_t {
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.signatureIndexSize == db.signatureIndexSize);
-				assert(~store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SIGNATUREINDEX));
 				store.signatureIndex = db.signatureIndex;
 				store.signatureIndexSize = db.signatureIndexSize;
 			} else {
@@ -685,7 +685,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_SWAP) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_SWAP);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SWAP));
 				store.swaps = db.swaps;
 				store.numSwap = db.numSwap;
 			} else if (!db.numSwap) {
@@ -694,10 +694,10 @@ struct dbtool_t : callable_t {
 				store.numSwap = 1;
 			} else if (store.maxSwap <= db.numSwap && copyOnWrite) {
 				// small enough to use copy-on-write
-				assert(~store.allocFlags & database_t::ALLOCMASK_SWAP);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SWAP));
 				store.swaps = db.swaps;
 				store.numSwap = db.numSwap;
-			} else if (~rebuildSections & database_t::ALLOCMASK_SWAP) {
+			} else if (!(rebuildSections & database_t::ALLOCMASK_SWAP)) {
 				fprintf(stderr, "[%s] Copying swap section\n", ctx.timeAsString());
 
 				assert(store.maxSwap >= db.numSwap);
@@ -708,7 +708,7 @@ struct dbtool_t : callable_t {
 
 			if (inheritSections & database_t::ALLOCMASK_SWAPINDEX) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX));
 				store.swapIndexSize = db.swapIndexSize;
 				store.swapIndex = db.swapIndex;
 			} else if (rebuildSections & database_t::ALLOCMASK_SWAPINDEX) {
@@ -721,7 +721,7 @@ struct dbtool_t : callable_t {
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.swapIndexSize == db.swapIndexSize);
-				assert(~store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX));
 				store.swapIndex = db.swapIndex;
 				store.swapIndexSize = db.swapIndexSize;
 			} else {
@@ -743,7 +743,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_HINT) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_HINT);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_HINT));
 				store.hints = db.hints;
 				store.numHint = db.numHint;
 			} else if (!db.numHint) {
@@ -752,10 +752,10 @@ struct dbtool_t : callable_t {
 				store.numHint = 1;
 			} else if (store.maxHint <= db.numHint && copyOnWrite) {
 				// small enough to use copy-on-write
-				assert(~store.allocFlags & database_t::ALLOCMASK_HINT);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_HINT));
 				store.hints = db.hints;
 				store.numHint = db.numHint;
-			} else if (~rebuildSections & database_t::ALLOCMASK_HINT) {
+			} else if (!(rebuildSections & database_t::ALLOCMASK_HINT)) {
 				fprintf(stderr, "[%s] Copying hint section\n", ctx.timeAsString());
 
 				assert(store.maxHint >= db.numHint);
@@ -766,7 +766,7 @@ struct dbtool_t : callable_t {
 
 			if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_HINTINDEX));
 				store.hintIndexSize = db.hintIndexSize;
 				store.hintIndex = db.hintIndex;
 			} else if (rebuildSections & database_t::ALLOCMASK_HINTINDEX) {
@@ -779,7 +779,7 @@ struct dbtool_t : callable_t {
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.hintIndexSize == db.hintIndexSize);
-				assert(~store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_HINTINDEX));
 				store.hintIndex = db.hintIndex;
 				store.hintIndexSize = db.hintIndexSize;
 			} else {
@@ -801,7 +801,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINT);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_IMPRINT));
 				store.imprints = db.imprints;
 				store.numImprint = db.numImprint;
 			} else if (!db.numImprint) {
@@ -810,10 +810,10 @@ struct dbtool_t : callable_t {
 				store.numImprint = 1;
 			} else if (store.maxImprint <= db.numImprint && copyOnWrite) {
 				// small enough to use copy-on-write
-				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINT);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_IMPRINT));
 				store.imprints = db.imprints;
 				store.numImprint = db.numImprint;
-			} else if (~rebuildSections & database_t::ALLOCMASK_IMPRINT) {
+			} else if (!(rebuildSections & database_t::ALLOCMASK_IMPRINT)) {
 				fprintf(stderr, "[%s] Copying imprint section\n", ctx.timeAsString());
 
 				assert(store.maxImprint >= db.numImprint);
@@ -824,7 +824,7 @@ struct dbtool_t : callable_t {
 
 			if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX));
 				store.imprintIndexSize = db.imprintIndexSize;
 				store.imprintIndex = db.imprintIndex;
 			} else if (rebuildSections & database_t::ALLOCMASK_IMPRINTINDEX) {
@@ -837,7 +837,7 @@ struct dbtool_t : callable_t {
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.imprintIndexSize == db.imprintIndexSize);
-				assert(~store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX));
 				store.imprintIndex = db.imprintIndex;
 				store.imprintIndexSize = db.imprintIndexSize;
 			} else {
@@ -859,7 +859,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (inheritSections & database_t::ALLOCMASK_MEMBER) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBER);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_MEMBER));
 				store.members = db.members;
 				store.numMember = db.numMember;
 			} else if (!db.numMember) {
@@ -868,10 +868,10 @@ struct dbtool_t : callable_t {
 				store.numMember = 1;
 			} else if (store.maxMember <= db.numMember && copyOnWrite) {
 				// small enough to use copy-on-write
-				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBER);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_MEMBER));
 				store.members = db.members;
 				store.numMember = db.numMember;
-			} else if (~rebuildSections & database_t::ALLOCMASK_MEMBER) {
+			} else if (!(rebuildSections & database_t::ALLOCMASK_MEMBER)) {
 				fprintf(stderr, "[%s] Copying member section\n", ctx.timeAsString());
 
 				assert(store.maxMember >= db.numMember);
@@ -882,7 +882,7 @@ struct dbtool_t : callable_t {
 
 			if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
 				// inherited. pass-though
-				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX));
 				store.memberIndexSize = db.memberIndexSize;
 				store.memberIndex = db.memberIndex;
 			} else if (rebuildSections & database_t::ALLOCMASK_MEMBERINDEX) {
@@ -895,7 +895,7 @@ struct dbtool_t : callable_t {
 			} else if (copyOnWrite) {
 				// copy-on-write
 				assert(store.memberIndexSize == db.memberIndexSize);
-				assert(~store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_MEMBERINDEX));
 				store.memberIndex = db.memberIndex;
 				store.memberIndexSize = db.memberIndexSize;
 			} else {

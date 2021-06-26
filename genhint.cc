@@ -561,7 +561,7 @@ struct genhintContext_t : dbtool_t {
 			for (unsigned iSid    = 1; iSid < pStore->numSignature; iSid++) {
 				const signature_t *pSignature = pStore->signatures + iSid;
 
-				if (~pSignature->flags & signature_t::SIGMASK_SAFE)
+				if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 					pHintMap[numHint++] = iSid;
 
 			}
@@ -1045,7 +1045,7 @@ int main(int argc, char *argv[]) {
 	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;

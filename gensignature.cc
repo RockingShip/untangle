@@ -425,7 +425,7 @@ struct gensignatureContext_t : dbtool_t {
 				pStore->signatureIndex[six] = sid;
 
 				// add to imprints to index
-				if (~ctx.flags & context_t::MAGICMASK_AINF) {
+				if (!(ctx.flags & context_t::MAGICMASK_AINF)) {
 					unsigned newSid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, sid);
 					assert(newSid == 0 || newSid == markSid);
 				}
@@ -713,7 +713,7 @@ struct gensignatureContext_t : dbtool_t {
 			unsigned        beenThere      = 0;
 			for (const char *p             = name; *p; p++) {
 				if (::islower(*p)) {
-					if (~beenThere & (1 << (*p - 'a'))) {
+					if (!(beenThere & (1 << (*p - 'a')))) {
 						newPlaceholder++;
 						beenThere |= 1 << (*p - 'a');
 					}
@@ -1412,7 +1412,7 @@ int main(int argc, char *argv[]) {
 	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;

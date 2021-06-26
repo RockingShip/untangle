@@ -794,7 +794,7 @@ struct generatorTree_t : tinyTree_t {
 				const unsigned F = pNode->F;
 
 				// determine if node already handled
-				if (~beenThere & (1 << curr)) {
+				if (!(beenThere & (1 << curr))) {
 					/// first time
 
 					// push id so it visits again a second time
@@ -819,21 +819,21 @@ struct generatorTree_t : tinyTree_t {
 					 * check that operands are in natural order
 					 */
 
-					if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
+					if (Q < TINYTREE_NSTART && !(beenThere & (1 << Q))) {
 						beenThere |= (1 << Q);
 						if (Q != TINYTREE_KSTART + numPlaceholder)
 							return;
 						numPlaceholder++;
 					}
 
-					if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
+					if (To < TINYTREE_NSTART && !(beenThere & (1 << To))) {
 						beenThere |= (1 << To);
 						if (To != TINYTREE_KSTART + numPlaceholder)
 							return;
 						numPlaceholder++;
 					}
 
-					if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
+					if (F < TINYTREE_NSTART && !(beenThere & (1 << F))) {
 						beenThere |= (1 << F);
 						if (F != TINYTREE_KSTART + numPlaceholder)
 							return;

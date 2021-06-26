@@ -1148,7 +1148,7 @@ int main(int argc, char *argv[]) {
 	store.create(app.inheritSections);
 	app.pStore = &store;
 
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && (~app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
@@ -1209,7 +1209,7 @@ int main(int argc, char *argv[]) {
 		unsigned      found  = 0;
 		const char    *pName = store.fwdTransformNames[iTid];
 		for (unsigned j      = 0; j < MAXSLOTS; j++) {
-			if (~found & (1 << (pName[j] - 'a'))) {
+			if (!(found & (1 << (pName[j] - 'a')))) {
 				// new starting point
 				unsigned      w = 1;
 				// walk cycle

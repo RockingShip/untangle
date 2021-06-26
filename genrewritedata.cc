@@ -1272,7 +1272,7 @@ struct genrewritedataContext_t {
 						if (bestData & REWRITEMASK_TREE) {
 							gCntTree++;
 							gCntNode[bestSize]++;
-						} else if (~bestData & (1 << 31)) {
+						} else if (!(bestData & (1 << 31))) {
 							gCntNode[bestSize]++;
 						}
 

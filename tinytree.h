@@ -178,8 +178,8 @@ struct tinyTree_t {
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int      stackPos = 0;
 
-		assert(~lhs & IBIT);
-		assert(~rhs & IBIT);
+		assert(!(lhs & IBIT));
+		assert(!(rhs & IBIT));
 
 		// nodes already processed
 		uint32_t beenThereL;
@@ -235,7 +235,7 @@ struct tinyTree_t {
 
 			// test that either both or none have IBIT set
 			if (pNodeL->T & IBIT) {
-				if (~pNodeR->T & IBIT)
+				if (!(pNodeR->T & IBIT))
 					return -1;
 			} else if (pNodeR->T & IBIT) {
 				return +1;
@@ -475,7 +475,7 @@ struct tinyTree_t {
 				T             = savQ ^ IBIT;
 			}
 		}
-		if (F == 0 && (~T & IBIT)) {
+		if (F == 0 && !(T & IBIT)) {
 			// `AND` ordering
 			if (this->compare(Q, *this, T) > 0) {
 				// swap
@@ -493,7 +493,7 @@ struct tinyTree_t {
 		 * ./eval --qntf 'ab&' 'abc?'
 		 */
 
-		if ((ctx.flags & context_t::MAGICMASK_PURE) && (~T & IBIT)) {
+		if ((ctx.flags & context_t::MAGICMASK_PURE) && !(T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
@@ -538,9 +538,9 @@ struct tinyTree_t {
 
 		// sanity checking
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
-			assert(~Q & IBIT);                     // Q not inverted
-			assert((T & IBIT) || (~ctx.flags & context_t::MAGICMASK_PURE));
-			assert(~F & IBIT);                     // F not inverted
+			assert(!(Q & IBIT));                   // Q not inverted
+			assert((T & IBIT) || !(ctx.flags & context_t::MAGICMASK_PURE));
+			assert(!(F & IBIT));                   // F not inverted
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0
 			assert(T != IBIT || F != 0);           // Q?!0:0 -> Q
@@ -1129,18 +1129,18 @@ struct tinyTree_t {
 				const unsigned   F      = pNode->F;
 
 				// determine if node already handled
-				if (~beenThere & (1 << curr)) {
+				if (!(beenThere & (1 << curr))) {
 					/// first time
 
 					// push id so it visits again a second time
 					stack[stackPos++] = curr;
 
 					// push unvisited references
-					if (F >= TINYTREE_NSTART && (~beenThere & (1 << F)))
+					if (F >= TINYTREE_NSTART && !(beenThere & (1 << F)))
 						stack[stackPos++] = F;
-					if (To != F && To >= TINYTREE_NSTART && (~beenThere & (1 << To)))
+					if (To != F && To >= TINYTREE_NSTART && !(beenThere & (1 << To)))
 						stack[stackPos++] = To;
-					if (Q >= TINYTREE_NSTART && (~beenThere & (1 << Q)))
+					if (Q >= TINYTREE_NSTART && !(beenThere & (1 << Q)))
 						stack[stackPos++] = Q;
 
 					// done, flag no endpoint assignment done
@@ -1150,19 +1150,19 @@ struct tinyTree_t {
 				} else if (beenWhat[curr] == 0) {
 					// node complete, assign placeholders
 
-					if (Q < TINYTREE_NSTART && (~beenThere & (1 << Q))) {
+					if (Q < TINYTREE_NSTART && !(beenThere & (1 << Q))) {
 						beenThere |= (1 << Q);
 						beenWhat[Q]             = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
 					}
 
-					if (To < TINYTREE_NSTART && (~beenThere & (1 << To))) {
+					if (To < TINYTREE_NSTART && !(beenThere & (1 << To))) {
 						beenThere |= (1 << To);
 						beenWhat[To]            = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
 					}
 
-					if (F < TINYTREE_NSTART && (~beenThere & (1 << F))) {
+					if (F < TINYTREE_NSTART && !(beenThere & (1 << F))) {
 						beenThere |= (1 << F);
 						beenWhat[F]             = TINYTREE_KSTART + numPlaceholder;
 						pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
@@ -1208,7 +1208,7 @@ struct tinyTree_t {
 			const unsigned   F      = pNode->F;
 
 			// determine if node already handled
-			if (~beenThere & (1 << curr)) {
+			if (!(beenThere & (1 << curr))) {
 				/// first time
 
 				// push id so it visits again a second time after expanding
