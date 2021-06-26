@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-26 09:26:01 Fixed: Component matching in `genmember::findHeadTail()``
+2021-06-26 09:05:49 Changed: database version to 0x20210626.
+2021-06-26 09:02:52 Changed: added flags and removed flags in `member_t`
+2021-06-13 01:01:01 Removed: Legacy QTnF operator mixup (#/!).
 2021-06-13 00:07:11 Added: `validaterewrite.cc`.
 2021-06-09 11:26:08 Added: `beval.cc` (without --rewrite).
 ```

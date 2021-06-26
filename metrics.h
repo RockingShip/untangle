@@ -406,6 +406,28 @@ struct metricsGenerator_t {
  *   last updated
  */
 static const metricsGenerator_t metricsGenerator[] = {
+	{9, 1, 0, 0,             3,         3,        151, 225, 3,       0},
+	{9, 0, 0, 0,             3,         3,        151, 225, 3,       0},
+	{9, 1, 1, 4,             5,         7,        2,   6,   7,       0},
+	{9, 0, 1, 6,             7,         9,        2,   6,   9,       0},
+	{9, 1, 2, 154,           155,       49,       6,   14,  108,     0},
+	{9, 0, 2, 424,           425,       110,      6,   14,  275,     0},
+	{9, 1, 3, 15548,         15221,     1311,     26,  47,  6862,    0},
+	{9, 0, 3, 81406,         79835,     5666,     26,  47,  29721,   0},
+	{9, 1, 4, 2969462,       2777493,   96363,    151, 225, 801917,  0},
+	{9, 0, 4, 29990974,      28304991,  791647,   151, 225, 5959653, 0},
+	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
+	{9, 1, 5, 913288021,     809357847, 10233318, 0,   0,   5873490, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 5, 913288021,     809357847, 15490349, 0,   0,   0,       2}, // NOTE: this is full 5n9-pure (placed second and hidden)
+	// below only intended for members
+	{9, 0, 5, 17927026892,   0,         0,        0,   0,   6533489, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 6, 410335296888,  0,         0,        0,   0,   0,       2}, // numProgress takes about 60 minutes
+	{9, 0, 6, 1556055783374, 0,         0,        0,   0,   0,       3}, // from historic metrics
+	//
+	{0}
+};
+
+static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 0, 0,             3,         3,        151, 225, 3,        0},
 	{9, 0, 0, 0,             3,         3,        151, 225, 3,        0},
 	{9, 1, 1, 4,             5,         7,        2,   6,   7,        0},

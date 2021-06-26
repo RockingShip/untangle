@@ -174,7 +174,7 @@ struct dbtool_t : callable_t {
 		// data
 		if (this->opt_maxSignature) {
 			// user specified
-			store.maxSignature = this->opt_maxSignature;
+			store.maxSignature = ctx.raisePercent(this->opt_maxSignature, 5);
 		} else if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
 			// inherited. pass-though
 			store.maxSignature = db.numSignature;
@@ -209,7 +209,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_signatureIndexSize) {
 				// user specified
-				store.signatureIndexSize = this->opt_signatureIndexSize;
+				store.signatureIndexSize = ctx.nextPrime(this->opt_signatureIndexSize);
 			} else if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
 				// inherited. pass-though
 				store.signatureIndexSize = db.signatureIndexSize;
@@ -241,7 +241,7 @@ struct dbtool_t : callable_t {
 		// data
 		if (this->opt_maxSwap) {
 			// user specified
-			store.maxSwap = this->opt_maxSwap;
+			store.maxSwap = ctx.raisePercent(this->opt_maxSwap, 5);
 		} else if (inheritSections & database_t::ALLOCMASK_SWAP) {
 			// inherited. pass-though
 			store.maxSwap = db.numSwap;
@@ -276,7 +276,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_swapIndexSize) {
 				// user specified
-				store.swapIndexSize = this->opt_swapIndexSize;
+				store.swapIndexSize = ctx.nextPrime(this->opt_swapIndexSize);
 			} else if (inheritSections & database_t::ALLOCMASK_SWAPINDEX) {
 				// inherited. pass-though
 				store.swapIndexSize = db.swapIndexSize;
@@ -308,7 +308,7 @@ struct dbtool_t : callable_t {
 		// data
 		if (this->opt_maxHint) {
 			// user specified
-			store.maxHint = this->opt_maxHint;
+			store.maxHint = ctx.raisePercent(this->opt_maxHint, 5);
 		} else if (inheritSections & database_t::ALLOCMASK_HINT) {
 			// inherited. pass-though
 			store.maxHint = db.numHint;
@@ -343,7 +343,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_hintIndexSize) {
 				// user specified
-				store.hintIndexSize = this->opt_hintIndexSize;
+				store.hintIndexSize = ctx.nextPrime(this->opt_hintIndexSize);
 			} else if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
 				// inherited. pass-though
 				store.hintIndexSize = db.hintIndexSize;
@@ -406,7 +406,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_maxImprint) {
 				// user specified
-				store.maxImprint = this->opt_maxImprint;
+				store.maxImprint = ctx.raisePercent(this->opt_maxImprint, 5);
 			} else if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
 				// inherited. pass-though
 				store.maxImprint = db.numImprint;
@@ -454,7 +454,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_imprintIndexSize) {
 				// user specified
-				store.imprintIndexSize = this->opt_imprintIndexSize;
+				store.imprintIndexSize = ctx.nextPrime(this->opt_imprintIndexSize);
 			} else if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
 				// inherited. pass-though
 				store.imprintIndexSize = db.imprintIndexSize;
@@ -486,7 +486,7 @@ struct dbtool_t : callable_t {
 		// data
 		if (this->opt_maxMember) {
 			// user specified
-			store.maxMember = this->opt_maxMember;
+			store.maxMember = ctx.raisePercent(this->opt_maxMember, 5);
 		} else if (inheritSections & database_t::ALLOCMASK_MEMBER) {
 			// inherited. pass-though
 			store.maxMember = db.numMember;
@@ -521,7 +521,7 @@ struct dbtool_t : callable_t {
 		} else {
 			if (this->opt_memberIndexSize) {
 				// user specified
-				store.memberIndexSize = this->opt_memberIndexSize;
+				store.memberIndexSize = ctx.nextPrime(this->opt_memberIndexSize);
 			} else if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
 				// inherited. pass-though
 				store.memberIndexSize = db.memberIndexSize;

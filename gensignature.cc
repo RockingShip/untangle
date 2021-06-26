@@ -1459,8 +1459,15 @@ int main(int argc, char *argv[]) {
 
 	if (app.opt_load)
 		app.signaturesFromFile();
-	if (app.opt_generate)
+	if (app.opt_generate) {
+		if (app.arg_numNodes == 1) {
+			// also include "0" and "a"
+			app.arg_numNodes = 0;
+			app.signaturesFromGenerator();
+			app.arg_numNodes = 1;
+		}
 		app.signaturesFromGenerator();
+	}
 
 	/*
 	 * sort signatures and ...

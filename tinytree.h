@@ -244,6 +244,7 @@ struct tinyTree_t {
 			/*
 			 * Push components
 			 *
+			 *  Evaluation order is reverse order
 			 *	First push if both are endpoints. Should be tested last if layout matches.
 			 *	Second enter depth, let that handle incomplete sides.
 			 */
@@ -1297,6 +1298,30 @@ struct tinyTree_t {
 		encode(id, staticName, pSkin);
 
 		return staticName;
+	}
+
+	/*
+	 * @date 2021-06-17 20:39:54
+	 *
+	 * Determine display score (less is better)
+	 *  numNodes << 8  | numEndpoint << 4 | numQTF
+	 */
+	static uint16_t calcScoreName(const char *pName) {
+		// fast score calculation
+		unsigned score    = 0;
+
+		while (*pName) {
+			if (islower(*pName))
+				score += 0x010; // numEndpoint
+			else if (*pName == '&' || *pName == '?')
+				score += 0x101; // numQTF,numNode
+			else if (*pName == '^' || *pName == '+' || *pName == '>' || *pName == '!')
+				score += 0x100; // numNode
+
+			pName++;
+		}
+
+		return score;
 	}
 
 	/**

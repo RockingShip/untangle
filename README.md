@@ -296,14 +296,14 @@ The "8" representing all the combinations were `"NOT"` can appear.
 
 #### Final normalised collection
 
-(for readability 0=false)
+("0" is interchangeable with "false")
 
-| Infix          | Operator | postfix symbol
-|:---------------|:--------:|:--------------:
-| a ? ~false : b |   OR     | `"+"`
-| a ?  b : false |   AND    | `"&"`
-| a ? ~b : false |   GT     | `">"`
-| a ? ~b : b     |   XOR    | `"^"`
+| Infix Expr | Operator | postfix symbol
+|:-----------|:--------:|:--------------:
+| a ? ~0 : b |   OR     | `"+"`
+| a ?  b : 0 |   AND    | `"&"`
+| a ? ~b : 0 |   GT     | `">"`
+| a ? ~b : b |  XOR/NE  | `"^"`
 | a ?  b : c     |   QTF    | `"?"`
 | a ? ~b : c     |   QnTF   | `"#"`
 

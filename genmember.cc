@@ -20,7 +20,7 @@
  *
  * @date 2020-04-01 23:48:02
  *
- * I always thought that the goal motivation was to replace structures with with smallest nodesize but that might not be the case.
+ * I always thought that the goal motivation was to replace structures with smallest nodesize but that might not be the case.
  * 3040 signature groups in 4n9 space fail to have safe members. However, they do exist in 5n9 space.
  *
  * @date 2020-04-02 10:44:05
@@ -162,8 +162,9 @@
  * `--text=4`   Selected and sorted signatures that are written to the output database
  *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
- *              <sid> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
+ *              <mid> <sid> <tid> <name> <Qmid> <Tmid> <Fmid> <HeadMids> <Safe/Nonsafe-member> <Safe/Nonsafe-signature>
  *
+ * `--text=5`	Output is sql for advanced analysis
  */
 
 /*
@@ -220,7 +221,7 @@ struct genmemberContext_t : dbtool_t {
 		OPTTEXT_COMPARE = 2,
 		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
-
+		OPTTEXT_SQL     = 5,
 	};
 
 	/*
@@ -241,6 +242,8 @@ struct genmemberContext_t : dbtool_t {
 	const char *opt_load;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
 	unsigned   opt_saveIndex;
+	/// @var {number} --score, group by `tinyTree_t::calcScoreName()` instead of node count, for smaller signature groups
+	unsigned   opt_score;
 	/// @var {number} Sid range upper bound
 	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -262,6 +265,8 @@ struct genmemberContext_t : dbtool_t {
 	footprint_t *pEvalFwd;
 	/// @var {footprint_t[]} - Evaluator for reverse transforms
 	footprint_t *pEvalRev;
+	/// @var {uint16_t} - score of signature group members. NOTE: size+score may differ from signature
+	uint16_t    *pSafeScores;
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
 
@@ -279,7 +284,7 @@ struct genmemberContext_t : dbtool_t {
 	unsigned        skipDuplicate;
 	/// @var {number} `foundTree()` too large for signature
 	unsigned        skipSize;
-	/// @var {number} `foundTree()` unsafe abumdance
+	/// @var {number} `foundTree()` unsafe abundance
 	unsigned        skipUnsafe;
 	/// @var {number} Where database overflow was caught
 	uint64_t        truncated;
@@ -300,6 +305,7 @@ struct genmemberContext_t : dbtool_t {
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
 		opt_load           = NULL;
+		opt_score          = 0;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
 		opt_text           = 0;
@@ -307,17 +313,18 @@ struct genmemberContext_t : dbtool_t {
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
-		pStore   = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
+		pStore      = NULL;
+		pEvalFwd    = NULL;
+		pEvalRev    = NULL;
+		pSafeScores = NULL;
 
-		activeHintIndex = 0;
-		freeMemberRoot  = 0;
-		numUnsafe       = 0;
-		skipDuplicate   = 0;
-		skipSize        = 0;
-		skipUnsafe      = 0;
-		truncated       = 0;
+		activeHintIndex  = 0;
+		freeMemberRoot   = 0;
+		numUnsafe        = 0;
+		skipDuplicate    = 0;
+		skipSize         = 0;
+		skipUnsafe       = 0;
+		truncated        = 0;
 		truncatedName[0] = 0;
 	}
 
@@ -341,13 +348,14 @@ struct genmemberContext_t : dbtool_t {
 	 *
 	 * @param {member_t} pMember - Member to process
 	 * @param {tinyTree_t} treeR - candidate tree
+	 * @return {bool} - true for found, false to drop candidate
 	 */
-	void findHeadTail(member_t *pMember, const tinyTree_t &treeR) {
+	bool /*__attribute__((optimize("O0")))*/ findHeadTail(member_t *pMember, const tinyTree_t &treeR) {
 
 		assert(~treeR.root & IBIT);
 
 		// safe until proven otherwise
-		pMember->flags |= signature_t::SIGMASK_SAFE;
+		pMember->flags |= member_t::MEMMASK_SAFE;
 
 		/*
 		 * @date 2020-03-29 23:16:43
@@ -361,17 +369,18 @@ struct genmemberContext_t : dbtool_t {
 			assert(::strcmp(pMember->name, "0") == 0); // must be reserved name
 			assert(pMember->sid == 1); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember->sid;
-			return;
+			pMember->tid = 0;
+			pMember->Q = pMember->T = pMember->F = pMember - pStore->members;
+
+			return true;
 		}
-		if (treeR.root == 1) {
+		if (treeR.root == tinyTree_t::TINYTREE_KSTART) {
 			assert(::strcmp(pMember->name, "a") == 0); // must be reserved name
 			assert(pMember->sid == 2); // must be reserved entry
 
-			pMember->Qmid = pMember->Tmid = pMember->Fmid = pMember - pStore->members;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember->sid;
-			return;
+			pMember->tid = 0;
+			pMember->Q = pMember->T = pMember->F = pMember - pStore->members;
+			return true;
 		}
 
 		assert(treeR.root >= tinyTree_t::TINYTREE_NSTART);
@@ -402,46 +411,77 @@ struct genmemberContext_t : dbtool_t {
 		 *
 		 * for 4n9, 2976 of the 791646 signatures are unsafe.
 		 */
-		{
-			char skin[MAXSLOTS + 1];
+		tinyTree_t tree(ctx);
+		tinyTree_t tree2(ctx);
+		char skin[MAXSLOTS + 1];
+		char name[tinyTree_t::TINYTREE_NAMELEN + 1];
 
+		{
 			unsigned Q = treeR.N[treeR.root].Q;
 			{
-				const char *pComponentName = treeR.encode(Q, skin);
-				unsigned   ix              = pStore->lookupMember(pComponentName);
+				// fast
+				treeR.encode(Q, name, skin);
+				unsigned ix = pStore->lookupMember(name);
+				if (pStore->memberIndex[ix] == 0) {
+					// slow
+					tree2.decodeSafe(name);
+					tree2.encode(tree2.root, name, skin);
+					ix = pStore->lookupMember(name);
+				}
 
-				pMember->Qmid = pStore->memberIndex[ix];
-				pMember->Qsid = pStore->members[pMember->Qmid].sid;
+				pMember->Q = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Qmid == 0 || pMember->Qsid == 0 || (~pStore->members[pMember->Qmid].flags & signature_t::SIGMASK_SAFE))
-					pMember->flags &= ~signature_t::SIGMASK_SAFE;
+				if (pMember->Q == 0 || (!(pStore->members[pMember->Q].flags & member_t::MEMMASK_SAFE))) {
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+					return false;
+				}
 			}
 
 			unsigned To = treeR.N[treeR.root].T & ~IBIT;
 			{
-				const char *pComponentName = treeR.encode(To, skin);
-				unsigned   ix              = pStore->lookupMember(pComponentName);
+				// fast
+				treeR.encode(To, name, skin);
+				unsigned ix = pStore->lookupMember(name);
+				if (pStore->memberIndex[ix] == 0) {
+					// slow
+					tree2.decodeSafe(name);
+					tree2.encode(tree2.root, name, skin);
+					ix = pStore->lookupMember(name);
+				}
 
-				pMember->Tmid = pStore->memberIndex[ix];
-				pMember->Tsid = pStore->members[pMember->Tmid].sid ^ (treeR.N[treeR.root].T & IBIT);
+				pMember->T = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Tmid == 0 || (pMember->Tsid & ~IBIT) == 0 || (~pStore->members[pMember->Tmid].flags & signature_t::SIGMASK_SAFE))
-					pMember->flags &= ~signature_t::SIGMASK_SAFE;
+				if (pMember->T == 0 || (!(pStore->members[pMember->T].flags & member_t::MEMMASK_SAFE))) {
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+					return false;
+				}
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
-			{
-				const char *pComponentName = treeR.encode(F, skin);
-				unsigned   ix              = pStore->lookupMember(pComponentName);
+			if (F == To) {
+				// de-dup T/F
+				pMember->F = 0;
+			} else {
+				// fast
+				treeR.encode(F, name, skin);
+				unsigned ix = pStore->lookupMember(name);
+				if (pStore->memberIndex[ix] == 0) {
+					// slow
+					tree2.decodeSafe(name);
+					tree2.encode(tree2.root, name, skin);
+					ix = pStore->lookupMember(name);
+				}
 
-				pMember->Fmid = pStore->memberIndex[ix];
-				pMember->Fsid = pStore->members[pMember->Fmid].sid;
+
+				pMember->F = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Fmid == 0 || pMember->Fsid == 0 || (~pStore->members[pMember->Fmid].flags & signature_t::SIGMASK_SAFE))
-					pMember->flags &= ~signature_t::SIGMASK_SAFE;
+				if (pMember->F == 0 || (!(pStore->members[pMember->F].flags & member_t::MEMMASK_SAFE))) {
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+					return false;
+				}
 			}
 		}
 
@@ -455,11 +495,16 @@ struct genmemberContext_t : dbtool_t {
 		 *   `"cbdabc!!e!"` is unsafe because that can be rewritten to `"cab&d?/bdce"`
 		 */
 		{
-			tinyTree_t tree(ctx);
-			unsigned   numHead = 0; // number of found heads
+			unsigned   numHead = 0; // number of unique found heads
+
+			/*
+			 * In turn, select each node to become "hot"
+			 * Hot nodes are replaced with an endpoint placeholder
+			 * Basically cutting of parts of the tree
+			 */
 
 			// replace `hot` node with placeholder
-			for (unsigned hot = tinyTree_t::TINYTREE_NSTART; hot < treeR.root; hot++) {
+			for (unsigned iHead = tinyTree_t::TINYTREE_NSTART; iHead < treeR.root; iHead++) {
 				unsigned select                     = 1 << treeR.root | 1 << 0; // selected nodes to extract nodes
 				unsigned nextPlaceholderPlaceholder = tinyTree_t::TINYTREE_KSTART;
 				uint32_t what[tinyTree_t::TINYTREE_NEND];
@@ -467,7 +512,7 @@ struct genmemberContext_t : dbtool_t {
 
 				// scan tree for needed nodes, ignoring `hot` node
 				for (unsigned k = treeR.root; k >= tinyTree_t::TINYTREE_NSTART; k--) {
-					if (k != hot && (select & (1 << k))) {
+					if (k != iHead && (select & (1 << k))) {
 						const tinyNode_t *pNode = treeR.N + k;
 						const unsigned   Q      = pNode->Q;
 						const unsigned   To     = pNode->T & ~IBIT;
@@ -485,7 +530,7 @@ struct genmemberContext_t : dbtool_t {
 				// prepare for extraction
 				tree.clearTree();
 				// remove `hot` node from selection
-				select &= ~(1 << hot);
+				select &= ~(1 << iHead);
 
 				/*
 				 * Extract head.
@@ -493,7 +538,7 @@ struct genmemberContext_t : dbtool_t {
 				 * `what[hot]` is not a reference but a placeholder
 				 */
 				for (unsigned k = tinyTree_t::TINYTREE_NSTART; k <= treeR.root; k++) {
-					if (k != hot && select & (1 << k)) {
+					if (k != iHead && select & (1 << k)) {
 						const tinyNode_t *pNode = treeR.N + k;
 						const unsigned   Q      = pNode->Q;
 						const unsigned   To     = pNode->T & ~IBIT;
@@ -558,35 +603,70 @@ struct genmemberContext_t : dbtool_t {
 				// set root
 				tree.root = tree.count - 1;
 
-				// get head name/notation
-				char skin[MAXSLOTS + 1];
-				char name[tinyTree_t::TINYTREE_NAMELEN + 1];
+				/*
+				 * @date 2021-06-14 18:56:37
+				 *
+				 * This doesn't got well for sid=221 "dab+c1&!"
+				 * When replacing "ab+" with a placeholder the result is "dxcx&!"
+				 * making the head effectively "cbab&!" instead of "caab&!".
+				 * this also introduces a layer of transforms.
+				 *
+				 * This makes it clear that heads should not be used for structure creation
+				 * and therefore be a sid/tid combo instead of a references to a template member
+				 * This sadly adds 5-6 entryes to `member_t`.
+				 *
+				 * This change should be safe because the components have already been tested for validity.
+				 */
+
+				// fast path: lookup skin-free head name/notation
 				tree.encode(tree.root, name, skin);
+				unsigned ix = pStore->lookupMember(name);
+				if (pStore->memberIndex[ix] == 0) {
+					/*
+					 * @date 2021-06-18 21:29:50
+					 *
+					 * NOTE/WARNING the extracted component may have non-normalised dyadic ordering
+					 * because in the context of the original trees, the endpoints were locked by the now removed node
+					 */
+					tree2.decodeSafe(name);
+					// structure is now okay
+					tree2.encode(tree2.root, name, skin);
+					// endpoints are now okay
 
-				// perform member lookup
-				unsigned ix      = pStore->lookupMember(name);
+					ix = pStore->lookupMember(name);
+				}
 				unsigned midHead = pStore->memberIndex[ix];
-				if (midHead == 0) {
-					// unsafe
-					pMember->flags &= ~signature_t::SIGMASK_SAFE;
-				} else {
-					// test if head already present
-					for (unsigned k = 0; k < member_t::MAXHEAD && pMember->heads[k]; k++) {
-						if (pMember->heads[k] == midHead) {
-							// found
-							midHead = 0;
-							break;
-						}
-					}
 
-					// add to list
-					if (midHead) {
-						assert(numHead < member_t::MAXHEAD);
-						pMember->heads[numHead++] = midHead;
+				if (midHead == 0) {
+					// component not found
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+					return false;
+				}
+
+				if (!(pStore->members[midHead].flags & member_t::MEMMASK_SAFE)) {
+					// component unsafe
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+					return false;
+				}
+
+				// test if head already present
+				for (unsigned k = 0; k < member_t::MAXHEAD && pMember->heads[k]; k++) {
+					if (pMember->heads[k] == midHead) {
+						// found
+						midHead = 0;
+						break;
 					}
+				}
+
+				// add to list
+				if (midHead) {
+					assert(numHead < member_t::MAXHEAD);
+					pMember->heads[numHead++] = midHead;
 				}
 			}
 		}
+
+		return true;
 	}
 
 	/**
@@ -652,7 +732,7 @@ struct genmemberContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool /*__attribute__((optimize("O0")))*/ foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (this->truncated)
 			return false; // quit as fast as possible
@@ -722,6 +802,7 @@ struct genmemberContext_t : dbtool_t {
 		 */
 
 		unsigned sid     = 0;
+		unsigned tid     = 0;
 		unsigned markSid = pStore->numSignature;
 
 		if ((ctx.flags & context_t::MAGICMASK_AINF) && !this->readOnlyMode) {
@@ -736,7 +817,6 @@ struct genmemberContext_t : dbtool_t {
 			// add to imprints to index
 			sid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, markSid);
 		} else {
-			unsigned tid = 0;
 			pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
 		}
 
@@ -744,12 +824,49 @@ struct genmemberContext_t : dbtool_t {
 			return true; // not found
 
 		signature_t *pSignature = pStore->signatures + sid;
+		unsigned cmp = 0;
+		unsigned scoreR = 0; // delay calculation of this as long as possible
 
-		// early-reject if candidate is larger than safe group
-		if ((pSignature->flags & signature_t::SIGMASK_SAFE) && treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size) {
+		/*
+		 * early-reject
+		 *
+		 * @date 2021-06-21 08:59:05
+		 * In `--text=SQL`, collect as many members in a group as possible so they can be examined/selected/rejected on further analysis
+		 */
+
+		if ((pSignature->flags & signature_t::SIGMASK_SAFE) && opt_text != OPTTEXT_SQL) {
+			/*
+			 * @date 2021-06-20 19:06:44
+			 * Just like primes with component dependency chains, members can be larger than signatures
+			 * Larger candidates will always be rejected, so reject now before doing expensive testing
+			 * Grouping can be either by node size or score
+			 *
+			 * NOTE:
+			 * `pSafeScores[]` contains either score (opt_score!=0) or node count (opt_score==0)
+			 */
+
+			if (opt_score) {
+				if (scoreR == 0)
+					scoreR = treeR.calcScoreName(pNameR);
+
+				if (scoreR > pSafeScores[sid])
+					cmp = '*'; // reject
+			} else if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeScores[sid]) {
+				cmp = '*'; // reject
+			}
+		} else {
+			/*
+			 * @date 2021-06-20 19:15:49
+			 * unsafe groups are a collection of everything that matches.
+			 * however, keep the difference less than 2 nodes, primarily to protect 5n9 against populating <= 3n9
+			 */
+			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 1u)
+				cmp = '*'; // reject
+		}
+
+		if (cmp) {
 			if (opt_text == OPTTEXT_COMPARE)
-				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, '-', pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
-
+				printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, sid, cmp, pNameR, treeR.count - tinyTree_t::TINYTREE_NSTART, numPlaceholder, numEndpoint, numBackRef);
 			skipSize++;
 			return true;
 		}
@@ -764,40 +881,44 @@ struct genmemberContext_t : dbtool_t {
 
 		::strcpy(tmpMember.name, pNameR);
 		tmpMember.sid            = sid;
+		tmpMember.tid            = tid;
 		tmpMember.size           = treeR.count - tinyTree_t::TINYTREE_NSTART;
 		tmpMember.numPlaceholder = numPlaceholder;
 		tmpMember.numEndpoint    = numEndpoint;
 		tmpMember.numBackRef     = numBackRef;
 
-		findHeadTail(&tmpMember, treeR);
+
+		bool found = findHeadTail(&tmpMember, treeR);
+		if (!found)
+			found = true; // for debugging
 
 		/*
 		 * Verify if candidate member is acceptable
 		 */
-		unsigned cmp = 0;
 
 		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
-			if (~tmpMember.flags & signature_t::SIGMASK_SAFE) {
+			if (!(tmpMember.flags & member_t::MEMMASK_SAFE)) {
 				// group is safe, candidate not. Reject
 				cmp = '<';
 				skipUnsafe++;
 			} else {
 				// group/candidate both safe. Accept
 				cmp = '+';
-				assert(tmpMember.size == pSignature->size);
+
+				if (opt_score) {
+					if (scoreR == 0)
+						scoreR = treeR.calcScoreName(pNameR);
+					if (scoreR < pSafeScores[sid])
+						cmp = '!'; // better score, flush group
+				}
 			}
 		} else {
-			if (tmpMember.flags & signature_t::SIGMASK_SAFE) {
+			if (tmpMember.flags & member_t::MEMMASK_SAFE) {
 				// group is unsafe, candidate is safe. Accept
 				cmp = '>';
-			} else if (tmpMember.size > pSignature->size) {
-				// group/candidate both unsafe, candidate is worse. Reject
-				cmp = '-';
-				skipSize++;
 			} else {
 				// group/candidate both unsafe. Accept.
 				cmp = '=';
-				assert(tmpMember.size == pSignature->size);
 			}
 		}
 
@@ -805,89 +926,78 @@ struct genmemberContext_t : dbtool_t {
 			printf("%lu\t%u\t%c\t%s\t%u\t%u\t%u\t%u\n", ctx.progress, tmpMember.sid, cmp, tmpMember.name, tmpMember.size, tmpMember.numPlaceholder, tmpMember.numEndpoint, tmpMember.numBackRef);
 
 		if (cmp == '<' || cmp == '-')
-			return true;  // lost challange
+			return true;  // lost challenge
 
 		// won challenge
 		if (opt_text == OPTTEXT_WON)
 			printf("%s\n", pNameR);
 
-		/*
-		 * group changed from unsafe to save, remove all (unsafe) members
-			 * If candidate is same size then drop all existing unsafe group members
-			 * If candidate is larger then keep all smaller unsafe members for later optimisations
-			 */
-
-		if (cmp == '>') {
+		if (cmp == '>' || cmp == '!') {
 			/*
-			 * promote signature to safe
+			 * group changes from unsafe to save, or safe group flush: remove all (unsafe) members
 			 */
 
 			if (pSignature->firstMember) {
-				if (tmpMember.size == pSignature->size) {
-					// remove all same-sized unsafe members
+				// remove all unsafe members
 
-					if (this->readOnlyMode) {
-						// memberchain cannot be broken
-						// pretend signature becomes safe or keeps unsafe members
-						pSignature->firstMember = 0;
-					} else {
+				if (this->readOnlyMode) {
+					// member chain cannot be modified
+					// pretend signature becomes safe or keeps unsafe members
+					pSignature->firstMember = 0;
+				} else {
+					/*
+					 * Group contains unsafe members of same size.
+					 * empty group
+					 *
+					 * @date 2020-04-05 02:21:42
+					 *
+					 * For `5n9-pure` it turns out that the chance of finding safe replacements is rare.
+					 * And you need to collect all non-safe members if the group is unsafe.
+					 * Orphaning them depletes resources too fast.
+					 *
+					 * Reuse `members[]`.
+					 * Field `nextMember` is perfect for that.
+					 */
+					while (pSignature->firstMember) {
+						// remove all references to the deleted
+						for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+							member_t *p = pStore->members + iMid;
 
-						/*
-						 * Group contains unsafe members of same size.
-						 * empty group
-						 *
-						 * @date 2020-04-05 02:21:42
-						 *
-						 * For `5n9-pure` it turns out that the chance of finding safe replacements is rare.
-						 * And you need to collect all non-safe members if the group is unsafe.
-						 * Orphaning them depletes resources too fast.
-						 *
-						 * Reuse `members[]`.
-						 * Field `nextMember` is perfect for that.
-						 */
-						while (pSignature->firstMember) {
-							// remove all references to the deleted
-							for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
-								member_t *p = pStore->members + iMid;
-
-								if (p->Qmid == pSignature->firstMember) {
-									assert(~p->flags & signature_t::SIGMASK_SAFE);
-									p->Qmid = 0;
-								}
-								if (p->Tmid == pSignature->firstMember) {
-									assert(~p->flags & signature_t::SIGMASK_SAFE);
-									p->Tmid = 0;
-								}
-								if (p->Fmid == pSignature->firstMember) {
-									assert(~p->flags & signature_t::SIGMASK_SAFE);
-									p->Fmid = 0;
-								}
+							if (p->Q == pSignature->firstMember) {
+								assert(!(p->flags & member_t::MEMMASK_SAFE));
+								p->Q = 0;
 							}
-
-							// release head of chain
-							member_t *p = pStore->members + pSignature->firstMember;
-
-							pSignature->firstMember = p->nextMember;
-
-							this->memberFree(p);
+							if (p->T == pSignature->firstMember) {
+								assert(!(p->flags & member_t::MEMMASK_SAFE));
+								p->T = 0;
+							}
+							if (p->F == pSignature->firstMember) {
+								assert(!(p->flags & member_t::MEMMASK_SAFE));
+								p->F = 0;
+							}
 						}
+
+						// release head of chain
+						member_t *p = pStore->members + pSignature->firstMember;
+
+						pSignature->firstMember = p->nextMember;
+
+						this->memberFree(p);
 					}
 				}
 
-				// test group has become empty
-				if (pSignature->firstMember == 0)
-					numEmpty++;
+				// group has become empty
+				numEmpty++;
 			}
+		}
 
+		if (cmp == '>') {
 			// mark group as safe
 			pSignature->flags |= signature_t::SIGMASK_SAFE;
-			pSignature->size = tmpMember.size;
-
-			// group has become safe
 			numUnsafe--;
 		}
 
-		// test group now has first member
+		// going to add member to group.
 		if (pSignature->firstMember == 0)
 			numEmpty--;
 
@@ -911,6 +1021,19 @@ struct genmemberContext_t : dbtool_t {
 
 			// index
 			pStore->memberIndex[mix] = pMember - pStore->members;
+		}
+
+		/*
+		 * update global score
+		 * NOTE: `pSafeScores[]` contains either score (opt_score!=0) or node count (opt_score==0)
+		 */
+
+		if (opt_score) {
+			if (scoreR == 0)
+				scoreR = treeR.calcScoreName(pNameR);
+			pSafeScores[sid] = scoreR;
+		} else {
+			pSafeScores[sid] = treeR.count - tinyTree_t::TINYTREE_NSTART;
 		}
 
 		return true;
@@ -942,6 +1065,23 @@ struct genmemberContext_t : dbtool_t {
 		if (pMemberR->sid == 0)
 			return -1;
 
+		int cmp = 0;
+
+		/*
+		 * compare scores
+		 */
+
+		unsigned scoreL = tinyTree_t::calcScoreName(pMemberL->name);
+		unsigned scoreR = tinyTree_t::calcScoreName(pMemberR->name);
+
+		cmp = scoreL - scoreR;
+		if (cmp)
+			return cmp;
+
+		/*
+		 * Compare trees
+		 */
+
 		// load trees
 		tinyTree_t treeL(*pApp);
 		tinyTree_t treeR(*pApp);
@@ -949,33 +1089,6 @@ struct genmemberContext_t : dbtool_t {
 		treeL.decodeFast(pMemberL->name);
 		treeR.decodeFast(pMemberR->name);
 
-		/*
-		 * Compare
-		 */
-
-		int cmp = 0;
-
-		// Test for prime goal: reducing number of nodes
-		cmp = treeL.count - treeR.count;
-		if (cmp)
-			return cmp;
-
-		// Test for secondary goal: reduce number of unique endpoints, thus connections
-		cmp = pMemberL->numPlaceholder - pMemberR->numPlaceholder;
-		if (cmp)
-			return cmp;
-
-		// Test for preferred display selection: least number of endpoints
-		cmp = pMemberL->numEndpoint - pMemberR->numEndpoint;
-		if (cmp)
-			return cmp;
-
-		// Test for preferred display selection: least number of back-references
-		cmp = pMemberL->numBackRef - pMemberR->numBackRef;
-		if (cmp)
-			return cmp;
-
-		// Compare layouts, expensive
 		cmp = treeL.compare(treeL.root, treeR, treeR.root);
 		return cmp;
 	}
@@ -1494,18 +1607,11 @@ struct genmemberContext_t : dbtool_t {
 	 *
 	 * Groups may contain (unsafe) members that got orphaned when accepting a safe member.
 	 */
-	void finaliseMembers(void) {
+	void /*__attribute__((optimize("O0")))*/ finaliseMembers(void) {
 		tinyTree_t tree(ctx);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting members\n", ctx.timeAsString());
-
-		// sort entries.
-		assert(pStore->numMember >= 1);
-		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
 
 		unsigned lastMember = pStore->numMember;
 
@@ -1516,9 +1622,20 @@ struct genmemberContext_t : dbtool_t {
 		pStore->numMember                            = 1;
 		skipDuplicate = skipSize = skipUnsafe = 0;
 
+		// sort entries (skipping first)
+		assert(lastMember >= 1);
+		qsort_r(pStore->members + 1, lastMember - 1, sizeof(*pStore->members), comparMember, this);
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
+
 		// reload everything
 		ctx.setupSpeed(lastMember);
 		ctx.tick = 0;
+
+		// mark signatures unsafe
+		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++)
+			pStore->signatures[iSid].flags &= ~signature_t::SIGMASK_SAFE;
 
 		ctx.progress++; // skip reserved
 		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
@@ -1552,32 +1669,31 @@ struct genmemberContext_t : dbtool_t {
 				tree.decodeFast(pMember->name);
 				findHeadTail(pMember, tree);
 
-				if (~pSignature->flags & signature_t::SIGMASK_SAFE) {
+				if (!(pSignature->flags & signature_t::SIGMASK_SAFE)) {
 					/*
 					 * Adding (unsafe) member to unsafe group
 					 */
 
-					// member should be unsafe
-					assert(~pMember->flags & signature_t::SIGMASK_SAFE);
-					// nodeSize should match
-					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-
-				} else if (pMember->flags & signature_t::SIGMASK_SAFE) {
 					/*
-					 * Adding safe member to safe group
+					 * member should be unsafe
+					 *
+					 * @date 2021-06-23 09:46:35
+					 *
+					 * assert will fail when reading members from a list that is not properly ordered.
+					 * and the list contains primes that are longer than the signatures.
+					 * this will signatures to reject seeing primes as safe on the first pass.
+					 * For the moment this is experimental code, so issue a warning instead of aborting a lengthy run
+					 * (input list was ordered by sid instead of mid)
 					 */
+					// assert(!(pMember->flags & signature_t::SIGMASK_SAFE));
+					if (pMember->flags & member_t::MEMMASK_SAFE) {
+						fprintf(stderr,"\r\e[K[%s] WARNING: adding safe member %u:%s to unsafe signature %u:%s\n", ctx.timeAsString(), iMid, pMember->name, pMember->sid, pSignature->name);
+						pSignature->flags |= signature_t::SIGMASK_SAFE;
+					}
 
-					// nodeSize should match
-					assert(tree.count - tinyTree_t::TINYTREE_NSTART == pSignature->size);
-
-				} else if (tree.count - tinyTree_t::TINYTREE_NSTART < pSignature->size) {
+				} else if (!(pMember->flags & member_t::MEMMASK_SAFE)) {
 					/*
-					 * Adding unsafe member to safe group
-					 */
-
-				} else {
-					/*
-					 * Member got orphaned when group became safe
+					 * Reject adding unsafe member to safe group
 					 */
 					skipUnsafe++;
 					ctx.progress++;
@@ -1707,7 +1823,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --prepare                       Prepare dataset for empty/unsafe groups\n");
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
@@ -2101,7 +2216,7 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE && app.opt_text != app.OPTTEXT_SQL);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -2166,8 +2281,9 @@ int main(int argc, char *argv[]) {
 	 */
 
 	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	app.pEvalFwd    = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+	app.pEvalRev    = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+	app.pSafeScores = (uint16_t *) ctx.myAlloc("genmemberContext_t::pMemberScores", store.maxSignature, sizeof(*app.pSafeScores));
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
@@ -2197,6 +2313,29 @@ int main(int argc, char *argv[]) {
 	tinyTree_t tree(ctx);
 	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
 	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
+
+	for (unsigned iSid = 0; iSid < store.maxSignature; iSid++)
+		app.pSafeScores[iSid] = 0;
+
+	// calc initial signature group scores (may differ from signature)
+	for (unsigned iSid = 0; iSid < store.numSignature; iSid++) {
+		const signature_t *pSignature = db.signatures + iSid;
+
+		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+			assert(pSignature->firstMember);
+
+			const member_t *pMember = db.members + pSignature->firstMember;
+
+			if (app.opt_score) {
+				app.pSafeScores[iSid] = tinyTree_t::calcScoreName(pMember->name);
+			} else {
+				tinyTree_t tree(ctx);
+				tree.decodeFast(pMember->name);
+
+				app.pSafeScores[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
+			}
+		}
+	}
 
 	/*
 	 * Inherit/copy sections
@@ -2263,8 +2402,15 @@ int main(int argc, char *argv[]) {
 
 	if (app.opt_load)
 		app.membersFromFile();
-	if (app.opt_generate)
+	if (app.opt_generate) {
+		if (app.arg_numNodes == 1) {
+			// also include "0" and "a"
+			app.arg_numNodes = 0;
+			app.membersFromGenerator();
+			app.arg_numNodes = 1;
+		}
 		app.membersFromGenerator();
+	}
 
 	/*
 	 * re-order and re-index members
@@ -2273,6 +2419,17 @@ int main(int argc, char *argv[]) {
 	if (!app.readOnlyMode) {
 		// compact, sort and reindex members
 		app.finaliseMembers();
+
+		/*
+		 * Check that all unsafe groups have no safe members (or the group would have been safe)
+		 */
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
+				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+					assert(~store.members[iMid].flags & member_t::MEMMASK_SAFE);
+				}
+			}
+		}
 
 		if (app.opt_text == app.OPTTEXT_BRIEF) {
 			/*
@@ -2289,36 +2446,49 @@ int main(int argc, char *argv[]) {
 			 * Display full members, grouped by signature
 			 */
 			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
+				const signature_t *pSignature = store.signatures + iSid;
+
+				for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
 					member_t *pMember = store.members + iMid;
 
-					printf("%u:%s\t", iMid, pMember->name);
-					printf("%u\t", pMember->sid);
+					printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
+					printf("0x%03x\t", tinyTree_t::calcScoreName(pMember->name));
 
-					printf("%u:%s\t%u\t", pMember->Qmid, store.members[pMember->Qmid].name, pMember->Qsid);
-					if (pMember->Tsid & IBIT)
-						printf("%u:%s\t-%u\t", pMember->Tmid, store.members[pMember->Tmid].name, pMember->Tsid & ~IBIT);
-					else
-						printf("%u:%s\t%u\t", pMember->Tmid, store.members[pMember->Tmid].name, pMember->Tsid);
-					printf("%u:%s\t%u\t", pMember->Fmid, store.members[pMember->Fmid].name, pMember->Fsid);
+					printf("%u:%s\t", pMember->Q, store.members[pMember->Q].name);
+					printf("%u:%s\t", pMember->T, store.members[pMember->T].name);
+					printf("%u:%s\t", pMember->F, store.members[pMember->F].name);
 
 					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
 						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
 
-					if (pMember->flags & signature_t::SIGMASK_SAFE)
+					if (pMember->flags & member_t::MEMMASK_SAFE)
 						printf("S");
+					else
+						printf("N");
+					if (pSignature->flags & signature_t::SIGMASK_SAFE)
+						printf("S");
+					else
+						printf("N");
 					printf("\n");
 				}
 			}
 		}
+		if (app.opt_text == app.OPTTEXT_SQL) {
+			/*
+			 * Display full members, grouped by signature
+			 */
+			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+				const signature_t *pSignature = store.signatures + iSid;
 
-		/*
-		 * Check that all unsafe groups have no safe members (or the group would have been safe)
-		 */
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			if (~store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
-				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(~store.members[iMid].flags & signature_t::SIGMASK_SAFE);
+				for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
+					member_t *pMember = store.members + iMid;
+
+					if (pMember->flags & member_t::MEMMASK_SAFE) {
+						printf("insert ignore into member (mid,sid,tid,score,name,q,t,f,h1,h2,h3,h4,h5,h6) values (%u,%u,%u,%x,\"%s\",%u,%u,%u, %u,%u,%u,%u,%u,%u);\n",
+						       iMid, pMember->sid, pMember->tid, tinyTree_t::calcScoreName(pMember->name), pMember->name,
+						       pMember->Q, pMember->T, pMember->F,
+						       pMember->heads[0], pMember->heads[1], pMember->heads[2], pMember->heads[3], pMember->heads[4], pMember->heads[5]);
+					}
 				}
 			}
 		}

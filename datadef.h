@@ -158,11 +158,11 @@ struct footprint_t {
 struct signature_t {
 	enum {
 		/// @constant {number} (numnode*3+1+1/*root invert*/+1/*terminator*/) For 5n9 signatures (4n9 is default) that would be 18
-		SIGNATURENAMELENGTH = (5 * 3 + 1 + 1 + 1),
+		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1 + 1),
 	};
 
 	enum {
-		SIGFLAG_SAFE = 0,     // It is safe to use the display name to reconstruct structures
+		SIGFLAG_SAFE     = 0, // It is safe to use the display name to reconstruct structures
 		SIGFLAG_PROVIDES = 1, // this signature provides as an operand
 		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
 
@@ -205,7 +205,7 @@ struct signature_t {
 	/// @var {number} number of back-references
 	uint8_t numBackRef;
 
-	/// @var {string} Notation/name of signature. With space for inverted root and terminator
+	/// @var {string} Display name of signature. With space for inverted root and terminator
 	char name[SIGNATURENAMELENGTH];
 };
 
@@ -317,26 +317,30 @@ struct member_t {
 		MAXHEAD = 6,
 	};
 
+	enum {
+		MEMFLAG_SAFE = 0,  // Member is safe
+		MEMFLAG_DEPR = 1,  // Member is depreciated, used by `rewritedata[]` to force-rewrite into a better alternative
+
+		// @formatter: off
+		MEMMASK_SAFE = 1 << MEMFLAG_SAFE,
+		MEMMASK_DEPR = 1 << MEMFLAG_DEPR,
+		// @formatter: on
+	};
+
 	/// @var {number} Signature id to which signature group this member belongs
 	uint32_t sid;
 
+	/// @var {number} Transform relative to signature
+	uint32_t tid;
+
 	/// @var {number} member id of `Q` component
-	uint32_t Qmid;
-
-	/// @var {number} Signature id of `Q` component
-	uint32_t Qsid;
+	uint32_t Q;
 
 	/// @var {number} member id of `T` component
-	uint32_t Tmid;
-
-	/// @var {number} member id of `T` component
-	uint32_t Tsid;
+	uint32_t T;
 
 	/// @var {number} member id of `F` component
-	uint32_t Fmid;
-
-	/// @var {number} member id of `F` component
-	uint32_t Fsid;
+	uint32_t F;
 
 	/// @var {number} member id of next member in signature group
 	uint32_t nextMember;

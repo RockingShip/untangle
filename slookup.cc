@@ -195,18 +195,18 @@ struct slookupContext_t {
 					lenName = len;
 
 				if (this->opt_member > 1) {
-					len          = sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
+					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->Q].sid, pMember->Q, pStore->members[pMember->Q].name);
 					if (lenQ < len)
 						lenQ = len;
 
-					if (pMember->Tsid & IBIT)
-						len = sprintf(txt, "-%u:%u:%s", pMember->Tsid & ~IBIT, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					if (pMember->T & IBIT)
+						len = sprintf(txt, "~%u:%u:%s", pStore->members[pMember->T & ~IBIT].sid, pMember->T, pStore->members[pMember->T].name);
 					else
-						len  = sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
+						len  = sprintf(txt, "%u:%u:%s", pStore->members[pMember->T].sid, pMember->T, pStore->members[pMember->T].name);
 					if (lenT < len)
 						lenT = len;
 
-					len          = sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
+					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->F].sid, pMember->F, pStore->members[pMember->F].name);
 					if (lenF < len)
 						lenF = len;
 
@@ -239,16 +239,16 @@ struct slookupContext_t {
 				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 				if (this->opt_member > 1) {
-					sprintf(txt, "%u:%u:%s", pMember->Qsid, pMember->Qmid, pStore->members[pMember->Qmid].name);
+					sprintf(txt, "%u:%u:%s", pStore->members[pMember->Q].sid, pMember->Q, pStore->members[pMember->Q].name);
 					printf(" Q=%-*s", lenQ, txt);
 
-					if (pMember->Tsid & IBIT)
-						sprintf(txt, "-%u:%u:%s", pMember->Tsid & ~IBIT, pMember->Tmid, pStore->members[pMember->Tmid].name);
+					if (pMember->T & IBIT)
+						sprintf(txt, "~%u:%u:%s", pStore->members[pMember->T & ~IBIT].sid, pMember->T, pStore->members[pMember->T].name);
 					else
-						sprintf(txt, "%u:%u:%s", pMember->Tsid, pMember->Tmid, pStore->members[pMember->Tmid].name);
+						sprintf(txt, "%u:%u:%s", pStore->members[pMember->T].sid, pMember->T, pStore->members[pMember->T].name);
 					printf(" T=%-*s", lenT, txt);
 
-					sprintf(txt, "%u:%u:%s", pMember->Fsid, pMember->Fmid, pStore->members[pMember->Fmid].name);
+					sprintf(txt, "%u:%u:%s", pStore->members[pMember->F].sid, pMember->F, pStore->members[pMember->F].name);
 					printf(" F=%-*s", lenF, txt);
 
 					len = 0;
@@ -262,11 +262,10 @@ struct slookupContext_t {
 					printf(" heads=%-*s", lenHead, txt);
 				}
 
-				printf(" flags=[%x%s%s%s]",
+				printf(" flags=[%x%s%s]",
 				       pMember->flags,
-				       (pMember->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
-				       (pMember->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
-				       (pMember->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "");
+				       (pMember->flags & member_t::MEMMASK_SAFE) ? " SAFE" : "",
+				       (pMember->flags & member_t::MEMMASK_DEPR) ? " DEPR" : "");
 
 				printf("\n");
 			}
