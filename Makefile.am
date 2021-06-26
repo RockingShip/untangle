@@ -7,7 +7,7 @@ MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
 MOSTLYCLEANFILES =
 CLEANFILES =
-BUILT_SOURCES = genrestartdata
+BUILT_SOURCES = genrestartdata rewritedata.c
 
 noinst_PROGRAMS =
 bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4)
@@ -164,6 +164,9 @@ ksystem_LDADD = $(LDADD) $(AM_LDADD)
 
 PROGRAMS_PART4 = beval genrewritedata validaterewrite
 EXTRA_PART4 =
+
+rewritedata.c : genrewritedata.cc
+	./genrewritedata > rewritedata.c
 
 # @date 2021-06-08 10:19:45
 beval_SOURCES = beval.cc basetree.h context.h

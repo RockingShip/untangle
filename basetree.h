@@ -1,14 +1,6 @@
 #ifndef _BASETREE_H
 #define _BASETREE_H
 
-#include <fcntl.h>
-#include <jansson.h>
-#include <string>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <vector>
-#include "context.h"
-
 /*
  *	This file is part of Untangle, Information in fractal structures.
  *	Copyright (C) 2017-2021, xyzzy@rockingship.org
@@ -26,6 +18,16 @@
  *	You should have received a copy of the GNU General Public License
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#include <fcntl.h>
+#include <jansson.h>
+#include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <vector>
+
+#include "context.h"
+#include "rewritedata.h"
 
 /*
  * Version number of data file
@@ -64,6 +66,15 @@
  */
 #ifndef ENABLE_DEBUG_COMPARE
 #define ENABLE_DEBUG_COMPARE 0
+#endif
+
+/*
+ * The top-level node rewriting is a level-2 normalisation replacement that examines Q/T?F components
+ * This is a speed optimisation and enables code to display the decisions taken while walking.
+ * Displaying is performed when running with `--debug=`.
+ */
+#ifndef ENABLE_DEBUG_REWRITE
+#define ENABLE_DEBUG_REWRITE 0
 #endif
 
 struct baseNode_t {
@@ -194,6 +205,12 @@ struct baseTree_t {
 	uint32_t   *compVersionR;
 	uint32_t   compVersionNr;	// versioned memory for compare - active version number
 	uint64_t   numCompare;		// number of compares performed
+	// rewrite normalisation
+	uint32_t   *rewriteMap;         // results of intermediate lookups
+	uint32_t   *rewriteVersion;     // versioned memory for rewrites
+	uint32_t   iVersionRewrite;     // active version number
+	uint64_t   numRewrite;          // number of rewrites performed
+
 	// reserved for evaluator
 
 	//@formatter:on
@@ -258,7 +275,12 @@ struct baseTree_t {
 		compVersionL(NULL), // allocate as node-id map because of local version numbering
 		compVersionR(NULL),  // allocate as node-id map because of local version numbering
 		compVersionNr(1),
-		numCompare(0)
+		numCompare(0),
+		// rewrite normalisation
+		rewriteMap(NULL),
+		rewriteVersion(NULL),
+		iVersionRewrite(1),
+		numRewrite(0)
 	//@formatter:on
 	{
 	}
@@ -314,7 +336,12 @@ struct baseTree_t {
 		compVersionL(allocMap()), // allocate as node-id map because of local version numbering
 		compVersionR(allocMap()),  // allocate as node-id map because of local version numbering
 		compVersionNr(1),
-		numCompare(0)
+		numCompare(0),
+		// rewrite normalisation
+		rewriteMap(allocMap()),
+		rewriteVersion(allocMap()), // allocate as node-id map because of local version numbering
+		iVersionRewrite(1),
+		numRewrite(0)
 	//@formatter:on
 	{
 		if (this->N)
@@ -417,6 +444,8 @@ struct baseTree_t {
 		compNodeR        = NULL;
 		compVersionL     = NULL;
 		compVersionR     = NULL;
+		rewriteMap       = NULL;
+		rewriteVersion   = NULL;
 	}
 
 	/*
@@ -1047,20 +1076,15 @@ struct baseTree_t {
 		 */
 
 		if (this->flags & ctx.MAGICMASK_REWRITE) {
-			/*
-			 * @date 2021-05-13 01:25:13
-			 * todo: MAGICMASK_REWRITE placeholder
-			 */
-			assert(!"todo: MAGICMASK_REWRITE placeholder");
-			baseNode_t normalised; // = normaliseRewrite(this, Q, T, F);
 
-			// test for collapse
-			if (normalised.Q == normalised.T)
-				return normalised.Q ^ ibit;
+			// perform a lookup
+			uint32_t ret =  rewriteNode(Q, T, F);
 
-			Q = normalised.Q;
-			T = normalised.T;
-			F = normalised.F;
+			// if lookup triggered a rewrite, return what was found
+			if (ret != IBIT)
+				return ret ^ ibit;
+
+			// else continue assuming combo is level-2 normalised
 
 		} else if (T & IBIT) {
 
@@ -1295,6 +1319,336 @@ struct baseTree_t {
 		}
 
 		return this->basicNode(Q, T, F) ^ ibit;
+	}
+
+	/*
+	 * @date 2021-06-13 10:28:49
+	 *
+	 * Rewrite Q/T/F based on top-level lookup tables.
+	 * If a rewrite found
+	 */
+	uint32_t rewriteNode(uint32_t Q, uint32_t T, uint32_t F) {
+		// test if symbols available while linking
+		if (rewriteMap == NULL) {
+			assert(!"MAGICMASK_REWRITE requested, include \"rewritedata.h\"");
+		} else {
+			uint32_t slots[16], nextSlot;
+			uint32_t Tu = T & ~IBIT;
+			uint32_t Ti = T & IBIT;
+			uint32_t ix = rewriteDataFirst;
+
+			if (this->flags & context_t::MAGICMASK_PARANOID) {
+				assert(~Q & IBIT);            // Q not inverted
+				assert(Ti || (~this->flags & context_t::MAGICMASK_PURE));
+				assert(~F & IBIT);            // F not inverted
+				assert(Q != 0);               // Q not zero
+
+				assert (Q < this->ncount);
+				assert (Tu < this->ncount);
+				assert (F < this->ncount);
+			}
+
+			// versioning
+			uint32_t thisVersion = ++iVersionRewrite;
+			if (thisVersion == 0) {
+				// version overflow, clear
+				memset(rewriteVersion, 0, this->maxNodes * sizeof(*rewriteVersion));
+
+				thisVersion = ++iVersionRewrite;
+			}
+			numRewrite++;
+
+			// setup slots
+			slots[0] = 0;
+			nextSlot = 0;
+			rewriteMap[nextSlot++] = 0;
+
+			if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+				fprintf(stderr, "%d: Q=%d T=%s%d F=%d ", this->ncount, Q, Ti ? "~" : "", Tu, F);
+
+			/*
+			 * Pull Q through state table
+			 */
+			if (Q < this->nstart) {
+
+				if (Q && rewriteVersion[Q] != thisVersion) {
+					slots[nextSlot]   = Q;
+					rewriteVersion[Q] = thisVersion;
+					rewriteMap[Q]     = nextSlot++;
+				}
+
+				// endpoint Q stores as 2 successive, no invert
+				ix = rewriteData[ix + rewriteMap[Q]];
+				ix = rewriteData[ix + rewriteMap[Q]];
+
+			} else {
+
+				const baseNode_t *pNode = this->N + Q;
+				const uint32_t   QQ     = pNode->Q;
+				const uint32_t   QTu    = pNode->T & ~IBIT;
+				const uint32_t   QTi    = pNode->T & IBIT;
+				const uint32_t   QF     = pNode->F;
+
+				if (QQ && rewriteVersion[QQ] != thisVersion) {
+					slots[nextSlot]    = QQ;
+					rewriteVersion[QQ] = thisVersion;
+					rewriteMap[QQ]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[QQ]];
+
+				if (QTu && rewriteVersion[QTu] != thisVersion) {
+					slots[nextSlot]     = QTu;
+					rewriteVersion[QTu] = thisVersion;
+					rewriteMap[QTu]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[QTu]];
+
+				if (QF && rewriteVersion[QF] != thisVersion) {
+					slots[nextSlot]    = QF;
+					rewriteVersion[QF] = thisVersion;
+					rewriteMap[QF]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[QF]];
+
+				ix = rewriteData[ix + (QTi ? 1 : 0)];
+
+				// placeholder
+				if (rewriteVersion[Q] != thisVersion) {
+					slots[nextSlot]   = Q;
+					rewriteVersion[Q] = thisVersion;
+					rewriteMap[Q]     = nextSlot++;
+				}
+			}
+
+			/*
+			 * Pull T through state table
+			 */
+			if (Tu < this->nstart || rewriteVersion[Tu] == thisVersion) {
+
+				if (Tu && rewriteVersion[Tu] != thisVersion) {
+					slots[nextSlot]    = Tu;
+					rewriteVersion[Tu] = thisVersion;
+					rewriteMap[Tu]     = nextSlot++;
+				}
+
+				// endpoint Tu stores as 2 successive, no invert
+				ix = rewriteData[ix + rewriteMap[Tu]];
+				ix = rewriteData[ix + rewriteMap[Tu]];
+			} else {
+
+				const baseNode_t *pNode = this->N + Tu;
+				const uint32_t   TQ     = pNode->Q;
+				const uint32_t   TTu    = pNode->T & ~IBIT;
+				const uint32_t   TTi    = pNode->T & IBIT;
+				const uint32_t   TF     = pNode->F;
+
+				if (TQ && rewriteVersion[TQ] != thisVersion) {
+					slots[nextSlot]    = TQ;
+					rewriteVersion[TQ] = thisVersion;
+					rewriteMap[TQ]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[TQ]];
+
+
+				if (TTu && rewriteVersion[TTu] != thisVersion) {
+					slots[nextSlot]     = TTu;
+					rewriteVersion[TTu] = thisVersion;
+					rewriteMap[TTu]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[TTu]];
+
+
+				if (TF && rewriteVersion[TF] != thisVersion) {
+					slots[nextSlot]    = TF;
+					rewriteVersion[TF] = thisVersion;
+					rewriteMap[TF]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[TF]];
+
+
+				ix = rewriteData[ix + (TTi ? 1 : 0)];
+
+				// placeholder
+				slots[nextSlot]    = Tu;
+				rewriteVersion[Tu] = thisVersion;
+				rewriteMap[Tu]     = nextSlot++;
+			}
+
+			/*
+			 * Pull F through state table
+			 */
+			if (F < this->nstart || rewriteVersion[F] == thisVersion) {
+
+				if (F && rewriteVersion[F] != thisVersion) {
+					slots[nextSlot]   = F;
+					rewriteVersion[F] = thisVersion;
+					rewriteMap[F]     = nextSlot++;
+				}
+
+				// endpoint F stores as 2 successive, no invert
+				ix = rewriteData[ix + rewriteMap[F]];
+				ix = rewriteData[ix + rewriteMap[F]];
+
+			} else {
+
+				const baseNode_t *pNode = this->N + F;
+				const uint32_t   FQ     = pNode->Q;
+				const uint32_t   FTu    = pNode->T & ~IBIT;
+				const uint32_t   FTi    = pNode->T & IBIT;
+				const uint32_t   FF     = pNode->F;
+
+				if (FQ && rewriteVersion[FQ] != thisVersion) {
+					slots[nextSlot]    = FQ;
+					rewriteVersion[FQ] = thisVersion;
+					rewriteMap[FQ]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[FQ]];
+
+
+				if (FTu && rewriteVersion[FTu] != thisVersion) {
+					slots[nextSlot]     = FTu;
+					rewriteVersion[FTu] = thisVersion;
+					rewriteMap[FTu]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[FTu]];
+
+
+				if (FF && rewriteVersion[FF] != thisVersion) {
+					slots[nextSlot]    = FF;
+					rewriteVersion[FF] = thisVersion;
+					rewriteMap[FF]     = nextSlot++;
+				}
+				ix = rewriteData[ix + rewriteMap[FF]];
+
+
+				ix = rewriteData[ix + (FTi ? 1 : 0)];
+
+				// placeholder
+				slots[nextSlot]   = F;
+				rewriteVersion[F] = thisVersion;
+				rewriteMap[F]     = nextSlot++;
+			}
+
+			if (ENABLE_DEBUG_REWRITE && ctx.opt_debug & ctx.DEBUGMASK_REWRITE)
+				fprintf(stderr, "-> [%d %d %d %d %d %d %d %d %d]",
+					nextSlot < 1 ? 0 : slots[0],
+					nextSlot < 2 ? 0 : slots[1],
+					nextSlot < 3 ? 0 : slots[2],
+					nextSlot < 4 ? 0 : slots[3],
+					nextSlot < 5 ? 0 : slots[4],
+					nextSlot < 6 ? 0 : slots[5],
+					nextSlot < 7 ? 0 : slots[6],
+					nextSlot < 8 ? 0 : slots[7],
+					nextSlot < 9 ? 0 : slots[8]);
+
+			/*
+			 * top level inverted T.
+			 * NOTE: Not an index but an offset
+			 */
+			//
+			assert(ix);
+			ix = ix + (Ti ? 1 : 0);
+
+			if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+				fprintf(stderr, " -> ix=%x", ix);
+
+			gLastRewriteIndex = ix;
+
+			/*
+			 * Respond to rewrite
+			 */
+			uint32_t data = rewriteData[ix];
+			assert(data);
+
+			gCountRewritePower[(data >> REWRITEFLAG_POWER) & 0xf]++;
+
+			if (data & REWRITEMASK_TREE) {
+				// destructive rewrite
+				gCountRewriteTree++;
+
+				uint64_t treedata = rewriteTree[data & 0xffffff];
+				uint32_t temp[16];
+				uint32_t nextNode = MAXSLOTS + 1;
+				uint32_t r        = 0;
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, " -> tree=%lx {\n", treedata);
+
+				while (treedata) {
+					uint32_t F = treedata & 0xf;
+					treedata >>= 4;
+					uint32_t Tu = treedata & 0xf;
+					treedata >>= 4;
+					uint32_t Q = treedata & 0xf;
+					treedata >>= 4;
+					uint32_t Ti = (treedata & 0xf) ? IBIT : 0;
+					treedata >>= 4;
+
+					Q            = (Q >= 10) ? temp[Q] : slots[Q];
+					Tu           = (Tu >= 10) ? temp[Tu] : slots[Tu];
+					F            = (F >= 10) ? temp[F] : slots[F];
+
+					// NOTE: tail-recursion, safe to call
+					// NOTE: returns IBIT if QTF is /safe/ without creating instance
+
+					r = this->normaliseNode(Q, Tu ^ Ti, F);
+
+					temp[nextNode++] = r;
+				}
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, "}\n");
+
+				gCountRewriteTree++;
+				return r;
+
+			} else if (data & REWRITEMASK_COLLAPSE) {
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, " -> collapse=%x\n", data);
+
+				// rewrite is a full collapse
+				gCountRewriteCollapse++;
+				return slots[data & 0xf];
+
+			} else if (data & REWRITEMASK_FOUND) {
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, " -> weak=%x\n", data);
+
+				// no rewrite needed
+				gCountRewriteNo++;
+				return IBIT;
+
+			} else {
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, " -> order=%x {\n", data);
+
+				// rewrite with available components
+				uint32_t newF = slots[data & 15];
+				data >>= 4;
+				uint32_t newTu = slots[data & 15];
+				data >>= 4;
+				uint32_t newQ = slots[data & 15];
+				data >>= 4;
+				uint32_t newTi = (data & 1) ? IBIT : 0;
+
+				// rewriteData[] only addresses structure, need `normaliseNode()` to address ordering
+				// NOTE: tail-recursion, safe to call
+				uint32_t r = this->normaliseNode(newQ, newTu ^ newTi, newF);
+
+				if (ENABLE_DEBUG_REWRITE && (ctx.opt_debug & ctx.DEBUGMASK_REWRITE))
+					fprintf(stderr, "}\n");
+
+				gCountRewriteYes++;
+				return r;
+
+			}
+
+			// should not reach here
+			assert(0);
+		}
 	}
 
 	/*
@@ -2154,7 +2508,7 @@ struct baseTree_t {
 	 *
 	 * NOTE: !!! Apply any changes here also to `loadBasicString()`
 	 *
-	 * Import a string into tree.
+	 * Import/add a string into tree.
 	 * NOTE: Will use `normaliseNode()`.
 	 */
 	uint32_t loadNormaliseString(const char *pPattern, const char *pTransform = NULL) {
@@ -2413,7 +2767,7 @@ struct baseTree_t {
 	 *
 	 * NOTE: !!! Apply any changes here also to `loadNormaliseString()`
 	 *
-	 * Import a string into tree.
+	 * Import/add a string into tree.
 	 * NOTE: Will use `basicNode()`.
 	 */
 	uint32_t loadBasicString(const char *pPattern, const char *pTransform = NULL) {
