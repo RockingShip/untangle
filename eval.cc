@@ -869,7 +869,7 @@ struct tree_t {
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 */
-	int decodeSafe(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
+	int loadStringSafe(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count = this->nstart;
@@ -1247,7 +1247,7 @@ struct tree_t {
 	 * @param {number[]}} pSkin - zero based list of skin elements
 	 * @return non-zero when parsing failed
 	 */
-	int decodeFast(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
+	int loadStringFast(const char *pName, unsigned numSkin, const uint32_t *pSkin) {
 
 		// initialise tree
 		this->count              = this->nstart;
@@ -1626,10 +1626,10 @@ struct tree_t {
 
 		// decode with explicit temporary storage for `pSkin`
 		if (opt_fast) {
-			if (this->decodeFast(pName, numSkin, this->skin))
+			if (this->loadStringFast(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		} else {
-			if (this->decodeSafe(pName, numSkin, this->skin))
+			if (this->loadStringSafe(pName, numSkin, this->skin))
 				return 1; // decoding failed
 		}
 
@@ -1664,7 +1664,7 @@ struct tree_t {
 	 * Pass-1 locating and assigning placeholders
 	 * Pass-2 emiting variable length placeholder names
 	 *
-	 * @param {number} id - index of node to encode
+	 * @param {number} id - index of node to save
 	 */
 	void encodePlaceholders(unsigned id) {
 
@@ -1741,7 +1741,7 @@ struct tree_t {
 	 *
 	 * NOTE: uses recursion which might break on extremely large trees, which is not expected for this program.
 	 *
-	 * @param {number} id - index of node to encode
+	 * @param {number} id - index of node to save
 	 */
 	void encodeOperand(unsigned id) {
 
@@ -1821,7 +1821,7 @@ struct tree_t {
 	 *
 	 * Compose the notation of a given node in "placeholder/skin" notation.
 	 *
-	 * @param {number} id - index of node to encode
+	 * @param {number} id - index of node to save
 	 */
 	void encodeQTF(unsigned id) {
 
@@ -1902,14 +1902,14 @@ struct tree_t {
 	 *
 	 * @date 2020-03-29 15:17:13
 	 *
-	 *  There is a known issue that `encode()` with a entrypoint other than te root might not properly order endpoints.
+	 *  There is a known issue that `saveString()` with a entrypoint other than te root might not properly order endpoints.
 	 *  `"./eval 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
 	 * @return {string} Constructed notation. State information so no multiple calls with `printf()`.
 	 */
-	const char *encode(unsigned id, bool withPlaceholders) {
+	const char *saveString(unsigned id, bool withPlaceholders) {
 
 		// special case
 		if (id == 0) {
@@ -2229,7 +2229,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 		 * Emit notation
 		 */
 
-		printf("%s\n", pTree->encode(pTree->root, opt_skin ? true : false));
+		printf("%s\n", pTree->saveString(pTree->root, opt_skin ? true : false));
 		return 0;
 	}
 
@@ -2277,7 +2277,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Output tree
 	 */
-	printf(": %26s", pTree->encode(pTree->root, opt_skin ? true : false));
+	printf(": %26s", pTree->saveString(pTree->root, opt_skin ? true : false));
 
 	/*
 	 * Output number of nodes and determine how many nodes if tree were flat
@@ -2350,7 +2350,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		pTree->root   = r;
 
 		// convert to prefix and back
-		const char *treeName = pTree->encode(pTree->root, false);
+		const char *treeName = pTree->saveString(pTree->root, false);
 		assert(pTree->decode(treeName, false) == 0);
 
 		if (pTree->root != r) {
@@ -2403,7 +2403,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			/*
 			 * save with placeholders and reload
 			 */
-			const char *treeName = pTree->encode(pTree->root, iSkin ? true : false);
+			const char *treeName = pTree->saveString(pTree->root, iSkin ? true : false);
 			assert(pTree->decode(treeName, false) == 0);
 
 			/*

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-06-26 09:33:21 Changed: Renamed `encode()` to `saveString` and `decode()` to `loadString()`.
 2021-06-26 09:26:01 Fixed: Component matching in `genmember::findHeadTail()``
 2021-06-26 09:05:49 Changed: database version to 0x20210626.
 2021-06-26 09:02:52 Changed: added flags and removed flags in `member_t`

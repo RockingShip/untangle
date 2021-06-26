@@ -340,7 +340,7 @@ struct genmemberContext_t : dbtool_t {
 	 * Components might have (from a component point of view) a different ordering
 	 * like the `F` component in `"ab+bc+a12!!"` which is `"ab+bc+a12!!"`, giving a problem as `"cab+ca+!/bca"`
 	 *
-	 * Filter them out (by utilizing that `encode()` does not order)
+	 * Filter them out (by utilizing that `saveString()` does not order)
 	 *
 	 * example of unsafe components: `"ebcabc?!ad1!!"`
 	 *   components are `"a"`, `"bcabc?"` and `"adbcabc?!!"`
@@ -420,12 +420,12 @@ struct genmemberContext_t : dbtool_t {
 			unsigned Q = treeR.N[treeR.root].Q;
 			{
 				// fast
-				treeR.encode(Q, name, skin);
+				treeR.saveString(Q, name, skin);
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
-					tree2.decodeSafe(name);
-					tree2.encode(tree2.root, name, skin);
+					tree2.loadStringSafe(name);
+					tree2.saveString(tree2.root, name, skin);
 					ix = pStore->lookupMember(name);
 				}
 
@@ -441,12 +441,12 @@ struct genmemberContext_t : dbtool_t {
 			unsigned To = treeR.N[treeR.root].T & ~IBIT;
 			{
 				// fast
-				treeR.encode(To, name, skin);
+				treeR.saveString(To, name, skin);
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
-					tree2.decodeSafe(name);
-					tree2.encode(tree2.root, name, skin);
+					tree2.loadStringSafe(name);
+					tree2.saveString(tree2.root, name, skin);
 					ix = pStore->lookupMember(name);
 				}
 
@@ -465,12 +465,12 @@ struct genmemberContext_t : dbtool_t {
 				pMember->F = 0;
 			} else {
 				// fast
-				treeR.encode(F, name, skin);
+				treeR.saveString(F, name, skin);
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
-					tree2.decodeSafe(name);
-					tree2.encode(tree2.root, name, skin);
+					tree2.loadStringSafe(name);
+					tree2.saveString(tree2.root, name, skin);
 					ix = pStore->lookupMember(name);
 				}
 
@@ -619,7 +619,7 @@ struct genmemberContext_t : dbtool_t {
 				 */
 
 				// fast path: lookup skin-free head name/notation
-				tree.encode(tree.root, name, skin);
+				tree.saveString(tree.root, name, skin);
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					/*
@@ -628,9 +628,9 @@ struct genmemberContext_t : dbtool_t {
 					 * NOTE/WARNING the extracted component may have non-normalised dyadic ordering
 					 * because in the context of the original trees, the endpoints were locked by the now removed node
 					 */
-					tree2.decodeSafe(name);
+					tree2.loadStringSafe(name);
 					// structure is now okay
-					tree2.encode(tree2.root, name, skin);
+					tree2.saveString(tree2.root, name, skin);
 					// endpoints are now okay
 
 					ix = pStore->lookupMember(name);
@@ -1086,8 +1086,8 @@ struct genmemberContext_t : dbtool_t {
 		tinyTree_t treeL(*pApp);
 		tinyTree_t treeR(*pApp);
 
-		treeL.decodeFast(pMemberL->name);
-		treeR.decodeFast(pMemberR->name);
+		treeL.loadStringFast(pMemberL->name);
+		treeR.loadStringFast(pMemberR->name);
 
 		cmp = treeL.compare(treeL.root, treeR, treeR.root);
 		return cmp;
@@ -1180,7 +1180,7 @@ struct genmemberContext_t : dbtool_t {
 					break;
 				}
 
-				tree.decodeFast(pSignature->name);
+				tree.loadStringFast(pSignature->name);
 
 				unsigned sid, tid;
 
@@ -1360,7 +1360,7 @@ struct genmemberContext_t : dbtool_t {
 					break;
 				}
 
-				tree.decodeFast(pSignature->name);
+				tree.loadStringFast(pSignature->name);
 
 				unsigned sid = 0, tid;
 
@@ -1470,7 +1470,7 @@ struct genmemberContext_t : dbtool_t {
 			/*
 			 * construct tree
 			 */
-			generator.decodeFast(name);
+			generator.loadStringFast(name);
 
 			/*
 			 * call `foundTreeMember()`
@@ -1666,7 +1666,7 @@ struct genmemberContext_t : dbtool_t {
 				signature_t *pSignature = pStore->signatures + pMember->sid;
 
 				// calculate head/tail
-				tree.decodeFast(pMember->name);
+				tree.loadStringFast(pMember->name);
 				findHeadTail(pMember, tree);
 
 				if (!(pSignature->flags & signature_t::SIGMASK_SAFE)) {
@@ -2330,7 +2330,7 @@ int main(int argc, char *argv[]) {
 				app.pSafeScores[iSid] = tinyTree_t::calcScoreName(pMember->name);
 			} else {
 				tinyTree_t tree(ctx);
-				tree.decodeFast(pMember->name);
+				tree.loadStringFast(pMember->name);
 
 				app.pSafeScores[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
 			}

@@ -477,7 +477,7 @@ struct gensignatureContext_t : dbtool_t {
 			 * Compare layouts, expensive
 			 */
 			tinyTree_t treeL(ctx);
-			treeL.decodeFast(pSignature->name);
+			treeL.loadStringFast(pSignature->name);
 
 			cmp = treeL.compare(treeL.root, treeR, treeR.root);
 
@@ -535,8 +535,8 @@ struct gensignatureContext_t : dbtool_t {
 		tinyTree_t treeL(*pApp);
 		tinyTree_t treeR(*pApp);
 
-		treeL.decodeFast(pSignatureL->name);
-		treeR.decodeFast(pSignatureR->name);
+		treeL.loadStringFast(pSignatureL->name);
+		treeR.loadStringFast(pSignatureR->name);
 
 		/*
 		 * Compare
@@ -628,7 +628,7 @@ struct gensignatureContext_t : dbtool_t {
 
 			const signature_t *pSignature = pStore->signatures + iSid;
 
-			tree.decodeFast(pSignature->name);
+			tree.loadStringFast(pSignature->name);
 
 			/*
 			 * @date 2020-04-27 12:32:06
@@ -740,7 +740,7 @@ struct gensignatureContext_t : dbtool_t {
 			/*
 			 * construct tree
 			 */
-			generator.decodeFast(name);
+			generator.loadStringFast(name);
 
 			/*
 			 * call `foundTreeSignature()`

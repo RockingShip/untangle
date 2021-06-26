@@ -116,9 +116,9 @@ struct slookupContext_t {
 
 				const char *slash = ::strchr(pName, '/');
 				if (slash)
-					tree.decodeSafe(pName, slash + 1);
+					tree.loadStringSafe(pName, slash + 1);
 				else
-					tree.decodeSafe(pName);
+					tree.loadStringSafe(pName);
 
 				if (tree.root & IBIT) {
 					// inverted root
@@ -187,7 +187,7 @@ struct slookupContext_t {
 				member_t *pMember = pStore->members + iMid;
 
 				// find tid
-				tree.decodeSafe(pMember->name);
+				tree.loadStringSafe(pMember->name);
 				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
 
 				len             = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
@@ -230,7 +230,7 @@ struct slookupContext_t {
 				member_t *pMember = pStore->members + iMid;
 
 				// find tid
-				tree.decodeSafe(pMember->name);
+				tree.loadStringSafe(pMember->name);
 				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
 
 				sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);

@@ -207,7 +207,7 @@ struct genhintContext_t : dbtool_t {
 			tempdb.interleaveStep = pInterleave->interleaveStep;
 
 			// add imprint
-			tree.decodeFast(pName);
+			tree.loadStringFast(pName);
 			tempdb.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, 1 /* dummy sid */);
 
 			// output count

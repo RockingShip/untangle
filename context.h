@@ -110,12 +110,14 @@ struct context_t {
 		// @formatter:off
 		// common flags go from low to high
 		DEBUGFLAG_COMPARE           = 0,	// Display the intermediate steps in `baseTree_t::compare()`
+		DEBUGFLAG_REWRITE           = 1,	// Display the intermediate steps in `baseTree_t::rewriteNode()`
 
 		// un-common or internal flags go from high to low
 		DEBUGFLAG_GENERATOR_TABS    = 30,	// Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
 		DEBUGFLAG_METRICS_RATIO     = 31,	// Let `selftest --metrics` generate ratio metrics
 
 		DEBUGMASK_COMPARE           = 1 << DEBUGFLAG_COMPARE,
+		DEBUGMASK_REWRITE           = 1 << DEBUGFLAG_REWRITE,
 		DEBUGMASK_GENERATOR_TABS    = 1 << DEBUGFLAG_GENERATOR_TABS,
 		DEBUGMASK_METRICS_RATIO     = 1 << DEBUGFLAG_METRICS_RATIO,
 		// @formatter:on

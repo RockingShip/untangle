@@ -601,7 +601,7 @@ struct tinyTree_t {
 	 * @param {string} pSkin - Skin
 	 * @return non-zero when parsing failed
 	 */
-	int decodeSafe(const char *pName, const char *pSkin = "abcdefghi") {
+	int loadStringSafe(const char *pName, const char *pSkin = "abcdefghi") {
 
 		// initialise tree
 		this->clearTree();
@@ -838,7 +838,7 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 */
-	void decodeFast(const char *pName, const char *pSkin = "abcdefghi") {
+	void loadStringFast(const char *pName, const char *pSkin = "abcdefghi") {
 
 		assert(pName[0]); // disallow empty name
 
@@ -1061,7 +1061,7 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 */
-	void encode(unsigned id, char *pName, char *pSkin) const {
+	void saveString(unsigned id, char *pName, char *pSkin) const {
 
 		unsigned nameLen  = 0;
 
@@ -1285,17 +1285,17 @@ struct tinyTree_t {
 	/**
 	 * @date 2020-03-26 15:02:28
 	 *
-	 * Simple wrapper with static storage for `encode()`
+	 * Simple wrapper with static storage for `saveString()`
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {string} pSkin - optional Skin
 	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 */
-	const char *encode(unsigned id, char *pSkin = NULL) const {
+	const char *saveString(unsigned id, char *pSkin = NULL) const {
 
 		static char staticName[TINYTREE_NAMELEN + 1];
 
-		encode(id, staticName, pSkin);
+		saveString(id, staticName, pSkin);
 
 		return staticName;
 	}

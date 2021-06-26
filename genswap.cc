@@ -346,7 +346,7 @@ struct genswapContext_t : dbtool_t {
 		 * Create a list of transforms representing all permutations
 		 */
 
-		tree.decodeFast(pSignature->name);
+		tree.loadStringFast(pSignature->name);
 
 		// put untransformed result in reverse transform
 		tree.eval(this->pEvalRev);

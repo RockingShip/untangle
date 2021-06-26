@@ -112,11 +112,11 @@ struct selftestContext_t : dbtool_t {
 		 */
 
 		// test is test name can be decoded
-		generator.decodeFast(name);
+		generator.loadStringFast(name);
 
 		// test that tree is what was requested
 		assert(~generator.root & IBIT);
-		assert(::strcmp(name, generator.encode(generator.root, NULL)) == 0);
+		assert(::strcmp(name, generator.saveString(generator.root, NULL)) == 0);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
@@ -130,9 +130,9 @@ struct selftestContext_t : dbtool_t {
 	void performSelfTestTreeNormaliseLevel2(void) {
 
 		// decode name
-		generator.decodeSafe("ab>ba+^");
+		generator.loadStringSafe("ab>ba+^");
 		// encode name
-		const char *pName = generator.encode(generator.root);
+		const char *pName = generator.saveString(generator.root);
 
 		if (::strcmp(pName, "ab+ab>^") != 0) {
 			printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
@@ -213,25 +213,25 @@ struct selftestContext_t : dbtool_t {
 				if (iSkin) {
 					char skin[MAXSLOTS + 1];
 
-					treeName = generator.encode(generator.root, skin);
+					treeName = generator.saveString(generator.root, skin);
 					if (iFast) {
-						generator.decodeFast(treeName, skin);
+						generator.loadStringFast(treeName, skin);
 					} else {
-						int ret = generator.decodeSafe(treeName, skin);
+						int ret = generator.loadStringSafe(treeName, skin);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
+							printf("{\"error\":\"loadStringSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
 							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
 							exit(1);
 						}
 					}
 				} else {
-					treeName = generator.encode(generator.root, NULL);
+					treeName = generator.saveString(generator.root, NULL);
 					if (iFast) {
-						generator.decodeFast(treeName);
+						generator.loadStringFast(treeName);
 					} else {
-						int ret = generator.decodeSafe(treeName);
+						int ret = generator.loadStringSafe(treeName);
 						if (ret != 0) {
-							printf("{\"error\":\"decodeSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
+							printf("{\"error\":\"loadStringSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
 							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, ret);
 						}
 					}
@@ -490,12 +490,12 @@ struct selftestContext_t : dbtool_t {
 		assert(strcmp(pStore->revTransformNames[3], "bcadefghi") == 0);
 
 		// calculate `"abc!defg!!hi!"/cabdefghi"`
-		tree.decodeSafe("abc!defg!!hi!");
+		tree.loadStringSafe("abc!defg!!hi!");
 		footprint_t *pEncountered = pEvalFwd + tinyTree_t::TINYTREE_NEND * 3;
 		tree.eval(pEncountered);
 
 		// calculate `"cab!defg!!hi!"` (manually applying forward transform)
-		tree.decodeSafe("cab!defg!!hi!");
+		tree.loadStringSafe("cab!defg!!hi!");
 		footprint_t *pExpect = pEvalFwd;
 		tree.eval(pExpect);
 
@@ -508,10 +508,10 @@ struct selftestContext_t : dbtool_t {
 
 		// test that cache lookups work
 		// calculate `"abc!de!fabc!!"`
-		tree.decodeSafe("abc!de!fabc!!");
+		tree.loadStringSafe("abc!de!fabc!!");
 		tree.eval(pEvalFwd);
 
-		const char *pExpectedName = tree.encode(tree.root);
+		const char *pExpectedName = tree.saveString(tree.root);
 
 		// compare
 		if (strcmp(pExpectedName, "abc!de!f2!") != 0) {
@@ -1013,7 +1013,7 @@ struct selftestContext_t : dbtool_t {
 			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
 			 */
 
-			generator.decodeFast(pBasename);
+			generator.loadStringFast(pBasename);
 
 			// add to database
 			pStore->addImprintAssociative(&generator, pEvalFwd, pEvalRev, 0);
@@ -1031,7 +1031,7 @@ struct selftestContext_t : dbtool_t {
 				}
 
 				// Load base name with skin
-				generator.decodeFast(pBasename, pStore->fwdTransformNames[iTransform]);
+				generator.loadStringFast(pBasename, pStore->fwdTransformNames[iTransform]);
 
 				unsigned sid, tid;
 
@@ -1130,8 +1130,8 @@ struct selftestContext_t : dbtool_t {
 		tinyTree_t treeL(*pApp);
 		tinyTree_t treeR(*pApp);
 
-		treeL.decodeFast(pSignatureL->name);
-		treeR.decodeFast(pSignatureR->name);
+		treeL.loadStringFast(pSignatureL->name);
+		treeR.loadStringFast(pSignatureR->name);
 
 		/*
 		 * Compare
@@ -1361,7 +1361,7 @@ struct selftestContext_t : dbtool_t {
 			if (this->opt_metrics) {
 				// wait for a tick
 				for (ctx.tick = 0; ctx.tick == 0;)
-					generator.decodeFast("ab+"); // waste some time
+					generator.loadStringFast("ab+"); // waste some time
 
 				// do random lookups for 10 seconds
 				for (ctx.tick = 0; ctx.tick < 5;) {
@@ -1370,7 +1370,7 @@ struct selftestContext_t : dbtool_t {
 					unsigned tid = rand() % pStore->numTransform;
 
 					// load tree
-					generator.decodeFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
+					generator.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
 
 					// perform a lookup
 					unsigned s = 0, t = 0;
@@ -1420,7 +1420,7 @@ struct selftestContext_t : dbtool_t {
 				for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 					const signature_t *pSignature = pStore->signatures + iSid;
 
-					generator.decodeFast(pSignature->name);
+					generator.loadStringFast(pSignature->name);
 					pStore->addImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, iSid);
 				}
 
@@ -1435,7 +1435,7 @@ struct selftestContext_t : dbtool_t {
 
 				// wait for a tick
 				for (ctx.tick = 0; ctx.tick == 0;) {
-					generator.decodeFast("ab+"); // waste some time
+					generator.loadStringFast("ab+"); // waste some time
 				}
 
 				// do random lookups for 10 seconds
@@ -1445,7 +1445,7 @@ struct selftestContext_t : dbtool_t {
 					unsigned tid = rand() % pStore->numTransform;
 
 					// load tree
-					generator.decodeFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
+					generator.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
 
 					// perform a lookup
 					unsigned s = 0, t = 0;
