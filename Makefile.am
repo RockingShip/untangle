@@ -162,7 +162,7 @@ ksystem_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for baseTree optimisations
 ##
 
-PROGRAMS_PART4 = beval genrewritedata validaterewrite
+PROGRAMS_PART4 = beval gendepreciate genrewritedata validaterewrite
 EXTRA_PART4 =
 
 rewritedata.c : genrewritedata.cc
@@ -171,6 +171,10 @@ rewritedata.c : genrewritedata.cc
 # @date 2021-06-08 10:19:45
 beval_SOURCES = beval.cc basetree.h context.h
 beval_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-06-27 15:50:25
+gendepreciate_SOURCES = gendepreciate.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
+gendepreciate_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-10 11:39:02
 genrewritedata_SOURCES = genrewritedata.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h

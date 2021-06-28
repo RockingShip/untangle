@@ -262,7 +262,7 @@ struct database_t {
 	 */
 	database_t(context_t &ctx) : ctx(ctx) {
 		// copy user flags+debug settings
-		creationFlags = 0;
+		creationFlags = ctx.flags;
 
 		hndl        = 0;
 		rawDatabase = NULL;

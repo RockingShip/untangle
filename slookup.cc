@@ -156,21 +156,25 @@ struct slookupContext_t {
 		       tid, pSignature->numPlaceholder, pStore->fwdTransformNames[tid],
 		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 
-		printf(" flags=[%x%s%s%s]",
+		printf(" flags=[%x:%s%s%s]",
 		       pSignature->flags,
 		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
 		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "");
 
 		if (opt_swap) {
-			printf(" swaps=[");
-			const swap_t  *pSwap = pStore->swaps + pSignature->swapId;
-			for (unsigned j      = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
-				if (j)
-					putchar(',');
-				printf("%u:%.*s", pSwap->tids[j], pSignature->numPlaceholder, pStore->fwdTransformNames[pSwap->tids[j]]);
+			if (pStore->numSwap == 0) {
+				printf(" swaps=missing");
+			} else {
+				printf(" swaps=[");
+				const swap_t  *pSwap = pStore->swaps + pSignature->swapId;
+				for (unsigned j      = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
+					if (j)
+						putchar(',');
+					printf("%u:%.*s", pSwap->tids[j], pSignature->numPlaceholder, pStore->fwdTransformNames[pSwap->tids[j]]);
+				}
+				putchar(']');
 			}
-			putchar(']');
 		}
 
 		printf(" %s\n", pName);
@@ -262,10 +266,13 @@ struct slookupContext_t {
 					printf(" heads=%-*s", lenHead, txt);
 				}
 
-				printf(" flags=[%x%s%s]",
+				printf(" flags=[%x:%s%s%s%s%s]",
 				       pMember->flags,
 				       (pMember->flags & member_t::MEMMASK_SAFE) ? " SAFE" : "",
-				       (pMember->flags & member_t::MEMMASK_DEPR) ? " DEPR" : "");
+				       (pMember->flags & member_t::MEMMASK_COMP) ? " COMP" : "",
+				       (pMember->flags & member_t::MEMMASK_LOCKED) ? " LOCKED" : "",
+				       (pMember->flags & member_t::MEMMASK_DEPR) ? " DEPR" : "",
+				       (pMember->flags & member_t::MEMMASK_DELETE) ? " DELETE" : "");
 
 				printf("\n");
 			}

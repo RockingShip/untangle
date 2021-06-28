@@ -314,16 +314,22 @@ struct member_t {
 
 	enum {
 		/// @constant {number} Maximum number of heads. bump when assertion indicates.
-		MAXHEAD = 6,
+		MAXHEAD = 5,
 	};
 
 	enum {
-		MEMFLAG_SAFE = 0,  // Member is safe
-		MEMFLAG_DEPR = 1,  // Member is depreciated, used by `rewritedata[]` to force-rewrite into a better alternative
+		MEMFLAG_SAFE   = 0,  // Member is safe
+		MEMFLAG_COMP   = 1,  // Member is a component
+		MEMFLAG_LOCKED = 2,  // Member is required
+		MEMFLAG_DEPR   = 3,  // Member is depreciated and should be ignored, used by `rewritedata[]` to force-rewrite into a better alternative
+		MEMFLAG_DELETE = 4,  // Member is no-existent because one of the Q/T/F components is depreciated
 
 		// @formatter: off
-		MEMMASK_SAFE = 1 << MEMFLAG_SAFE,
-		MEMMASK_DEPR = 1 << MEMFLAG_DEPR,
+		MEMMASK_SAFE   = 1 << MEMFLAG_SAFE,
+		MEMMASK_COMP   = 1 << MEMFLAG_COMP,
+		MEMMASK_LOCKED = 1 << MEMFLAG_LOCKED,
+		MEMMASK_DEPR   = 1 << MEMFLAG_DEPR,
+		MEMMASK_DELETE = 1 << MEMFLAG_DELETE,
 		// @formatter: on
 	};
 

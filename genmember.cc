@@ -483,6 +483,13 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		/*
+		 * @date  2021-06-27 19:56:00
+		 * Erase heads, they may contain random values
+		 */
+		for (unsigned j = 0; j < member_t::MAXHEAD; j++)
+			pMember->heads[j] = 0;
+
+		/*
 		 * @date 2020-04-01 22:30:09
 		 *
 		 * Analyse and lookup providers (heads)
@@ -661,6 +668,16 @@ struct genmemberContext_t : dbtool_t {
 					pMember->heads[numHead++] = midHead;
 				}
 			}
+		}
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+			unsigned iMid = pMember - pStore->members;
+
+			assert(pMember->Q == 0 || pMember->Q < iMid);
+			assert(pMember->T == 0 || pMember->T < iMid);
+			assert(pMember->F == 0 || pMember->F < iMid);
+			for (unsigned k = 0; k < member_t::MAXHEAD; k++)
+				assert(pMember->heads[k] == 0 || pMember->heads[k] < iMid);
 		}
 
 		return true;
@@ -1468,7 +1485,7 @@ struct genmemberContext_t : dbtool_t {
 			this->opt_windowHi = this->truncated;
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 				ctx.timeAsString(),
 				ctx.progress,
@@ -1641,29 +1658,33 @@ struct genmemberContext_t : dbtool_t {
 				tree.loadStringFast(pMember->name);
 				findHeadTail(pMember, tree);
 
-				if (!(pSignature->flags & signature_t::SIGMASK_SAFE)) {
-					/*
-					 * Adding (unsafe) member to unsafe group
-					 */
-
-					/*
-					 * member should be unsafe
-					 *
-					 * @date 2021-06-23 09:46:35
-					 *
-					 * assert will fail when reading members from a list that is not properly ordered.
-					 * and the list contains primes that are longer than the signatures.
-					 * this will signatures to reject seeing primes as safe on the first pass.
-					 * For the moment this is experimental code, so issue a warning instead of aborting a lengthy run
-					 * (input list was ordered by sid instead of mid)
-					 */
-					// assert(!(pMember->flags & signature_t::SIGMASK_SAFE));
+				/*
+				 * member should be unsafe
+				 *
+				 * @date 2021-06-23 09:46:35
+				 *
+				 * assert will fail when reading members from a list that is not properly ordered.
+				 * and the list contains primes that are longer than the signatures.
+				 * this will signatures to reject seeing primes as safe on the first pass.
+				 * For the moment this is experimental code, so issue a warning instead of aborting a lengthy run
+				 * (input list was ordered by sid instead of mid)
+				 */
+				if (pSignature->firstMember == 0) {
 					if (pMember->flags & member_t::MEMMASK_SAFE) {
-						fprintf(stderr,"\r\e[K[%s] WARNING: adding safe member %u:%s to unsafe signature %u:%s\n", ctx.timeAsString(), iMid, pMember->name, pMember->sid, pSignature->name);
+						// first member safe, then signature safe
 						pSignature->flags |= signature_t::SIGMASK_SAFE;
+					} else {
+						// first member unsafe, then signature unsafe
 					}
-
-				} else if (!(pMember->flags & member_t::MEMMASK_SAFE)) {
+				} else if ((pMember->flags & member_t::MEMMASK_SAFE) && (pSignature->flags & signature_t::SIGMASK_SAFE)) {
+					// adding safe members to safe signature
+				} else if (!(pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
+					// adding unsafe members to unsafe signature
+				} else if ((pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
+					// adding safe members to unsafe signature
+					fprintf(stderr,"\r\e[K[%s] WARNING: Adding safe member %u:%s to unsafe signature %u:%s\n", ctx.timeAsString(), iMid, pMember->name, pMember->sid, pSignature->name);
+					pSignature->flags |= signature_t::SIGMASK_SAFE;
+				} else {
 					/*
 					 * Reject adding unsafe member to safe group
 					 */
@@ -1694,6 +1715,31 @@ struct genmemberContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Indexed members. numMember=%u skipUnsafe=%u\n",
 				ctx.timeAsString(), pStore->numMember, skipUnsafe);
+
+		/*
+		 * Flag component members
+		 */
+
+		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			pMember->flags &= ~member_t::MEMMASK_COMP;
+
+			if (pMember->flags & member_t::MEMMASK_SAFE) {
+				if (pMember->Q)
+					pStore->members[pMember->Q].flags |= member_t::MEMMASK_COMP;
+				if (pMember->T)
+					pStore->members[pMember->T].flags |= member_t::MEMMASK_COMP;
+				if (pMember->F)
+					pStore->members[pMember->F].flags |= member_t::MEMMASK_COMP;
+
+				for (unsigned k = 0; k < member_t::MAXHEAD; k++) {
+					if (pMember->heads[k])
+						pStore->members[pMember->heads[k]].flags |= member_t::MEMMASK_COMP;
+
+				}
+			}
+		}
 
 		/*
 		 * Recalculate empty/unsafe groups
@@ -2420,7 +2466,7 @@ int main(int argc, char *argv[]) {
 					member_t *pMember = store.members + iMid;
 
 					printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
-					printf("0x%03x\t", tinyTree_t::calcScoreName(pMember->name));
+					printf("%u\t%03x\t", pMember->flags, tinyTree_t::calcScoreName(pMember->name));
 
 					printf("%u:%s\t", pMember->Q, store.members[pMember->Q].name);
 					printf("%u:%s\t", pMember->T, store.members[pMember->T].name);
@@ -2429,14 +2475,20 @@ int main(int argc, char *argv[]) {
 					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
 						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
 
-					if (pMember->flags & member_t::MEMMASK_SAFE)
-						printf("S");
-					else
-						printf("N");
-					if (pSignature->flags & signature_t::SIGMASK_SAFE)
-						printf("S");
-					else
-						printf("N");
+					if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+						if (pMember->flags & member_t::MEMMASK_SAFE)
+							printf("S");
+						else
+							printf("s");
+					}
+					if (pMember->flags & member_t::MEMMASK_COMP)
+						printf("C");
+					if (pMember->flags & member_t::MEMMASK_LOCKED)
+						printf("L");
+					if (pMember->flags & member_t::MEMMASK_DEPR)
+						printf("D");
+					if (pMember->flags & member_t::MEMMASK_DELETE)
+						printf("X");
 					printf("\n");
 				}
 			}
@@ -2452,10 +2504,11 @@ int main(int argc, char *argv[]) {
 					member_t *pMember = store.members + iMid;
 
 					if (pMember->flags & member_t::MEMMASK_SAFE) {
-						printf("insert ignore into member (mid,sid,tid,score,name,q,t,f,h1,h2,h3,h4,h5,h6) values (%u,%u,%u,%x,\"%s\",%u,%u,%u, %u,%u,%u,%u,%u,%u);\n",
+						assert(member_t::MAXHEAD == 5);
+						printf("insert ignore into member (mid,sid,tid,score,name,q,t,f,h1,h2,h3,h4,h5) values (%u,%u,%u,%x,\"%s\",%u,%u,%u, %u,%u,%u,%u,%u);\n",
 						       iMid, pMember->sid, pMember->tid, tinyTree_t::calcScoreName(pMember->name), pMember->name,
 						       pMember->Q, pMember->T, pMember->F,
-						       pMember->heads[0], pMember->heads[1], pMember->heads[2], pMember->heads[3], pMember->heads[4], pMember->heads[5]);
+						       pMember->heads[0], pMember->heads[1], pMember->heads[2], pMember->heads[3], pMember->heads[4]);
 					}
 				}
 			}

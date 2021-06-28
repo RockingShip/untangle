@@ -70,6 +70,7 @@ binary-operators used in algebra can describe about 0.1% of them.
   - [Anatomy of a fractal tree file](#anatomy-of-a-fractal-tree-file)
   - [Structure based compare](#structure-based-compare)
   - [Versioned memory](#versioned-memory)
+  - [Member depreciation](#member-depreciation)
   - [Manifest](#manifest)
   - [Requirements](#requirements)
   - [Building and Installation](#building-and-installation)
@@ -656,6 +657,44 @@ The compare outcome can be one of:
 ## Versioned memory
 
 TODO
+
+## Member depreciation
+
+Mark excess members as depreciated.  
+Excess members are those that when removed, the remaining collection spans all signature groups.  
+The goal is to have a collection wih the minimal amount of components,  
+  i.e. members that are used to construct other members, either in part or as a whole.  
+The `rewritedata[]` pre-processor can use this as a first-attempt to reduce the most obvious mirrors and transforms.  
+The mechanics behind this is: if structures are never created (because other structures have the same effect),  
+  they can be excluded from the system and safely ignored.  
+
+The collection is pruned by removing he component members one at a time.  
+If the remaining collection has at least one member per signature group,  
+  then the component is considered excess and can be safely ignored (depreciated).  
+However, if the collection becomes incomplete then the component is considered critical and locked.  
+
+Several algorithms have been tried to determine the order of members to examine.  
+Trying members with the greatest effect when removed are considered first.  
+In order or priority:  
+
+  - Smallest structures first as they are the most versatile building blocks
+  - Members that have the highest reference count
+  - Most versatile members first (lowest memberId)
+
+The "safe" 5n9 collection consists of 6533489 members, of which 684839 are used as component.  
+Rebuilding a collection where some are excluded, is an extreme time-consuming two-pass operation.  
+The first pass is to determine which members are part of the new set, the second pass to flag those that were left behind.  
+The speed is around 11 operations per second, which would take some 19 hours.  
+
+However, the number of members to exclude does not effect the speed of the operation.  
+The main optimisation is to exclude members in bursts.  
+If the exclusion should fail because the burst includes an undetected locked member,  
+  then the burst is reduced in size in expectation that the remaining (smaller) burst will succeed.  
+This approach reduces the overall computation to about 8 hours.  
+
+The second challenge is the speed of updating the reference counts to update the prune ordering.  
+Sorting some 300k-700k elements is also highly time-consuming.  
+An alternative approach is to determine the relative distance in the waiting queue, and using memmove() to shift the intermediate areas.  
 
 ## Manifest
 
