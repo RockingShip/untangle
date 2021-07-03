@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+WARNING: This is a deadend, depreciated and only to archive genprime.cc/validateprime.cc
+
 ## 2021-06-07 22:51:42 [Version 2.5.0]
 
 Database version "20210617".

@@ -4,6 +4,10 @@ title: "untangle - Extract essence of information and store in fractal structure
 image: assets/favimage-472x472.jpg
 ---
 
+!!!  
+!!! WARNING: This is a dead-end, depreciated and only to archive genprime.cc/validateprime.cc  
+!!!  
+
 \[click on image to start the interactive model, NOTE: CPU intensive\]  
 [![teaser](assets/favimage-472x472.jpg)](https://rockingship.github.io/untangle-media/shrimp.html)  
 \[3D wireframe model of a fractal structure containing zero (yellow), 9 inputs (blue) and 9 outputs (green)\]
