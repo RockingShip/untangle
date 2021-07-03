@@ -190,11 +190,7 @@ struct slookupContext_t {
 			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 				member_t *pMember = pStore->members + iMid;
 
-				// find tid
-				tree.loadStringSafe(pMember->name);
-				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
-
-				len             = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
+				len             = sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, pMember->tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
 				if (lenName < len)
 					lenName = len;
 
@@ -233,11 +229,15 @@ struct slookupContext_t {
 			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 				member_t *pMember = pStore->members + iMid;
 
-				// find tid
-				tree.loadStringSafe(pMember->name);
-				pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+				// get tid relative to argument
+				char skin[MAXSLOTS+1];
 
-				sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, tid, pMember->numPlaceholder, pStore->revTransformNames[tid]);
+				// apply transform to make it relative to the input argument (tid)
+				for (int i = 0; i < MAXSLOTS; i++)
+					skin[i] = pStore->fwdTransformNames[tid][pStore->revTransformNames[pMember->tid][i] - 'a'];
+				skin[MAXSLOTS]  = 0;
+
+				sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, pStore->lookupFwdTransform(skin), pMember->numPlaceholder, skin);
 				printf("\t%-*s", lenName, txt);
 
 				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
@@ -521,7 +521,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] Allocated %.3fG memory\n", app.timeAsString(), app.totalAllocated / 1e9);
 #endif
 
-	if (app.opt_imprint || app.opt_member) {
+	if (app.opt_imprint) {
 		// initialise evaluators
 		tinyTree_t tree(ctx);
 		tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
