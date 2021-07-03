@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-03 11:01:13 Changed: member ordering: 1:SAFE, 2:!DEPR, 3:COMP, 4:score, 5:compare
 2021-06-28 20:47:11 Added: `gendepreciated`.
 2021-06-26 16:58:08 Removed: `genmember --score`.
 2021-06-26 16:50:56 Changed: Rewrite all logical `(~X & Y)` into `!(X & Y)`.

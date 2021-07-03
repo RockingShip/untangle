@@ -1057,6 +1057,30 @@ struct genmemberContext_t : dbtool_t {
 		int cmp = 0;
 
 		/*
+		 * safes go first
+		 */
+		if ((pMemberL->flags & member_t::MEMMASK_SAFE) && !(pMemberR->flags & member_t::MEMMASK_SAFE))
+			return +1;
+		if (!(pMemberL->flags & member_t::MEMMASK_SAFE) && (pMemberR->flags & member_t::MEMMASK_SAFE))
+			return -1;
+
+		/*
+		 * depreciates go last
+		 */
+		if ((pMemberL->flags & member_t::MEMMASK_DEPR) && !(pMemberR->flags & member_t::MEMMASK_DEPR))
+			return +1;
+		if (!(pMemberL->flags & member_t::MEMMASK_DEPR) && (pMemberR->flags & member_t::MEMMASK_DEPR))
+			return -1;
+
+		/*
+		 * components go first
+		 */
+		if ((pMemberL->flags & member_t::MEMMASK_COMP) && !(pMemberR->flags & member_t::MEMMASK_COMP))
+			return -1;
+		if (!(pMemberL->flags & member_t::MEMMASK_COMP) && (pMemberR->flags & member_t::MEMMASK_COMP))
+			return -1;
+
+		/*
 		 * compare scores
 		 */
 
@@ -1656,7 +1680,11 @@ struct genmemberContext_t : dbtool_t {
 
 				// calculate head/tail
 				tree.loadStringFast(pMember->name);
-				findHeadTail(pMember, tree);
+				bool isSafe = findHeadTail(pMember, tree);
+
+				// safe member must remain safe
+				if (pMember->flags & member_t::MEMMASK_SAFE)
+					assert(isSafe);
 
 				/*
 				 * member should be unsafe
