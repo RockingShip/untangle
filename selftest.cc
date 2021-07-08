@@ -1839,8 +1839,8 @@ int main(int argc, char *argv[]) {
 	 * initialise evaluators
 	 */
 
-	app.generator.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	app.generator.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Perform medium/slow metrics

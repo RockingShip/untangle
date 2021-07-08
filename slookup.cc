@@ -508,10 +508,6 @@ int main(int argc, char *argv[]) {
 	if (db.imprintIndexSize == 0 && app.opt_imprint)
 		ctx.fatal("Incomplete imprint section: %s\n", app.opt_database);
 
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
 	/*
 	 * Statistics
 	 */
@@ -522,10 +518,13 @@ int main(int argc, char *argv[]) {
 #endif
 
 	if (app.opt_imprint) {
+		// allocate evaluators
+		app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
+		app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
+
 		// initialise evaluators
-		tinyTree_t tree(ctx);
-		tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-		tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
+		tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
+		tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 	} else {
 		// evaluators not present
 		app.pEvalFwd = app.pEvalRev = NULL;

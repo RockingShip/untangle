@@ -1123,10 +1123,10 @@ struct tinyTree_t {
 				unsigned curr = stack[--stackPos];
 
 				const tinyNode_t *pNode = this->N + curr;
-				const unsigned   Q      = pNode->Q;
-				const unsigned   To     = pNode->T & ~IBIT;
-//				const unsigned Ti = pNode->T & IBIT;
-				const unsigned   F      = pNode->F;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   To     = pNode->T & ~IBIT;
+//				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
 
 				// determine if node already handled
 				if (!(beenThere & (1 << curr))) {
@@ -1202,10 +1202,10 @@ struct tinyTree_t {
 			}
 
 			const tinyNode_t *pNode = this->N + curr;
-			const unsigned   Q      = pNode->Q;
-			const unsigned   To     = pNode->T & ~IBIT;
-			const unsigned   Ti     = pNode->T & IBIT;
-			const unsigned   F      = pNode->F;
+			const uint32_t   Q      = pNode->Q;
+			const uint32_t   To     = pNode->T & ~IBIT;
+			const uint32_t   Ti     = pNode->T & IBIT;
+			const uint32_t   F      = pNode->F;
 
 			// determine if node already handled
 			if (!(beenThere & (1 << curr))) {
@@ -1567,7 +1567,7 @@ struct tinyTree_t {
 	 * @param {footprint_t) maxTransform - How many transforms
 	 * @param {uint64_t[]) pTransformData - forward or reverse transform data
 	 */
-	void initialiseVector(context_t &ctx, footprint_t *pFootprint, unsigned numTransform, uint64_t *pTransformData) {
+	static void initialiseVector(context_t &ctx, footprint_t *pFootprint, unsigned numTransform, uint64_t *pTransformData) {
 
 		// hardcoded assumptions
 		assert(MAXSLOTS == 9);

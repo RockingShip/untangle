@@ -1054,9 +1054,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	// initialize evaluator early using input database
-	tinyTree_t tree(ctx);
-	tree.initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tree.initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
+	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
+	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Inherit/copy sections
