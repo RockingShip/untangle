@@ -163,8 +163,6 @@
  *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
  *              <mid> <sid> <tid> <name> <Qmid> <Tmid> <Fmid> <HeadMids> <Safe/Nonsafe-member> <Safe/Nonsafe-signature>
- *
- * `--text=5`	Output is sql for advanced analysis
  */
 
 /*
@@ -221,7 +219,6 @@ struct genmemberContext_t : dbtool_t {
 		OPTTEXT_COMPARE = 2,
 		OPTTEXT_BRIEF   = 3,
 		OPTTEXT_VERBOSE = 4,
-		OPTTEXT_SQL     = 5,
 	};
 
 	/*
@@ -842,12 +839,9 @@ struct genmemberContext_t : dbtool_t {
 
 		/*
 		 * early-reject
-		 *
-		 * @date 2021-06-21 08:59:05
-		 * In `--text=SQL`, collect as many members in a group as possible so they can be examined/selected/rejected on further analysis
 		 */
 
-		if ((pSignature->flags & signature_t::SIGMASK_SAFE) && opt_text != OPTTEXT_SQL) {
+		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
 			/*
 			 * @date 2021-06-20 19:06:44
 			 * Just like primes with component dependency chains, members can be larger than signatures
@@ -2262,7 +2256,7 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE && app.opt_text != app.OPTTEXT_SQL);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
 	db.open(app.arg_inputDatabase, !app.readOnlyMode);
 
@@ -2517,26 +2511,6 @@ int main(int argc, char *argv[]) {
 					if (pMember->flags & member_t::MEMMASK_DELETE)
 						printf("X");
 					printf("\n");
-				}
-			}
-		}
-		if (app.opt_text == app.OPTTEXT_SQL) {
-			/*
-			 * Display full members, grouped by signature
-			 */
-			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-				const signature_t *pSignature = store.signatures + iSid;
-
-				for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					member_t *pMember = store.members + iMid;
-
-					if (pMember->flags & member_t::MEMMASK_SAFE) {
-						assert(member_t::MAXHEAD == 5);
-						printf("insert ignore into member (mid,sid,tid,score,name,q,t,f,h1,h2,h3,h4,h5) values (%u,%u,%u,%x,\"%s\",%u,%u,%u, %u,%u,%u,%u,%u);\n",
-						       iMid, pMember->sid, pMember->tid, tinyTree_t::calcScoreName(pMember->name), pMember->name,
-						       pMember->Q, pMember->T, pMember->F,
-						       pMember->heads[0], pMember->heads[1], pMember->heads[2], pMember->heads[3], pMember->heads[4]);
-					}
 				}
 			}
 		}

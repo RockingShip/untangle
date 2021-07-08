@@ -470,73 +470,7 @@ struct gendepreciateContext_t : dbtool_t {
 		return cntLocked;
 	}
 
-	/*
-	 * @date 2021-06-30 13:32:19
-	 *
-	 * For signature groups containing components, drop all the non-components
-	 * They are not referenced, have nothing to contribute and nothing is lost.
-	 */
-	bool __attribute__((optimize("O0")))  modeComponent(void) {
-
-		bool     somethingChanged = false;
-		unsigned cntSelected      = 0;
-		unsigned cntSid, cntMid;
-
-		/*
-		 * Count number of steps for ticker
-		 */
-		for (unsigned iSid = SID_1N9; iSid<pStore->numSignature; iSid++) {
-			signature_t *pSignature = pStore->signatures + iSid;
-
-			++iVersionSelect; // select nothing
-
-			bool hasComponent = false;
-			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
-				member_t *pMember = pStore->members + iMid;
-
-				if (pMember->flags & member_t::MEMMASK_DEPR)
-					continue;
-				if (pMember->flags & member_t::MEMMASK_COMP)
-					hasComponent = true;
-			}
-
-			if (hasComponent) {
-				for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
-					member_t *pMember = pStore->members + iMid;
-
-					if (pMember->flags & member_t::MEMMASK_DEPR)
-						continue;
-					if (!(pMember->flags & member_t::MEMMASK_COMP) && !(pMember->flags & member_t::MEMMASK_LOCKED)) {
-						pSelect[iMid] = iVersionSelect;
-						cntSelected++;
-					}
-				}
-			}
-		}
-
-		if (cntSelected) {
-			// Select/exclude all lesser
-			countSafeExcludeSelected(cntSid, cntMid);
-
-			assert (cntSid == pStore->numSignature - 1);
-
-
-			for (unsigned j=SID_1N9; j < pStore->numMember; j++) {
-				member_t *pMem = pStore->members + j;
-
-				// depreciate all (new) orphans
-				if (pSafeMid[j] != iVersionSafe && !(pMem->flags & member_t::MEMMASK_DEPR)) {
-					pMem->flags |= member_t::MEMMASK_DEPR;
-					somethingChanged = true;
-				}
-			}
-		}
-
-		return somethingChanged;
-	}
-
 	struct refcnt_t {
-		member_t *pMember;
 		uint32_t refcnt;
 		uint32_t heapIdx; // index in heap
 
@@ -666,7 +600,7 @@ struct gendepreciateContext_t : dbtool_t {
 		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
-			pRefcnts[iMid].pMember = pMember;
+//			pRefcnts[iMid].pMember = pMember;
 
 			if (arg_numNodes && pMember->size != arg_numNodes)
 				continue;
