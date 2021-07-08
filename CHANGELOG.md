@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-08 21:08:17 Changed: database version to 0x20210707.
+2021-07-08 20:59:12 Changed: `member_t`, Q/T/F now sid/tid pair.
 2021-07-08 20:50:30 Removed: `genmember --text=5 (sql)`.
 2021-07-08 20:39:06 Changed: `tinyTree_t::initialiseVector()` now static.
 2021-07-03 12:23:48 Changed: `slookup --member` display tid's relative to input.

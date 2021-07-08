@@ -340,13 +340,22 @@ struct member_t {
 	uint32_t tid;
 
 	/// @var {number} member id of `Q` component
-	uint32_t Q;
+	uint32_t Qsid;
+
+	/// @var {number} `Q` component transform
+	uint32_t Qtid;
 
 	/// @var {number} member id of `T` component
-	uint32_t T;
+	uint32_t Tsid;
+
+	/// @var {number} `Q` component transform
+	uint32_t Ttid;
 
 	/// @var {number} member id of `F` component
-	uint32_t F;
+	uint32_t Fsid;
+
+	/// @var {number} `Q` component transform
+	uint32_t Ftid;
 
 	/// @var {number} member id of next member in signature group
 	uint32_t nextMember;

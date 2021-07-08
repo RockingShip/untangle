@@ -238,6 +238,49 @@ struct gendepreciateContext_t : dbtool_t {
 		pSelect        = NULL;
 	}
 
+	/*
+	 * @date 2021-07-04 07:29:13
+	 * Display counts for comparison
+	 */
+	void showCounts() {
+		unsigned numComponent = 0;
+		unsigned numDepr      = 0;
+		unsigned numLocked    = updateLocked();
+
+		/*
+		 * Walk through members, any depreciated component makes the member depreciated, count active components
+		 */
+
+		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			if (pMember->flags & member_t::MEMMASK_DEPR) {
+				// member already depreciated
+				numDepr++;
+			} else if ((pMember->Qsid != 0 && (pStore->members[pMember->Qsid].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Tsid != 0 && (pStore->members[pMember->Tsid].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Fsid != 0 && (pStore->members[pMember->Fsid].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->heads[0] != 0 && (pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->heads[1] != 0 && (pStore->members[pMember->heads[1]].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->heads[2] != 0 && (pStore->members[pMember->heads[2]].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->heads[3] != 0 && (pStore->members[pMember->heads[3]].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->heads[4] != 0 && (pStore->members[pMember->heads[4]].flags & member_t::MEMMASK_DEPR))) {
+				assert(member_t::MAXHEAD == 5);
+
+				// components are depreciated, so member is also depreciated
+				pMember->flags |= member_t::MEMMASK_DEPR;
+				numDepr++;
+			}
+
+			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
+				numComponent++;
+
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "\r\e[K[%s] numComponent=%u numDepr=%u numLocked=%u\n", ctx.timeAsString(), numComponent, numDepr, numLocked);
+	}
+
 	/**
 	 * @date 2021-07-02 21:55:16
 	 *
@@ -330,9 +373,9 @@ struct gendepreciateContext_t : dbtool_t {
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
 				// member already depreciated
 				numDepr++;
-			} else if ((pMember->Q != 0 && (pStore->members[pMember->Q].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->T != 0 && (pStore->members[pMember->T].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->F != 0 && (pStore->members[pMember->F].flags & member_t::MEMMASK_DEPR))
+			} else if ((pMember->Qsid != 0 && (pStore->members[pMember->Qsid].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Tsid != 0 && (pStore->members[pMember->Tsid].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Fsid != 0 && (pStore->members[pMember->Fsid].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[0] != 0 && (pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[1] != 0 && (pStore->members[pMember->heads[1]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[2] != 0 && (pStore->members[pMember->heads[2]].flags & member_t::MEMMASK_DEPR))
@@ -377,6 +420,9 @@ struct gendepreciateContext_t : dbtool_t {
 
 		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
+
+			// depr/locked is mutual-exclusive
+			assert(!(pMember->flags & member_t::MEMMASK_DEPR) || !(pMember->flags & member_t::MEMMASK_LOCKED));
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
 				numComponent++;
@@ -432,16 +478,16 @@ struct gendepreciateContext_t : dbtool_t {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED) {
-				if (pMember->Q && !(pStore->members[pMember->Q].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[pMember->Q].flags |= member_t::MEMMASK_LOCKED;
+				if (pMember->Qsid && !(pStore->members[pMember->Qsid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[pMember->Qsid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
-				if (pMember->T && !(pStore->members[pMember->T].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[pMember->T].flags |= member_t::MEMMASK_LOCKED;
+				if (pMember->Tsid && !(pStore->members[pMember->Tsid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[pMember->Tsid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
-				if (pMember->F && !(pStore->members[pMember->F].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[pMember->F].flags |= member_t::MEMMASK_LOCKED;
+				if (pMember->Fsid && !(pStore->members[pMember->Fsid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[pMember->Fsid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
 				if (pMember->heads[0] && !(pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_LOCKED)) {
@@ -606,9 +652,9 @@ struct gendepreciateContext_t : dbtool_t {
 				continue;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
-				if (pMember->Q) pRefcnts[pMember->Q].refcnt++;
-				if (pMember->T) pRefcnts[pMember->T].refcnt++;
-				if (pMember->F) pRefcnts[pMember->F].refcnt++;
+				if (pMember->Qsid) pRefcnts[pMember->Qsid].refcnt++;
+				if (pMember->Tsid) pRefcnts[pMember->Tsid].refcnt++;
+				if (pMember->Fsid) pRefcnts[pMember->Fsid].refcnt++;
 				if (pMember->heads[0]) pRefcnts[pMember->heads[0]].refcnt++;
 				if (pMember->heads[1]) pRefcnts[pMember->heads[1]].refcnt++;
 				if (pMember->heads[2]) pRefcnts[pMember->heads[2]].refcnt++;
@@ -751,17 +797,17 @@ struct gendepreciateContext_t : dbtool_t {
 							--numComponents;
 
 						if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
-							if (pMember->Q) {
-								pRefcnts[pMember->Q].refcnt--;
-								heap.down(pRefcnts + pMember->Q);
+							if (pMember->Qsid) {
+								pRefcnts[pMember->Qsid].refcnt--;
+								heap.down(pRefcnts + pMember->Qsid);
 							}
-							if (pMember->T) {
-								pRefcnts[pMember->T].refcnt--;
-								heap.down(pRefcnts + pMember->T);
+							if (pMember->Tsid) {
+								pRefcnts[pMember->Tsid].refcnt--;
+								heap.down(pRefcnts + pMember->Tsid);
 							}
-							if (pMember->F) {
-								pRefcnts[pMember->F].refcnt--;
-								heap.down(pRefcnts + pMember->F);
+							if (pMember->Fsid) {
+								pRefcnts[pMember->Fsid].refcnt--;
+								heap.down(pRefcnts + pMember->Fsid);
 							}
 							if (pMember->heads[0]) {
 								pRefcnts[pMember->heads[0]].refcnt--;
@@ -854,9 +900,9 @@ struct gendepreciateContext_t : dbtool_t {
 					pSafeSid[pMember->sid] = iVersionSafe;
 					cntSid++;
 				}
-			} else if ((pMember->Q == 0 || pSafeMid[pMember->Q] == iVersionSafe)
-					&& (pMember->T == 0 || pSafeMid[pMember->T] == iVersionSafe)
-					&& (pMember->F == 0 || pSafeMid[pMember->F] == iVersionSafe)
+			} else if ((pMember->Qsid == 0 || pSafeMid[pMember->Qsid] == iVersionSafe)
+					&& (pMember->Tsid == 0 || pSafeMid[pMember->Tsid] == iVersionSafe)
+					&& (pMember->Fsid == 0 || pSafeMid[pMember->Fsid] == iVersionSafe)
 					&& (pMember->heads[0] == 0 || pSafeMid[pMember->heads[0]] == iVersionSafe)
 					&& (pMember->heads[1] == 0 || pSafeMid[pMember->heads[1]] == iVersionSafe)
 					&& (pMember->heads[2] == 0 || pSafeMid[pMember->heads[2]] == iVersionSafe)
@@ -1198,7 +1244,7 @@ int main(int argc, char *argv[]) {
 	if (argc - optind >= 1)
 		app.arg_outputDatabase = argv[optind++];
 
-	if (app.arg_inputDatabase == NULL || app.arg_numNodes == 0) {
+	if (app.arg_inputDatabase == NULL) {
 		usage(argv, false);
 		exit(1);
 	}
@@ -1417,9 +1463,9 @@ int main(int argc, char *argv[]) {
 				assert(app.pSafeMid[iMid] == app.iVersionSafe);
 			}
 
-			assert(pMember->Q == 0 || pMember->Q < iMid);
-			assert(pMember->T == 0 || pMember->T < iMid);
-			assert(pMember->F == 0 || pMember->F < iMid);
+			assert(pMember->Qsid == 0 || pMember->Qsid < iMid);
+			assert(pMember->Tsid == 0 || pMember->Tsid < iMid);
+			assert(pMember->Fsid == 0 || pMember->Fsid < iMid);
 			assert(pMember->heads[0] == 0 || pMember->heads[0] < iMid);
 			assert(pMember->heads[1] == 0 || pMember->heads[1] < iMid);
 			assert(pMember->heads[2] == 0 || pMember->heads[2] < iMid);
@@ -1443,11 +1489,15 @@ int main(int argc, char *argv[]) {
 	// update locking
 	app.updateLocked();
 
-	if (app.opt_load)
+	if (app.opt_load) {
+		app.showCounts();
 		app.depreciateFromFile();
+	}
 	if (app.opt_generate) {
+		app.showCounts();
 		app.depreciateFromGenerator();
 	}
+	app.showCounts();
 
 	/*
 	 * re-order and re-index members

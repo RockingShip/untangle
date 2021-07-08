@@ -195,18 +195,18 @@ struct slookupContext_t {
 					lenName = len;
 
 				if (this->opt_member > 1) {
-					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->Q].sid, pMember->Q, pStore->members[pMember->Q].name);
+					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->Qsid].sid, pMember->Qsid, pStore->members[pMember->Qsid].name);
 					if (lenQ < len)
 						lenQ = len;
 
-					if (pMember->T & IBIT)
-						len = sprintf(txt, "~%u:%u:%s", pStore->members[pMember->T & ~IBIT].sid, pMember->T, pStore->members[pMember->T].name);
+					if (pMember->Tsid & IBIT)
+						len = sprintf(txt, "~%u:%u:%s", pStore->members[pMember->Tsid & ~IBIT].sid, pMember->Tsid, pStore->members[pMember->Tsid].name);
 					else
-						len  = sprintf(txt, "%u:%u:%s", pStore->members[pMember->T].sid, pMember->T, pStore->members[pMember->T].name);
+						len  = sprintf(txt, "%u:%u:%s", pStore->members[pMember->Tsid].sid, pMember->Tsid, pStore->members[pMember->Tsid].name);
 					if (lenT < len)
 						lenT = len;
 
-					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->F].sid, pMember->F, pStore->members[pMember->F].name);
+					len          = sprintf(txt, "%u:%u:%s", pStore->members[pMember->Fsid].sid, pMember->Fsid, pStore->members[pMember->Fsid].name);
 					if (lenF < len)
 						lenF = len;
 
@@ -243,16 +243,16 @@ struct slookupContext_t {
 				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 				if (this->opt_member > 1) {
-					sprintf(txt, "%u:%u:%s", pStore->members[pMember->Q].sid, pMember->Q, pStore->members[pMember->Q].name);
+					sprintf(txt, "%u:%u:%s", pStore->members[pMember->Qsid].sid, pMember->Qsid, pStore->members[pMember->Qsid].name);
 					printf(" Q=%-*s", lenQ, txt);
 
-					if (pMember->T & IBIT)
-						sprintf(txt, "~%u:%u:%s", pStore->members[pMember->T & ~IBIT].sid, pMember->T, pStore->members[pMember->T].name);
+					if (pMember->Tsid & IBIT)
+						sprintf(txt, "~%u:%u:%s", pStore->members[pMember->Tsid & ~IBIT].sid, pMember->Tsid, pStore->members[pMember->Tsid].name);
 					else
-						sprintf(txt, "%u:%u:%s", pStore->members[pMember->T].sid, pMember->T, pStore->members[pMember->T].name);
+						sprintf(txt, "%u:%u:%s", pStore->members[pMember->Tsid].sid, pMember->Tsid, pStore->members[pMember->Tsid].name);
 					printf(" T=%-*s", lenT, txt);
 
-					sprintf(txt, "%u:%u:%s", pStore->members[pMember->F].sid, pMember->F, pStore->members[pMember->F].name);
+					sprintf(txt, "%u:%u:%s", pStore->members[pMember->Fsid].sid, pMember->Fsid, pStore->members[pMember->Fsid].name);
 					printf(" F=%-*s", lenF, txt);
 
 					len = 0;
