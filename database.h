@@ -79,7 +79,7 @@
 #include "tinytree.h"
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20210707
+#define FILE_MAGIC        0x20210708
 
 /*
  *  All components contributing and using the database should share the same dimensions

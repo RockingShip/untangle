@@ -1,4 +1,4 @@
-// # pragma GCC optimize ("O0") // optimize on demand
+ # pragma GCC optimize ("O3") // optimize on demand
 
 /*
  * @date 2021-06-27 15:56:11
@@ -673,7 +673,6 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 
 		heap_t heap(pStore->numMember, pRefcnts);
-		fprintf(stderr, "%u\n", heap.count);
 
 		unsigned cntSid, cntMid;
 		unsigned cntDepr=0, cntLock = 0;
@@ -1344,8 +1343,10 @@ int main(int argc, char *argv[]) {
 	database_t store(ctx);
 
 	// will be using `lookupSignature()`, `lookupImprintAssociative()` and `lookupMember()`
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
+	app.inheritSections &= ~(database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
 	// signature indices are used read-only, remove from inherit if sections are empty
+	if (!db.numSignature)
+		app.inheritSections &= ~database_t::ALLOCMASK_SIGNATURE;
 	if (!db.signatureIndexSize)
 		app.inheritSections &= ~database_t::ALLOCMASK_SIGNATUREINDEX;
 	if (!db.numImprint)

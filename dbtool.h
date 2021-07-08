@@ -188,7 +188,7 @@ struct dbtool_t : callable_t {
 		} else if (!readOnlyMode) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numSignature)
 				ctx.fatal("no preset for --maxsignature\n");
 
 			// give metrics a margin of error
@@ -255,7 +255,7 @@ struct dbtool_t : callable_t {
 		} else if (!readOnlyMode) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numSwap)
 				ctx.fatal("no preset for --maxswap\n");
 
 			// give metrics a margin of error
@@ -322,7 +322,7 @@ struct dbtool_t : callable_t {
 		} else if (!readOnlyMode) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numHint)
 				ctx.fatal("no preset for --maxhint\n");
 
 			// give metrics a margin of error
@@ -393,7 +393,7 @@ struct dbtool_t : callable_t {
 
 		if (store.interleave) {
 			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numStored || !pMetrics->interleaveStep)
 				ctx.fatal("no preset for --interleave\n");
 
 			store.interleave = pMetrics->numStored;
@@ -420,7 +420,7 @@ struct dbtool_t : callable_t {
 			} else if (!readOnlyMode) {
 				// resize using metrics
 				const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
-				if (!pMetrics)
+				if (!pMetrics || !pMetrics->numImprint)
 					ctx.fatal("no preset for --maximprint\n");
 
 				store.maxImprint = ctx.raisePercent(pMetrics->numImprint, 5);
@@ -500,7 +500,7 @@ struct dbtool_t : callable_t {
 		} else if (!readOnlyMode) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numPair)
 				ctx.fatal("no preset for --maxpair\n");
 
 			// give metrics a margin of error
@@ -567,7 +567,7 @@ struct dbtool_t : callable_t {
 		} else if (!readOnlyMode) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
-			if (!pMetrics)
+			if (!pMetrics || !pMetrics->numMember)
 				ctx.fatal("no preset for --maxmember\n");
 
 			// give metrics a margin of error
