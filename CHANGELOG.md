@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-08 23:15:59 Changed: Q/T/F in `member_t` now pair id's.
 2021-07-08 22:18:58 Added: Sid/Mid and Mid/Tid pair section to `database_t` and `dbtool_t`.
 2021-07-08 21:08:17 Changed: database version to 0x20210707.
 2021-07-08 20:59:12 Changed: `member_t`, Q/T/F now sid/tid pair.

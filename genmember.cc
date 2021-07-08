@@ -364,8 +364,9 @@ struct genmemberContext_t : dbtool_t {
 			assert(pMember->sid == 1); // must be reserved entry
 
 			pMember->tid  = 0;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember - pStore->members;
-			pMember->Qtid = pMember->Ttid = pMember->Ftid = 0;
+
+			unsigned ix = pStore->lookupPair(pMember - pStore->members, 0);
+			pMember->Qmt = pMember->Tmt = pMember->Fmt = pStore->pairIndex[ix];
 
 			return true;
 		}
@@ -374,8 +375,10 @@ struct genmemberContext_t : dbtool_t {
 			assert(pMember->sid == 2); // must be reserved entry
 
 			pMember->tid  = 0;
-			pMember->Qsid = pMember->Tsid = pMember->Fsid = pMember - pStore->members;
-			pMember->Qtid = pMember->Ttid = pMember->Ftid = 0;
+
+			unsigned ix = pStore->lookupPair(pMember - pStore->members, 0);
+			pMember->Qmt = pMember->Tmt = pMember->Fmt = pStore->pairIndex[ix];
+
 			return true;
 		}
 
@@ -432,15 +435,23 @@ struct genmemberContext_t : dbtool_t {
 					ix = pStore->lookupMember(name);
 				}
 
-				pMember->Qsid = pStore->memberIndex[ix];
+				uint32_t Qmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Qsid == 0 || (!(pStore->members[pMember->Qsid].flags & member_t::MEMMASK_SAFE))) {
+				if (Qmid == 0 || (!(pStore->members[Qmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
 
-				pMember->Qtid = pStore->lookupFwdTransform(skin);
+				uint32_t Qtid = pStore->lookupFwdTransform(skin);
+
+				// convert mid/tid to pair
+				ix = pStore->lookupPair(Qmid, Qtid);
+				if (pStore->pairIndex[ix] == 0) {
+					// new
+					pStore->pairIndex[ix] = pStore->addPair(Qmid, Qtid);
+				}
+				pMember->Qmt = pStore->pairIndex[ix];
 			}
 
 			unsigned Tu = treeR.N[treeR.root].T & ~IBIT;
@@ -456,22 +467,29 @@ struct genmemberContext_t : dbtool_t {
 					ix = pStore->lookupMember(name);
 				}
 
-				pMember->Tsid = pStore->memberIndex[ix];
+				uint32_t Tmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Tsid == 0 || (!(pStore->members[pMember->Tsid].flags & member_t::MEMMASK_SAFE))) {
+				if (Tmid == 0 || (!(pStore->members[Tmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
 
-				pMember->Ttid = pStore->lookupFwdTransform(skin);
+				uint32_t Ttid = pStore->lookupFwdTransform(skin);
+
+				// convert mid/tid to pair
+				ix = pStore->lookupPair(Tmid, Ttid);
+				if (pStore->pairIndex[ix] == 0) {
+					// new
+					pStore->pairIndex[ix] = pStore->addPair(Tmid, Ttid);
+				}
+				pMember->Qmt = pStore->pairIndex[ix];
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
 			if (F == Tu) {
 				// de-dup T/F
-				pMember->Fsid = 0;
-				pMember->Ftid = 0;
+				pMember->Fmt = 0;
 			} else {
 				// fast
 				treeR.saveString(F, name, skin);
@@ -485,15 +503,23 @@ struct genmemberContext_t : dbtool_t {
 				}
 
 
-				pMember->Fsid = pStore->memberIndex[ix];
+				uint32_t Fmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (pMember->Fsid == 0 || (!(pStore->members[pMember->Fsid].flags & member_t::MEMMASK_SAFE))) {
+				if (Fmid == 0 || (!(pStore->members[Fmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
 
-				pMember->Ftid = pStore->lookupFwdTransform(skin);
+				uint32_t Ftid = pStore->lookupFwdTransform(skin);
+
+				// convert mid/tid to pair
+				ix = pStore->lookupPair(Fmid, Ftid);
+				if (pStore->pairIndex[ix] == 0) {
+					// new
+					pStore->pairIndex[ix] = pStore->addPair(Fmid, Ftid);
+				}
+				pMember->Qmt = pStore->pairIndex[ix];
 			}
 		}
 
@@ -688,9 +714,10 @@ struct genmemberContext_t : dbtool_t {
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			unsigned iMid = pMember - pStore->members;
 
-			assert(pMember->Qsid == 0 || pMember->Qsid < iMid);
-			assert(pMember->Tsid == 0 || pMember->Tsid < iMid);
-			assert(pMember->Fsid == 0 || pMember->Fsid < iMid);
+			assert(pMember->Qmt == 0 || pStore->pairs[pMember->Qmt].sidmid < iMid);
+			assert(pMember->Tmt == 0 || pStore->pairs[pMember->Tmt].sidmid < iMid);
+			assert(pMember->Fmt == 0 || pStore->pairs[pMember->Fmt].sidmid < iMid);
+
 			for (unsigned k = 0; k < member_t::MAXHEAD; k++)
 				assert(pMember->heads[k] == 0 || pMember->heads[k] < iMid);
 		}
@@ -972,17 +999,17 @@ struct genmemberContext_t : dbtool_t {
 						for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 							member_t *p = pStore->members + iMid;
 
-							if (p->Qsid == pSignature->firstMember) {
+							if (pStore->pairs[p->Qmt].sidmid == pSignature->firstMember) {
 								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Qsid = p->Qtid = 0;
+								p->Qmt = 0;
 							}
-							if (p->Tsid == pSignature->firstMember) {
+							if (pStore->pairs[p->Tmt].sidmid == pSignature->firstMember) {
 								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Tsid = p->Ttid = 0;
+								p->Tmt = 0;
 							}
-							if (p->Fsid == pSignature->firstMember) {
+							if (pStore->pairs[p->Fmt].sidmid == pSignature->firstMember) {
 								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Fsid = p->Ftid = 0;
+								p->Fmt = 0;
 							}
 						}
 
@@ -1766,12 +1793,12 @@ struct genmemberContext_t : dbtool_t {
 			pMember->flags &= ~member_t::MEMMASK_COMP;
 
 			if (pMember->flags & member_t::MEMMASK_SAFE) {
-				if (pMember->Qsid)
-					pStore->members[pMember->Qsid].flags |= member_t::MEMMASK_COMP;
-				if (pMember->Tsid)
-					pStore->members[pMember->Tsid].flags |= member_t::MEMMASK_COMP;
-				if (pMember->Fsid)
-					pStore->members[pMember->Fsid].flags |= member_t::MEMMASK_COMP;
+				if (pMember->Qmt)
+					pStore->members[pStore->pairs[pMember->Qmt].sidmid].flags |= member_t::MEMMASK_COMP;
+				if (pMember->Tmt)
+					pStore->members[pStore->pairs[pMember->Tmt].sidmid].flags |= member_t::MEMMASK_COMP;
+				if (pMember->Fmt)
+					pStore->members[pStore->pairs[pMember->Fmt].sidmid].flags |= member_t::MEMMASK_COMP;
 
 				for (unsigned k = 0; k < member_t::MAXHEAD; k++) {
 					if (pMember->heads[k])
@@ -2513,15 +2540,20 @@ int main(int argc, char *argv[]) {
 					printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
 					printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
 
+					uint32_t Qsid = store.pairs[pMember->Qmt].sidmid, Qtid = store.pairs[pMember->Qmt].tid;
 					printf("%u:%s/%u:%.*s\t",
-					       pMember->Qsid, store.members[pMember->Qsid].name,
-					       pMember->Qtid, store.signatures[pMember->Qsid].numPlaceholder, store.fwdTransformNames[pMember->Qtid]);
+					       Qsid, store.members[Qsid].name,
+					       Qtid, store.signatures[Qsid].numPlaceholder, store.fwdTransformNames[Qtid]);
+
+					uint32_t Tsid = store.pairs[pMember->Tmt].sidmid, Ttid = store.pairs[pMember->Tmt].tid;
 					printf("%u:%s/%u:%.*s\t",
-					       pMember->Tsid, store.members[pMember->Tsid].name,
-					       pMember->Ttid, store.signatures[pMember->Tsid].numPlaceholder, store.fwdTransformNames[pMember->Ttid]);
+					       Tsid, store.members[Tsid].name,
+					       Ttid, store.signatures[Tsid].numPlaceholder, store.fwdTransformNames[Ttid]);
+
+					uint32_t Fsid = store.pairs[pMember->Fmt].sidmid, Ftid = store.pairs[pMember->Fmt].tid;
 					printf("%u:%s/%u:%.*s\t",
-					       pMember->Fsid, store.members[pMember->Fsid].name,
-					       pMember->Ftid, store.signatures[pMember->Fsid].numPlaceholder, store.fwdTransformNames[pMember->Ftid]);
+					       Fsid, store.members[Fsid].name,
+					       Ftid, store.signatures[Fsid].numPlaceholder, store.fwdTransformNames[Ftid]);
 
 					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
 						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
