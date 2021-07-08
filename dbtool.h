@@ -71,6 +71,8 @@ struct dbtool_t : callable_t {
 	unsigned opt_maxImprint;
 	/// @var {number} Maximum number of members to be stored database
 	unsigned opt_maxMember;
+	/// @var {number} Maximum number of id pairs to be stored database
+	unsigned opt_maxPair;
 	/// @var {number} Maximum number of signatures to be stored database
 	unsigned opt_maxSignature;
 	/// @var {number} Maximum number of swaps to be stored database
@@ -78,7 +80,9 @@ struct dbtool_t : callable_t {
 	/// @var {number} size of member index WARNING: must be prime
 	unsigned opt_memberIndexSize;
 	/// @var {number} index/data ratio
-	double opt_ratio;
+	double   opt_ratio;
+	/// @var {number} size of pair index WARNING: must be prime
+	unsigned opt_pairIndexSize;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 	/// @var {number} size of swap index WARNING: must be prime
@@ -98,26 +102,29 @@ struct dbtool_t : callable_t {
 	 */
 	dbtool_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
-		opt_imprintIndexSize = 0;
-		opt_hintIndexSize = 0;
-		opt_interleave = 0;
-		opt_maxHint = 0;
-		opt_maxImprint = 0;
-		opt_maxMember = 0;
-		opt_maxSignature = 0;
-		opt_maxSwap = 0;
-		opt_memberIndexSize = 0;
-		opt_ratio = METRICS_DEFAULT_RATIO / 10.0;
+		opt_imprintIndexSize   = 0;
+		opt_hintIndexSize      = 0;
+		opt_interleave         = 0;
+		opt_maxHint            = 0;
+		opt_maxImprint         = 0;
+		opt_maxMember          = 0;
+		opt_maxPair            = 0;
+		opt_maxSignature       = 0;
+		opt_maxSwap            = 0;
+		opt_memberIndexSize    = 0;
+		opt_ratio              = METRICS_DEFAULT_RATIO / 10.0;
+		opt_pairIndexSize      = 0;
 		opt_signatureIndexSize = 0;
-		opt_swapIndexSize = 0;
+		opt_swapIndexSize      = 0;
 
 		copyOnWrite = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM |
-		                  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
-		                  database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX |
-		                  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
-		                  database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
-		                  database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
+				  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
+				  database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX |
+				  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
+				  database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
+				  database_t::ALLOCMASK_PAIR | database_t::ALLOCMASK_PAIRINDEX |
+				  database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
 		readOnlyMode = 0;
 		rebuildSections = 0;
 	}
@@ -480,6 +487,73 @@ struct dbtool_t : callable_t {
 		}
 
 		/*
+		 * sid/tid pairs
+		 */
+
+		// data
+		if (this->opt_maxPair) {
+			// user specified
+			store.maxPair = ctx.raisePercent(this->opt_maxPair, 5);
+		} else if (inheritSections & database_t::ALLOCMASK_PAIR) {
+			// inherited. pass-though
+			store.maxPair = db.numPair;
+		} else if (!readOnlyMode) {
+			// resize using metrics
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			if (!pMetrics)
+				ctx.fatal("no preset for --maxpair\n");
+
+			// give metrics a margin of error
+			store.maxPair = ctx.raisePercent(pMetrics->numPair, 5);
+		} else if (db.numPair) {
+			// non-empty. pass-though
+			store.maxPair = db.numPair;
+		} else {
+			// empty. create minimal sized section
+			store.maxPair = 1;
+		}
+
+		if (store.maxPair > db.numPair) {
+			// disable inherit when section wants to grow
+			inheritSections &= ~database_t::ALLOCMASK_PAIR;
+		} else if (this->copyOnWrite) {
+			// inherit when section fits and copy-on-write
+			inheritSections |= database_t::ALLOCMASK_PAIR;
+		}
+
+		// index
+		if (!store.maxPair) {
+			// no data to index
+			store.pairIndexSize = 0;
+		} else {
+			if (this->opt_pairIndexSize) {
+				// user specified
+				store.pairIndexSize = ctx.nextPrime(this->opt_pairIndexSize);
+			} else if (inheritSections & database_t::ALLOCMASK_PAIRINDEX) {
+				// inherited. pass-though
+				store.pairIndexSize = db.pairIndexSize;
+			} else if (!readOnlyMode) {
+				// auto-resize
+				store.pairIndexSize = ctx.nextPrime(store.maxPair * this->opt_ratio);
+			} else if (db.pairIndexSize) {
+				// non-empty. pass-though
+				store.pairIndexSize = db.pairIndexSize;
+			} else {
+				// empty. create minimal sized section
+				store.pairIndexSize = 1;
+			}
+
+			if (store.pairIndexSize != db.pairIndexSize) {
+				// source section is missing or unusable
+				rebuildSections |= database_t::ALLOCMASK_PAIRINDEX;
+				inheritSections &= ~rebuildSections;
+			} else if (this->copyOnWrite) {
+				// inherit when section fits and copy-on-write
+				inheritSections |= database_t::ALLOCMASK_PAIRINDEX;
+			}
+		}
+
+		/*
 		 * member
 		 */
 
@@ -550,8 +624,8 @@ struct dbtool_t : callable_t {
 		inheritSections &= ~rebuildSections;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
-			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
-			        ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxMember, store.memberIndexSize);
+			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxHint=%u hintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
+				ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize);
 
 		// output data must be large enough to fit input data
 		if (store.maxSignature < db.numSignature)
@@ -560,6 +634,8 @@ struct dbtool_t : callable_t {
 			ctx.fatal("--maxswap=%u needs to be at least %u\n", store.maxSwap, db.numSwap);
 		if (store.maxHint < db.numHint)
 			ctx.fatal("--maxhint=%u needs to be at least %u\n", store.maxHint, db.numHint);
+		if (store.maxPair < db.numPair)
+			ctx.fatal("--maxpair=%u needs to be at least %u\n", store.maxPair, db.numPair);
 		if (store.maxMember < db.numMember)
 			ctx.fatal("--maxmember=%u needs to be at least %u\n", store.maxMember, db.numMember);
 	}
@@ -846,6 +922,64 @@ struct dbtool_t : callable_t {
 				assert(store.allocFlags & database_t::ALLOCMASK_IMPRINTINDEX);
 				store.imprintIndexSize = db.imprintIndexSize;
 				::memcpy(store.imprintIndex, db.imprintIndex, store.imprintIndexSize * sizeof(*store.imprintIndex));
+			}
+		}
+
+		/*
+		 * sid/tid pairs
+		 */
+
+		if (!store.maxPair) {
+			// set signatures to null but keep index intact for (empty) lookups
+			store.pairs = NULL;
+		} else {
+			if (inheritSections & database_t::ALLOCMASK_PAIR) {
+				// inherited. pass-though
+				assert(!(store.allocFlags & database_t::ALLOCMASK_PAIR));
+				store.pairs   = db.pairs;
+				store.numPair = db.numPair;
+			} else if (!db.numPair) {
+				// input empty
+				assert(store.allocFlags & database_t::ALLOCMASK_PAIR);
+				store.numPair = 1;
+			} else if (store.maxPair <= db.numPair && copyOnWrite) {
+				// small enough to use copy-on-write
+				assert(!(store.allocFlags & database_t::ALLOCMASK_PAIR));
+				store.pairs   = db.pairs;
+				store.numPair = db.numPair;
+			} else if (!(rebuildSections & database_t::ALLOCMASK_PAIR)) {
+				fprintf(stderr, "[%s] Copying pair section\n", ctx.timeAsString());
+
+				assert(store.maxPair >= db.numPair);
+				assert(store.allocFlags & database_t::ALLOCMASK_PAIR);
+				store.numPair = db.numPair;
+				::memcpy(store.pairs, db.pairs, store.numPair * sizeof(*store.pairs));
+			}
+
+			if (inheritSections & database_t::ALLOCMASK_PAIRINDEX) {
+				// inherited. pass-though
+				assert(!(store.allocFlags & database_t::ALLOCMASK_PAIRINDEX));
+				store.pairIndexSize = db.pairIndexSize;
+				store.pairIndex     = db.pairIndex;
+			} else if (rebuildSections & database_t::ALLOCMASK_PAIRINDEX) {
+				// post-processing
+				assert(store.allocFlags & database_t::ALLOCMASK_PAIRINDEX);
+			} else if (!db.pairIndexSize) {
+				// was missing
+				assert(store.allocFlags & database_t::ALLOCMASK_PAIRINDEX);
+				::memset(store.pairIndex, 0, store.pairIndexSize * sizeof(*store.pairIndex));
+			} else if (copyOnWrite) {
+				// copy-on-write
+				assert(store.pairIndexSize == db.pairIndexSize);
+				assert(!(store.allocFlags & database_t::ALLOCMASK_PAIRINDEX));
+				store.pairIndex     = db.pairIndex;
+				store.pairIndexSize = db.pairIndexSize;
+			} else {
+				// copy
+				assert(store.pairIndexSize == db.pairIndexSize);
+				assert(store.allocFlags & database_t::ALLOCMASK_PAIRINDEX);
+				store.pairIndexSize = db.pairIndexSize;
+				::memcpy(store.pairIndex, db.pairIndex, store.pairIndexSize * sizeof(*store.pairIndex));
 			}
 		}
 

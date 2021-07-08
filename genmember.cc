@@ -1879,6 +1879,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
+		fprintf(stderr, "\t   --maxpair=<number>              Maximum number of sid/tid pairs [default=%u]\n", app.opt_maxPair);
 		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
@@ -1886,7 +1887,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>,]<high>            Sid range upper bound  [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
-		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --pairindexsize=<number>        Size of sid/tid pair index [default=%u]\n", app.opt_pairIndexSize);
 		fprintf(stderr, "\t   --task=sge                      Get task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
@@ -1927,6 +1928,7 @@ int main(int argc, char *argv[]) {
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
+			LO_MAXPAIR,
 			LO_MEMBERINDEXSIZE,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
@@ -1938,7 +1940,7 @@ int main(int argc, char *argv[]) {
 			LO_RATIO,
 			LO_SAVEINDEX,
 			LO_SID,
-			LO_SIGNATUREINDEXSIZE,
+			LO_PAIRINDEXSIZE,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
@@ -1963,6 +1965,7 @@ int main(int argc, char *argv[]) {
 			{"load",               1, 0, LO_LOAD},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxmember",          1, 0, LO_MAXMEMBER},
+			{"maxpair",            1, 0, LO_MAXPAIR},
 			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
@@ -1975,7 +1978,7 @@ int main(int argc, char *argv[]) {
 			{"ratio",              1, 0, LO_RATIO},
 			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"sid",                1, 0, LO_SID},
-			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
+			{"pairindexsize",      1, 0, LO_PAIRINDEXSIZE},
 			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
@@ -2040,6 +2043,9 @@ int main(int argc, char *argv[]) {
 		case LO_MAXMEMBER:
 			app.opt_maxMember = ctx.dToMax(::strtod(optarg, NULL));
 			break;
+		case LO_MAXPAIR:
+			app.opt_maxPair = ctx.dToMax(::strtod(optarg, NULL));
+			break;
 		case LO_MEMBERINDEXSIZE:
 			app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
@@ -2089,8 +2095,8 @@ int main(int argc, char *argv[]) {
 
 			break;
 		}
-		case LO_SIGNATUREINDEXSIZE:
-			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+		case LO_PAIRINDEXSIZE:
+			app.opt_pairIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
 		case LO_TASK:
 			if (::strcmp(optarg, "sge") == 0) {
@@ -2309,8 +2315,8 @@ int main(int argc, char *argv[]) {
 
 	database_t store(ctx);
 
-	// will be using `lookupSignature()`, `lookupImprintAssociative()` and `lookupMember()`
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
+	// will be using `lookupSignature()`, `lookupImprintAssociative()`, `lookupPair()` and `lookupMember()`
+	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_PAIR | database_t::ALLOCMASK_PAIRINDEX | database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
 	// signature indices are used read-only, remove from inherit if sections are empty
 	if (!db.signatureIndexSize)
 		app.inheritSections &= ~database_t::ALLOCMASK_SIGNATUREINDEX;

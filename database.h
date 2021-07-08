@@ -101,6 +101,7 @@ struct fileHeader_t {
 	uint32_t magic_sizeofSwap;
 	uint32_t magic_sizeofHint;
 	uint32_t magic_sizeofImprint;
+	uint32_t magic_sizeofPair;
 	uint32_t magic_sizeofMember;
 	uint32_t magic_sizeofPatternFirst;
 	uint32_t magic_sizeofPatternSecond;
@@ -121,6 +122,8 @@ struct fileHeader_t {
 	uint32_t hintIndexSize;
 	uint32_t numImprint;
 	uint32_t imprintIndexSize;
+	uint32_t numPair;
+	uint32_t pairIndexSize;
 	uint32_t numMember;
 	uint32_t memberIndexSize;
 	uint32_t numPatternFirst;
@@ -146,6 +149,8 @@ struct fileHeader_t {
 	uint64_t offHintIndex;
 	uint64_t offImprints;
 	uint64_t offImprintIndex;
+	uint64_t offpairs;
+	uint64_t offPairIndex;
 	uint64_t offMember;
 	uint64_t offMemberIndex;
 	uint64_t offPatternFirst;
@@ -181,6 +186,8 @@ struct database_t {
 		ALLOCFLAG_HINTINDEX,
 		ALLOCFLAG_IMPRINT,
 		ALLOCFLAG_IMPRINTINDEX,
+		ALLOCFLAG_PAIR,
+		ALLOCFLAG_PAIRINDEX,
 		ALLOCFLAG_MEMBER,
 		ALLOCFLAG_MEMBERINDEX,
 
@@ -194,6 +201,8 @@ struct database_t {
 		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
+		ALLOCMASK_PAIR               = 1 << ALLOCFLAG_PAIR,
+		ALLOCMASK_PAIRINDEX          = 1 << ALLOCFLAG_PAIRINDEX,
 		ALLOCMASK_MEMBER             = 1 << ALLOCFLAG_MEMBER,
 		ALLOCMASK_MEMBERINDEX        = 1 << ALLOCFLAG_MEMBERINDEX,
 		// @formatter:on
@@ -245,6 +254,12 @@ struct database_t {
 	imprint_t          *imprints;                   // imprint collection
 	uint32_t           imprintIndexSize;            // index size (must be prime)
 	uint32_t           *imprintIndex;               // index
+	// pair store
+	uint32_t           numPair;                     // number of sid/tid pairs
+	uint32_t           maxPair;                     // maximum size of collection
+	pair_t             *pairs;                      // sid/tid pair collection
+	uint32_t           pairIndexSize;               // index size (must be prime)
+	uint32_t           *pairIndex;                  // index
 	// member store
 	uint32_t           numMember;                   // number of members
 	uint32_t           maxMember;                   // maximum size of collection
@@ -308,6 +323,13 @@ struct database_t {
 		imprintIndexSize = 0;
 		imprintIndex     = NULL;
 
+		// sid/tid store
+		numPair = 0;
+		maxPair         = 0;
+		pairs         = NULL;
+		pairIndexSize = 0;
+		pairIndex     = NULL;
+
 		// member store
 		numMember       = 0;
 		maxMember       = 0;
@@ -355,6 +377,10 @@ struct database_t {
 			ctx.myFree("database_t::imprints", imprints);
 		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
 			ctx.myFree("database_t::imprintIndex", imprintIndex);
+		if (allocFlags & ALLOCMASK_PAIR)
+			ctx.myFree("database_t::pairs", pairs);
+		if (allocFlags & ALLOCMASK_PAIRINDEX)
+			ctx.myFree("database_t::pairIndex", pairIndex);
 		if (allocFlags & ALLOCMASK_MEMBER)
 			ctx.myFree("database_t::members", members);
 		if (allocFlags & ALLOCMASK_MEMBERINDEX)
@@ -554,6 +580,26 @@ struct database_t {
 			}
 		}
 
+		// sid/tid store
+		if (inheritSections & (ALLOCMASK_PAIR | ALLOCMASK_PAIRINDEX)) {
+			if (pFrom->numPair == 0)
+				ctx.fatal("\n{\"error\":\"Missing sid/tid section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+					  __FUNCTION__, __FILE__, __LINE__, pName);
+
+			if (inheritSections & ALLOCMASK_PAIR) {
+				assert(!(allocFlags & ALLOCMASK_PAIR));
+				this->maxPair = pFrom->maxPair;
+				this->numPair = pFrom->numPair;
+				this->pairs   = pFrom->pairs;
+			}
+
+			if (inheritSections & ALLOCMASK_PAIRINDEX) {
+				assert(!(allocFlags & ALLOCMASK_PAIRINDEX));
+				this->pairIndexSize = pFrom->pairIndexSize;
+				this->pairIndex     = pFrom->pairIndex;
+			}
+		}
+
 		// member store
 		if (inheritSections & (ALLOCMASK_MEMBER | ALLOCMASK_MEMBERINDEX)) {
 			if (pFrom->numMember == 0)
@@ -621,6 +667,12 @@ struct database_t {
 			memUsage += maxImprint * sizeof(*imprints); // increase with 5%
 		if (imprintIndexSize && !(excludeSections & ALLOCMASK_IMPRINTINDEX))
 			memUsage += imprintIndexSize * sizeof(*imprintIndex);
+
+		// sid/tid store
+		if (maxPair && !(excludeSections & ALLOCMASK_PAIR))
+			memUsage += maxPair * sizeof(*pairs); // increase with 5%
+		if (pairIndexSize && !(excludeSections & ALLOCMASK_PAIRINDEX))
+			memUsage += pairIndexSize * sizeof(*pairIndex);
 
 		// member store
 		if (maxMember && !(excludeSections & ALLOCMASK_MEMBER))
@@ -708,6 +760,20 @@ struct database_t {
 			assert(ctx.isPrime(imprintIndexSize));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINTINDEX;
+		}
+
+		// sid/tid store
+		if (maxPair && !(excludeSections & ALLOCMASK_PAIR)) {
+			// increase with 5%
+			maxPair = maxPair;
+			numPair = 1; // do not start at 1
+			pairs = (pair_t *) ctx.myAlloc("database_t::pairs", maxPair, sizeof(*pairs));
+			allocFlags |= ALLOCMASK_PAIR;
+		}
+		if (pairIndexSize && !(excludeSections & ALLOCMASK_PAIRINDEX)) {
+			assert(ctx.isPrime(pairIndexSize));
+			pairIndex = (uint32_t *) ctx.myAlloc("database_t::pairIndex", pairIndexSize, sizeof(*pairIndex));
+			allocFlags |= ALLOCMASK_PAIRINDEX;
 		}
 
 		// member store
@@ -811,6 +877,8 @@ struct database_t {
 			ctx.fatal("\n{\"error\":\"db magic_sizeofHint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofHint, (unsigned) sizeof(hint_t));
 		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t) && fileHeader.numImprint > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofImprint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofImprint, (unsigned) sizeof(imprint_t));
+		if (fileHeader.magic_sizeofPair != sizeof(pair_t) && fileHeader.numPair > 0)
+			ctx.fatal("\n{\"error\":\"db magic_sizeofPair\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofPair, (unsigned) sizeof(pair_t));
 		if (fileHeader.magic_sizeofMember != sizeof(member_t) && fileHeader.numMember > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofMember\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofMember, (unsigned) sizeof(member_t));
 
@@ -844,7 +912,7 @@ struct database_t {
 		swapIndex     = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
 
 		// hint
-		maxHint       = numHint       = fileHeader.numHint;
+		maxHint       = numHint = fileHeader.numHint;
 		hints         = (hint_t *) (rawDatabase + fileHeader.offHints);
 		hintIndexSize = fileHeader.hintIndexSize;
 		hintIndex     = (uint32_t *) (rawDatabase + fileHeader.offHintIndex);
@@ -856,6 +924,12 @@ struct database_t {
 		imprints         = (imprint_t *) (rawDatabase + fileHeader.offImprints);
 		imprintIndexSize = fileHeader.imprintIndexSize;
 		imprintIndex     = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
+
+		// sid/tid
+		maxPair         = numPair = fileHeader.numPair;
+		pairs         = (pair_t *) (rawDatabase + fileHeader.offpairs);
+		pairIndexSize = fileHeader.pairIndexSize;
+		pairIndex     = (uint32_t *) (rawDatabase + fileHeader.offPairIndex);
 
 		// members
 		maxMember       = numMember = fileHeader.numMember;
@@ -913,6 +987,8 @@ struct database_t {
 		ctx.progressHi += align32(sizeof(*this->hintIndex) * this->hintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->imprints) * this->numImprint);
 		ctx.progressHi += align32(sizeof(*this->imprintIndex) * this->imprintIndexSize);
+		ctx.progressHi += align32(sizeof(*this->pairs) * this->numPair);
+		ctx.progressHi += align32(sizeof(*this->pairIndex) * this->pairIndexSize);
 		ctx.progressHi += align32(sizeof(*this->members) * this->numMember);
 		ctx.progressHi += align32(sizeof(*this->memberIndex) * this->memberIndexSize);
 		ctx.progress   = 0;
@@ -1061,6 +1137,27 @@ struct database_t {
 		}
 
 		/*
+		 * write sid/tid pairs
+		 */
+		if (this->numPair) {
+			// first entry must be zero
+			pair_t zero;
+			::memset(&zero, 0, sizeof(zero));
+			assert(::memcmp(this->pairs, &zero, sizeof(zero)) == 0);
+
+			// collection
+			fileHeader.numPair  = this->numPair;
+			fileHeader.offpairs = flen;
+			flen += writeData(outf, this->pairs, align32(sizeof(*this->pairs) * this->numPair), fileName);
+			if (this->pairIndexSize) {
+				// Index
+				fileHeader.pairIndexSize = this->pairIndexSize;
+				fileHeader.offPairIndex  = flen;
+				flen += writeData(outf, this->pairIndex, align32(sizeof(*this->pairIndex) * this->pairIndexSize), fileName);
+			}
+		}
+
+		/*
 		 * write members
 		 */
 		if (this->numMember) {
@@ -1094,8 +1191,9 @@ struct database_t {
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
 		fileHeader.magic_sizeofSwap      = sizeof(swap_t);
 		fileHeader.magic_sizeofHint      = sizeof(hint_t);
-		fileHeader.magic_sizeofImprint   = sizeof(imprint_t);
-		fileHeader.magic_sizeofMember    = sizeof(member_t);
+		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
+		fileHeader.magic_sizeofPair    = sizeof(pair_t);
+		fileHeader.magic_sizeofMember  = sizeof(member_t);
 		fileHeader.offEnd                = flen;
 
 		// rewrite header
@@ -1921,6 +2019,74 @@ struct database_t {
 	}
 
 	/*
+	 * Sid/Tid pair store
+	 */
+
+	/**
+	 * @date 2021-07-08 21:35:58
+	 *
+	 * Perform sid/tid lookup
+	 *
+	 * Lookup key in index using a hash array with overflow.
+	 * Returns the offset within the index.
+	 * If contents of index is 0, then not found, otherwise it the index where to find the sid/tid pair.
+	 *
+	 * @param sidmid {uint32_t} - key value
+	 * @param tid {uint32_t} - key value
+	 * @return {number} offset into index
+	 */
+	inline unsigned lookupPair(uint32_t sidmid, uint32_t tid) {
+		ctx.cntHash++;
+
+		// calculate starting position
+		unsigned crc32 = 0;
+
+		crc32 = __builtin_ia32_crc32si(crc32, sidmid);
+		crc32 = __builtin_ia32_crc32si(crc32, tid);
+
+		unsigned ix   = crc32 % pairIndexSize;
+		unsigned bump = ix;
+		if (bump == 0)
+			bump = pairIndexSize - 1; // may never be zero
+		if (bump > 2147000041)
+			bump = 2147000041; // may never exceed last 32bit prime
+
+		for (;;) {
+			ctx.cntCompare++;
+			if (this->pairIndex[ix] == 0)
+				return ix; // "not-found"
+
+			if (this->pairs[this->pairIndex[ix]].equals(sidmid, tid))
+				return ix; // "found"
+
+			// overflow, jump to next entry
+			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
+			ix += bump;
+			if (ix >= pairIndexSize)
+				ix -= pairIndexSize;
+		}
+	}
+
+	/**
+ 	 * Add a new sid/tid pair to the dataset
+ 	 *
+	 * @param sid {uint32_t} - key value
+	 * @param tid {uint32_t} - key value
+	 * @return {number} pairId
+	 */
+	inline unsigned addPair(uint32_t sid, uint32_t tid) {
+		unsigned pairId = this->numPair++;
+
+		if (this->numPair > this->maxPair)
+			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxPair\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxPair);
+
+		this->pairs[pairId].sidmid = sid;
+		this->pairs[pairId].tid    = tid;
+
+		return pairId;
+	}
+
+	/*
 	 * Member store
 	 */
 
@@ -2010,6 +2176,8 @@ struct database_t {
 			numProgress += this->numHint;
 		if (sections & ALLOCMASK_IMPRINTINDEX)
 			numProgress += this->numImprint;
+		if (sections & ALLOCMASK_PAIRINDEX)
+			numProgress += this->numPair;
 		if (sections & ALLOCMASK_MEMBERINDEX)
 			numProgress += this->numMember;
 		ctx.setupSpeed(numProgress);
@@ -2182,6 +2350,48 @@ struct database_t {
 		}
 
 		/*
+		 * Sid/Tid pairs
+		 */
+
+		if (sections & ALLOCMASK_PAIRINDEX) {
+			// clear
+			::memset(this->pairIndex, 0, this->pairIndexSize * sizeof(*this->pairIndex));
+
+			// rebuild
+			for (unsigned iPair = 1; iPair < this->numPair; iPair++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+							ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+							(double) ctx.cntCompare / ctx.cntHash);
+					}
+
+					ctx.tick = 0;
+				}
+
+				const pair_t *pPair = this->pairs + iPair;
+
+				unsigned ix = this->lookupPair(pPair->sidmid, pPair->tid);
+				assert(this->pairIndex[ix] == 0);
+				this->pairIndex[ix] = iPair;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
 		 * Members
 		 */
 
@@ -2291,6 +2501,18 @@ struct database_t {
 			if (sections)
 				::strcat(pBuffer, "|");
 		}
+		if (sections & ALLOCMASK_PAIR) {
+			::strcat(pBuffer, "pair");
+			sections &= ~ALLOCMASK_PAIR;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
+		if (sections & ALLOCMASK_PAIRINDEX) {
+			::strcat(pBuffer, "pairIndex");
+			sections &= ~ALLOCMASK_PAIRINDEX;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
 		if (sections & ALLOCMASK_MEMBER) {
 			::strcat(pBuffer, "member");
 			sections &= ~ALLOCMASK_MEMBER;
@@ -2325,6 +2547,8 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));
+		json_object_set_new_nocheck(jResult, "numPair", json_integer(this->numPair));
+		json_object_set_new_nocheck(jResult, "pairIndexSize", json_integer(this->pairIndexSize));
 		json_object_set_new_nocheck(jResult, "numMember", json_integer(this->numMember));
 		json_object_set_new_nocheck(jResult, "memberIndexSize", json_integer(this->memberIndexSize));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader.offEnd));

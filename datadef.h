@@ -304,6 +304,30 @@ struct imprint_t {
 };
 
 /*
+ * @date 2021-07-08 21:13:03
+ *
+ * sid/tid or mid/tid pair for `member_t` heads and tails.
+ */
+struct pair_t {
+
+	uint32_t sidmid;
+	uint32_t tid;
+
+	/**
+	 * @date 2021-07-08 21:17:14
+	 *
+	 * Compare two records and determine if both are same
+	 *
+	 * @param {pair_t} rhs - right hand side of comparison
+	 * @return {boolean} `true` if same, `false` if different
+	 */
+	inline bool equals(uint32_t sidmid, uint32_t tid) const {
+		return this->sidmid == sidmid && this->tid == tid;
+	}
+
+};
+
+/*
  * @date 2020-03-29 22:07:22
  *
  * Members of signature groups.
@@ -339,23 +363,14 @@ struct member_t {
 	/// @var {number} Transform relative to signature
 	uint32_t tid;
 
-	/// @var {number} member id of `Q` component
-	uint32_t Qsid;
+	/// @var {number} member id of `Q` component and transform
+	uint32_t Qmt;
 
-	/// @var {number} `Q` component transform
-	uint32_t Qtid;
+	/// @var {number} member id of `T` component and transform
+	uint32_t Tmt;
 
-	/// @var {number} member id of `T` component
-	uint32_t Tsid;
-
-	/// @var {number} `Q` component transform
-	uint32_t Ttid;
-
-	/// @var {number} member id of `F` component
-	uint32_t Fsid;
-
-	/// @var {number} `Q` component transform
-	uint32_t Ftid;
+	/// @var {number} member id of `F` component and transform
+	uint32_t Fmt;
 
 	/// @var {number} member id of next member in signature group
 	uint32_t nextMember;
