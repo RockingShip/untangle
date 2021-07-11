@@ -1,4 +1,4 @@
-//# pragma GCC optimize ("O0") // optimize on demand
+# pragma GCC optimize ("O3") // optimize on demand
 
 /*
  * @date 2020-03-30 17:20:21
@@ -483,7 +483,7 @@ struct genmemberContext_t : dbtool_t {
 					// new
 					pStore->pairIndex[ix] = pStore->addPair(Tmid, Ttid);
 				}
-				pMember->Qmt = pStore->pairIndex[ix];
+				pMember->Tmt = pStore->pairIndex[ix];
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
@@ -519,7 +519,7 @@ struct genmemberContext_t : dbtool_t {
 					// new
 					pStore->pairIndex[ix] = pStore->addPair(Fmid, Ftid);
 				}
-				pMember->Qmt = pStore->pairIndex[ix];
+				pMember->Fmt = pStore->pairIndex[ix];
 			}
 		}
 
@@ -922,6 +922,12 @@ struct genmemberContext_t : dbtool_t {
 		member_t tmpMember;
 		::memset(&tmpMember, 0, sizeof(tmpMember));
 
+		/*
+		 * @date 2021-07-12 21:25:02
+		 * `sid`/`tid` == `pNameR`
+		 *
+		 * However, in the member table, it is intended to be `sid`/`tid` == `pNameR`
+		 */
 		::strcpy(tmpMember.name, pNameR);
 		tmpMember.sid            = sid;
 		tmpMember.tid            = tid;
@@ -933,7 +939,7 @@ struct genmemberContext_t : dbtool_t {
 
 		bool found = findHeadTail(&tmpMember, treeR);
 		if (!found)
-			found = true; // for debugging
+			found = false; // for debugger breakpoint
 
 		/*
 		 * Verify if candidate member is acceptable
@@ -1665,32 +1671,35 @@ struct genmemberContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting members\n", ctx.timeAsString());
 
-		unsigned lastMember = pStore->numMember;
+		// clear pair section
+		pStore->numPair = 1;
+		::memset(pStore->pairIndex, 0, pStore->pairIndexSize * sizeof(*pStore->pairIndex));
 
-		// clear member index and linked-list
+		// clear member index and linked-list, mark signatures unsafe
 		::memset(pStore->memberIndex, 0, pStore->memberIndexSize * sizeof(*pStore->memberIndex));
-		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++)
+		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++) {
 			pStore->signatures[iSid].firstMember = 0;
-		pStore->numMember                            = 1;
+			pStore->signatures[iSid].flags &= ~signature_t::SIGMASK_SAFE;
+		}
 		skipDuplicate = skipSize = skipUnsafe = 0;
 
 		// sort entries (skipping first)
-		assert(lastMember >= 1);
-		qsort_r(pStore->members + 1, lastMember - 1, sizeof(*pStore->members), comparMember, this);
+		assert(pStore->numMember >= 1);
+		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
+
+		// lower lastMember, skipping all the deleted
+		while (pStore->numMember > 1 && pStore->members[pStore->numMember - 1].sid == 0)
+			--pStore->numMember;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
 
 		// reload everything
-		ctx.setupSpeed(lastMember);
+		ctx.setupSpeed(pStore->numMember);
 		ctx.tick = 0;
 
-		// mark signatures unsafe
-		for (unsigned iSid = 0; iSid < pStore->numSignature; iSid++)
-			pStore->signatures[iSid].flags &= ~signature_t::SIGMASK_SAFE;
-
 		ctx.progress++; // skip reserved
-		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
+		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -1714,70 +1723,75 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			member_t *pMember = pStore->members + iMid;
-			if (pMember->sid) {
-				signature_t *pSignature = pStore->signatures + pMember->sid;
+			signature_t *pSignature = pStore->signatures + pMember->sid;
 
-				// calculate head/tail
-				tree.loadStringFast(pMember->name);
-				bool isSafe = findHeadTail(pMember, tree);
+			assert(pMember->sid);
 
-				// safe member must remain safe
-				if (pMember->flags & member_t::MEMMASK_SAFE)
-					assert(isSafe);
+			// calculate head/tail
+			tree.loadStringFast(pMember->name);
+			bool isSafe = findHeadTail(pMember, tree);
 
-				/*
-				 * member should be unsafe
-				 *
-				 * @date 2021-06-23 09:46:35
-				 *
-				 * assert will fail when reading members from a list that is not properly ordered.
-				 * and the list contains primes that are longer than the signatures.
-				 * this will signatures to reject seeing primes as safe on the first pass.
-				 * For the moment this is experimental code, so issue a warning instead of aborting a lengthy run
-				 * (input list was ordered by sid instead of mid)
-				 */
-				if (pSignature->firstMember == 0) {
-					if (pMember->flags & member_t::MEMMASK_SAFE) {
-						// first member safe, then signature safe
-						pSignature->flags |= signature_t::SIGMASK_SAFE;
-					} else {
-						// first member unsafe, then signature unsafe
-					}
-				} else if ((pMember->flags & member_t::MEMMASK_SAFE) && (pSignature->flags & signature_t::SIGMASK_SAFE)) {
-					// adding safe members to safe signature
-				} else if (!(pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
-					// adding unsafe members to unsafe signature
-				} else if ((pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
-					// adding safe members to unsafe signature
-					fprintf(stderr,"\r\e[K[%s] WARNING: Adding safe member %u:%s to unsafe signature %u:%s\n", ctx.timeAsString(), iMid, pMember->name, pMember->sid, pSignature->name);
+			// safe member must remain safe
+			if (pMember->flags & member_t::MEMMASK_SAFE)
+				assert(isSafe);
+
+			/*
+			 * member should be unsafe
+			 *
+			 * @date 2021-06-23 09:46:35
+			 *
+			 * assert will fail when reading members from a list that is not properly ordered.
+			 * and the list contains primes that are longer than the signatures.
+			 * this will signatures to reject seeing primes as safe on the first pass.
+			 * For the moment this is experimental code, so issue a warning instead of aborting a lengthy run
+			 * (input list was ordered by sid instead of mid)
+			 */
+			if (pSignature->firstMember == 0) {
+				if (pMember->flags & member_t::MEMMASK_SAFE) {
+					// first member safe, then signature safe
 					pSignature->flags |= signature_t::SIGMASK_SAFE;
 				} else {
-					/*
-					 * Reject adding unsafe member to safe group
-					 */
-					skipUnsafe++;
-					ctx.progress++;
-					continue;
+					// first member unsafe, then signature unsafe
 				}
-
-				// add to index
-				unsigned ix = pStore->lookupMember(pMember->name);
-				assert(pStore->memberIndex[ix] == 0);
-				pStore->memberIndex[ix] = pStore->numMember;
-
-				// add to group
-				pMember->nextMember     = pSignature->firstMember;
-				pSignature->firstMember = pStore->numMember;
-
-				// copy
-				pStore->members[pStore->numMember++] = *pMember;
+			} else if ((pMember->flags & member_t::MEMMASK_SAFE) && (pSignature->flags & signature_t::SIGMASK_SAFE)) {
+				// adding safe members to safe signature
+			} else if (!(pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
+				// adding unsafe members to unsafe signature
+			} else if ((pMember->flags & member_t::MEMMASK_SAFE) && !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
+				// adding safe members to unsafe signature
+				fprintf(stderr,"\r\e[K[%s] WARNING: Adding safe member %u:%s to unsafe signature %u:%s\n", ctx.timeAsString(), iMid, pMember->name, pMember->sid, pSignature->name);
+				pSignature->flags |= signature_t::SIGMASK_SAFE;
+			} else {
+				/*
+				 * Reject adding unsafe member to safe group
+				 */
+				skipUnsafe++;
+				ctx.progress++;
+				continue;
 			}
+
+			// add to index
+			unsigned ix = pStore->lookupMember(pMember->name);
+			assert(pStore->memberIndex[ix] == 0);
+			pStore->memberIndex[ix] = iMid;
 
 			ctx.progress++;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
+
+		/*
+		 * String all the members to signatures, best one is first in list
+		 */
+		for (unsigned iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
+			member_t *pMember = pStore->members + iMid;
+			signature_t *pSignature = pStore->signatures + pMember->sid;
+
+			// add to group
+			pMember->nextMember     = pSignature->firstMember;
+			pSignature->firstMember = iMid;
+		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Indexed members. numMember=%u skipUnsafe=%u\n",
@@ -1787,7 +1801,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Flag component members
 		 */
 
-		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
+		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			pMember->flags &= ~member_t::MEMMASK_COMP;
@@ -1829,8 +1843,8 @@ struct genmemberContext_t : dbtool_t {
 		 * Done
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
-				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe);
+			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u,\"numPair\":%u}\n",
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe, pStore->numPair);
 
 	}
 
@@ -2590,6 +2604,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
+			store.memberIndexSize    = 0;
+			store.pairIndexSize      = 0;
 		}
 
 		// unexpected termination should unlink the outputs

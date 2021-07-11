@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O3") // optimize on demand
 
 /*
  * @date 2020-03-14 11:09:15
@@ -1530,6 +1530,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
+			store.memberIndexSize    = 0;
+			store.pairIndexSize      = 0;
 		} else if (app.opt_sort) {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {

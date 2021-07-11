@@ -268,6 +268,7 @@ struct bevalContext_t {
 	 */
 	int main(baseTree_t *pTree) {
 		/*
+		 * Record footprints for each node to maintain the results to compare trees
 		 * Each bit is an independent test.
 		 * For ease of calculation, number of tests = number of words per key/node
 		 */
@@ -353,7 +354,7 @@ struct bevalContext_t {
 		bool     differ = false;
 
 		for (unsigned iRoot = pTree->ostart; iRoot < pTree->estart; iRoot++) {
-			std::string pattern;
+			std::string name;
 			std::string transform;
 
 			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
@@ -388,11 +389,11 @@ struct bevalContext_t {
 
 			// display expression
 			if (opt_normalise) {
-				pattern = pTree->saveString(pTree->roots[iRoot], &transform);
-				printf(": %s/%s", pattern.c_str(), transform.c_str());
+				name = pTree->saveString(pTree->roots[iRoot], &transform);
+				printf(": %s/%s", name.c_str(), transform.c_str());
 			} else {
-				pattern = pTree->saveString(pTree->roots[iRoot]);
-				printf(": %s", pattern.c_str());
+				name = pTree->saveString(pTree->roots[iRoot]);
+				printf(": %s", name.c_str());
 			}
 
 			printf("\n");
