@@ -118,10 +118,6 @@ struct genhintContext_t : dbtool_t {
 
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 
 	/// @var {unsigned} - active index for `hints[]`
 	unsigned activeHintIndex;
@@ -147,8 +143,6 @@ struct genhintContext_t : dbtool_t {
 		opt_text           = 0;
 
 		pStore   = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
 
 		activeHintIndex = 0;
 		skipDuplicate   = 0;
@@ -208,7 +202,7 @@ struct genhintContext_t : dbtool_t {
 
 			// add imprint
 			tree.loadStringFast(pName);
-			tempdb.addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, 1 /* dummy sid */);
+			tempdb.addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, 1 /* dummy sid */);
 
 			// output count
 			hint.numStored[pInterleave - metricsInterleave] = tempdb.numImprint - 1;
@@ -971,7 +965,7 @@ int main(int argc, char *argv[]) {
 	// test for readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
-	db.open(app.arg_inputDatabase, !app.readOnlyMode);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1025,10 +1019,6 @@ int main(int argc, char *argv[]) {
 	 * Finalise allocations and create database
 	 */
 
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
 		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
@@ -1052,10 +1042,6 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	// initialize evaluator early using input database
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Inherit/copy sections

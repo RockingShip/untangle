@@ -8,6 +8,9 @@
  * If an argument is numeric (decimal, hexadecimal or octal) it will show the database entry indexed by that id.
  * Otherwise it will perform a display-name lookup.
  * If requested it can also perform an associative lookup on its footprint.
+ *
+ * @date 2021-07-15 21:28:14
+ *   With the new database copy-on-write evaluator section, `---imprint` can now be the default
  */
 
 /*
@@ -63,19 +66,13 @@ struct slookupContext_t {
 
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for referse transforms
-	footprint_t *pEvalRev;
 
 	slookupContext_t(context_t &ctx) : ctx(ctx) {
 		opt_database = "untangle.db";
-		opt_imprint  = 0;
+		opt_imprint  = 1; // @date 2021-07-15 23:45:06, now the default. keep old code for posterity.
 		opt_member   = 0;
 		opt_swap     = 0;
 		pStore       = NULL;
-		pEvalFwd     = NULL;
-		pEvalRev     = NULL;
 	}
 
 	/**
@@ -123,11 +120,11 @@ struct slookupContext_t {
 				if (tree.root & IBIT) {
 					// inverted root
 					tree.root ^= IBIT;
-					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
 					sid ^= IBIT;
 				} else {
 					// non-inverted root
-					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid);
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
 				}
 
 			} else {
@@ -504,7 +501,7 @@ int main(int argc, char *argv[]) {
 	// Open database
 	database_t db(ctx);
 
-	db.open(app.opt_database, 0);
+	db.open(app.opt_database);
 
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
@@ -515,6 +512,8 @@ int main(int argc, char *argv[]) {
 
 	if (db.numTransform == 0)
 		ctx.fatal("Missing transform section: %s\n", app.opt_database);
+	if (db.numEvaluator == 0)
+		ctx.fatal("Missing evaluator section: %s\n", app.opt_database);
 	if (db.numSignature == 0)
 		ctx.fatal("Missing signature section: %s\n", app.opt_database);
 	if (db.signatureIndexSize == 0)
@@ -530,19 +529,6 @@ int main(int argc, char *argv[]) {
 	if (ctx.opt_verbose >= app.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %.3fG memory\n", app.timeAsString(), app.totalAllocated / 1e9);
 #endif
-
-	if (app.opt_imprint) {
-		// allocate evaluators
-		app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-		app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
-		// initialise evaluators
-		tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-		tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
-	} else {
-		// evaluators not present
-		app.pEvalFwd = app.pEvalRev = NULL;
-	}
 
 	/*
 	 * Call main for every argument

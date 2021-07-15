@@ -413,6 +413,11 @@ struct gentransformContext_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] Generated %u transforms\n", ctx.timeAsString(), pStore->numTransform);
+
+		/*
+		 * allocate evaluators, will be generated on save
+		 */
+		pStore->numEvaluator = tinyTree_t::TINYTREE_NEND * MAXTRANSFORM;
 	}
 
 };
@@ -628,6 +633,7 @@ int main(int argc, char *argv[]) {
 	// set section sizes to be created
 	store.maxTransform       = MAXTRANSFORM;
 	store.transformIndexSize = MAXTRANSFORMINDEX;
+	store.maxEvaluator       = tinyTree_t::TINYTREE_NEND * MAXTRANSFORM;
 
 	// create memory-based store
 	store.create(0);

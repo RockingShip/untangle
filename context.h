@@ -220,9 +220,26 @@ struct context_t {
 	const char *timeAsString(void) {
 		static char tstr[64];
 
-		time_t t = ::time(0);
-		struct tm *tm = ::localtime(&t);
-		::strftime(tstr, sizeof(tstr), "%F %T", tm);
+		if (false) {
+			// relative
+			static time_t t0;
+			if (!t0)
+				t0 = ::time(0);
+
+			time_t t = ::time(0) - t0;
+
+			unsigned s = t % 60;
+			t /= 60;
+			unsigned m = t % 60;
+			t /= 60;
+			sprintf(tstr, "%02d:%02u:%02u", (unsigned) t, m, s);
+
+		} else {
+			// absolute
+			time_t    t   = ::time(0);
+			struct tm *tm = ::localtime(&t);
+			::strftime(tstr, sizeof(tstr), "%F %T", tm);
+		}
 
 		return tstr;
 	}

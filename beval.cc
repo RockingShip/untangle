@@ -621,7 +621,7 @@ int main(int argc, char *argv[]) {
 		// Open database
 	database_t db(ctx);
 
-	db.open(app.opt_databaseName, 0);
+	db.open(app.opt_databaseName);
 
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)

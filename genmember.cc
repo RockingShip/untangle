@@ -256,10 +256,6 @@ struct genmemberContext_t : dbtool_t {
 	/// @var {number} generator lower bound
 	uint64_t   opt_windowLo;
 
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 	/// @var {uint16_t} - score of signature group members. NOTE: size+score may differ from signature
 	uint16_t    *pSafeScores;
 	/// @var {database_t} - Database store to place results
@@ -307,8 +303,6 @@ struct genmemberContext_t : dbtool_t {
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
-		pEvalFwd    = NULL;
-		pEvalRev    = NULL;
 		pSafeScores = NULL;
 		pStore      = NULL;
 
@@ -871,9 +865,9 @@ struct genmemberContext_t : dbtool_t {
 			 *          To get better results, re-run with next increment interleave.
 			 */
 			// add to imprints to index
-			sid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, markSid);
+			sid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, markSid);
 		} else {
-			pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
+			pStore->lookupImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
 		}
 
 		if (sid == 0)
@@ -1242,8 +1236,8 @@ struct genmemberContext_t : dbtool_t {
 
 				unsigned sid, tid;
 
-				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
-					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				if (!pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid))
+					pStore->addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, iSid);
 			}
 
 			// stats
@@ -1422,8 +1416,8 @@ struct genmemberContext_t : dbtool_t {
 
 				unsigned sid = 0, tid;
 
-				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
-					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				if (!pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid))
+					pStore->addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, iSid);
 			}
 
 			// stats
@@ -2323,7 +2317,7 @@ int main(int argc, char *argv[]) {
 	// test readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
-	db.open(app.arg_inputDatabase, !app.readOnlyMode);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -2386,8 +2380,6 @@ int main(int argc, char *argv[]) {
 	 */
 
 	// allocate evaluators
-	app.pEvalFwd    = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev    = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 	app.pSafeScores = (uint16_t *) ctx.myAlloc("genmemberContext_t::pMemberScores", store.maxSignature, sizeof(*app.pSafeScores));
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -2413,10 +2405,6 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	// initialize evaluator early using input database
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	for (unsigned iSid = 0; iSid < store.maxSignature; iSid++)
 		app.pSafeScores[iSid] = 0;

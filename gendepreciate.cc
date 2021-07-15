@@ -172,10 +172,6 @@ struct gendepreciateContext_t : dbtool_t {
 	/// @var {number} --text, textual output instead of binary database
 	unsigned   opt_text;
 
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
 
@@ -220,8 +216,6 @@ struct gendepreciateContext_t : dbtool_t {
 		opt_text           = 0;
 
 		pStore      = NULL;
-		pEvalFwd    = NULL;
-		pEvalRev    = NULL;
 
 		activeHintIndex  = 0;
 		freeMemberRoot   = 0;
@@ -1309,7 +1303,7 @@ int main(int argc, char *argv[]) {
 	// test readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
-	db.open(app.arg_inputDatabase, !app.readOnlyMode);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1342,7 +1336,7 @@ int main(int argc, char *argv[]) {
 
 	database_t store(ctx);
 
-	// will be using `lookupSignature()`, `lookupImprintAssociative()` and `lookupMember()`
+	// will be using `lookupSignature()` and `lookupMember()`
 	app.inheritSections &= ~(database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
 	// signature indices are used read-only, remove from inherit if sections are empty
 	if (!db.numSignature)
@@ -1364,6 +1358,8 @@ int main(int argc, char *argv[]) {
 
 	if (db.numTransform == 0)
 		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
+	if (db.numEvaluator == 0)
+		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
 	if (db.numSignature == 0)
 		ctx.fatal("Missing signature section: %s\n", app.arg_inputDatabase);
 	if (db.numMember == 0)
@@ -1375,10 +1371,6 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Finalise allocations and create database
 	 */
-
-	// allocate evaluators
-	app.pEvalFwd    = (footprint_t *) ctx.myAlloc("gendepreciateContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev    = (footprint_t *) ctx.myAlloc("gendepreciateContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
 
 	// allocate big arrays
 	app.pSafeSid      = (uint32_t *) ctx.myAlloc("gendepreciateContext_t::pSafeSid", store.maxSignature, sizeof(*app.pSafeSid));
@@ -1409,10 +1401,6 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	// initialize evaluator early using input database
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Inherit/copy sections

@@ -231,10 +231,6 @@ struct gensignatureContext_t : dbtool_t {
 	/// @var {number} generator lower bound
 	uint64_t   opt_windowLo;
 
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
 
@@ -269,8 +265,6 @@ struct gensignatureContext_t : dbtool_t {
 		opt_windowLo       = 0;
 
 		pStore        = NULL;
-		pEvalFwd      = NULL;
-		pEvalRev      = NULL;
 		skipDuplicate = 0;
 		truncated     = 0;
 		truncatedName[0] = 0;
@@ -402,10 +396,10 @@ struct gensignatureContext_t : dbtool_t {
 			 *          To get better results, re-run with next increment interleave.
 			 */
 			// add to imprints to index
-			sid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, markSid);
+			sid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, markSid);
 		} else {
 			unsigned tid = 0;
-			pStore->lookupImprintAssociative(&treeR, pEvalFwd, pEvalRev, &sid, &tid);
+			pStore->lookupImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
 		}
 
 		// add to datastore if not found
@@ -426,7 +420,7 @@ struct gensignatureContext_t : dbtool_t {
 
 				// add to imprints to index
 				if (!(ctx.flags & context_t::MAGICMASK_AINF)) {
-					unsigned newSid = pStore->addImprintAssociative(&treeR, pEvalFwd, pEvalRev, sid);
+					unsigned newSid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, sid);
 					assert(newSid == 0 || newSid == markSid);
 				}
 
@@ -638,18 +632,18 @@ struct gensignatureContext_t : dbtool_t {
 			 * Keep old code for historics
 			 */
 #if 1
-			unsigned ret = pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+			unsigned ret = pStore->addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, iSid);
 			assert(ret == 0);
 #else
 			unsigned sid, tid;
 
 			if (ctx.flags & context_t::MAGICMASK_AINF) {
 				// add-if-not-found, but actually it should not have been found
-				unsigned ret = pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				unsigned ret = pStore->addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, iSid);
 				assert(ret == 0);
 			} else {
-				if (!pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &sid, &tid))
-					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
+				if (!pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid))
+					pStore->addImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, iSid);
 			}
 #endif
 
@@ -1337,7 +1331,7 @@ int main(int argc, char *argv[]) {
 	// test readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
 
-	db.open(app.arg_inputDatabase, !app.readOnlyMode);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1392,10 +1386,6 @@ int main(int argc, char *argv[]) {
 	 * Finalise allocations and create database
 	 */
 
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("gensignatureContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
 		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
@@ -1419,10 +1409,6 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	// initialize evaluator early using input database
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Inherit/copy sections

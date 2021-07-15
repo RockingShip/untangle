@@ -79,7 +79,7 @@
 #include "tinytree.h"
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20210708
+#define FILE_MAGIC        0x20210715
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -114,6 +114,7 @@ struct fileHeader_t {
 	// section sizes
 	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
+	uint32_t numEvaluator;          // for both fwd/rev
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
 	uint32_t numSwap;
@@ -141,6 +142,8 @@ struct fileHeader_t {
 	uint64_t offRevTransformIds;
 	uint64_t offFwdTransformNameIndex;
 	uint64_t offRevTransformNameIndex;
+	uint64_t offFwdEvaluator;
+	uint64_t offRevEvaluator;
 	uint64_t offSignatures;
 	uint64_t offSignatureIndex;
 	uint64_t offSwaps;
@@ -178,6 +181,7 @@ struct database_t {
 	 */
 	enum {
 		ALLOCFLAG_TRANSFORM = 0,
+		ALLOCFLAG_EVALUATOR,
 		ALLOCFLAG_SIGNATURE,
 		ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCFLAG_SWAP,
@@ -193,6 +197,7 @@ struct database_t {
 
 		// @formatter:off
 		ALLOCMASK_TRANSFORM          = 1 << ALLOCFLAG_TRANSFORM,
+		ALLOCMASK_EVALUATOR          = 1 << ALLOCFLAG_EVALUATOR,
 		ALLOCMASK_SIGNATURE          = 1 << ALLOCFLAG_SIGNATURE,
 		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCMASK_SWAP               = 1 << ALLOCFLAG_SWAP,
@@ -228,6 +233,11 @@ struct database_t {
 	uint32_t           transformIndexSize;          // index size (must be prime)
 	uint32_t           *fwdTransformNameIndex;      // fwdTransformNames index
 	uint32_t           *revTransformNameIndex;      // revTransformNames index
+	// evaluator store [COPY-ON-WRITE]
+	uint32_t           numEvaluator;                // number of evaluators (tinyTree_t::TINYTREE_NEND * MAXTRANSFORM)
+	uint32_t           maxEvaluator;                // maximum size of collection
+	footprint_t	   *fwdEvaluator;		// evaluator for forward transforms
+	footprint_t	   *revEvaluator;		// evaluator for reverse transforms
 	// signature store
 	uint32_t           numSignature;                // number of signatures
 	uint32_t           maxSignature;                // maximum size of collection
@@ -292,6 +302,12 @@ struct database_t {
 		fwdTransformNames     = revTransformNames     = NULL;
 		fwdTransformNameIndex = revTransformNameIndex = NULL;
 		revTransformIds       = NULL;
+
+		// evaluator store [COPY-ON-WRITE]
+		numEvaluator = 0;
+		maxEvaluator = 0;
+		fwdEvaluator = NULL;
+		revEvaluator = NULL;
 
 		// signature store
 		numSignature       = 0;
@@ -360,6 +376,10 @@ struct database_t {
 			ctx.myFree("database_t::revTransformIds", revTransformIds);
 			ctx.myFree("database_t::fwdTransformNameIndex", fwdTransformNameIndex);
 			ctx.myFree("database_t::revTransformNameIndex", revTransformNameIndex);
+		}
+		if (allocFlags & ALLOCMASK_EVALUATOR) {
+			ctx.myFree("database_t::fwdEvaluator", fwdEvaluator);
+			ctx.myFree("database_t::revEvaluator", revEvaluator);
 		}
 		if (allocFlags & ALLOCMASK_SIGNATURE)
 			ctx.myFree("database_t::signatures", signatures);
@@ -464,7 +484,7 @@ struct database_t {
 	/**
 	 * @date 2020-03-15 22:25:41
 	 *
-	 * Inherit read-only sections from an source database.
+	 * Inherit read-only sections from a source database.
 	 *
 	 * NOTE: call after calling `create()`
 	 *
@@ -495,6 +515,20 @@ struct database_t {
 
 			fwdTransformNameIndex = pFrom->fwdTransformNameIndex;
 			revTransformNameIndex = pFrom->revTransformNameIndex;
+		}
+
+		// evaluator store [COPY-ON-WRITE]
+		if (inheritSections & ALLOCMASK_EVALUATOR) {
+			if (pFrom->numEvaluator == 0)
+				ctx.fatal("\n{\"error\":\"Missing evaluator section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+					  __FUNCTION__, __FILE__, __LINE__, pName);
+
+			assert(maxEvaluator == 0);
+			maxEvaluator = pFrom->maxEvaluator;
+			numEvaluator = pFrom->numEvaluator;
+
+			fwdEvaluator  = pFrom->fwdEvaluator;
+			revEvaluator  = pFrom->revEvaluator;
 		}
 
 		// signature store
@@ -644,6 +678,12 @@ struct database_t {
 			memUsage += transformIndexSize * sizeof(*revTransformNameIndex);
 		}
 
+		// evaluator store [COPY-ON-WRITE]
+		if (maxEvaluator && !(excludeSections & ALLOCMASK_EVALUATOR)) {
+			memUsage += maxEvaluator * sizeof(*this->fwdEvaluator);
+			memUsage += maxEvaluator * sizeof(*this->revEvaluator);
+		}
+
 		// signature store
 		if (maxSignature && !(excludeSections & ALLOCMASK_SIGNATURE))
 			memUsage += maxSignature * sizeof(*signatures); // increase with 5%
@@ -703,6 +743,14 @@ struct database_t {
 			fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
 			revTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::revTransformNameIndex", transformIndexSize, sizeof(*revTransformNameIndex));
 			allocFlags |= ALLOCMASK_TRANSFORM;
+		}
+
+		// evaluator store [COPY-ON-WRITE]
+		if (maxEvaluator && !(excludeSections & ALLOCMASK_EVALUATOR)) {
+			assert(maxTransform == MAXTRANSFORM);
+			assert(maxEvaluator == tinyTree_t::TINYTREE_NEND * maxTransform);
+			fwdEvaluator      = (footprint_t *) ctx.myAlloc("database_t::fwdEvaluator", maxEvaluator, sizeof(*this->fwdEvaluator));
+			revEvaluator      = (footprint_t *) ctx.myAlloc("database_t::revEvaluator", maxEvaluator, sizeof(*this->revEvaluator));
 		}
 
 		// signature store
@@ -804,7 +852,7 @@ struct database_t {
          * @param {string} fileName - database filename
          * @param {boolean} writable - Set access to R/W
 	 */
-	void open(const char *fileName, unsigned writable) {
+	void open(const char *fileName) {
 
 		/*
 		 * Open file
@@ -819,19 +867,11 @@ struct database_t {
 
 #if defined(HAVE_MMAP)
 		/*
-		 * Load using mmap()
+		 * Load using mmap() and enable copy-on-write
 		 */
-		void *pMemory;
-
-		if (writable) {
-			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
-			if (pMemory == MAP_FAILED)
-				ctx.fatal("\n{\"error\":\"mmap(PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
-		} else {
-			pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, hndl, 0);
-			if (pMemory == MAP_FAILED)
-				ctx.fatal("\n{\"error\":\"mmap(PROT_READ,MAP_SHARED|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
-		}
+		void *pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
+		if (pMemory == MAP_FAILED)
+			ctx.fatal("\n{\"error\":\"mmap(PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		// set memory usage preferances
 		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_RANDOM))
@@ -889,7 +929,8 @@ struct database_t {
 		 */
 
 		// transforms
-		maxTransform          = numTransform = fileHeader.numTransform;
+		maxTransform          = fileHeader.numTransform;
+		numTransform          = fileHeader.numTransform;
 		fwdTransformData      = (uint64_t *) (rawDatabase + fileHeader.offFwdTransforms);
 		revTransformData      = (uint64_t *) (rawDatabase + fileHeader.offRevTransforms);
 		fwdTransformNames     = (transformName_t *) (rawDatabase + fileHeader.offFwdTransformNames);
@@ -899,20 +940,29 @@ struct database_t {
 		fwdTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offFwdTransformNameIndex);
 		revTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offRevTransformNameIndex);
 
+		// evaluator store [COPY-ON-WRITE]
+		maxEvaluator = fileHeader.numEvaluator;
+		numEvaluator = fileHeader.numEvaluator;
+		fwdEvaluator = (footprint_t *) (rawDatabase + fileHeader.offFwdEvaluator);
+		revEvaluator = (footprint_t *) (rawDatabase + fileHeader.offRevEvaluator);
+
 		// signatures
-		maxSignature       = numSignature = fileHeader.numSignature;
+		maxSignature       = fileHeader.numSignature;
+		numSignature       = fileHeader.numSignature;
 		signatures         = (signature_t *) (rawDatabase + fileHeader.offSignatures);
 		signatureIndexSize = fileHeader.signatureIndexSize;
 		signatureIndex     = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
 
 		// swap
-		maxSwap       = numSwap = fileHeader.numSwap;
+		maxSwap       = fileHeader.numSwap;
+		numSwap       = fileHeader.numSwap;
 		swaps         = (swap_t *) (rawDatabase + fileHeader.offSwaps);
 		swapIndexSize = fileHeader.swapIndexSize;
 		swapIndex     = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
 
 		// hint
-		maxHint       = numHint = fileHeader.numHint;
+		maxHint       = fileHeader.numHint;
+		numHint       = fileHeader.numHint;
 		hints         = (hint_t *) (rawDatabase + fileHeader.offHints);
 		hintIndexSize = fileHeader.hintIndexSize;
 		hintIndex     = (uint32_t *) (rawDatabase + fileHeader.offHintIndex);
@@ -926,13 +976,15 @@ struct database_t {
 		imprintIndex     = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
 
 		// sid/tid
-		maxPair         = numPair = fileHeader.numPair;
+		maxPair       = fileHeader.numPair;
+		numPair       = fileHeader.numPair;
 		pairs         = (pair_t *) (rawDatabase + fileHeader.offpairs);
 		pairIndexSize = fileHeader.pairIndexSize;
 		pairIndex     = (uint32_t *) (rawDatabase + fileHeader.offPairIndex);
 
 		// members
-		maxMember       = numMember = fileHeader.numMember;
+		maxMember       = fileHeader.numMember;
+		numMember       = fileHeader.numMember;
 		members         = (member_t *) (rawDatabase + fileHeader.offMember);
 		memberIndexSize = fileHeader.memberIndexSize;
 		memberIndex     = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
@@ -969,7 +1021,13 @@ struct database_t {
 		::memset(&fileHeader, 0, sizeof(fileHeader));
 
 		/*
-		 * Quick cvalculate file size
+		 * Evaluators are copy-on-write and need to be re-created (sanitised) before writing
+		 */
+		if (this->numEvaluator)
+			initialiseEvaluators();
+
+		/*
+		 * Quick calculate file size
 		 */
 		ctx.progressHi = align32(sizeof(fileHeader));
 		ctx.progressHi += align32(sizeof(*this->fwdTransformData) * this->numTransform);
@@ -979,6 +1037,8 @@ struct database_t {
 		ctx.progressHi += align32(sizeof(*this->revTransformIds) * this->numTransform);
 		ctx.progressHi += align32(sizeof(*this->fwdTransformNameIndex * this->transformIndexSize));
 		ctx.progressHi += align32(sizeof(*this->revTransformNameIndex * this->transformIndexSize));
+		ctx.progressHi += align32(sizeof(*this->fwdEvaluator) * this->numEvaluator);
+		ctx.progressHi += align32(sizeof(*this->revEvaluator) * this->numEvaluator);
 		ctx.progressHi += align32(sizeof(*this->signatures) * this->numSignature);
 		ctx.progressHi += align32(sizeof(*this->signatureIndex) * this->signatureIndexSize);
 		ctx.progressHi += align32(sizeof(*this->swaps) * this->numSwap);
@@ -1013,7 +1073,7 @@ struct database_t {
 		 */
 		uint64_t flen = 0;
 
-		flen += writeData(outf, &fileHeader, align32(sizeof(fileHeader)), fileName);
+		flen += writeData(outf, &fileHeader, sizeof(fileHeader), fileName);
 
 		/*
 		 * write transforms
@@ -1023,19 +1083,19 @@ struct database_t {
 
 			// write forward/reverse transforms
 			fileHeader.offFwdTransforms = flen;
-			flen += writeData(outf, this->fwdTransformData, align32(sizeof(*this->fwdTransformData) * this->numTransform), fileName);
+			flen += writeData(outf, this->fwdTransformData, sizeof(*this->fwdTransformData) * this->numTransform, fileName);
 			fileHeader.offRevTransforms = flen;
-			flen += writeData(outf, this->revTransformData, align32(sizeof(*this->revTransformData) * this->numTransform), fileName);
+			flen += writeData(outf, this->revTransformData, sizeof(*this->revTransformData) * this->numTransform, fileName);
 
 			// write forward/reverse names
 			fileHeader.offFwdTransformNames = flen;
-			flen += writeData(outf, this->fwdTransformNames, align32(sizeof(*this->fwdTransformNames) * this->numTransform), fileName);
+			flen += writeData(outf, this->fwdTransformNames, sizeof(*this->fwdTransformNames) * this->numTransform, fileName);
 			fileHeader.offRevTransformNames = flen;
-			flen += writeData(outf, this->revTransformNames, align32(sizeof(*this->revTransformNames) * this->numTransform), fileName);
+			flen += writeData(outf, this->revTransformNames, sizeof(*this->revTransformNames) * this->numTransform, fileName);
 
 			// write inverted skins
 			fileHeader.offRevTransformIds = flen;
-			flen += writeData(outf, this->revTransformIds, align32(sizeof(*this->revTransformIds) * this->numTransform), fileName);
+			flen += writeData(outf, this->revTransformIds, sizeof(*this->revTransformIds) * this->numTransform, fileName);
 
 			// write index
 			if (transformIndexSize) {
@@ -1043,10 +1103,23 @@ struct database_t {
 
 				// write index
 				fileHeader.offFwdTransformNameIndex = flen;
-				flen += writeData(outf, this->fwdTransformNameIndex, align32(sizeof(*this->fwdTransformNameIndex) * this->transformIndexSize), fileName);
+				flen += writeData(outf, this->fwdTransformNameIndex, sizeof(*this->fwdTransformNameIndex) * this->transformIndexSize, fileName);
 				fileHeader.offRevTransformNameIndex = flen;
-				flen += writeData(outf, this->revTransformNameIndex, align32(sizeof(*this->revTransformNameIndex) * this->transformIndexSize), fileName);
+				flen += writeData(outf, this->revTransformNameIndex, sizeof(*this->revTransformNameIndex) * this->transformIndexSize, fileName);
 			}
+		}
+
+		/*
+		 * write evaluators [COPY-ON-WRITE]
+		 */
+		if (this->numEvaluator) {
+			fileHeader.numEvaluator = this->numEvaluator;
+
+			// write forward/reverse transforms
+			fileHeader.offFwdEvaluator = flen;
+			flen += writeData(outf, this->fwdEvaluator, sizeof(*this->fwdEvaluator) * this->numEvaluator, fileName);
+			fileHeader.offRevEvaluator = flen;
+			flen += writeData(outf, this->revEvaluator, sizeof(*this->revEvaluator) * this->numEvaluator, fileName);
 		}
 
 		/*
@@ -1061,12 +1134,12 @@ struct database_t {
 			// collection
 			fileHeader.numSignature  = this->numSignature;
 			fileHeader.offSignatures = flen;
-			flen += writeData(outf, this->signatures, align32(sizeof(*this->signatures) * this->numSignature), fileName);
+			flen += writeData(outf, this->signatures, sizeof(*this->signatures) * this->numSignature, fileName);
 			if (this->signatureIndexSize) {
 				// Index
 				fileHeader.signatureIndexSize = this->signatureIndexSize;
 				fileHeader.offSignatureIndex  = flen;
-				flen += writeData(outf, this->signatureIndex, align32(sizeof(*this->signatureIndex) * this->signatureIndexSize), fileName);
+				flen += writeData(outf, this->signatureIndex, sizeof(*this->signatureIndex) * this->signatureIndexSize, fileName);
 			}
 		}
 
@@ -1082,12 +1155,12 @@ struct database_t {
 			// collection
 			fileHeader.numSwap  = this->numSwap;
 			fileHeader.offSwaps = flen;
-			flen += writeData(outf, this->swaps, align32(sizeof(*this->swaps) * this->numSwap), fileName);
+			flen += writeData(outf, this->swaps, sizeof(*this->swaps) * this->numSwap, fileName);
 			if (this->swapIndexSize) {
 				// Index
 				fileHeader.swapIndexSize = this->swapIndexSize;
 				fileHeader.offSwapIndex  = flen;
-				flen += writeData(outf, this->swapIndex, align32(sizeof(*this->swapIndex) * this->swapIndexSize), fileName);
+				flen += writeData(outf, this->swapIndex, sizeof(*this->swapIndex) * this->swapIndexSize, fileName);
 			}
 		}
 
@@ -1103,12 +1176,12 @@ struct database_t {
 			// collection
 			fileHeader.numHint  = this->numHint;
 			fileHeader.offHints = flen;
-			flen += writeData(outf, this->hints, align32(sizeof(*this->hints) * this->numHint), fileName);
+			flen += writeData(outf, this->hints, sizeof(*this->hints) * this->numHint, fileName);
 			if (this->hintIndexSize) {
 				// Index
 				fileHeader.hintIndexSize = this->hintIndexSize;
 				fileHeader.offHintIndex  = flen;
-				flen += writeData(outf, this->hintIndex, align32(sizeof(*this->hintIndex) * this->hintIndexSize), fileName);
+				flen += writeData(outf, this->hintIndex, sizeof(*this->hintIndex) * this->hintIndexSize, fileName);
 			}
 		}
 
@@ -1127,12 +1200,12 @@ struct database_t {
 			// collection
 			fileHeader.numImprint  = this->numImprint;
 			fileHeader.offImprints = flen;
-			flen += writeData(outf, this->imprints, align32(sizeof(*this->imprints) * this->numImprint), fileName);
+			flen += writeData(outf, this->imprints, sizeof(*this->imprints) * this->numImprint, fileName);
 			if (this->imprintIndexSize) {
 				// Index
 				fileHeader.imprintIndexSize = this->imprintIndexSize;
 				fileHeader.offImprintIndex  = flen;
-				flen += writeData(outf, this->imprintIndex, align32(sizeof(*this->imprintIndex) * this->imprintIndexSize), fileName);
+				flen += writeData(outf, this->imprintIndex, sizeof(*this->imprintIndex) * this->imprintIndexSize, fileName);
 			}
 		}
 
@@ -1148,12 +1221,12 @@ struct database_t {
 			// collection
 			fileHeader.numPair  = this->numPair;
 			fileHeader.offpairs = flen;
-			flen += writeData(outf, this->pairs, align32(sizeof(*this->pairs) * this->numPair), fileName);
+			flen += writeData(outf, this->pairs, sizeof(*this->pairs) * this->numPair, fileName);
 			if (this->pairIndexSize) {
 				// Index
 				fileHeader.pairIndexSize = this->pairIndexSize;
 				fileHeader.offPairIndex  = flen;
-				flen += writeData(outf, this->pairIndex, align32(sizeof(*this->pairIndex) * this->pairIndexSize), fileName);
+				flen += writeData(outf, this->pairIndex, sizeof(*this->pairIndex) * this->pairIndexSize, fileName);
 			}
 		}
 
@@ -1169,12 +1242,12 @@ struct database_t {
 			// collection
 			fileHeader.numMember = this->numMember;
 			fileHeader.offMember = flen;
-			flen += writeData(outf, this->members, align32(sizeof(*this->members) * this->numMember), fileName);
+			flen += writeData(outf, this->members, sizeof(*this->members) * this->numMember, fileName);
 			if (this->memberIndexSize) {
 				// Index
 				fileHeader.memberIndexSize = this->memberIndexSize;
 				fileHeader.offMemberIndex  = flen;
-				flen += writeData(outf, this->memberIndex, align32(sizeof(*this->memberIndex) * this->memberIndexSize), fileName);
+				flen += writeData(outf, this->memberIndex, sizeof(*this->memberIndex) * this->memberIndexSize, fileName);
 			}
 		}
 
@@ -1319,13 +1392,13 @@ struct database_t {
 		}
 
 		/*
-		 * Quad align
+		 * 32-byte align for SIMD
 		 */
-		dataLength = 8U - (written & 7U);
+		dataLength = 32U - (written & 31U);
 		if (dataLength > 0) {
-			uint8_t zero8[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+			uint8_t zero32[32] = {0};
 
-			fwrite(zero8, dataLength, 1, outf);
+			fwrite(zero32, dataLength, 1, outf);
 			written += dataLength;
 		}
 
@@ -1470,6 +1543,20 @@ struct database_t {
   	 */
 	inline unsigned lookupRevTransform(const char *pName) {
 		return lookupTransform(pName, this->revTransformNameIndex);
+	}
+
+	/*
+	 * Evaluator store [COPY-ON-WRITE]
+	 */
+
+	/**
+	 * Construct the dataset for the evaluator
+	 */
+	inline void initialiseEvaluators(void) {
+		assert(this->numTransform == MAXTRANSFORM);
+		assert(this->numEvaluator == tinyTree_t::TINYTREE_NEND * this->numTransform);
+		tinyTree_t::initialiseEvaluator(ctx, this->fwdEvaluator, this->numTransform, this->fwdTransformData);
+		tinyTree_t::initialiseEvaluator(ctx, this->revEvaluator, this->numTransform, this->revTransformData);
 	}
 
 	/*
@@ -2453,6 +2540,12 @@ struct database_t {
 			if (sections)
 				::strcat(pBuffer, "|");
 		}
+		if (sections & ALLOCMASK_EVALUATOR) {
+			::strcat(pBuffer, "evaluator");
+			sections &= ~ALLOCMASK_EVALUATOR;
+			if (sections)
+				::strcat(pBuffer, "|");
+		}
 		if (sections & ALLOCMASK_SIGNATURE) {
 			::strcat(pBuffer, "signature");
 			sections &= ~ALLOCMASK_SIGNATURE;
@@ -2538,6 +2631,7 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "flags", json_integer(this->creationFlags));
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
+		json_object_set_new_nocheck(jResult, "numEvaluator", json_integer(this->numEvaluator));
 		json_object_set_new_nocheck(jResult, "numSignature", json_integer(this->numSignature));
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
 		json_object_set_new_nocheck(jResult, "numSwap", json_integer(this->numSwap));

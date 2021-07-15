@@ -119,10 +119,6 @@ struct bevalContext_t {
 	/// @global {number} --seed=n, Random seed to generate evaluator test pattern
 	unsigned opt_seed;
 
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 	/// @global {footprint_t[]} Evulation footprint for `explainNode()`
 	footprint_t *gExplainEval;
 	/// @var {database_t} - Database store to place results
@@ -137,8 +133,6 @@ struct bevalContext_t {
 		opt_normalise    = 0;
 		opt_seed         = 0x20210609;
 
-		pEvalFwd     = NULL;
-		pEvalRev     = NULL;
 		gExplainEval = NULL;
 		pStore       = NULL;
 
@@ -1071,7 +1065,7 @@ struct bevalContext_t {
 			uint32_t tid;
 
 			// lookup the tree used by the detector
-			pStore->lookupImprintAssociative(&tree, pEvalFwd, pEvalRev, &level3sid, &tid);
+			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &level3sid, &tid);
 			assert(level3sid);
 
 			printf(",\"sid\":\"%u:%s\"",
@@ -2120,19 +2114,13 @@ int main(int argc, char *argv[]) {
 		// Open database
 	database_t db(ctx);
 
-	db.open(app.opt_databaseName, 0);
+	db.open(app.opt_databaseName);
 
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
 	app.pStore   = &db;
-
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Construct the tree

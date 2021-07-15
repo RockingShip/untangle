@@ -317,10 +317,12 @@ int main(int argc, char *argv[]) {
 	// open database
 	database_t db(ctx);
 
-	db.open(app.arg_database, 0);
+	db.open(app.arg_database);
 
 	if (db.maxTransform == 0)
 		ctx.fatal("Missing transform section: %s\n", app.arg_database);
+	if (db.numEvaluator == 0)
+		ctx.fatal("Missing evaluator section: %s\n", app.arg_database);
 
 	/*
 	 * Invoke main entrypoint of application context for every argument

@@ -1709,7 +1709,7 @@ int main(int argc, char *argv[]) {
 	// Open database
 	database_t db(ctx);
 
-	db.open(app.arg_inputDatabase, 0);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1839,8 +1839,8 @@ int main(int argc, char *argv[]) {
 	 * initialise evaluators
 	 */
 
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
+	tinyTree_t::initialiseEvaluator(ctx, app.pEvalFwd, MAXTRANSFORM, store.fwdTransformData);
+	tinyTree_t::initialiseEvaluator(ctx, app.pEvalRev, MAXTRANSFORM, store.revTransformData);
 
 	/*
 	 * Perform medium/slow metrics

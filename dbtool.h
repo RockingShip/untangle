@@ -119,6 +119,7 @@ struct dbtool_t : callable_t {
 
 		copyOnWrite = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM |
+				  database_t::ALLOCMASK_EVALUATOR |
 				  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
 				  database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX |
 				  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
@@ -689,6 +690,23 @@ struct dbtool_t : callable_t {
 
 			store.fwdTransformNameIndex = db.fwdTransformNameIndex;
 			store.revTransformNameIndex = db.revTransformNameIndex;
+		} else {
+			assert(0);
+		}
+
+		/*
+		 * evaluators are copy-on-write, and never invalid or resized
+		 */
+
+		if (inheritSections & database_t::ALLOCMASK_EVALUATOR) {
+			assert(!(store.allocFlags & database_t::ALLOCMASK_EVALUATOR));
+
+			assert(db.numEvaluator == tinyTree_t::TINYTREE_NEND * MAXTRANSFORM);
+			store.maxEvaluator = db.numEvaluator;
+			store.numEvaluator = db.numEvaluator;
+
+			store.fwdEvaluator = db.fwdEvaluator;
+			store.revEvaluator = db.revEvaluator;
 		} else {
 			assert(0);
 		}

@@ -142,10 +142,6 @@ struct genswapContext_t : dbtool_t {
 
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
-	/// @var {footprint_t[]} - Evaluator for forward transforms
-	footprint_t *pEvalFwd;
-	/// @var {footprint_t[]} - Evaluator for reverse transforms
-	footprint_t *pEvalRev;
 
 	/// @var {number} current version incarnation
 	uint32_t iVersion;
@@ -179,8 +175,6 @@ struct genswapContext_t : dbtool_t {
 
 		iVersion = 0;
 		pStore   = NULL;
-		pEvalFwd = NULL;
-		pEvalRev = NULL;
 
 		skipDuplicate = 0;
 		swapsActive   = (uint32_t *) ctx.myAlloc("genswapContext_t::swapsActive", MAXTRANSFORM, sizeof(*swapsActive));
@@ -349,19 +343,19 @@ struct genswapContext_t : dbtool_t {
 		tree.loadStringFast(pSignature->name);
 
 		// put untransformed result in reverse transform
-		tree.eval(this->pEvalRev);
+		tree.eval(pStore->revEvaluator);
 
 		this->iVersion++;
 		unsigned      numSwaps = 0;
 		for (unsigned tid      = 0; tid < tidHi[pSignature->numPlaceholder]; tid++) {
 			// point to evaluator for given transformId
-			footprint_t *v = this->pEvalFwd + tid * tinyTree_t::TINYTREE_NEND;
+			footprint_t *v = pStore->fwdEvaluator + tid * tinyTree_t::TINYTREE_NEND;
 
 			// evaluate
 			tree.eval(v);
 
 			// test if result is unchanged
-			if (this->pEvalRev[tree.root].equals(v[tree.root])) {
+			if (pStore->revEvaluator[tree.root].equals(v[tree.root])) {
 				// remember tid
 				assert(numSwaps < MAXTRANSFORM);
 				this->swapsFound[numSwaps++] = tid;
@@ -1074,7 +1068,7 @@ int main(int argc, char *argv[]) {
 	// test for readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
-	db.open(app.arg_inputDatabase, !app.readOnlyMode);
+	db.open(app.arg_inputDatabase);
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1128,10 +1122,6 @@ int main(int argc, char *argv[]) {
 	 * Finalise allocations and create database
 	 */
 
-	// allocate evaluators
-	app.pEvalFwd = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalFwd", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalFwd));
-	app.pEvalRev = (footprint_t *) ctx.myAlloc("genmemberContext_t::pEvalRev", tinyTree_t::TINYTREE_NEND * MAXTRANSFORM, sizeof(*app.pEvalRev));
-
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
 		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
@@ -1155,10 +1145,6 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	// initialize evaluator early using input database
-	tinyTree_t::initialiseVector(ctx, app.pEvalFwd, MAXTRANSFORM, db.fwdTransformData);
-	tinyTree_t::initialiseVector(ctx, app.pEvalRev, MAXTRANSFORM, db.revTransformData);
 
 	/*
 	 * Inherit/copy sections

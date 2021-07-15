@@ -1342,7 +1342,7 @@ struct tinyTree_t {
          * @date 2020-04-17 09:19:47
          *
          * The array `v[]` is a list of `MAXSLOT`! trees with pre-determined footprints for all the inputs.
-         * The initial footprints are setup as described in `initialiseVector()`
+         * The initial footprints are setup as described in `initialiseEvaluator()`
          * Evaluation is performed by first selecting the tree matching the required transform/skin
          * and then starting from the first real node `nstart` executing the unified operator as described in the tree.
          *
@@ -1567,7 +1567,7 @@ struct tinyTree_t {
 	 * @param {footprint_t) maxTransform - How many transforms
 	 * @param {uint64_t[]) pTransformData - forward or reverse transform data
 	 */
-	static void initialiseVector(context_t &ctx, footprint_t *pFootprint, unsigned numTransform, uint64_t *pTransformData) {
+	static void initialiseEvaluator(context_t &ctx, footprint_t *pFootprint, unsigned numTransform, uint64_t *pTransformData) {
 
 		// hardcoded assumptions
 		assert(MAXSLOTS == 9);
@@ -1587,7 +1587,7 @@ struct tinyTree_t {
 		for (unsigned iTrans = 0; iTrans < MAXTRANSFORM; iTrans++) {
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				fprintf(stderr, "\r\e[K%.5f%%", iTrans * 100.0 / MAXTRANSFORM);
+				fprintf(stderr, "\r\e[KinitialiseEvaluator %.5f%%", iTrans * 100.0 / MAXTRANSFORM);
 				ctx.tick = 0;
 			}
 

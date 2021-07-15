@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-15 23:40:44 Changed: database version to 0x20210715.
+2021-07-15 23:40:44 Added: Evaluator [copy-on-write] section to database.
 2021-07-11 20:55:22 Added: `bexplain.cc`, output needs to be json for GUI presentation.
 2021-07-08 23:18:12 Changed: database version to 0x20210708.
 2021-07-08 23:15:59 Changed: Q/T/F in `member_t` now pair id's.
@@ -15,7 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 2021-07-08 21:08:17 Changed: database version to 0x20210707.
 2021-07-08 20:59:12 Changed: `member_t`, Q/T/F now sid/tid pair.
 2021-07-08 20:50:30 Removed: `genmember --text=5 (sql)`.
-2021-07-08 20:39:06 Changed: `tinyTree_t::initialiseVector()` now static.
+2021-07-08 20:39:06 Changed: `tinyTree_t::initialiseEvaluator()` now static.
 2021-07-03 12:23:48 Changed: `slookup --member` display tid's relative to input.
 2021-07-03 11:01:13 Changed: member ordering: 1:SAFE, 2:!DEPR, 3:COMP, 4:score, 5:compare
 2021-06-28 20:47:11 Added: `gendepreciated`.
