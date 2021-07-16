@@ -1722,7 +1722,7 @@ struct bevalContext_t {
 	 *
 	 * Create/load tree based on arguments
 	 */
-	baseTree_t *loadTree(unsigned numArgs, char *inputArgs[]) {
+	baseTree_t *main(unsigned numArgs, char *inputArgs[]) {
 
 		/*
 		 * Determine number of keys
@@ -1798,143 +1798,25 @@ struct bevalContext_t {
 		 * Load arguments
 		 */
 		for (unsigned iArg = 0; iArg < numArgs; iArg++) {
+			unsigned iRoot = ostart + iArg;
+
 			// find transform delimiter
 			const char *pTransform = strchr(inputArgs[iArg], '/');
 
 			if (pTransform)
-				pTree->roots[ostart + iArg] = explainNormaliseString(0, pTree, inputArgs[iArg], pTransform + 1);
+				pTree->roots[iRoot] = explainNormaliseString(0, pTree, inputArgs[iArg], pTransform + 1);
 			else
-				pTree->roots[ostart + iArg] = explainNormaliseString(0, pTree, inputArgs[iArg], NULL);
-		}
+				pTree->roots[iRoot] = explainNormaliseString(0, pTree, inputArgs[iArg], NULL);
 
-		return pTree;
-	}
-
-	/**
-	 * @date 2021-06-08 21:01:18
-	 *
-	 * What `eval` does
-	 */
-	int main(baseTree_t *pTree) {
-		/*
-		 * Record footprints for each node to maintain the results to compare trees
-		 * Each bit is an independent test.
-		 * For ease of calculation, number of tests = number of words per key/node
-		 */
-
-		// setup a data vector for evaluation
-		uint64_t **pFootprint = (uint64_t **) ctx.myAlloc("pFootprint", pTree->ncount, sizeof(*pFootprint));
-
-		for (unsigned i = 0; i < pTree->ncount; i++) {
-			pFootprint[i] = (uint64_t *) ctx.myAlloc("pFootprint", opt_dataSize, sizeof(**pFootprint));
-		}
-
-		/*
-		 * Initialise data/footprint vector
-		 */
-		if (pTree->ostart - pTree->kstart == MAXSLOTS) {
 			/*
-			 * If there are MAXSLOTS keys, then be `eval`/`tinyTree_t` compatible
+			 * Display expression
 			 */
-			unsigned kstart = pTree->kstart;
 
-			// set 64bit slice to zero
-			for (unsigned j = 0; j < QUADPERFOOTPRINT; j++)
-				pFootprint[0][j] = 0;
-
-			// set footprint for 64bit slice
-			assert(MAXSLOTS == 9);
-			for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
-				// v[(i/64)+0*4] should be 0
-				if (i & (1 << 0)) pFootprint[kstart + 0][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 1)) pFootprint[kstart + 1][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 2)) pFootprint[kstart + 2][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 3)) pFootprint[kstart + 3][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 4)) pFootprint[kstart + 4][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 5)) pFootprint[kstart + 5][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 6)) pFootprint[kstart + 6][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 7)) pFootprint[kstart + 7][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 8)) pFootprint[kstart + 8][(i / 64)] |= 1LL << (i % 64);
-			}
-
-		} else {
-			// erase v[0]
-			for (unsigned i = 0; i < opt_dataSize; i++)
-				pFootprint[0][i] = 0;
-
-			// fill rest with random patterns
-			for (uint32_t iKey = 1; iKey < pTree->nstart; iKey++) {
-				uint64_t *v = pFootprint[iKey];
-
-				// craptastic random fill
-				for (unsigned i = 0; i < opt_dataSize; i++) {
-					v[i] = (uint64_t) rand();
-					v[i] = (v[i] << 16) ^ (uint64_t) rand();
-					v[i] = (v[i] << 16) ^ (uint64_t) rand();
-					v[i] = (v[i] << 16) ^ (uint64_t) rand();
-				}
-			}
-		}
-
-		/*
-		 * Evaluate test vector
-		 */
-		for (uint32_t iNode = pTree->nstart; iNode < pTree->ncount; iNode++) {
-			// point to the first chunk of the `"question"`
-			const baseNode_t *pNode = pTree->N + iNode;
-			const uint32_t   Q      = pNode->Q;
-			const uint32_t   Tu     = pNode->T & ~IBIT;
-			const uint32_t   Ti     = pNode->T & IBIT;
-			const uint32_t   F      = pNode->F;
-
-			// determine if the operator is `QTF` or `QnTF`
-			if (Ti) {
-				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
-				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iNode][j] = (pFootprint[Q][j] & ~pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
-			} else {
-				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
-				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iNode][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
-			}
-		}
-
-		uint32_t firstcrc = 0;
-		bool     differ = false;
-
-		for (unsigned iRoot = pTree->ostart; iRoot < pTree->estart; iRoot++) {
 			std::string name;
 			std::string transform;
 
-			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
-			const uint32_t Ri = pTree->roots[iRoot] & IBIT;
-
 			// display root name
 			printf("%s: ", pTree->rootNames[iRoot].c_str());
-
-			// display footprint
-			if (pTree->ostart - pTree->kstart == MAXSLOTS) {
-				// `eval` compatibility, display footprint
-				if (Ri) {
-					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j] ^ ~0U);
-				} else {
-					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j]);
-				}
-			}
-
-			// display CRC
-			unsigned crc32 = calccrc32(pFootprint[Ru], opt_dataSize);
-			// Inverted `T` is a concept not present in footprints. As a compromise, invert the result.
-			if (Ri)
-				crc32 ^= 0xffffffff;
-			printf("{%08x} ", crc32);
-
-			if (iRoot == 0)
-				firstcrc = crc32;
-			else if (firstcrc != crc32)
-				differ = true;
 
 			// display expression
 			if (opt_normalise) {
@@ -1946,21 +1828,11 @@ struct bevalContext_t {
 			}
 
 			printf("\n");
+
 		}
 
-		if (pTree->numRewrite > 1 && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
-			if (differ)
-				fprintf(stderr, "crc DIFFER\n");
-			else
-				fprintf(stderr, "crc same\n");
-		}
-
-		if (differ)
-			exit(1);
-
-		return 0;
+		return pTree;
 	}
-
 };
 
 /*
@@ -2182,10 +2054,10 @@ int main(int argc, char *argv[]) {
 	 * Construct the tree
 	 */
 
-	baseTree_t *pTree = app.loadTree(argc - optind, argv + optind);
+	app.main(argc - optind, argv + optind);
 
 	/*
 	 * Analyse the result
 	 */
-	return app.main(pTree);
+	return 0;
 }
