@@ -27,9 +27,18 @@ Collection of used terms and codewords.
     
     2n9 has two nodes, the second can also reference the first (and its invert) in addition to zero and variables.
     However, at least one operand must reference the first node.
-    
+
+              +- zero and 9 endpoints for QTF and QnTF [(1+9)*2]
+              |   +-- triple for the Q/T/F components
+              |   |     +- N[10] must be referenced, for QTF and QTnF
+              |   |     |     +-- zero, 9 endpoints and N[10] [(1+9+1)*2]
+              | --+--   |     |
     `2n9` = (20*20*20)*(2*22*22) = 7744000.
-    
+            ----+----- ----+----
+                |          |
+                |          +-- number of possibilities for the second node `N[11]`
+                +-- number of possibilities for the first node `N[10]`
+
     `3n9` = (20*20*20)*(2*22*22)*(2*24*24) = 8.921e9
 
     `4n9` = (20*20*20)*(2*22*22)*(2*24*24)*(2*24*24)*(2*26*26) = 1.206e13

@@ -120,6 +120,11 @@ struct genexportContext_t {
 		uint32_t crc32;
 
 		/*
+		 * Write selection of header values
+		 */
+		json_object_set_new_nocheck(jOutput, "interleave", json_integer(pStore->interleave));
+
+		/*
 		 * Write signatures
 		 */
 

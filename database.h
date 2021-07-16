@@ -233,7 +233,7 @@ struct database_t {
 	uint32_t           transformIndexSize;          // index size (must be prime)
 	uint32_t           *fwdTransformNameIndex;      // fwdTransformNames index
 	uint32_t           *revTransformNameIndex;      // revTransformNames index
-	// evaluator store [COPY-ON-WRITE]
+	// evaluator store [COPY-ON-WRITE] Preloaded for a `tinyTree_t`.
 	uint32_t           numEvaluator;                // number of evaluators (tinyTree_t::TINYTREE_NEND * MAXTRANSFORM)
 	uint32_t           maxEvaluator;                // maximum size of collection
 	footprint_t	   *fwdEvaluator;		// evaluator for forward transforms

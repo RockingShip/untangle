@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-16 09:53:10 Added: level4 to `bexplain.cc`.
 2021-07-16 01:14:26 Added: `genexport.cc`.
 2021-07-15 23:40:44 Changed: database version to 0x20210715.
 2021-07-15 23:40:44 Added: Evaluator [copy-on-write] section to database.

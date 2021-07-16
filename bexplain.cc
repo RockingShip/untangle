@@ -692,7 +692,7 @@ struct bevalContext_t {
 		       (T & IBIT) ? "~" : "", (T & ~IBIT),
 		       (F & IBIT) ? "~" : "", (F & ~IBIT));
 
-		assert(++depth < 10);
+		assert(++depth < 20);
 
 		assert ((Q & ~IBIT) < pTree->ncount);
 		assert ((T & ~IBIT) < pTree->ncount);
@@ -1093,6 +1093,62 @@ struct bevalContext_t {
 		/*
 		 * Level-4 signature operand swapping
 		 */
+		{
+			bool displayed = false;
+
+			signature_t *pSignature = pStore->signatures + level3sid;
+			if (pSignature->swapId) {
+				swap_t *pSwap = pStore->swaps + pSignature->swapId;
+
+				bool changed;
+				do {
+					changed = false;
+
+					for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+						unsigned tid = pSwap->tids[iSwap];
+
+						// get the transform string
+						const char *pTransformStr = pStore->fwdTransformNames[tid];
+
+						// test if swap needed
+						bool needSwap = false;
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+							if (sidSlots[tinyTree_t::TINYTREE_KSTART + i] > sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a']) {
+								needSwap = true;
+								break;
+							}
+							if (sidSlots[tinyTree_t::TINYTREE_KSTART + i] < sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a']) {
+								needSwap = false;
+								break;
+							}
+						}
+
+						if (needSwap) {
+							if (!displayed)
+								printf(",\"level4\":[");
+							else
+								printf(",");
+							printf("%.*s", pSignature->numPlaceholder, pStore->fwdTransformNames[tid]);
+							displayed = true;
+
+							uint32_t newSlots[MAXSLOTS];
+
+							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+								newSlots[i] = sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a'];
+
+							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+								sidSlots[tinyTree_t::TINYTREE_KSTART + i] = newSlots[i];
+
+							changed = true;
+						}
+					}
+				} while(changed);
+			}
+
+			if (displayed)
+				printf("]");
+		}
 
 		/*
 		 * Level-5 normalisation: single node rewrites
