@@ -422,7 +422,7 @@ struct genswapContext_t : dbtool_t {
 		for (unsigned iRound = 0;; iRound++) {
 
 			/*
-				 * NOTE: consider all swaps including those disabled because this allows the possibility that some transforms can be applied multiple times
+			 * NOTE: consider all swaps including those disabled because this allows the possibility that some transforms can be applied multiple times
 			 */
 			unsigned      bestTid   = 0;
 			unsigned      bestCount = 0;
@@ -458,9 +458,16 @@ struct genswapContext_t : dbtool_t {
 				}
 			}
 
-			// add to record
+			// add to record (if not found)
 			assert(numEntry < swap_t::MAXENTRY);
-			swap.tids[numEntry++] = bestTid;
+			bool found = false;
+
+			for (unsigned j = 0; j < numEntry && swap.tids[j]; j++) {
+				if (swap.tids[j] == bestTid)
+					found = true;
+			}
+			if (!found)
+				swap.tids[numEntry++] = bestTid;
 
 			if (bestCount == 1)
 				break;
