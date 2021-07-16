@@ -173,7 +173,7 @@ struct bevalContext_t {
 	 *
 	 * Create/load tree based on arguments
 	 */
-	baseTree_t *loadTree(unsigned numArgs, char *inputArgs[]) {
+	baseTree_t *main(unsigned numArgs, char *inputArgs[]) {
 
 		/*
 		 * Determine number of keys
@@ -627,7 +627,7 @@ int main(int argc, char *argv[]) {
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
-	baseTree_t *pTree = app.loadTree(argc - optind, argv + optind);
+	baseTree_t *pTree = app.main(argc - optind, argv + optind);
 
 	return app.main(pTree);
 }

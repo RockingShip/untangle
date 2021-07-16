@@ -1153,7 +1153,7 @@ struct bevalContext_t {
 		/*
 		 * Level-5 normalisation: single node rewrites
 		 */
-		uint32_t level5mid;
+		uint32_t level5mid = 0;
 		{
 			uint32_t bestCount = 0;
 

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## 2021-07-16 10:18:26 [Version 2.6.0]
+
+Database version "20210708".
+
+This release is the first approach towards `rewriteData[]`.
+Also introduced is the concept of safe members.
+
+ - `beval` evaluate a `baseTree_t` like `eval` for `tinyTree_t`
+ - `bexplain` explain how a tree is normalised during construction
+ - `gendepreciate` determine which member components are critical
+ - `genexport` export a database in as minimalistic text
+ - `genrewritedata` construct level-3 normalisation lookup tables
+ - `validaterewrite` brute force validation `rewriteData[]`
+
 ```
 2021-07-16 11:30:14 Changed: Display roots while constructing `bexplain`.
 2021-07-16 09:53:10 Added: level4 to `bexplain.cc`.
@@ -266,7 +280,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.6.0...HEAD
+[Version 2.6.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...v2.6.0
 [Version 2.4.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.3.0...v2.4.0
 [Version 2.3.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...v2.3.0
 [Version 2.2.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.1.0...v2.2.0
