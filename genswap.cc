@@ -504,7 +504,7 @@ int main(int argc, char *argv[]) {
 	app.opt_maxSignature = db.numSignature;
 
 	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, 0); // numNodes is only needed for defaults that should not occur
+	app.sizeDatabaseSections(store, db, 0, !app.readOnlyMode); // numNodes is only needed for defaults that should not occur
 
 	/*
 	 * Finalise allocations and create database

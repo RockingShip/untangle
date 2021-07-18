@@ -74,6 +74,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+
 #include "config.h"
 #include "datadef.h"
 #include "tinytree.h"
@@ -1987,7 +1988,7 @@ struct database_t {
 	 * There are a number of occasion where there are `add if not found` situations.
 	 * This is done to prevent the `pStore->addImprintAssociative()` throwing an unrecoverable error.
 	 *
-	 * Typically code looks like:
+	 * Typically, code looks like:
 	 * 	```
 	 *	if (!pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid))
 	 * 		pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);

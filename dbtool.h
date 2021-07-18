@@ -164,7 +164,7 @@ struct dbtool_t : callable_t {
 	 * @param {database_t} db - read-only input database
 	 * @param {number} numNodes - to find matching metrics
 	 */
-	void __attribute__((optimize("O0"))) sizeDatabaseSections(database_t &store, const database_t &db, unsigned numNodes) {
+	void __attribute__((optimize("O0"))) sizeDatabaseSections(database_t &store, const database_t &db, unsigned numNodes, bool autoSize) {
 
 		/*
 		 * @date 2020-03-17 13:57:25
@@ -189,7 +189,7 @@ struct dbtool_t : callable_t {
 		} else if (inheritSections & database_t::ALLOCMASK_SIGNATURE) {
 			// inherited. pass-though
 			store.maxSignature = db.numSignature;
-		} else if (!readOnlyMode) {
+		} else if (autoSize) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics || !pMetrics->numSignature)
@@ -224,7 +224,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_SIGNATUREINDEX) {
 				// inherited. pass-though
 				store.signatureIndexSize = db.signatureIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
 			} else if (db.signatureIndexSize) {
@@ -256,7 +256,7 @@ struct dbtool_t : callable_t {
 		} else if (inheritSections & database_t::ALLOCMASK_SWAP) {
 			// inherited. pass-though
 			store.maxSwap = db.numSwap;
-		} else if (!readOnlyMode) {
+		} else if (autoSize) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics || !pMetrics->numSwap)
@@ -291,7 +291,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_SWAPINDEX) {
 				// inherited. pass-though
 				store.swapIndexSize = db.swapIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.swapIndexSize = ctx.nextPrime(store.maxSwap * this->opt_ratio);
 			} else if (db.swapIndexSize) {
@@ -323,7 +323,7 @@ struct dbtool_t : callable_t {
 		} else if (inheritSections & database_t::ALLOCMASK_HINT) {
 			// inherited. pass-though
 			store.maxHint = db.numHint;
-		} else if (!readOnlyMode) {
+		} else if (autoSize) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics || !pMetrics->numHint)
@@ -358,7 +358,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
 				// inherited. pass-though
 				store.hintIndexSize = db.hintIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
 			} else if (db.hintIndexSize) {
@@ -421,7 +421,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_IMPRINT) {
 				// inherited. pass-though
 				store.maxImprint = db.numImprint;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// resize using metrics
 				const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
 				if (!pMetrics || !pMetrics->numImprint)
@@ -469,7 +469,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_IMPRINTINDEX) {
 				// inherited. pass-though
 				store.imprintIndexSize = db.imprintIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
 			} else if (db.imprintIndexSize) {
@@ -501,7 +501,7 @@ struct dbtool_t : callable_t {
 		} else if (inheritSections & database_t::ALLOCMASK_PAIR) {
 			// inherited. pass-though
 			store.maxPair = db.numPair;
-		} else if (!readOnlyMode) {
+		} else if (autoSize) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics || !pMetrics->numPair)
@@ -536,7 +536,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_PAIRINDEX) {
 				// inherited. pass-though
 				store.pairIndexSize = db.pairIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.pairIndexSize = ctx.nextPrime(store.maxPair * this->opt_ratio);
 			} else if (db.pairIndexSize) {
@@ -568,7 +568,7 @@ struct dbtool_t : callable_t {
 		} else if (inheritSections & database_t::ALLOCMASK_MEMBER) {
 			// inherited. pass-though
 			store.maxMember = db.numMember;
-		} else if (!readOnlyMode) {
+		} else if (autoSize) {
 			// resize using metrics
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
 			if (!pMetrics || !pMetrics->numMember)
@@ -603,7 +603,7 @@ struct dbtool_t : callable_t {
 			} else if (inheritSections & database_t::ALLOCMASK_MEMBERINDEX) {
 				// inherited. pass-though
 				store.memberIndexSize = db.memberIndexSize;
-			} else if (!readOnlyMode) {
+			} else if (autoSize) {
 				// auto-resize
 				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
 			} else if (db.memberIndexSize) {
@@ -628,7 +628,7 @@ struct dbtool_t : callable_t {
 		inheritSections &= ~rebuildSections;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
-			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u maxImprint=%u imprintIndexSize=%u  maxHint=%u hintIndexSize=%u  maxMember=%u memberIndexSize=%u\n",
+			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u maxMember=%u memberIndexSize=%u\n",
 				ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize);
 
 		// output data must be large enough to fit input data

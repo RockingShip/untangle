@@ -680,7 +680,7 @@ int main(int argc, char *argv[]) {
 	 */
 
 	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, app.arg_numNodes);
+	app.sizeDatabaseSections(store, db, app.arg_numNodes, !app.readOnlyMode);
 
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);

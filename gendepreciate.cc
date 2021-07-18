@@ -1363,7 +1363,7 @@ int main(int argc, char *argv[]) {
 		ctx.fatal("Missing member section: %s\n", app.arg_inputDatabase);
 
 	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, 5);
+	app.sizeDatabaseSections(store, db, 5, !app.readOnlyMode);
 
 	/*
 	 * Finalise allocations and create database

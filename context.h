@@ -480,6 +480,7 @@ struct context_t {
 		this->progressCoef = this->progressCoefStart;
 		this->progressLast = 0;
 		this->progressSpeed = 0;
+		this->tick = 0;
 	}
 
 	/**

@@ -729,7 +729,7 @@ int main(int argc, char *argv[]) {
 		app.opt_maxSignature = db.numSignature;
 
 	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, minNodes);
+	app.sizeDatabaseSections(store, db, minNodes, !app.readOnlyMode);
 
 	/*
 	 * Finalise allocations and create database
