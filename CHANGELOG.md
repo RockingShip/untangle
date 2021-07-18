@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+```
+2021-07-18 10:21:13 Changed: Split selection of generators into `.cc` and `.h` components. No code change.
+```
+
 ## 2021-07-16 10:18:26 [Version 2.6.0]
 
 Database version "20210708".

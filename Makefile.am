@@ -42,7 +42,7 @@ genhint_LDADD = $(LDADD) $(AM_LDADD)
 genhint.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-30 17:19:24
-genmember_SOURCES = genmember.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
+genmember_SOURCES = genmember.cc genmember.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 genmember_LDADD = $(LDADD) $(AM_LDADD)
 genmember.$(OBJEXT) : restartdata.h
 
@@ -50,17 +50,17 @@ genmember.$(OBJEXT) : restartdata.h
 genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h datadef.h generator.h metrics.h
 
 # @date 2020-03-14 11:09:15
-gensignature_SOURCES = gensignature.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
+gensignature_SOURCES = gensignature.cc gensignature.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 gensignature_LDADD = $(LDADD) $(AM_LDADD)
 gensignature.$(OBJEXT) : restartdata.h
 
 # @date 2020-05-02 23:02:57
-genswap_SOURCES = genswap.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
+genswap_SOURCES = genswap.cc genswap.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genswap_LDADD = $(LDADD) $(AM_LDADD)
 genswap.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-11 21:53:16
-gentransform_SOURCES = gentransform.cc database.h datadef.h context.h tinytree.h
+gentransform_SOURCES = gentransform.cc gentransform.h database.h datadef.h context.h tinytree.h
 gentransform_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2020-04-21 23:30:30
