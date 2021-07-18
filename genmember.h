@@ -234,8 +234,6 @@ struct genmemberContext_t : dbtool_t {
 	unsigned   opt_generate;
 	/// @var {string} name of file containing members
 	const char *opt_load;
-	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned   opt_saveIndex;
 	/// @var {number} Sid range upper bound
 	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -289,7 +287,6 @@ struct genmemberContext_t : dbtool_t {
 		arg_outputDatabase = NULL;
 		opt_force          = 0;
 		opt_generate       = 1;
-		opt_saveIndex      = 1;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
 		opt_load           = NULL;

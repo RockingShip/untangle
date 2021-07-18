@@ -167,8 +167,6 @@ struct gendepreciateContext_t : dbtool_t {
 	unsigned opt_mode;
 	/// @var {number} reverse order of signatures
 	unsigned opt_reverse;
-	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned   opt_saveIndex;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned   opt_text;
 
@@ -212,7 +210,6 @@ struct gendepreciateContext_t : dbtool_t {
 		opt_mode           = 3;
 		opt_load           = NULL;
 		opt_reverse        = 0;
-		opt_saveIndex      = 1;
 		opt_text           = 0;
 
 		pStore      = NULL;

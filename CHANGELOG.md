@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-18 11:19:40 Changed: Moved `opt_saveIndex` to `dbtool_t`.
 2021-07-18 10:21:13 Changed: Split selection of generators into `.cc` and `.h` components. No code change.
 ```
 

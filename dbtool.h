@@ -83,6 +83,8 @@ struct dbtool_t : callable_t {
 	double   opt_ratio;
 	/// @var {number} size of pair index WARNING: must be prime
 	unsigned opt_pairIndexSize;
+	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
+	unsigned   opt_saveIndex;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 	/// @var {number} size of swap index WARNING: must be prime
@@ -114,6 +116,7 @@ struct dbtool_t : callable_t {
 		opt_memberIndexSize    = 0;
 		opt_ratio              = METRICS_DEFAULT_RATIO / 10.0;
 		opt_pairIndexSize      = 0;
+		opt_saveIndex          = 1;
 		opt_signatureIndexSize = 0;
 		opt_swapIndexSize      = 0;
 

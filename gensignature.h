@@ -209,8 +209,6 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_generate;
 	/// @var {string} name of file containing members
 	const char *opt_load;
-	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned   opt_saveIndex;
 	/// @var {number} save imprints with given interleave
 	unsigned   opt_saveInterleave;
 	/// @var {number} sort signatures before saving
@@ -251,7 +249,6 @@ struct gensignatureContext_t : dbtool_t {
 		opt_force          = 0;
 		opt_generate       = 1;
 		opt_load           = NULL;
-		opt_saveIndex      = 1;
 		opt_saveInterleave = 0;
 		opt_sort           = 1;
 		opt_taskId         = 0;

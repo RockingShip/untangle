@@ -103,8 +103,6 @@ struct genhintContext_t : dbtool_t {
 	unsigned   opt_generate;
 	/// @var {string} name of file containing interleave hints
 	const char *opt_load;
-	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned   opt_saveIndex;
 	/// @var {number} Sid range upper bound
 	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -135,7 +133,6 @@ struct genhintContext_t : dbtool_t {
 		arg_inputDatabase  = NULL;
 		opt_load           = NULL;
 		arg_outputDatabase = NULL;
-		opt_saveIndex      = 1;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
 		opt_taskId         = 0;
