@@ -1,4 +1,4 @@
-AC_INIT([untangle], [2.6.1])
+AC_INIT([untangle], [2.7.0])
 AC_CONFIG_SRCDIR([configure.ac])
 AC_CONFIG_AUX_DIR([m4])
 AC_CONFIG_MACRO_DIRS([m4])

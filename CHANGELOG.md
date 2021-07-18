@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+2021-07-18 21:04:59 [Version 2.7.0]
+
+Import/export used for [https://github.com/RockingShip/untangle-dataset](https://github.com/RockingShip/untangle-dataset)
+
+NOTE: Indications are to treat depreciated members as deleted.
+NOTE: `bexplain` still has errors.
+
 ```
+2021-07-18 16:46:16 Changed: Ignore depreciated members more.
 2021-07-18 12:22:34 Added: `genimport.cc` and `genport.h`.
 2021-07-18 11:19:40 Changed: Moved `opt_saveIndex` to `dbtool_t`.
 2021-07-18 10:21:13 Changed: Split selection of generators into `.cc` and `.h` components. No code change.
@@ -286,7 +294,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.6.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.7.0...HEAD
+[Version 2.7.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.6.0...v2.7.0
 [Version 2.6.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...v2.6.0
 [Version 2.4.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.3.0...v2.4.0
 [Version 2.3.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.2.0...v2.3.0
