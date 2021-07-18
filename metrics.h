@@ -397,7 +397,7 @@ struct metricsGenerator_t {
 	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space
 	uint64_t numPair; // (including mandatory zero entry)
 
-	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space
+	/// @var {number} - Total members (before compacting). Provided by `genmember`. Using `4n9` signature space, including depreciated
 	uint64_t numMember; // (including mandatory zero entry)
 
 	/// @var {number} - Total patternFirst. Provided by `genpattern`. Using `4n9` signature space
@@ -417,16 +417,16 @@ struct metricsGenerator_t {
 static const metricsGenerator_t metricsGenerator[] = {
 	{9, 1, 0, 0,             3,         3,        151, 225, 0,     3,       0, 0, 0},
 	{9, 0, 0, 0,             3,         3,        151, 225, 5,     3,       0, 0, 0},
-	{9, 1, 1, 4,             5,         7,        2,   6,   0,     7,       0, 0, 0},
+	{9, 1, 1, 4,             5,         7,        2,   6,   5,     7,       0, 0, 0},
 	{9, 0, 1, 6,             7,         9,        2,   6,   5,     9,       0, 0, 0},
-	{9, 1, 2, 154,           155,       49,       6,   14,  0,     108,     0, 0, 0},
+	{9, 1, 2, 154,           155,       49,       6,   14,  11,    108,     0, 0, 0},
 	{9, 0, 2, 424,           425,       110,      6,   14,  13,    275,     0, 0, 0},
-	{9, 1, 3, 15548,         15221,     1311,     26,  47,  0,     6862,    0, 0, 0},
+	{9, 1, 3, 15548,         15221,     1311,     26,  47,  171,   6981,    0, 0, 0},
 	{9, 0, 3, 81406,         79835,     5666,     26,  47,  377,   30137,   0, 0, 0},
-	{9, 1, 4, 2969462,       2777493,   96363,    151, 225, 0,     801917,  0, 0, 0},
+	{9, 1, 4, 2969462,       2777493,   96363,    151, 225, 12650, 832488,  0, 0, 0},
 	{9, 0, 4, 29990974,      28304991,  791647,   151, 225, 48967, 6187768, 0, 0, 0},
 	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
-	{9, 1, 5, 913288021,     809357847, 10233318, 0,   0,   0,     5873490, 0, 0, 2}, // NOTE: this is the extension to 4n9
+	{9, 1, 5, 913288021,     809357847, 10233318, 126, 0,   51907, 966156,  0, 0, 2}, // NOTE: this is the extension to 4n9
 	{9, 1, 5, 913288021,     809357847, 15490349, 0,   0,   0,     0,       0, 0, 2}, // NOTE: this is full 5n9-pure (placed second and hidden)
 	// below only intended for members
 	{9, 0, 5, 17927026892,   0,         0,        0,   0,   67922, 6258678, 0, 0, 2}, // NOTE: this is the extension to 4n9

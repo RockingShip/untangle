@@ -58,7 +58,7 @@ struct genportContext_t : dbtool_t {
 	/// @var {string} name of output database
 	const char *arg_jsonName;
 
-	/// @var {number} --no-depr, do not export depreciated members
+	/// @var {number} --depr, export depreciated members
 	unsigned opt_depr;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned opt_force;
@@ -70,7 +70,7 @@ struct genportContext_t : dbtool_t {
 		arg_databaseName = NULL;
 		arg_jsonName     = NULL;
 
-		opt_depr         = 1; // default includes depreciated
+		opt_depr         = 0;
 		opt_force        = 0;
 
 		pStore           = NULL;
@@ -153,9 +153,9 @@ struct genportContext_t : dbtool_t {
 		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 			const member_t *pMember = pStore->members + iMid;
 
-			if (pMember->flags &  member_t::MEMMASK_DELETE)
+			if (pMember->flags & member_t::MEMMASK_DELETE)
 				continue; // skip deleted
-			if ((pMember->flags & member_t::MEMMASK_DEPR) && opt_depr)
+			if ((pMember->flags & member_t::MEMMASK_DEPR) && !opt_depr)
 				continue; // skip depreciated
 
 			memberCRC = crc32Name(memberCRC, pMember->name);
@@ -186,7 +186,7 @@ struct genportContext_t : dbtool_t {
 			assert(pPair->tid < pStore->numTransform);
 			memberCRC = crc32Name(memberCRC, pStore->fwdTransformNames[pPair->tid]);
 
-			for (unsigned j = 0; j<pMember->MAXHEAD; j++) {
+			for (unsigned j = 0; j < pMember->MAXHEAD; j++) {
 				unsigned mid = pMember->heads[j];
 				if (mid) {
 					assert(mid < pStore->numMember);
@@ -196,8 +196,14 @@ struct genportContext_t : dbtool_t {
 
 			if (pMember->flags & member_t::MEMMASK_SAFE)
 				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('S'));
+#if 0
+			/*
+			 * @date 2021-07-18 14:33:44
+			 * do not include component flag as it might change when removing depreciated from the collection
+			 */
 			if (pMember->flags & member_t::MEMMASK_COMP)
 				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('C'));
+#endif
 			if (pMember->flags & member_t::MEMMASK_LOCKED)
 				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('L'));
 			if (pMember->flags & member_t::MEMMASK_DEPR)
@@ -517,7 +523,7 @@ struct genportContext_t : dbtool_t {
 
 			if (pMember->flags &  member_t::MEMMASK_DELETE)
 				continue; // skip deleted
-			if ((pMember->flags & member_t::MEMMASK_DEPR) && opt_depr)
+			if ((pMember->flags & member_t::MEMMASK_DEPR) && !opt_depr)
 				continue; // skip depreciated
 
 			if (first)
@@ -663,6 +669,12 @@ struct genportContext_t : dbtool_t {
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				(double) ctx.cntCompare / ctx.cntHash);
 		}
+
+		/*
+		 * compact, sort and reindex members
+		 */
+
+		appMember.finaliseMembers();
 
 		/*
 		 * Verify CRC
