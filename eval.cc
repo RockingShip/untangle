@@ -363,6 +363,7 @@ struct tree_t {
 		static uint32_t stackL[NEND * 3]; // there are 3 operands per per opcode
 		static uint32_t stackR[NEND * 3]; // there are 3 operands per per opcode
 		int             stackPos = 0;
+		int             secondary = 0;    // compare structure first, then endpoints
 
 		assert(!(lhs & IBIT));
 		assert(!(rhs & IBIT));
@@ -380,6 +381,10 @@ struct tree_t {
 			unsigned L = stackL[stackPos];
 			unsigned R = stackR[stackPos];
 
+			// shortcut
+			if (L == R)
+				continue;
+
 			/*
 			 * compare endpoints/references
 			 */
@@ -392,17 +397,21 @@ struct tree_t {
 			 * compare contents
 			 */
 			if (L < nstart) {
-				if (L < R)
-					return -1; // `lhs` < `rhs`
-				if (L > R)
-					return +1; // `lhs` < `rhs`
+				if (secondary == 0) {
+					if (L < R)
+						secondary = -1; // `lhs` < `rhs`
+					else if (L > R)
+						secondary = +1; // `lhs` < `rhs`
+				}
 
 				// continue with next stack entry
 				continue;
 			}
 
 			/*
-			 * Been here before
+			 * fast-path, Been here before
+			 * This is a shallow test.
+			 * If L is later compared with something else then this fast-path will disable.
 			 */
 			if (beenThere[L] == R)
 				continue; // yes
@@ -493,8 +502,10 @@ struct tree_t {
 
 		} while (stackPos > 0);
 
+		assert(secondary || lhs == rhs); // secondary==0 implies lhs==rhs
+
 		// identical
-		return 0;
+		return secondary;
 	}
 
 	/**

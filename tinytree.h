@@ -167,6 +167,13 @@ struct tinyTree_t {
 	 * Comparing follows tree walking path.
 	 * First layout, when components are satisfied then endpoints.
 	 *
+	 *
+	 * @date 2021-07-19 23:48:11
+	 *
+	 * With latest insights: compare structure first, then endpoints.
+	 * Make compatible with implementation in `eval.c`
+	 * ordering of dyadics should work now `./slookup --member 'abc!de^^f^'`
+	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
 	 * @param {boolean} layoutOnly - ignore endpoint values when `true`
@@ -177,6 +184,7 @@ struct tinyTree_t {
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int      stackPos = 0;
+		int      secondary = 0;  // compare structure first, then endpoints
 
 		assert(!(lhs & IBIT));
 		assert(!(rhs & IBIT));
@@ -211,9 +219,23 @@ struct tinyTree_t {
 			/*
 			 * compare if either is an endpoint
 			 */
-			if (L < TINYTREE_NSTART || R < TINYTREE_NSTART) {
-				if (L != R)
-					return L - R;
+			if (L < TINYTREE_NSTART && R >= TINYTREE_NSTART)
+				return -1; // `end` < `ref`
+			if (L >= TINYTREE_NSTART && R < TINYTREE_NSTART)
+				return +1; // `ref` > `end`
+
+			/*
+			 * compare contents
+			 */
+			if (L < TINYTREE_NSTART) {
+				if (secondary == 0) {
+					if (L < R)
+						secondary = -1; // `lhs` < `rhs`
+					else if (L > R)
+						secondary = +1; // `lhs` < `rhs`
+				}
+
+				// continue with next stack entry
 				continue;
 			}
 
@@ -233,56 +255,93 @@ struct tinyTree_t {
 			const tinyNode_t *pNodeL = this->N + L;
 			const tinyNode_t *pNodeR = treeR.N + R;
 
-			// test that either both or none have IBIT set
-			if (pNodeL->T & IBIT) {
-				if (!(pNodeR->T & IBIT))
-					return -1;
-			} else if (pNodeR->T & IBIT) {
-				return +1;
-			}
-
 			/*
-			 * Push components
-			 *
-			 *  Evaluation order is reverse order
-			 *	First push if both are endpoints. Should be tested last if layout matches.
-			 *	Second enter depth, let that handle incomplete sides.
+			 * Reminder:
+			 *  [ 2] a ? ~0 : b                  "+" OR
+			 *  [ 6] a ? ~b : 0                  ">" GT
+			 *  [ 8] a ? ~b : b                  "^" XOR
+			 *  [ 9] a ? ~b : c                  "!" QnTF
+			 *  [16] a ?  b : 0                  "&" AND
+			 *  [19] a ?  b : c                  "?" QTF
 			 */
 
-			if (pNodeL->F < TINYTREE_NSTART && pNodeR->F < TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->F;
-				stackR[stackPos] = pNodeR->F;
-				stackPos++;
+			/*
+			 * compare structure
+			 */
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
+				return -1; // `QnTF` < `QTF`
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+				return +1; // `QTF` > `QnTF`
+
+			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
+				return -1; // `OR` < !`OR`
+			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
+				return +1; // !`OR` > `OR`
+
+			if (pNodeL->F == 0 && pNodeR->F != 0)
+				return -1; // `GT` < !`GT` or `AND` < !`AND`
+			if (pNodeL->F != 0 && pNodeR->F == 0)
+				return +1; // !`GT` > `GT` or !`AND` > `AND`
+
+			if (pNodeL->F == (pNodeL->T ^ IBIT) && pNodeR->F != (pNodeR->T ^ IBIT))
+				return -1; // `XOR` < !`XOR`
+			if (pNodeL->F != (pNodeL->T ^ IBIT) && pNodeR->F == (pNodeR->T ^ IBIT))
+				return +1; // !`XOR` > `XOR`
+
+			/*
+			 * Push natural walking order
+			 * deep Q, deep T, deep F, endpoint Q, endpoint T, endpoint F
+			 *
+			 */
+			if (pNodeL->F) {
+				if (pNodeL->F < TINYTREE_NSTART && pNodeR->F < TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
+				}
 			}
-			if ((pNodeL->T & ~IBIT) < TINYTREE_NSTART && (pNodeR->T & ~IBIT) < TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->T & ~IBIT;
-				stackR[stackPos] = pNodeR->T & ~IBIT;
-				stackPos++;
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) < TINYTREE_NSTART && (pNodeR->T & ~IBIT) < TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
+				}
 			}
-			if (pNodeL->Q < TINYTREE_NSTART && pNodeR->Q < TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->Q;
-				stackR[stackPos] = pNodeR->Q;
-				stackPos++;
+			if (pNodeL->Q) {
+				if (pNodeL->Q < TINYTREE_NSTART && pNodeR->Q < TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
+				}
+			}
+			if (pNodeL->F) {
+				if (pNodeL->F >= TINYTREE_NSTART || pNodeR->F >= TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->F;
+					stackR[stackPos] = pNodeR->F;
+					stackPos++;
+				}
+			}
+			if (pNodeL->T & ~IBIT) {
+				if ((pNodeL->T & ~IBIT) >= TINYTREE_NSTART || (pNodeR->T & ~IBIT) >= TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->T & ~IBIT;
+					stackR[stackPos] = pNodeR->T & ~IBIT;
+					stackPos++;
+				}
+			}
+			if (pNodeL->Q) {
+				if (pNodeL->Q >= TINYTREE_NSTART || pNodeR->Q >= TINYTREE_NSTART) {
+					stackL[stackPos] = pNodeL->Q;
+					stackR[stackPos] = pNodeR->Q;
+					stackPos++;
+				}
 			}
 
-			if (pNodeL->F >= TINYTREE_NSTART || pNodeR->F >= TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->F;
-				stackR[stackPos] = pNodeR->F;
-				stackPos++;
-			}
-			if ((pNodeL->T & ~IBIT) >= TINYTREE_NSTART || (pNodeR->T & ~IBIT) >= TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->T & ~IBIT;
-				stackR[stackPos] = pNodeR->T & ~IBIT;
-				stackPos++;
-			}
-			if (pNodeL->Q >= TINYTREE_NSTART || pNodeR->Q >= TINYTREE_NSTART) {
-				stackL[stackPos] = pNodeL->Q;
-				stackR[stackPos] = pNodeR->Q;
-				stackPos++;
-			}
 		} while (stackPos > 0);
 
-		return 0;
+		assert(secondary || lhs == rhs); // secondary==0 implies lhs==rhs
+
+		// identical
+		return secondary;
 	}
 
 	/**

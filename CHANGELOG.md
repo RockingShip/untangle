@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-2021-07-18 21:04:59 [Version 2.7.0]
+```
+2021-07-22 21:37:20 Fixed: Tree compare, structure first then content.
+```
+
+## 2021-07-18 21:04:59 [Version 2.7.0]
 
 Import/export used for [https://github.com/RockingShip/untangle-dataset](https://github.com/RockingShip/untangle-dataset)
 
@@ -25,6 +29,7 @@ NOTE: `bexplain` still has errors.
 
 Database version "20210708".
 
+Evaluator initial state as database copy-on-write section.
 This release is the first approach towards `rewriteData[]`.
 Also introduced is the concept of safe members.
 

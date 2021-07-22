@@ -549,13 +549,11 @@ struct baseTree_t {
 	 * NOTE: Only key id's can be compared, node id's cannot be compared and need to be expanded
 	 *
 	 * return:
-	 *      -3 structure leftHandSide LESS rightHandSide
-	 *      -2 same structure but endpoints leftHandSide LESS rightHandSide
-	 *      -1 leftHandSide fits in rightHandSide
+	 *      -2 structure leftHandSide LESS rightHandSide
+	 *      -1 same structure but endpoints leftHandSide LESS rightHandSide
 	 *       0 EQUAL
-	 *      +1 rightHandSide fits in leftHandSide
-	 *      +2 same structure but endpoints leftHandSide GREATER rightHandSide
-	 *      +3 structure leftHandSide GREATER rightHandSide
+	 *      +1 same structure but endpoints leftHandSide GREATER rightHandSide
+	 *      +2 structure leftHandSide GREATER rightHandSide
 	 */
 	static int compare(baseTree_t *treeL, uint32_t lhs, baseTree_t *treeR, uint32_t rhs) {
 
@@ -616,39 +614,37 @@ struct baseTree_t {
 					L, treeL->N[L].Q, treeL->N[L].T, treeL->N[L].F,
 					R, treeR->N[R].Q, treeR->N[R].T, treeR->N[R].F);
 
+/*
+ * @date 2021-07-22 21:27:52
+ * I'm having second thoughts whether this has been fully tested.
+ */
+#if 0
 			// compare known/unknown
 			if ((treeL->compVersionL[L] == thisVersionL) && (treeR->compVersionR[R] != thisVersionR))
 				return -1;
 			if ((treeL->compVersionL[L] != thisVersionL) && (treeR->compVersionR[R] == thisVersionR))
 				return +1;
+#endif
 
-			// compare endpoint/tree
+			// compare endpoint/tree (structure)
 			if (L < treeL->nstart && R >= treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1a\n");
 			if (L < treeL->nstart && R >= treeR->nstart)
-				return -1;
+				return -2;
 			if (L >= treeL->nstart && R < treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1a\n");
 			if (L >= treeL->nstart && R < treeR->nstart)
-				return +1;
+				return +2;
 
-			if (L < treeL->nstart && R < treeR->nstart) {
-				// compare endpoint/endpoint
+			if (L < treeL->nstart) {
+				// compare endpoint/endpoint (contents)
 				if (secondary == 0) {
 					if (ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) { if (L < R) fprintf(stderr, "-2\n"); else if (L > R) fprintf(stderr, "+2\n"); }
 					// compare contents, not structure
 					if (L < R)
-						secondary = -2;
+						secondary = -1;
 					else if (L > R)
-						secondary = +2;
+						secondary = +1;
 				}
 				continue;
-			} else {
-				// compare relative node numbers
-				if (treeL->compVersionL[L] == thisVersionL) {
-					if (treeL->compNodeL[L] < treeR->compNodeR[R])
-						return -1;
-					if (treeL->compNodeL[L] > treeR->compNodeR[R])
-						return +1;
-				}
 			}
 
 			// determine if already handled
@@ -679,7 +675,7 @@ struct baseTree_t {
 			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
 				return +1;
 
-			// compare LESS-THAN
+			// compare GREATER-THAN
 			if (pNodeL->F == 0 && pNodeR->F != 0 && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1d\n");
 			if (pNodeL->F == 0 && pNodeR->F != 0)
 				return -1;
@@ -687,13 +683,15 @@ struct baseTree_t {
 			if (pNodeL->F != 0 && pNodeR->F == 0)
 				return +1;
 
-			// compare NOT-EQUAL
+			// compare XOR/NOT-EQUAL
 			if ((pNodeL->T & ~IBIT) == pNodeL->F && (pNodeR->T & ~IBIT) != pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1e\n");
 			if ((pNodeL->T & ~IBIT) == pNodeL->F && (pNodeR->T & ~IBIT) != pNodeR->F)
 				return -1;
 			if ((pNodeL->T & ~IBIT) != pNodeL->F && (pNodeR->T & ~IBIT) == pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1e\n");
 			if ((pNodeL->T & ~IBIT) != pNodeL->F && (pNodeR->T & ~IBIT) == pNodeR->F)
 				return +1;
+
+			// TODO: research if `tinyTree_t_t` treewalk is effecienter
 
 			// compare component
 			if (pNodeL->F != pNodeR->F) {
