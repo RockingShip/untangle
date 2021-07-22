@@ -70,7 +70,7 @@
  *
  *              <sid> <mid> <tid> <name> <flags>
  * Ticker:
- *   [TIMESTAMP] position( speed/s) procent% eta=EstimatedTime | numComponents=n numDepr=n | cntDepr=n cntLock=n | refcnt=n mid=n name/expression
+ *   [TIMESTAMP] position( speed/s) procent% eta=EstimatedTime | numComponent=n numDepr=n | cntDepr=n cntLock=n | refcnt=n mid=n name/expression
  *   numComponents: number of prime components, the lower the better
  *   cntDepr: number of components depreciated.
  *   numDepr: also including all members referencing the component (total)
@@ -707,7 +707,7 @@ struct gendepreciateContext_t : dbtool_t {
 				unsigned iMid     = pCurr - pRefcnts;
 				member_t *pMember = pStore->members + iMid;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numComponents=%u numDepr=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numComponent=%u numDepr=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u %s",
 					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, numComponents, numDepr, cntDepr, cntLock, pCurr->refcnt, iMid, pMember->name);
 
 				ctx.tick = 0;
@@ -865,7 +865,7 @@ struct gendepreciateContext_t : dbtool_t {
 		unsigned numLocked = updateLocked();
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numComponents=%u numDepr=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), numComponents, numDepr, numLocked, cntDepr, cntLock);
+			fprintf(stderr, "[%s] numComponent=%u numDepr=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), numComponents, numDepr, numLocked, cntDepr, cntLock);
 
 		return false;
 	}
