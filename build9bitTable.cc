@@ -1,7 +1,7 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * build9bit.cc
+ * build9bitTable.cc
  * 	Create (pseudo random) test function consisting of 9 input and 9 output bits.
  */
 
@@ -126,7 +126,7 @@ void validateAll(void) {
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
 
-struct build9bitContext_t {
+struct build9bitTableContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -137,7 +137,7 @@ struct build9bitContext_t {
 	/// @var {number} --seed, randon number generator seed
 	unsigned opt_seed;
 
-	build9bitContext_t() {
+	build9bitTableContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -278,7 +278,7 @@ struct build9bitContext_t {
  *
  * @global {build9bitContext_t} Application context
  */
-build9bitContext_t app;
+build9bitTableContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
