@@ -26,7 +26,7 @@
  * Basically, `gensignature` finds uniqueness in a given dataset.
  *
  * - It creates all possible 512403385356 expressions consisting of 5 or less unified operators and 9 or less variables
- * - Of every expression it permutates all possible 9!=363600 inputs
+ * - Of every expression it permutes all possible 9!=363600 inputs
  * - Of every permutation it tries all 2^8=512 different input values
  * - In that vastness of information matches are searched
  *
@@ -423,7 +423,7 @@ int main(int argc, char *argv[]) {
 			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 			break;
 		case LO_NOPURE:
-			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			app.opt_pureSignature = 0;
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
@@ -440,7 +440,7 @@ int main(int argc, char *argv[]) {
 			ctx.flags |= context_t::MAGICMASK_PARANOID;
 			break;
 		case LO_PURE:
-			ctx.flags |= context_t::MAGICMASK_PURE;
+			app.opt_pureSignature = 1;
 			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -820,6 +820,9 @@ int main(int argc, char *argv[]) {
 	 */
 
 	if (app.arg_outputDatabase) {
+		if (app.opt_pureSignature)
+			store.creationFlags |= context_t::MAGICMASK_PURE;
+
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
 			store.hintIndexSize      = 0;

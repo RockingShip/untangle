@@ -24,7 +24,7 @@
  * Basically, `gensignature` finds uniqueness in a given dataset.
  *
  * - It creates all possible 512403385356 expressions consisting of 5 or less unified operators and 9 or less variables
- * - Of every expression it permutates all possible 9!=363600 inputs
+ * - Of every expression it permutes all possible 9!=363600 inputs
  * - Of every permutation it tries all 2^8=512 different input values
  * - In that vastness of information matches are searched
  *
@@ -226,6 +226,14 @@ struct gensignatureContext_t : dbtool_t {
 	/// @var {number} generator lower bound
 	uint64_t   opt_windowLo;
 
+	/*
+	 * @date  2021-07-21 15:51:26
+	 * `--pure` will normally set the generator to `QnTF` only mode.
+	 * However, this is undesirable for signatures where the top-level node may be mixed.
+	 * Save the use gesture here, let the generator run in mixed mode and set the database flag just before saving.
+	 */
+	unsigned opt_pureSignature;
+
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
 
@@ -257,6 +265,8 @@ struct gensignatureContext_t : dbtool_t {
 		opt_truncate       = 0;
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
+
+		opt_pureSignature  = 0;
 
 		pStore        = NULL;
 		skipDuplicate = 0;
@@ -338,6 +348,19 @@ struct gensignatureContext_t : dbtool_t {
 #endif
 
 			ctx.tick = 0;
+		}
+
+		/*
+		 * @date 2021-07-20 09:51:35
+		 *
+		 * `--pure` v2 experiment: components must be QnTF, except signature top-level
+		 * Generator is still mixed mode so use a different flag and test explicitly here
+		 */
+		if (opt_pureSignature) {
+			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
+				if (!(treeR.N[k].T & IBIT))
+					return true;
+			}
 		}
 
 		/*
