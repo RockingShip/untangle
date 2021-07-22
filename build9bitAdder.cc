@@ -1,13 +1,8 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * build7bitCount.cc
- * 	Count 7 bits using the algorithm:
- *
- * 	count = bits;
- * 	count = (count & 0b1010101) + ( ((count & 0b0101010) >> 1)
- * 	count = (count & 0b0110011) + ( ((count & 0b1001100) >> 2)
- * 	count = (count & 0b0001111) + ( ((count & 0b1110000) >> 4)
+ * build9bitAdder.cc
+ * 	4 bits adder with carry-in
  */
 
 /*
@@ -48,18 +43,18 @@ context_t ctx;
 // used key/root names
 enum {
 	kZero = 0, kError, // reserved
-	k0, k1, k2, k3, k4, k5, k6, // keys/inputs
-	o0, o1, o2, // roots/outputs
+	l0, l1, l2, l3, r0, r1, r2, r3, ci, // keys/inputs
+	o0, o1, o2, o3, o4,  // roots/outputs
 	NSTART, // last
 
-	KSTART = k0,
+	KSTART = l0,
 	OSTART = o0,
 };
 
 const char *allNames[] = {
 	"0", "ERROR",
-	"k0", "k1", "k2", "k3", "k4", "k5", "k6",
-	"o0", "o1", "o2",
+	"l0", "l1", "l2", "l3", "r0", "r1", "r2", "r3", "ci",
+	"o0", "o1", "o2", "o3", "o4",
 };
 
 /// @var {baseTree_t*} global reference to tree
@@ -105,13 +100,15 @@ void validateAll(void) {
 
 		// calculate result
 		unsigned outputs = 0;
-		if (inputs & (1<<0)) outputs++;
-		if (inputs & (1<<1)) outputs++;
-		if (inputs & (1<<2)) outputs++;
-		if (inputs & (1<<3)) outputs++;
-		if (inputs & (1<<4)) outputs++;
-		if (inputs & (1<<5)) outputs++;
-		if (inputs & (1<<6)) outputs++;
+		if (inputs & (1<<0)) outputs += 0x1; // l0
+		if (inputs & (1<<1)) outputs += 0x2; // l1
+		if (inputs & (1<<2)) outputs += 0x4; // l2
+		if (inputs & (1<<3)) outputs += 0x8; // l3
+		if (inputs & (1<<4)) outputs += 0x1; // r0
+		if (inputs & (1<<5)) outputs += 0x2; // r1
+		if (inputs & (1<<6)) outputs += 0x4; // r2
+		if (inputs & (1<<7)) outputs += 0x8; // r3
+		if (inputs & (1<<8)) outputs += 1; // carry-in
 
 		// first byte
 		rootStr[0] = "0123456789abcdef"[(outputs >> 4) & 15];
@@ -135,7 +132,7 @@ void validateAll(void) {
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
 
-struct build7bitCountContext_t {
+struct build9bitAdderContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -146,7 +143,7 @@ struct build7bitCountContext_t {
 	/// @var {number} --seed, randon number generator seed
 	unsigned opt_seed;
 
-	build7bitCountContext_t() {
+	build9bitAdderContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -178,25 +175,6 @@ struct build7bitCountContext_t {
 	}
 
 	/*
-	 * Basic 7-bits adder
-	 */
-	void add7(unsigned *O6, unsigned *O5, unsigned *O4, unsigned *O3, unsigned *O2, unsigned *O1, unsigned *O0,
-		  unsigned L6, unsigned L5, unsigned L4, unsigned L3, unsigned L2, unsigned L1, unsigned L0,
-		  unsigned R6, unsigned R5, unsigned R4, unsigned R3, unsigned R2, unsigned R1, unsigned R0) {
-
-		// intermediate carries
-		unsigned C6, C5, C4, C3, C2, C1, C0;
-
-		add(&C0, O0, L0, R0, 0);
-		add(&C1, O1, L1, R1, C0);
-		add(&C2, O2, L2, R2, C1);
-		add(&C3, O3, L3, R3, C2);
-		add(&C4, O4, L4, R4, C3);
-		add(&C5, O5, L5, R5, C4);
-		add(&C6, O6, L6, R6, C5);
-	}
-
-	/*
 	 * Build the tree
 	 */
 	void build(void) {
@@ -209,41 +187,33 @@ struct build7bitCountContext_t {
 		 */
 
 		// count = bits;
-		unsigned A6, A5, A4, A3, A2, A1, A0;
-		
-		A0 = gTree->kstart + 0;
-		A1 = gTree->kstart + 1;
-		A2 = gTree->kstart + 2;
-		A3 = gTree->kstart + 3;
-		A4 = gTree->kstart + 4;
-		A5 = gTree->kstart + 5;
-		A6 = gTree->kstart + 6;
+		unsigned CI, R3, R2, R1, R0, L3, L2, L1, L0;
 
-		// count = (count & 0b1010101) + ( ((count & 0b0101010) >> 1)
-		unsigned B6, B5, B4, B3, B2, B1, B0;
+		L0 = gTree->kstart + 0;
+		L1 = gTree->kstart + 1;
+		L2 = gTree->kstart + 2;
+		L3 = gTree->kstart + 3;
+		R0 = gTree->kstart + 4;
+		R1 = gTree->kstart + 5;
+		R2 = gTree->kstart + 6;
+		R3 = gTree->kstart + 7;
+		CI = gTree->kstart + 8;
 
-		add7(&B6, &B5, &B4, &B3, &B2, &B1, &B0,
-		     A6, 0, A4, 0, A2, 0, A0,
-		      0, 0, A5, 0, A3, 0, A1);
+		// add
+		unsigned C3, C2, C1, C0; // carries
+		unsigned O3, O2, O1, O0; // outputs
 
-		// count = (count & 0b0110011) + ( ((count & 0b1001100) >> 2)
-		unsigned C6, C5, C4, C3, C2, C1, C0;
-
-		add7(&C6, &C5, &C4, &C3, &C2, &C1, &C0,
-		     0, B5, B4, 0, 0, B1, B0,
-		     0,  0, B6, 0, 0, B3, B2);
-
-		// count = (count & 0b0001111) + ( ((count & 0b1110000) >> 4)
-		unsigned D6, D5, D4, D3, D2, D1, D0;
-
-		add7(&D6, &D5, &D4, &D3, &D2, &D1, &D0,
-		     0, 0, 0, C3, C2, C1, C0,
-		     0, 0, 0,  0, C6, C5, C4);
+		add(&C0, &O0, L0, R0, CI);
+		add(&C1, &O1, L1, R1, C0);
+		add(&C2, &O2, L2, R2, C1);
+		add(&C3, &O3, L3, R3, C2);
 
 		// store result
-		gTree->roots[gTree->ostart + 0] = D0;
-		gTree->roots[gTree->ostart + 1] = D1;
-		gTree->roots[gTree->ostart + 2] = D2;
+		gTree->roots[gTree->ostart + 0] = O0;
+		gTree->roots[gTree->ostart + 1] = O1;
+		gTree->roots[gTree->ostart + 2] = O2;
+		gTree->roots[gTree->ostart + 3] = O3;
+		gTree->roots[gTree->ostart + 4] = C3;
 	}
 
 	void main(const char *jsonFilename, const char *datFilename) {
@@ -324,9 +294,9 @@ struct build7bitCountContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {build7bitCountContext_t} Application context
+ * @global {build9bitAdderContext_t} Application context
  */
-build7bitCountContext_t app;
+build9bitAdderContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
