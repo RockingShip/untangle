@@ -388,6 +388,8 @@ int main(int argc, char *argv[]) {
 
 	store.interleave         = json_integer_value(json_object_get(jInput, "interleave"));
 
+	ctx.flags		 = app.flagsFromJson(json_object_get(jInput, "flags"));
+
 	// find matching `interleaveStep`
 	const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
 	assert(pMetrics);
@@ -401,6 +403,14 @@ int main(int argc, char *argv[]) {
 	store.create(0);
 
 	app.pStore   = &store;
+
+	// display system flags when database was created
+	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
+		char dbText[128];
+
+		ctx.flagsToText(store.creationFlags, dbText);
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+	}
 
 	/*
 	 * Statistics

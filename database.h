@@ -287,12 +287,10 @@ struct database_t {
 	 * Constructor
 	 */
 	database_t(context_t &ctx) : ctx(ctx) {
-		// copy user flags+debug settings
-		creationFlags = ctx.flags;
-
 		hndl        = 0;
 		rawDatabase = NULL;
 		::memset(&fileHeader, 0, sizeof(fileHeader));
+		creationFlags = 0;
 		allocFlags = 0;
 
 		// transform store
@@ -732,6 +730,8 @@ struct database_t {
   	 * @param {number} excludeSections - set of sections to exclude from allocating
 	 */
 	void create(unsigned excludeSections) {
+		// copy user flags+debug settings
+		creationFlags = ctx.flags;
 
 		// transform store
 		if (maxTransform && !(excludeSections & ALLOCMASK_TRANSFORM)) {

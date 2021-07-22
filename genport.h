@@ -76,7 +76,7 @@ struct genportContext_t : dbtool_t {
 		pStore           = NULL;
 	}
 
-	uint32_t crc32Name(uint32_t crc32, const char *pName) {
+	inline uint32_t crc32Name(uint32_t crc32, const char *pName) {
 		while (*pName) {
 			__asm__ __volatile__ ("crc32b %1, %0" : "+r"(crc32) : "rm"(*pName));
 			pName++;
@@ -101,11 +101,11 @@ struct genportContext_t : dbtool_t {
 			signatureCRC = crc32Name(signatureCRC, pSignature->name);
 
 			if (pSignature->flags & signature_t::SIGMASK_SAFE)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(signatureCRC) : "rm"('S'));
+				signatureCRC = crc32Name(signatureCRC, "S");
 			if (pSignature->flags & signature_t::SIGMASK_PROVIDES)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(signatureCRC) : "rm"('P'));
+				signatureCRC = crc32Name(signatureCRC, "P");
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(signatureCRC) : "rm"('R'));
+				signatureCRC = crc32Name(signatureCRC, "R");
 		}
 
 		return signatureCRC;
@@ -195,21 +195,21 @@ struct genportContext_t : dbtool_t {
 			}
 
 			if (pMember->flags & member_t::MEMMASK_SAFE)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('S'));
+				memberCRC = crc32Name(memberCRC, "S");
 #if 0
 			/*
 			 * @date 2021-07-18 14:33:44
 			 * do not include component flag as it might change when removing depreciated from the collection
 			 */
 			if (pMember->flags & member_t::MEMMASK_COMP)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('C'));
+				memberCRC = crc32Name(memberCRC, "C");
 #endif
 			if (pMember->flags & member_t::MEMMASK_LOCKED)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('L'));
+				memberCRC = crc32Name(memberCRC, "L");
 			if (pMember->flags & member_t::MEMMASK_DEPR)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('D'));
+				memberCRC = crc32Name(memberCRC, "D");
 			if (pMember->flags & member_t::MEMMASK_DELETE)
-				__asm__ __volatile__ ("crc32b %1, %0" : "+r"(memberCRC) : "rm"('X'));
+				memberCRC = crc32Name(memberCRC, "X");
 		}
 
 		return memberCRC;
@@ -221,7 +221,43 @@ struct genportContext_t : dbtool_t {
 	 * Write selection of header values
 	 */
 	void headersAsJson(FILE *f) {
-		fprintf(f, "{\"%s\":%u\n", "maxSignature", pStore->numSignature);
+		fprintf(f, "{\"flags\":[");
+
+		unsigned cnt = 0;
+
+		if (pStore->creationFlags & context_t::MAGICMASK_PARANOID) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"paranoid\"");
+		}
+		if (pStore->creationFlags & context_t::MAGICMASK_PURE) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"pure\"");
+		}
+		if (pStore->creationFlags & context_t::MAGICMASK_UNSAFE) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"unsafe\"");
+		}
+		if (pStore->creationFlags & context_t::MAGICMASK_AINF) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"ainf\"");
+		}
+		if (pStore->creationFlags & context_t::MAGICMASK_CASCADE) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"cascade\"");
+		}
+		if (pStore->creationFlags & context_t::MAGICMASK_REWRITE) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"rewrite\"");
+		}
+		fprintf(f, "]");
+
+		fprintf(f, ",\"%s\":%u\n", "maxSignature", pStore->numSignature);
 		fprintf(f, ",\"%s\":%u\n", "signatureIndexSize", pStore->signatureIndexSize);
 		fprintf(f, ",\"%s\":%u\n", "maxSwap", pStore->numSwap);
 		fprintf(f, ",\"%s\":%u\n", "swapIndexSize", pStore->swapIndexSize);
@@ -233,6 +269,38 @@ struct genportContext_t : dbtool_t {
 		fprintf(f, ",\"%s\":%u\n", "maxMember", pStore->numMember);
 		fprintf(f, ",\"%s\":%u\n", "memberIndexSize", pStore->memberIndexSize);
 
+	}
+
+	/**
+	 * @date 2021-07-22 20:07:36
+	 *
+	 * Create flags from json
+	 */
+	unsigned flagsFromJson(json_t *jInput) {
+
+		unsigned mask = 0;
+
+		for (unsigned i=0; i< json_array_size(jInput); i++) {
+			const char *pFlag = json_string_value(json_array_get(jInput, i));
+
+			if (strcmp(pFlag, "paranoid") == 0)
+				mask |= context_t::MAGICMASK_PARANOID;
+			else if (strcmp(pFlag, "pure") == 0)
+				mask |= context_t::MAGICMASK_PURE;
+			else if (strcmp(pFlag, "unsafe") == 0)
+				mask |= context_t::MAGICMASK_UNSAFE;
+			else if (strcmp(pFlag, "ainf") == 0)
+				mask |= context_t::MAGICMASK_AINF;
+			else if (strcmp(pFlag, "cascade") == 0)
+				mask |= context_t::MAGICMASK_CASCADE;
+			else if (strcmp(pFlag, "rewrite") == 0)
+				mask |= context_t::MAGICMASK_REWRITE;
+			else
+				ctx.fatal("\n{\"error\":\"unsupported flag\",\"where\":\"%s:%s:%d\",\"flag\":\"%s\"}\n",
+					  __FUNCTION__, __FILE__, __LINE__, pFlag);
+		}
+
+		return mask;
 	}
 
 	/*
@@ -293,6 +361,12 @@ struct genportContext_t : dbtool_t {
 			const char *pFlags = json_string_value(json_array_get(jLine, 1));
 
 			/*
+			 * construct tree
+			 */
+
+			tree.loadStringFast(pName);
+
+			/*
 			 * Analyse name
 			 */
 
@@ -310,12 +384,6 @@ struct genportContext_t : dbtool_t {
 					numBackRef++;
 				}
 			}
-
-			/*
-			 * construct tree
-			 */
-
-			tree.loadStringFast(pName);
 
 			/*
 			 * construct signature
@@ -600,18 +668,41 @@ struct genportContext_t : dbtool_t {
 			}
 
 			/*
+			 * construct tree
+			 */
+
+			tree.loadStringFast(pName);
+
+			/*
+			 * Analyse name
+			 */
+
+			unsigned numPlaceholder = 0, numEndpoint = 0, numBackRef = 0;
+			unsigned beenThere      = 0;
+
+			for (const char *p = pName; *p; p++) {
+				if (::islower(*p)) {
+					if (!(beenThere & (1 << (*p - 'a')))) {
+						numPlaceholder++;
+						beenThere |= 1 << (*p - 'a');
+					}
+					numEndpoint++;
+				} else if (::isdigit(*p) && *p != '0') {
+					numBackRef++;
+				}
+			}
+
+			/*
 			 * construct member
 			 */
 
 			uint32_t mid = pStore->addMember(pName);
 			member_t *pMember = pStore->members + mid;
 
-			tree.loadStringFast(pName);
-			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &pMember->sid, &pMember->tid);
-
-			if (pMember->sid == 0)
-				ctx.fatal("\n{\"error\":\"member not matched\",\"where\":\"%s:%s:%d\",\"member\":\"%s\"}\n",
-					  __FUNCTION__, __FILE__, __LINE__, pName);
+			pMember->size           = tree.count - tinyTree_t::TINYTREE_NSTART;
+			pMember->numPlaceholder = numPlaceholder;
+			pMember->numEndpoint    = numEndpoint;
+			pMember->numBackRef     = numBackRef;
 
 			/*
 			 * Examine flags
@@ -642,12 +733,18 @@ struct genportContext_t : dbtool_t {
 			assert(pStore->memberIndex[ix] == 0);
 			pStore->memberIndex[ix] = mid;
 
+			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &pMember->sid, &pMember->tid);
+
+			if (pMember->sid == 0)
+				ctx.fatal("\n{\"error\":\"member not matched\",\"where\":\"%s:%s:%d\",\"member\":\"%s\"}\n",
+					  __FUNCTION__, __FILE__, __LINE__, pName);
+
 			/*
-			 * Construct member
+			 * determine heads/tails
 			 */
 			unsigned savFlags = pMember->flags;
 			bool ok = appMember.findHeadTail(pMember, tree);
-			if (!ok)
+			if (!ok && (pMember->flags & member_t::MEMMASK_SAFE))
 				ctx.fatal("\n{\"error\":\"failed to reconstruct member\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
 			if (pMember->flags != savFlags)
 				ctx.fatal("\n{\"error\":\"flags changed after member reconstruction\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, pName, pMember->flags, savFlags);

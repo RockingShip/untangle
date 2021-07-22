@@ -8,15 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-22 21:42:18 Fixed: `genimport`/`genexport`.
 2021-07-22 21:37:20 Fixed: Tree compare, structure first then content.
 ```
 
 ## 2021-07-18 21:04:59 [Version 2.7.0]
 
 Import/export used for [https://github.com/RockingShip/untangle-dataset](https://github.com/RockingShip/untangle-dataset)
-
-NOTE: Indications are to treat depreciated members as deleted.
-NOTE: `bexplain` still has errors.
 
 ```
 2021-07-18 16:46:16 Changed: Ignore depreciated members more.
