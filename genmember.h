@@ -998,26 +998,38 @@ struct genmemberContext_t : dbtool_t {
 					 *
 					 * Reuse `members[]`.
 					 * Field `nextMember` is perfect for that.
+					 *
+					 * to reduce multiple sweeps of members:
+					 * Flag members to be released first,
+					 * then loop once through all members to undo references
+					 * then release flagged
 					 */
-					while (pSignature->firstMember) {
-						// remove all references to the deleted
-						for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
-							member_t *p = pStore->members + iMid;
 
-							if (pStore->pairs[p->Qmt].sidmid == pSignature->firstMember) {
-								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Qmt = 0;
-							}
-							if (pStore->pairs[p->Tmt].sidmid == pSignature->firstMember) {
-								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Tmt = 0;
-							}
-							if (pStore->pairs[p->Fmt].sidmid == pSignature->firstMember) {
-								assert(!(p->flags & member_t::MEMMASK_SAFE));
-								p->Fmt = 0;
-							}
+					for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+						assert(!(pStore->members[iMid].flags & member_t::MEMMASK_SAFE));
+						pStore->members[iMid].flags |= member_t::MEMMASK_DELETE;
+					}
+
+					// remove all references to the deleted
+					for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+						member_t *p = pStore->members + iMid;
+
+						if (pStore->members[pStore->pairs[p->Qmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+							assert(!(p->flags & member_t::MEMMASK_SAFE));
+							p->Qmt = 0;
 						}
+						if (pStore->members[pStore->pairs[p->Tmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+							assert(!(p->flags & member_t::MEMMASK_SAFE));
+							p->Tmt = 0;
+						}
+						if (pStore->members[pStore->pairs[p->Fmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+							assert(!(p->flags & member_t::MEMMASK_SAFE));
+							p->Fmt = 0;
+						}
+					}
 
+					// release deleted
+					while (pSignature->firstMember) {
 						// release head of chain
 						member_t *p = pStore->members + pSignature->firstMember;
 
