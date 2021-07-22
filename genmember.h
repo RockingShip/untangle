@@ -894,10 +894,16 @@ struct genmemberContext_t : dbtool_t {
 			/*
 			 * @date 2021-06-20 19:15:49
 			 * unsafe groups are a collection of everything that matches.
-			 * however, keep the difference less than 2 nodes, primarily to protect 5n9 against populating <= 3n9
+			 * however, keep the difference less than 1 nodes, primarily to protect 5n9 against populating <= 3n9
+			 * for `--pure` difference is 2
 			 */
-			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 1u)
-				cmp = '*'; // reject
+			if (ctx.flags & context_t::MAGICMASK_PURE) {
+				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 2u)
+					cmp = '*'; // reject
+			} else {
+				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 1u)
+					cmp = '*'; // reject
+			}
 		}
 
 		if (cmp) {

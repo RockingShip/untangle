@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-22 22:13:41 Fixed: `genmember` and `6n9-pure`.
 2021-07-22 22:12:47 Added: `genmember --listunsafe`.
 2021-07-22 21:46:16 Changed: metrics.
 2021-07-22 21:42:18 Fixed: `genimport`/`genexport`.
