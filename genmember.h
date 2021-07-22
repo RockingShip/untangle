@@ -1102,23 +1102,7 @@ struct genmemberContext_t : dbtool_t {
 		const member_t *pMemberR = static_cast<const member_t *>(rhs);
 		context_t      *pApp     = static_cast<context_t *>(arg);
 
-		// test for empties (they should gather towards the end of `members[]`)
-		if (pMemberL->sid == 0 && pMemberR->sid == 0)
-			return 0;
-		if (pMemberL->sid == 0)
-			return +1;
-		if (pMemberR->sid == 0)
-			return -1;
-
 		int cmp = 0;
-
-		/*
-		 * safes go first
-		 */
-		if ((pMemberL->flags & member_t::MEMMASK_SAFE) && !(pMemberR->flags & member_t::MEMMASK_SAFE))
-			return -1;
-		if (!(pMemberL->flags & member_t::MEMMASK_SAFE) && (pMemberR->flags & member_t::MEMMASK_SAFE))
-			return +1;
 
 		/*
 		 * depreciates go last
@@ -1129,21 +1113,13 @@ struct genmemberContext_t : dbtool_t {
 			return -1;
 
 		/*
-		 * components go first
-		 */
-		if ((pMemberL->flags & member_t::MEMMASK_COMP) && !(pMemberR->flags & member_t::MEMMASK_COMP))
-			return -1;
-		if (!(pMemberL->flags & member_t::MEMMASK_COMP) && (pMemberR->flags & member_t::MEMMASK_COMP))
-			return -1;
-
-		/*
 		 * compare scores
 		 */
 
 		unsigned scoreL = tinyTree_t::calcScoreName(pMemberL->name);
 		unsigned scoreR = tinyTree_t::calcScoreName(pMemberR->name);
 
-		cmp = scoreL - scoreR;
+		cmp = (int)scoreL - (int)scoreR;
 		if (cmp)
 			return cmp;
 
@@ -1683,6 +1659,27 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting members\n", ctx.timeAsString());
+
+		/*
+		 * Compress members before sorting
+		 */
+
+		unsigned lastMember = pStore->numMember;
+		pStore->numMember = 1;
+
+		for (unsigned iMid = 1; iMid < lastMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			if (pMember->flags & member_t::MEMMASK_DELETE)
+				continue; // explicit delete
+			if (pMember->sid == 0)
+				continue; // implicit delete
+			if (pMember->flags & member_t::MEMMASK_DEPR)
+				continue; // depreciated
+
+			// save
+			pStore->members[pStore->numMember++] = *pMember;
+		}
 
 		// clear pair section
 		pStore->numPair = 1;

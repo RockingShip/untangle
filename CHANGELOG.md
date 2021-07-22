@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-22 22:26:37 Fixed: `genmember` compress before sorting.
 2021-07-22 22:17:25 Fixed: `genmember` Erasing signature groups.
 2021-07-22 22:13:41 Fixed: `genmember` and `6n9-pure`.
 2021-07-22 22:12:47 Added: `genmember --listunsafe`.
