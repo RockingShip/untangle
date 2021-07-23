@@ -151,7 +151,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
-	/// @var {number} Tree size in nodes to be generated for this invocation;
+	/// @var {number} Tree size in nodes to be generated for this invocation (0=any)
 	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
@@ -164,29 +164,29 @@ struct gendepreciateContext_t : dbtool_t {
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} operation mode
-	unsigned opt_mode;
+	unsigned   opt_mode;
 	/// @var {number} reverse order of signatures
-	unsigned opt_reverse;
+	unsigned   opt_reverse;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned   opt_text;
 
 	/// @var {database_t} - Database store to place results
-	database_t  *pStore;
+	database_t *pStore;
 
 	/// @var {unsigned} - active index for `hints[]`
-	unsigned        activeHintIndex;
+	unsigned activeHintIndex;
 	/// @var {number} - Head of list of free members to allocate
-	unsigned        freeMemberRoot;
+	unsigned freeMemberRoot;
 	/// @var {number} - Number of empty signatures left
-	unsigned        numEmpty;
+	unsigned numEmpty;
 	/// @var {number} - Number of unsafe signatures left
-	unsigned        numUnsafe;
+	unsigned numUnsafe;
 	/// @var {number} `foundTree()` duplicate by name
-	unsigned        skipDuplicate;
+	unsigned skipDuplicate;
 	/// @var {number} `foundTree()` too large for signature
-	unsigned        skipSize;
+	unsigned skipSize;
 	/// @var {number} `foundTree()` unsafe abundance
-	unsigned        skipUnsafe;
+	unsigned skipUnsafe;
 
 	uint32_t iVersionSafe;
 	uint32_t *pSafeSid;
@@ -643,7 +643,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 //			pRefcnts[iMid].pMember = pMember;
 
-			if (arg_numNodes && pMember->size != arg_numNodes)
+			if (arg_numNodes > 0 && pMember->size != arg_numNodes)
 				continue;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
@@ -1253,8 +1253,10 @@ int main(int argc, char *argv[]) {
 			app.opt_burst = 16;
 		else if (app.arg_numNodes == 4)
 			app.opt_burst = 2;
-		else
+		else if (app.arg_numNodes > 1)
 			app.opt_burst = 1;
+		else
+			app.opt_burst = 16; // 0 is most likely used for a final checkup
 	}
 
 	/*

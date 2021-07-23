@@ -112,7 +112,7 @@ unsigned opt_fast       = 0;
 unsigned opt_pure       = 0;
 /// @global {number} --seed=n, Random seed to generate evaluator test pattern
 unsigned opt_seed       = 1;
-/// @global {number} --shrinkwrap, Adjust nstart to highest found endpount
+/// @global {number} --shrinkwrap, Adjust nstart to highest found endpoint
 unsigned opt_shrinkwrap = 0;
 /// @global {number} --Q, Select the `"question"` part of the top-level node
 unsigned opt_Q          = 0;

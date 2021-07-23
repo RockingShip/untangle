@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-23 09:25:14 Fixed: Typos and cosmetics.
 2021-07-22 23:22:08 Added: `build9bitAdder.cc`.
 2021-07-22 22:34:15 Added: `build7bitCount.cc`.
 2021-07-22 22:30:29 Changed: `gensignature` `--pure` signatures with mixed top-level.

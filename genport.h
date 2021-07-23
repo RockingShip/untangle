@@ -255,7 +255,7 @@ struct genportContext_t : dbtool_t {
 				fprintf(f, ",");
 			fprintf(f, "\"rewrite\"");
 		}
-		fprintf(f, "]");
+		fprintf(f, "]\n");
 
 		fprintf(f, ",\"%s\":%u\n", "maxSignature", pStore->numSignature);
 		fprintf(f, ",\"%s\":%u\n", "signatureIndexSize", pStore->signatureIndexSize);

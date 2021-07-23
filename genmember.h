@@ -1803,10 +1803,6 @@ struct genmemberContext_t : dbtool_t {
 			pSignature->firstMember = iMid;
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Indexed members. numMember=%u skipUnsafe=%u\n",
-				ctx.timeAsString(), pStore->numMember, skipUnsafe);
-
 		/*
 		 * Flag component members
 		 */
@@ -1844,18 +1840,17 @@ struct genmemberContext_t : dbtool_t {
 				numUnsafe++;
 		}
 
-		if (numEmpty || numUnsafe) {
-			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
-		}
-
 		/*
 		 * Done
 		 */
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u,\"numPair\":%u}\n",
-				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numMember, numEmpty, numUnsafe, pStore->numPair);
+			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numPair\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numPair, pStore->numMember, numEmpty, numUnsafe);
 
+		if (numEmpty || numUnsafe) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
+		}
 	}
 
 };
