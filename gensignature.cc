@@ -640,7 +640,7 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
 	db.open(app.arg_inputDatabase);
 

@@ -677,7 +677,7 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
 	db.open(app.arg_inputDatabase);
 
@@ -880,64 +880,64 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
+	}
 
-		if (app.opt_text == app.OPTTEXT_BRIEF) {
-			/*
-			 * Display members of complete dataset
-			 *
-			 * <memberName> <numPlaceholder>
-			 */
-			for (unsigned iMid = 1; iMid < store.numMember; iMid++)
-				printf("%s\n", store.members[iMid].name);
-		}
+	if (app.opt_text == app.OPTTEXT_BRIEF) {
+		/*
+		 * Display members of complete dataset
+		 *
+		 * <memberName> <numPlaceholder>
+		 */
+		for (unsigned iMid = 1; iMid < store.numMember; iMid++)
+			printf("%s\n", store.members[iMid].name);
+	}
 
-		if (app.opt_text == app.OPTTEXT_VERBOSE) {
-			/*
-			 * Display full members, grouped by signature
-			 */
-			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-				const signature_t *pSignature = store.signatures + iSid;
+	if (app.opt_text == app.OPTTEXT_VERBOSE) {
+		/*
+		 * Display full members, grouped by signature
+		 */
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			const signature_t *pSignature = store.signatures + iSid;
 
-				for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					member_t *pMember = store.members + iMid;
+			for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
+				member_t *pMember = store.members + iMid;
 
-					printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
-					printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
+				printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
+				printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
 
-					uint32_t Qsid = store.pairs[pMember->Qmt].sidmid, Qtid = store.pairs[pMember->Qmt].tid;
-					printf("%u:%s/%u:%.*s\t",
-					       Qsid, store.members[Qsid].name,
-					       Qtid, store.signatures[Qsid].numPlaceholder, store.fwdTransformNames[Qtid]);
+				uint32_t Qsid = store.pairs[pMember->Qmt].sidmid, Qtid = store.pairs[pMember->Qmt].tid;
+				printf("%u:%s/%u:%.*s\t",
+				       Qsid, store.members[Qsid].name,
+				       Qtid, store.signatures[Qsid].numPlaceholder, store.fwdTransformNames[Qtid]);
 
-					uint32_t Tsid = store.pairs[pMember->Tmt].sidmid, Ttid = store.pairs[pMember->Tmt].tid;
-					printf("%u:%s/%u:%.*s\t",
-					       Tsid, store.members[Tsid].name,
-					       Ttid, store.signatures[Tsid].numPlaceholder, store.fwdTransformNames[Ttid]);
+				uint32_t Tsid = store.pairs[pMember->Tmt].sidmid, Ttid = store.pairs[pMember->Tmt].tid;
+				printf("%u:%s/%u:%.*s\t",
+				       Tsid, store.members[Tsid].name,
+				       Ttid, store.signatures[Tsid].numPlaceholder, store.fwdTransformNames[Ttid]);
 
-					uint32_t Fsid = store.pairs[pMember->Fmt].sidmid, Ftid = store.pairs[pMember->Fmt].tid;
-					printf("%u:%s/%u:%.*s\t",
-					       Fsid, store.members[Fsid].name,
-					       Ftid, store.signatures[Fsid].numPlaceholder, store.fwdTransformNames[Ftid]);
+				uint32_t Fsid = store.pairs[pMember->Fmt].sidmid, Ftid = store.pairs[pMember->Fmt].tid;
+				printf("%u:%s/%u:%.*s\t",
+				       Fsid, store.members[Fsid].name,
+				       Ftid, store.signatures[Fsid].numPlaceholder, store.fwdTransformNames[Ftid]);
 
-					for (unsigned i = 0; i < member_t::MAXHEAD; i++)
-						printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
+				for (unsigned i = 0; i < member_t::MAXHEAD; i++)
+					printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
 
-					if (pSignature->flags & signature_t::SIGMASK_SAFE) {
-						if (pMember->flags & member_t::MEMMASK_SAFE)
-							printf("S");
-						else
-							printf("s");
-					}
-					if (pMember->flags & member_t::MEMMASK_COMP)
-						printf("C");
-					if (pMember->flags & member_t::MEMMASK_LOCKED)
-						printf("L");
-					if (pMember->flags & member_t::MEMMASK_DEPR)
-						printf("D");
-					if (pMember->flags & member_t::MEMMASK_DELETE)
-						printf("X");
-					printf("\n");
+				if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+					if (pMember->flags & member_t::MEMMASK_SAFE)
+						printf("S");
+					else
+						printf("s");
 				}
+				if (pMember->flags & member_t::MEMMASK_COMP)
+					printf("C");
+				if (pMember->flags & member_t::MEMMASK_LOCKED)
+					printf("L");
+				if (pMember->flags & member_t::MEMMASK_DEPR)
+					printf("D");
+				if (pMember->flags & member_t::MEMMASK_DELETE)
+					printf("X");
+				printf("\n");
 			}
 		}
 	}

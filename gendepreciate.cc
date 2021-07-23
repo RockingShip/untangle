@@ -1300,7 +1300,7 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	// test readOnly mode
-	app.readOnlyMode = (app.arg_outputDatabase == NULL && app.opt_text != app.OPTTEXT_BRIEF && app.opt_text != app.OPTTEXT_VERBOSE);
+	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
 	db.open(app.arg_inputDatabase);
 
@@ -1511,53 +1511,53 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
+	}
 
-		if (app.opt_text == app.OPTTEXT_BRIEF) {
-			/*
-			 * Display depreciated components
-			 *
-			 * <memberName>
-			 */
-			for (unsigned iMid = 1; iMid < store.numMember; iMid++) {
-				member_t *pMember = store.members + iMid;
+	if (app.opt_text == app.OPTTEXT_BRIEF) {
+		/*
+		 * Display depreciated components
+		 *
+		 * <memberName>
+		 */
+		for (unsigned iMid = 1; iMid < store.numMember; iMid++) {
+			member_t *pMember = store.members + iMid;
 
-				if (pMember->flags & member_t::MEMMASK_COMP) {
-					if (pMember->flags & member_t::MEMMASK_DEPR)
-						printf("%s\tD\n", pMember->name);
-					else if (pMember->flags & member_t::MEMMASK_LOCKED)
-						printf("%s\tL\n", pMember->name);
-				}
+			if (pMember->flags & member_t::MEMMASK_COMP) {
+				if (pMember->flags & member_t::MEMMASK_DEPR)
+					printf("%s\tD\n", pMember->name);
+				else if (pMember->flags & member_t::MEMMASK_LOCKED)
+					printf("%s\tL\n", pMember->name);
 			}
 		}
+	}
 
-		if (app.opt_text == app.OPTTEXT_VERBOSE) {
-			/*
-			 * Display full members, grouped by signature
-			 */
-			for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-				const signature_t *pSignature = store.signatures + iSid;
+	if (app.opt_text == app.OPTTEXT_VERBOSE) {
+		/*
+		 * Display full members, grouped by signature
+		 */
+		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+			const signature_t *pSignature = store.signatures + iSid;
 
-				for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					member_t *pMember = store.members + iMid;
+			for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
+				member_t *pMember = store.members + iMid;
 
-					printf("%u\t%u\t%u\t%s\t", iSid, iMid, pMember->tid, pMember->name);
+				printf("%u\t%u\t%u\t%s\t", iSid, iMid, pMember->tid, pMember->name);
 
-					if (pSignature->flags & signature_t::SIGMASK_SAFE) {
-						if (pMember->flags & member_t::MEMMASK_SAFE)
-							printf("S");
-						else
-							printf("s");
-					}
-					if (pMember->flags & member_t::MEMMASK_COMP)
-						printf("C");
-					if (pMember->flags & member_t::MEMMASK_LOCKED)
-						printf("L");
-					if (pMember->flags & member_t::MEMMASK_DEPR)
-						printf("D");
-					if (pMember->flags & member_t::MEMMASK_DELETE)
-						printf("X");
-					printf("\n");
+				if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+					if (pMember->flags & member_t::MEMMASK_SAFE)
+						printf("S");
+					else
+						printf("s");
 				}
+				if (pMember->flags & member_t::MEMMASK_COMP)
+					printf("C");
+				if (pMember->flags & member_t::MEMMASK_LOCKED)
+					printf("L");
+				if (pMember->flags & member_t::MEMMASK_DEPR)
+					printf("D");
+				if (pMember->flags & member_t::MEMMASK_DELETE)
+					printf("X");
+				printf("\n");
 			}
 		}
 	}
