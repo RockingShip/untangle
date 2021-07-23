@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## 2021-07-23 20:33:36 [Version 2.8.0]
+
+Extra application/tree samples.
+Used to create the initial version `20210723` dataset [https://rockingship.github.io/untangle-dataset/README.html](https://rockingship.github.io/untangle-dataset/README.html)
+
 ```
 2021-07-23 18:00:57 Fixed: Disable `tinyTree_t::compare()` assertion as it triggered a minor historic generator issue.
 2021-07-23 17:54:13 Changed: Data listings `--text=3/4` in read-only mode.
@@ -308,7 +313,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.7.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.8.0...HEAD
+[Version 2.8.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.7.0...v2.8.0
 [Version 2.7.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.6.0...v2.7.0
 [Version 2.6.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.4.0...v2.6.0
 [Version 2.4.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.3.0...v2.4.0
