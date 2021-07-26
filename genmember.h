@@ -440,7 +440,7 @@ struct genmemberContext_t : dbtool_t {
 
 				// convert mid/tid to pair
 				ix = pStore->lookupPair(Qmid, Qtid);
-				if (pStore->pairIndex[ix] == 0) {
+				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
 					// new
 					pStore->pairIndex[ix] = pStore->addPair(Qmid, Qtid);
 				}
@@ -474,7 +474,7 @@ struct genmemberContext_t : dbtool_t {
 
 				// convert mid/tid to pair
 				ix = pStore->lookupPair(Tmid, Ttid);
-				if (pStore->pairIndex[ix] == 0) {
+				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
 					// new
 					pStore->pairIndex[ix] = pStore->addPair(Tmid, Ttid);
 				}
@@ -512,7 +512,7 @@ struct genmemberContext_t : dbtool_t {
 
 				// convert mid/tid to pair
 				ix = pStore->lookupPair(Fmid, Ftid);
-				if (pStore->pairIndex[ix] == 0) {
+				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
 					// new
 					pStore->pairIndex[ix] = pStore->addPair(Fmid, Ftid);
 				}
