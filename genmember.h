@@ -420,9 +420,11 @@ struct genmemberContext_t : dbtool_t {
 					 *          Reload it so it should become "ab^dac+!".
 					 */
 					// slow
-					treeR.saveString(Q, name);
-					tree2.loadStringSafe(name);
-					tree2.saveString(tree2.root, name, skin);
+					treeR.saveString(Q, name, NULL); // save F which is not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, skin); // save with skin, byt dyadics are not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
 				}
 
@@ -452,9 +454,11 @@ struct genmemberContext_t : dbtool_t {
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
-					treeR.saveString(Tu, name);
-					tree2.loadStringSafe(name);
-					tree2.saveString(tree2.root, name, skin);
+					treeR.saveString(Tu, name, NULL); // save F which is not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, skin); // save with skin, byt dyadics are not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
 				}
 
@@ -487,9 +491,11 @@ struct genmemberContext_t : dbtool_t {
 				unsigned ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
-					treeR.saveString(F, name);
-					tree2.loadStringSafe(name);
-					tree2.saveString(tree2.root, name, skin);
+					treeR.saveString(F, name, NULL); // save F which is not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, skin); // save with skin, byt dyadics are not normalised
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
 				}
 
@@ -663,11 +669,17 @@ struct genmemberContext_t : dbtool_t {
 					 *
 					 * NOTE/WARNING the extracted component may have non-normalised dyadic ordering
 					 * because in the context of the original trees, the endpoints were locked by the now removed node
+					 *
+					 * @date 2021-07-25 00:18:44
+					 * Originally this part would call `SwapNameSKin()` which is highly expensive
+					 *
 					 */
 					tree2.loadStringSafe(name);
 					// structure is now okay
 					tree2.saveString(tree2.root, name, skin);
 					// endpoints are now okay
+					tree2.loadStringSafe(name); // reload to normalise
+					tree2.saveString(tree2.root, name, NULL); // save again
 
 					ix = pStore->lookupMember(name);
 				}

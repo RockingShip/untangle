@@ -1355,11 +1355,11 @@ struct tinyTree_t {
 	 * @param {string} pSkin - optional Skin
 	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 */
-	const char *saveString(unsigned id, char *pSkin = NULL) const {
+	const char *saveString(unsigned id) const {
 
 		static char staticName[TINYTREE_NAMELEN + 1];
 
-		saveString(id, staticName, pSkin);
+		saveString(id, staticName, NULL);
 
 		return staticName;
 	}

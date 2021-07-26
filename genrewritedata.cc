@@ -841,7 +841,7 @@ struct genrewritedataContext_t {
 				slots[nextSlot]  = nid;
 				normVersion[nid] = iVersion;
 				normMap[nid]     = nextSlot++;
-				lenBlock++; // increate blocksize because of extra slot
+				lenBlock++; // increase blocksize because of extra slot
 			}
 		}
 		return pos;
@@ -1192,7 +1192,7 @@ struct genrewritedataContext_t {
 									for (uint32_t iNode=NSTART; iNode<tree.count; iNode++)
 										bestTree.N[iNode] = tree.N[iNode];
 									bestTree.root = tree.root;
-									strcpy(bestName, testTree.saveString(testTree.root));
+									testTree.saveString(testTree.root, bestName, NULL);
 									bestScore = testScore;
 									bestSize  = testTree.count - NSTART;
 

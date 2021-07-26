@@ -116,7 +116,7 @@ struct selftestContext_t : dbtool_t {
 
 		// test that tree is what was requested
 		assert(!(generator.root & IBIT));
-		assert(::strcmp(name, generator.saveString(generator.root, NULL)) == 0);
+		assert(::strcmp(name, generator.saveString(generator.root)) == 0);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
@@ -208,12 +208,12 @@ struct selftestContext_t : dbtool_t {
 				/*
 				 * save with placeholders and reload
 				 */
-				const char *treeName;
+				char treeName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
 				if (iSkin) {
 					char skin[MAXSLOTS + 1];
 
-					treeName = generator.saveString(generator.root, skin);
+					generator.saveString(generator.root, treeName, skin);
 					if (iFast) {
 						generator.loadStringFast(treeName, skin);
 					} else {
@@ -225,7 +225,7 @@ struct selftestContext_t : dbtool_t {
 						}
 					}
 				} else {
-					treeName = generator.saveString(generator.root, NULL);
+					generator.saveString(generator.root, treeName, NULL);
 					if (iFast) {
 						generator.loadStringFast(treeName);
 					} else {
