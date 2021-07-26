@@ -269,7 +269,7 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "\r\e[K[%s] numComponent=%u numDepr=%u numLocked=%u\n", ctx.timeAsString(), numComponent, numDepr, numLocked);
+			fprintf(stderr, "\r\e[K[%s] numMember=%u numComponent=%u numLocked=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponent, numLocked);
 	}
 
 	/**
@@ -420,10 +420,10 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "\r\e[K[%s] numComponent=%u numDepr=%u numLocked=%u\n", ctx.timeAsString(), numComponent, numDepr, numLocked);
+			fprintf(stderr, "\r\e[K[%s] numMember=%u numComponent=%u numLocked=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponent, numLocked);
 	}
 
-	unsigned __attribute__((optimize("O0")))  updateLocked(void) {
+	unsigned /*__attribute__((optimize("O0")))*/ updateLocked(void) {
 
 		unsigned cntLocked        = 0;
 
@@ -505,6 +505,7 @@ struct gendepreciateContext_t : dbtool_t {
 					pStore->members[pMember->heads[4]].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
+				assert(member_t::MAXHEAD == 5);
 			}
 		}
 
@@ -707,8 +708,8 @@ struct gendepreciateContext_t : dbtool_t {
 				unsigned iMid     = pCurr - pRefcnts;
 				member_t *pMember = pStore->members + iMid;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numComponent=%u numDepr=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u %s",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, numComponents, numDepr, cntDepr, cntLock, pCurr->refcnt, iMid, pMember->name);
+				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u numComponent=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u %s",
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember - numDepr, numComponents, cntDepr, cntLock, pCurr->refcnt, iMid, pMember->name);
 
 				ctx.tick = 0;
 			}
@@ -865,7 +866,7 @@ struct gendepreciateContext_t : dbtool_t {
 		unsigned numLocked = updateLocked();
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numComponent=%u numDepr=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), numComponents, numDepr, numLocked, cntDepr, cntLock);
+			fprintf(stderr, "[%s] numMember=%u numComponent=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponents, numLocked, cntDepr, cntLock);
 
 		return false;
 	}

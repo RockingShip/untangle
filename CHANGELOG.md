@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-26 11:42:17 Changed: Tickers.
 2021-07-26 11:40:10 Fixed: Create pairs only when in write mode.
 2021-07-26 11:32:40 Fixed: member matching in `findHeadTail()`. (SEVERE)
 2021-07-26 11:30:05 Changed: `lookupImprintAssociative()` with explicit root.

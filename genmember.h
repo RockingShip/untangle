@@ -800,10 +800,10 @@ struct genmemberContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numMember=%u(%.0f%%) numPair=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond,
-					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
+					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					numEmpty, numUnsafe - numEmpty,
 					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
@@ -815,10 +815,10 @@ struct genmemberContext_t : dbtool_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u(%.0f%%) numPair=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
-					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
+					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					numEmpty, numUnsafe - numEmpty,
 					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
@@ -1554,12 +1554,12 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numMember=%u(%.0f%%) numPair=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 				ctx.timeAsString(),
 				ctx.progress,
 				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
-				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
+				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				numEmpty, numUnsafe - numEmpty,
 				skipDuplicate, skipSize, skipUnsafe);
 	}
@@ -1649,10 +1649,10 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numMember=%u(%.0f%%) numPair=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
-				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
+				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				numEmpty, numUnsafe - numEmpty,
 				skipDuplicate, skipSize, skipUnsafe);
 	}
