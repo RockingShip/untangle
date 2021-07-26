@@ -1897,12 +1897,14 @@ struct database_t {
 	 * @param {number} tid - found transform id. what was queried can be reconstructed as `"sid/tid"`
 	 * @return {boolean} - `true` if found, `false` if not.
 	 */
-	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned *sid, unsigned *tid) {
+	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, unsigned *sid, unsigned *tid, uint32_t root = 0) {
 		/*
 		 * According to `performSelfTestInterleave` the following is true:
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
 	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
 		 */
+		if (root == 0)
+			root = pTree->root;
 
 		if (this->interleave == this->interleaveStep) {
 			/*
@@ -1920,7 +1922,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				unsigned ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[root]);
 
 				/*
 				 * Was something found
@@ -1952,7 +1954,7 @@ struct database_t {
 				pTree->eval(v);
 
 				// search the resulting footprint in the cache/index
-				unsigned ix = this->lookupImprint(v[pTree->root]);
+				unsigned ix = this->lookupImprint(v[root]);
 
 				/*
 				 * Was something found

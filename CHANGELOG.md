@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-26 11:30:05 Changed: `lookupImprintAssociative()` with explicit root.
 2021-07-26 11:01:56 Fixed: Ambiguous `tinyTree_t::saveString()`. (SEVERE)
 2021-07-25 22:59:28 Fixed: Generator pre-calculated iterator dyadic ordering.
 ```
