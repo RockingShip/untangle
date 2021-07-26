@@ -1810,8 +1810,30 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K");
 
 		/*
+		 * String all the members to signatures, best one is first in list
+		 */
+		for (unsigned iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
+			member_t *pMember = pStore->members + iMid;
+			signature_t *pSignature = pStore->signatures + pMember->sid;
+
+			// add to group
+			pMember->nextMember     = pSignature->firstMember;
+			pSignature->firstMember = iMid;
+		}
+
+		/*
 		 * Be paranoid
 		 */
+
+
+		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+			if (!(pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE)) {
+				for (unsigned iMid = pStore->signatures[iSid].firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+					assert(!(pStore->members[iMid].flags & member_t::MEMMASK_SAFE));
+				}
+			}
+		}
+
 		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
@@ -1838,18 +1860,6 @@ struct genmemberContext_t : dbtool_t {
 					}
 				}
 			}
-		}
-
-		/*
-		 * String all the members to signatures, best one is first in list
-		 */
-		for (unsigned iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
-			member_t *pMember = pStore->members + iMid;
-			signature_t *pSignature = pStore->signatures + pMember->sid;
-
-			// add to group
-			pMember->nextMember     = pSignature->firstMember;
-			pSignature->firstMember = iMid;
 		}
 
 		/*

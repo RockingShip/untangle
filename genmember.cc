@@ -867,17 +867,6 @@ int main(int argc, char *argv[]) {
 	if (!app.readOnlyMode) {
 		// compact, sort and reindex members
 		app.finaliseMembers();
-
-		/*
-		 * Check that all unsafe groups have no safe members (or the group would have been safe)
-		 */
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)) {
-				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(!(store.members[iMid].flags & member_t::MEMMASK_SAFE));
-				}
-			}
-		}
 	}
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {

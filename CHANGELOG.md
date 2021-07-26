@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-26 12:14:46 Added: Checks to `finaliseMembers()`.
 2021-07-26 12:02:36 Changed: Renamed `genmember::pSafeScore[]` to `pSafeSize`.
 2021-07-26 12:01:02 Changed: Moved `--listsafe`/`--listunsafe` to `gensignature`.
 2021-07-26 11:49:39 Fixed: Capture flags in `database_t::create()`.

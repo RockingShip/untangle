@@ -118,7 +118,7 @@
 #include "config.h"
 #include "database.h"
 #include "dbtool.h"
-#include "tinytree.h"
+#include "genmember.h"
 
 /**
  * @date 2020-03-14 11:10:15
@@ -138,7 +138,7 @@ struct gendepreciateContext_t : dbtool_t {
 		OPTTEXT_VERBOSE = 4,
 
 		/// @constant {number} - First sid (and mid) that belongs to 4n9 space
-		SID_1N9 = 3,
+		SID_1N9 = 1,
 		/// @constant {number} - First sid that belongs to 4n9 space (should be extracted from metrics, but too lazy)
 		SID_3N9 = 5666,
 		/// @constant {number} - First sid that belongs to 5n9 space (should be extracted from metrics, but too lazy)
@@ -642,8 +642,6 @@ struct gendepreciateContext_t : dbtool_t {
 		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
-//			pRefcnts[iMid].pMember = pMember;
-
 			if (arg_numNodes > 0 && pMember->size != arg_numNodes)
 				continue;
 
@@ -779,22 +777,25 @@ struct gendepreciateContext_t : dbtool_t {
 				}
 
 				// update ref counts
-				for (unsigned j = SID_1N9; j < pStore->numMember; j++) {
-					member_t *pMember = pStore->members + j;
+				for (unsigned iDepr = 1; iDepr < pStore->numMember; iDepr++) {
+					member_t *pDepr = pStore->members + iDepr;
 
 					// depreciate all (new) orphans
-					if (pSafeMid[j] != iVersionSafe && !(pMember->flags & member_t::MEMMASK_DEPR)) {
-						assert(!(pMember->flags & member_t::MEMMASK_LOCKED));
+					if (pSafeMid[iDepr] != iVersionSafe && !(pDepr->flags & member_t::MEMMASK_DEPR)) {
+						assert(!(pDepr->flags & member_t::MEMMASK_LOCKED));
 
-						pMember->flags |= member_t::MEMMASK_DEPR;
+						// mark depreciated
+						pDepr->flags |= member_t::MEMMASK_DEPR;
 
-						if (pMember->flags & member_t::MEMMASK_COMP)
+						// if a component, update counter
+						if (pDepr->flags & member_t::MEMMASK_COMP)
 							--numComponents;
 
-						if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
-							unsigned Qsid = pStore->pairs[pMember->Qmt].sidmid;
-							unsigned Tsid = pStore->pairs[pMember->Tmt].sidmid;
-							unsigned Fsid = pStore->pairs[pMember->Fmt].sidmid;
+						// release references and reposition them in list of candidates
+						if (!(pDepr->flags & member_t::MEMMASK_DEPR)) {
+							unsigned Qsid = pStore->pairs[pDepr->Qmt].sidmid;
+							unsigned Tsid = pStore->pairs[pDepr->Tmt].sidmid;
+							unsigned Fsid = pStore->pairs[pDepr->Fmt].sidmid;
 
 							if (Qsid) {
 								pRefcnts[Qsid].refcnt--;
@@ -808,25 +809,25 @@ struct gendepreciateContext_t : dbtool_t {
 								pRefcnts[Fsid].refcnt--;
 								heap.down(pRefcnts + Fsid);
 							}
-							if (pMember->heads[0]) {
-								pRefcnts[pMember->heads[0]].refcnt--;
-								heap.down(pRefcnts + pMember->heads[0]);
+							if (pDepr->heads[0]) {
+								pRefcnts[pDepr->heads[0]].refcnt--;
+								heap.down(pRefcnts + pDepr->heads[0]);
 							}
-							if (pMember->heads[1]) {
-								pRefcnts[pMember->heads[1]].refcnt--;
-								heap.down(pRefcnts + pMember->heads[1]);
+							if (pDepr->heads[1]) {
+								pRefcnts[pDepr->heads[1]].refcnt--;
+								heap.down(pRefcnts + pDepr->heads[1]);
 							}
-							if (pMember->heads[2]) {
-								pRefcnts[pMember->heads[2]].refcnt--;
-								heap.down(pRefcnts + pMember->heads[2]);
+							if (pDepr->heads[2]) {
+								pRefcnts[pDepr->heads[2]].refcnt--;
+								heap.down(pRefcnts + pDepr->heads[2]);
 							}
-							if (pMember->heads[3]) {
-								pRefcnts[pMember->heads[3]].refcnt--;
-								heap.down(pRefcnts + pMember->heads[3]);
+							if (pDepr->heads[3]) {
+								pRefcnts[pDepr->heads[3]].refcnt--;
+								heap.down(pRefcnts + pDepr->heads[3]);
 							}
-							if (pMember->heads[4]) {
-								pRefcnts[pMember->heads[4]].refcnt--;
-								heap.down(pRefcnts + pMember->heads[4]);
+							if (pDepr->heads[4]) {
+								pRefcnts[pDepr->heads[4]].refcnt--;
+								heap.down(pRefcnts + pDepr->heads[4]);
 							}
 							assert(member_t::MAXHEAD == 5);
 						}
@@ -940,6 +941,7 @@ context_t ctx;
  * @global {gendepreciateContext_t} Application context
  */
 gendepreciateContext_t app(ctx);
+genmemberContext_t appMember(ctx);
 
 /**
  * @date 2020-03-11 23:06:35
@@ -1393,6 +1395,7 @@ int main(int argc, char *argv[]) {
 	// actual create
 	store.create(app.inheritSections);
 	app.pStore = &store;
+	appMember.pStore = &store;
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
 		struct sysinfo info;
@@ -1425,10 +1428,18 @@ int main(int argc, char *argv[]) {
 
 	app.numEmpty = app.numUnsafe = 0;
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-		if (store.signatures[iSid].firstMember == 0)
+		if (store.signatures[iSid].firstMember == 0) {
 			app.numEmpty++;
-		if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
+		} else if (store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
+			uint32_t iMid = store.signatures[iSid].firstMember;
+			if (!(store.members[iMid].flags & member_t::MEMMASK_SAFE)) fprintf(stderr, "S %u\n", iSid);
+			if ((store.members[iMid].flags & member_t::MEMMASK_DEPR)) fprintf(stderr, "D %u\n", iSid);
+
+//			assert(store.members[iMid].flags & member_t::MEMMASK_SAFE);
+//			assert(!(store.members[iMid].flags & member_t::MEMMASK_DEPR));
+		} else {
 			app.numUnsafe++;
+		}
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
@@ -1490,12 +1501,21 @@ int main(int argc, char *argv[]) {
 	if (app.opt_load) {
 		app.showCounts();
 		app.depreciateFromFile();
+
+		if (!app.readOnlyMode) {
+			// compact, sort and reindex members
+			appMember.finaliseMembers();
+		}
 	}
 	if (app.opt_generate) {
 		app.showCounts();
 		app.depreciateFromGenerator();
+
+		if (!app.readOnlyMode) {
+			// compact, sort and reindex members
+			appMember.finaliseMembers();
+		}
 	}
-	app.showCounts();
 
 	/*
 	 * re-order and re-index members
@@ -1512,6 +1532,45 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
+	}
+
+	 app.showCounts();
+
+	/*
+	 * Validate, all members should be safe and properly ordered
+	 */
+	{
+		unsigned cntUnsafe = 0;
+		unsigned cntSid, cntMid;
+
+		// select appreciated
+		++app.iVersionSelect; // select/exclude none
+		app.countSafeExcludeSelected(cntSid, cntMid);
+
+		for (unsigned iMid = 3; iMid < store.numMember; iMid++) {
+			member_t *pMember = store.members + iMid;
+
+			if (pMember->flags & member_t::MEMMASK_DEPR)
+				continue;
+
+			assert(app.pSafeMid[iMid] == app.iVersionSafe);
+
+			if (!(pMember->flags & member_t::MEMMASK_SAFE))
+				cntUnsafe++;
+
+			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].sidmid < iMid);
+			assert(pMember->Tmt == 0 || store.pairs[pMember->Tmt].sidmid < iMid);
+			assert(pMember->Fmt == 0 || store.pairs[pMember->Fmt].sidmid < iMid);
+
+			assert(pMember->heads[0] == 0 || pMember->heads[0] < iMid);
+			assert(pMember->heads[1] == 0 || pMember->heads[1] < iMid);
+			assert(pMember->heads[2] == 0 || pMember->heads[2] < iMid);
+			assert(pMember->heads[3] == 0 || pMember->heads[3] < iMid);
+			assert(pMember->heads[4] == 0 || pMember->heads[4] < iMid);
+			assert(member_t::MAXHEAD == 5);
+		}
+		if (cntUnsafe > 0)
+			fprintf(stderr,"WARNING: Found %u unsafe members\n", cntUnsafe);
 	}
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
