@@ -132,7 +132,7 @@ struct slookupContext_t {
 				 * Find the signature index (fast)
 				 */
 
-				unsigned ix = pStore->lookupSignature(pName);
+				uint32_t ix = pStore->lookupSignature(pName);
 				sid = pStore->signatureIndex[ix];
 			}
 		}

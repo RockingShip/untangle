@@ -1046,7 +1046,7 @@ struct bevalContext_t {
 			 * Lookup member
 			 */
 
-			unsigned ix = pStore->lookupMember(level3name);
+			uint32_t ix = pStore->lookupMember(level3name);
 			level3mid = pStore->memberIndex[ix];
 			member_t *pMember = pStore->members + level3mid;
 

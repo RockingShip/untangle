@@ -242,7 +242,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 * Walk through members, any depreciated component makes the member depreciated, count active components
 		 */
 
-		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
@@ -329,8 +329,8 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 
 			// lookup member
-			unsigned ix  = pStore->lookupMember(name);
-			unsigned mid = pStore->memberIndex[ix];
+			uint32_t ix  = pStore->lookupMember(name);
+			uint32_t mid = pStore->memberIndex[ix];
 
 			if (mid == 0) {
 				ctx.fatal("\n{\"error\":\"member not found\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"name\":\"%s\"}\n",
@@ -358,7 +358,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 * Walk through members, any depreciated component makes the member depreciated
 		 */
 
-		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
@@ -383,12 +383,12 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * test that all sids have at least a single active member
 		 */
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			unsigned cntActive = 0; // number of active members for this signature
 
-			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+			for (uint32_t iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 				if (!(pStore->members[iMid].flags & member_t::MEMMASK_DEPR))
 					cntActive++;
 			}
@@ -409,7 +409,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 */
 		unsigned numComponent = 0;
 
-		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
+		for (uint32_t iMid=1; iMid<pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			// depr/locked is mutual-exclusive
@@ -430,7 +430,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * count already present locked members
 		 */
-		for (unsigned j = SID_1N9; j < pStore->numMember; j++) {
+		for (uint32_t j = 1; j < pStore->numMember; j++) {
 			if (pStore->members[j].flags & member_t::MEMMASK_LOCKED)
 				cntLocked++;
 		}
@@ -438,7 +438,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * Find single active member signatures and lock them and their head+tail components
 		 */
-		for (unsigned iSid = pStore->numSignature-1; iSid >= SID_1N9 ; iSid--) {
+		for (uint32_t iSid = pStore->numSignature - 1; iSid >= 1; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			++iVersionSelect;
@@ -449,7 +449,7 @@ struct gendepreciateContext_t : dbtool_t {
 			 * count active members
 			 */
 
-			for (unsigned iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
+			for (uint32_t iMid = pSignature->firstMember; iMid; iMid = pStore->members[iMid].nextMember) {
 				if (!(pStore->members[iMid].flags & member_t::MEMMASK_DEPR)) {
 					cntActive++;
 					lastActive = iMid;
@@ -465,13 +465,13 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * Propagate locked
 		 */
-		for (unsigned iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
+		for (uint32_t iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED) {
-				unsigned Qsid = pStore->pairs[pMember->Qmt].sidmid;
-				unsigned Tsid = pStore->pairs[pMember->Tmt].sidmid;
-				unsigned Fsid = pStore->pairs[pMember->Fmt].sidmid;
+				uint32_t Qsid = pStore->pairs[pMember->Qmt].sidmid;
+				uint32_t Tsid = pStore->pairs[pMember->Tmt].sidmid;
+				uint32_t Fsid = pStore->pairs[pMember->Fmt].sidmid;
 
 				if (Qsid && !(pStore->members[Qsid].flags & member_t::MEMMASK_LOCKED)) {
 					pStore->members[Qsid].flags |= member_t::MEMMASK_LOCKED;
@@ -625,7 +625,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 		unsigned numComponents = 0;
 
-		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
@@ -639,7 +639,7 @@ struct gendepreciateContext_t : dbtool_t {
 		// allocate
 		refcnt_t *pRefcnts = (refcnt_t*) calloc(pStore->numMember, sizeof *pRefcnts);
 		// populate
-		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (arg_numNodes > 0 && pMember->size != arg_numNodes)
@@ -657,7 +657,7 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 		}
 		// remove locked
-		for (unsigned iMid=1; iMid<pStore->numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED)
 				pRefcnts[iMid].refcnt = 0;
 		}
@@ -777,7 +777,7 @@ struct gendepreciateContext_t : dbtool_t {
 				}
 
 				// update ref counts
-				for (unsigned iDepr = 1; iDepr < pStore->numMember; iDepr++) {
+				for (uint32_t iDepr = 1; iDepr < pStore->numMember; iDepr++) {
 					member_t *pDepr = pStore->members + iDepr;
 
 					// depreciate all (new) orphans
@@ -1547,7 +1547,7 @@ int main(int argc, char *argv[]) {
 		++app.iVersionSelect; // select/exclude none
 		app.countSafeExcludeSelected(cntSid, cntMid);
 
-		for (unsigned iMid = 3; iMid < store.numMember; iMid++) {
+		for (uint32_t iMid = 1; iMid < store.numMember; iMid++) {
 			member_t *pMember = store.members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR)

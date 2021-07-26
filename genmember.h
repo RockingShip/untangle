@@ -408,7 +408,7 @@ struct genmemberContext_t : dbtool_t {
 			{
 				// fast
 				treeR.saveString(Q, name, skin);
-				unsigned ix = pStore->lookupMember(name);
+				uint32_t ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					/*
 					 * @date 2021-07-07 20:40:12
@@ -448,7 +448,7 @@ struct genmemberContext_t : dbtool_t {
 			{
 				// fast
 				treeR.saveString(Tu, name, skin);
-				unsigned ix = pStore->lookupMember(name);
+				uint32_t ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
 					treeR.saveString(Tu, name, NULL); // save F which is not normalised
@@ -485,7 +485,7 @@ struct genmemberContext_t : dbtool_t {
 			} else {
 				// fast
 				treeR.saveString(F, name, skin);
-				unsigned ix = pStore->lookupMember(name);
+				uint32_t ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					// slow
 					treeR.saveString(F, name, NULL); // save F which is not normalised
@@ -659,7 +659,7 @@ struct genmemberContext_t : dbtool_t {
 
 				// fast path: lookup skin-free head name/notation
 				tree.saveString(tree.root, name, skin);
-				unsigned ix = pStore->lookupMember(name);
+				uint32_t ix = pStore->lookupMember(name);
 				if (pStore->memberIndex[ix] == 0) {
 					/*
 					 * @date 2021-06-18 21:29:50
@@ -833,7 +833,7 @@ struct genmemberContext_t : dbtool_t {
 		 * test  for duplicates
 		 */
 
-		unsigned mix = pStore->lookupMember(pNameR);
+		uint32_t mix = pStore->lookupMember(pNameR);
 		if (pStore->memberIndex[mix] != 0) {
 			// duplicate candidate name
 			skipDuplicate++;
@@ -1816,7 +1816,7 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			// add to index
-			unsigned ix = pStore->lookupMember(pMember->name);
+			uint32_t ix = pStore->lookupMember(pMember->name);
 			assert(pStore->memberIndex[ix] == 0);
 			pStore->memberIndex[ix] = iMid;
 

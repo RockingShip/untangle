@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ```
+2021-07-26 22:26:31 Changed: Database record offsets are `uint32_t`.
 2021-07-26 12:29:00 Changed: Reject signature swapped alternatives.
 2021-07-26 12:14:46 Added: Checks to `finaliseMembers()`.
 2021-07-26 12:02:36 Changed: Renamed `genmember::pSafeScore[]` to `pSafeSize`.

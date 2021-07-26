@@ -418,7 +418,7 @@ struct genportContext_t : dbtool_t {
 			 * add to index
 			 */
 
-			unsigned ix = pStore->lookupSignature(pName);
+			uint32_t ix = pStore->lookupSignature(pName);
 			assert(pStore->signatureIndex[ix] == 0);
 			pStore->signatureIndex[ix] = sid;
 		}
@@ -729,7 +729,7 @@ struct genportContext_t : dbtool_t {
 			 * add to index
 			 */
 
-			unsigned ix = pStore->lookupMember(pName);
+			uint32_t ix = pStore->lookupMember(pName);
 			assert(pStore->memberIndex[ix] == 0);
 			pStore->memberIndex[ix] = mid;
 
