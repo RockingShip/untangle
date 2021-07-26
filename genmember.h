@@ -923,6 +923,23 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		/*
+		 * @date 2021-07-24 11:52:14
+		 * Revalidate name if signature has swaps. Do so there because it's expensive
+		 */
+		if (pSignature->swapId != 0) {
+			// ugh, pNameR is const, adding `strcpy()` to an expensive path would be hardly noticeable
+			char tmpName[tinyTree_t::TINYTREE_NAMELEN + 1];
+			strcpy(tmpName, pNameR);
+
+			if (pStore->normaliseNameSkin(tmpName, NULL, pSignature)) {
+				// name changed, reject
+				skipSize++;
+				return true;
+			}
+		}
+
+
+		/*
 		 * Determine if safe when heads/tails are all safe
 		 * NOTE: need temporary storage because database member section might be readOnly
 		 */
