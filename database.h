@@ -1271,7 +1271,7 @@ struct database_t {
 			fprintf(stderr, "\r\e[Kclosing");
 
 		fileHeader.magic                 = FILE_MAGIC;
-		fileHeader.magic_flags           = ctx.flags;
+		fileHeader.magic_flags           = creationFlags;
 		fileHeader.magic_maxSlots        = MAXSLOTS;
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
 		fileHeader.magic_sizeofSwap      = sizeof(swap_t);
