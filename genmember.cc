@@ -736,7 +736,7 @@ int main(int argc, char *argv[]) {
 	 */
 
 	// allocate evaluators
-	app.pSafeScores = (uint16_t *) ctx.myAlloc("genmemberContext_t::pMemberScores", store.maxSignature, sizeof(*app.pSafeScores));
+	app.pSafeSize = (uint16_t *) ctx.myAlloc("genmemberContext_t::pMemberScores", store.maxSignature, sizeof(*app.pSafeSize));
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
 		// Assuming with database allocations included
@@ -760,25 +760,6 @@ int main(int argc, char *argv[]) {
 			info.freeram = 0;
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
-	}
-
-	for (unsigned iSid = 0; iSid < store.maxSignature; iSid++)
-		app.pSafeScores[iSid] = 0;
-
-	// calc initial signature group scores (may differ from signature)
-	for (unsigned iSid = 0; iSid < store.numSignature; iSid++) {
-		const signature_t *pSignature = db.signatures + iSid;
-
-		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
-			assert(pSignature->firstMember);
-
-			const member_t *pMember = db.members + pSignature->firstMember;
-
-			tinyTree_t tree(ctx);
-			tree.loadStringFast(pMember->name);
-
-			app.pSafeScores[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
-		}
 	}
 
 	/*
@@ -834,6 +815,29 @@ int main(int argc, char *argv[]) {
 			store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 			store.numMember, store.numMember * 100.0 / store.maxMember,
 			app.numEmpty, app.numUnsafe - app.numEmpty);
+
+	/*
+	 * Determine tree size for safe groups
+	 */
+
+	for (unsigned iSid = 0; iSid < store.maxSignature; iSid++)
+		app.pSafeSize[iSid] = 0;
+
+	// calc initial signature group scores (may differ from signature)
+	for (unsigned iSid = 0; iSid < store.numSignature; iSid++) {
+		const signature_t *pSignature = db.signatures + iSid;
+
+		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+			assert(pSignature->firstMember);
+
+			const member_t *pMember = db.members + pSignature->firstMember;
+
+			tinyTree_t tree(ctx);
+			tree.loadStringFast(pMember->name);
+
+			app.pSafeSize[iSid] = tree.count - tinyTree_t::TINYTREE_NSTART;
+		}
+	}
 
 	/*
 	 * Where to look for new candidates

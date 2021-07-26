@@ -252,7 +252,7 @@ struct genmemberContext_t : dbtool_t {
 	uint64_t   opt_windowLo;
 
 	/// @var {uint16_t} - score of signature group members. NOTE: size+score may differ from signature
-	uint16_t    *pSafeScores;
+	uint16_t    *pSafeSize;
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
 
@@ -297,8 +297,8 @@ struct genmemberContext_t : dbtool_t {
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
-		pSafeScores = NULL;
-		pStore      = NULL;
+		pSafeSize = NULL;
+		pStore    = NULL;
 
 		activeHintIndex  = 0;
 		freeMemberRoot   = 0;
@@ -896,7 +896,7 @@ struct genmemberContext_t : dbtool_t {
 			 * Grouping can be either by node size or score
 			 */
 
-			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeScores[sid]) {
+			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeSize[sid]) {
 				cmp = '*'; // reject
 			}
 		} else {
@@ -1088,7 +1088,7 @@ struct genmemberContext_t : dbtool_t {
 		/*
 		 * update global score
 		 */
-		pSafeScores[sid] = treeR.count - tinyTree_t::TINYTREE_NSTART;
+		pSafeSize[sid] = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 		return true;
 	}
