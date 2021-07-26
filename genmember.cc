@@ -267,7 +267,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
-		fprintf(stderr, "\t   --listunsafe                   List empty/unsafe signature\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
@@ -317,7 +316,6 @@ int main(int argc, char *argv[]) {
 			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
-			LO_LISTUNSAFE,
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
@@ -355,7 +353,6 @@ int main(int argc, char *argv[]) {
 			{"help",               0, 0, LO_HELP},
 			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",         1, 0, LO_INTERLEAVE},
-			{"listunsafe",         0, 0, LO_LISTUNSAFE},
 			{"load",               1, 0, LO_LOAD},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxmember",          1, 0, LO_MAXMEMBER},
@@ -427,9 +424,6 @@ int main(int argc, char *argv[]) {
 			app.opt_interleave = ::strtoul(optarg, NULL, 0);
 			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
-			break;
-		case LO_LISTUNSAFE:
-			app.opt_listUnsafe++;
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
@@ -939,18 +933,6 @@ int main(int argc, char *argv[]) {
 					printf("X");
 				printf("\n");
 			}
-		}
-	}
-
-	/*
-	 * @date 2021-07-21 16:44:15
-	 * Simple hack to display incomplete signature groups
-	 */
-	if (app.opt_listUnsafe) {
-		for (uint32_t iSid=1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
-			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
-				printf("%s\n", pSignature->name);
 		}
 	}
 

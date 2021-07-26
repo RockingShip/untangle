@@ -207,6 +207,10 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned   opt_generate;
+	/// @var {number} List empty/unsafe signatures, for exclusion
+	unsigned   opt_listSafe;
+	/// @var {number} List safe signatures, for inclusion
+	unsigned   opt_listUnsafe;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} save imprints with given interleave
@@ -256,6 +260,8 @@ struct gensignatureContext_t : dbtool_t {
 		arg_outputDatabase = NULL;
 		opt_force          = 0;
 		opt_generate       = 1;
+		opt_listSafe       = 0;
+		opt_listUnsafe     = 0;
 		opt_load           = NULL;
 		opt_saveInterleave = 0;
 		opt_sort           = 1;

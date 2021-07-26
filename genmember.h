@@ -232,8 +232,6 @@ struct genmemberContext_t : dbtool_t {
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned   opt_generate;
-	/// @var {number} List empty/unsafe signature groups
-	unsigned   opt_listUnsafe;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} Sid range upper bound
@@ -291,7 +289,6 @@ struct genmemberContext_t : dbtool_t {
 		opt_generate       = 1;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
-		opt_listUnsafe     = 0;
 		opt_load           = NULL;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
