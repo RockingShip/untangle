@@ -1673,6 +1673,12 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Sorting members\n", ctx.timeAsString());
 
 		/*
+		 * @date 2021-07-25 17:26:25
+		 * cannot `assert(mid < iMid)` here because reusing released members disrupts that ordering
+		 * test it later
+		 */
+
+		/*
 		 * Compress members before sorting
 		 */
 
@@ -1716,7 +1722,10 @@ struct genmemberContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Indexing members\n", ctx.timeAsString());
 
-		// reload everything
+		/*
+		 * rebuild references
+		 */
+
 		ctx.setupSpeed(pStore->numMember);
 		ctx.tick = 0;
 
@@ -1751,11 +1760,11 @@ struct genmemberContext_t : dbtool_t {
 
 			// calculate head/tail
 			tree.loadStringFast(pMember->name);
+			bool wasSafe = pMember->flags & member_t::MEMMASK_SAFE;
 			bool isSafe = findHeadTail(pMember, tree);
 
 			// safe member must remain safe
-			if (pMember->flags & member_t::MEMMASK_SAFE)
-				assert(isSafe);
+			assert(!wasSafe || isSafe);
 
 			/*
 			 * member should be unsafe
@@ -1802,6 +1811,37 @@ struct genmemberContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
+
+		/*
+		 * Be paranoid
+		 */
+		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			if (pMember->flags & member_t::MEMMASK_SAFE) {
+				if (pMember->Qmt) {
+					unsigned m = pStore->pairs[pMember->Qmt].sidmid;
+					assert(m < iMid);
+					assert(pStore->members[m].sid != 0);
+				}
+				if (pMember->Tmt) {
+					unsigned m = pStore->pairs[pMember->Tmt].sidmid;
+					assert(m < iMid);
+					assert(pStore->members[m].sid != 0);
+				}
+				if (pMember->Fmt) {
+					unsigned m = pStore->pairs[pMember->Fmt].sidmid;
+					assert(m < iMid);
+					assert(pStore->members[m].sid != 0);
+				}
+				for (unsigned k = 0; k < member_t::MAXHEAD; k++) {
+					if (pMember->heads[k]) {
+						assert(pMember->heads[k] < iMid);
+						assert(pStore->members[pMember->heads[k]].sid != 0);
+					}
+				}
+			}
+		}
 
 		/*
 		 * String all the members to signatures, best one is first in list

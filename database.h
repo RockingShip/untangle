@@ -2623,6 +2623,113 @@ struct database_t {
 		return pBuffer;
 	}
 
+	/*
+	 * @date 2021-07-24 10:49:25
+	 *
+	 * When swaps are involved, names and skins are a mess.
+	 * This should finally plug the situation only it is highly expensive
+	 *
+	 * @date 2021-07-24 12:24:47
+	 *
+	 * Ugh with 'ecaab^!db2!!'
+	 * The F component id `dbab^!'
+	 *
+	 */
+	bool normaliseNameSkin(char *pName, char *pSkin, const signature_t *pSignature) {
+
+		// load base tree
+		tinyTree_t tree(ctx);
+		tree.loadStringSafe(pName);
+
+		// save safe name
+		tree.saveString(tree.root, pName, NULL);
+
+		// does signature have swap info
+		if (pSignature->swapId == 0)
+			return false;
+
+		const swap_t *pSwap = this->swaps + pSignature->swapId;
+
+		tinyTree_t testTree(ctx);
+
+		bool anythingChanged = false;
+		bool changed;
+
+		do {
+			changed = false;
+
+			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+				unsigned tid = pSwap->tids[iSwap];
+
+				// get the transform string
+				const char *pTransformStr = this->fwdTransformNames[tid];
+
+				// load transformed tree
+				testTree.loadStringSafe(pName, pTransformStr);
+
+				// test if better
+				if (testTree.compare(testTree.root, tree, tree.root) < 0) {
+					// copy tree, including root
+					for (unsigned i = tinyTree_t::TINYTREE_NSTART; i <= testTree.root; i++)
+						tree.N[i] = testTree.N[i];
+					tree.root = testTree.root;
+
+					// save better name
+					tree.saveString(tree.root, pName, NULL);
+
+					changed = true;
+					anythingChanged = true;
+				}
+			}
+
+			// TODO: Normalise skin
+#if 0
+			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+				unsigned tid = pSwap->tids[iSwap];
+
+				// get the transform string
+				const char *pTransformStr = pStore->fwdTransformNames[tid];
+
+				// test if swap needed
+				bool needSwap = false;
+
+				for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+					if (sidSlots[tinyTree_t::TINYTREE_KSTART + i] > sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a']) {
+						needSwap = true;
+						break;
+					}
+					if (sidSlots[tinyTree_t::TINYTREE_KSTART + i] < sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a']) {
+						needSwap = false;
+						break;
+					}
+				}
+
+				if (needSwap) {
+					if (!displayed)
+						printf(",\"level4\":[");
+					else
+						printf(",");
+					printf("%.*s", pSignature->numPlaceholder, pStore->fwdTransformNames[tid]);
+					displayed = true;
+
+					uint32_t newSlots[MAXSLOTS];
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+						newSlots[i] = sidSlots[tinyTree_t::TINYTREE_KSTART + pTransformStr[i] - 'a'];
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+						sidSlots[tinyTree_t::TINYTREE_KSTART + i] = newSlots[i];
+
+					changed = true;
+				}
+			}
+#endif
+
+		} while (changed);
+
+		return anythingChanged;
+	}
+
 	/**
 	 * @date 2020-03-12 19:36:56
 	 *
