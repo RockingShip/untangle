@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+```
+2021-07-25 22:59:28 Fixed: Generator pre-calculated iterator dyadic ordering.
+```
+
 ## 2021-07-23 20:33:36 [Version 2.8.0]
 
 Extra application/tree samples.

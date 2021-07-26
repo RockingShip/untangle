@@ -1163,7 +1163,7 @@ struct selftestContext_t : dbtool_t {
 		generator.windowLo = 0;
 		generator.windowHi = 0;
 		ctx.tick           = 0;
-		ctx.setupSpeed(16033780); // no consequences if value is off
+		ctx.setupSpeed(16119595); // no consequences if value is off
 
 		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 		generator.clearGenerator();
@@ -1174,8 +1174,14 @@ struct selftestContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
 
-		if (ctx.progressHi != pStore->numSignature)
+		if (ctx.progressHi != pStore->numSignature) {
+			/*
+			 * @date 2021-07-25 16:08:08
+			 * NOTE just update `setupSpeed()` above
+			 * Could be an indication that some major bug/issue got fixed
+			 */
 			printf("WARNING: performSelfTestCompare() numSignature=%u\n", pStore->numSignature);
+		}
 
 		unsigned      maxRound = 4;
 		for (unsigned iRound   = 0; iRound < maxRound; iRound++) {

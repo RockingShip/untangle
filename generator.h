@@ -364,19 +364,19 @@ struct generatorTree_t : tinyTree_t {
 				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 				else if (Q > F)
-					pIsType[ix] = 0;
+					pIsType[ix] = 0; // reject
 			}
 			if (pIsType[ix] & PACKED_XOR) {
 				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 				else if (Q > F)
-					pIsType[ix] = 0;
+					pIsType[ix] = 0; // reject
 			}
 			if (pIsType[ix] & PACKED_AND) {
 				if (Q >= TINYTREE_NSTART && To >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 				else if (Q > To)
-					pIsType[ix] = 0;
+					pIsType[ix] = 0; // reject
 			}
 		}
 
@@ -653,30 +653,31 @@ struct generatorTree_t : tinyTree_t {
 		 * @date 2020-04-11 23:38:44
 		 *
 		 * Ordering changed again. Do not reject but swap when copying to `N[]`
+		 *
+		 * @date 2021-07-25 13:37:27
+		 *
+		 * Reject instead of swap.
+		 * Don't forget, with the structure based compare, node id's have become invisible.
+		 * For templates/constructor testing nodeID is possible because the generator creates all alternates,
+		 *   one of them is correct, is it isn't this one then just ignore it
+		 * For runtime/detector, testing nodeID is invisible because of the structure based compare.
+		 *   If alternatives ar eneeded, then most likely its the top-level and let higher levels be smart and swap where needed
+		 * Also, `rewriteData[]` is based on similarity/equality instead of compare, so that is immune.
+		 *   `patterns` (untngle v1) *might* be influenced, however the structure based compare was introduced in untangle v2.
 		 */
-		if (pIsType[qtf] & (PACKED_OR | PACKED_XOR | PACKED_AND)) {
+		if (pIsType[qtf] & PACKED_COMPARE) {
 			if (pIsType[qtf] & PACKED_OR) {
-				// swap `OR` if unordered
-				if (this->compare(pNode->Q, *this, pNode->F) > 0) {
-					unsigned savQ = pNode->Q;
-					pNode->Q = pNode->F;
-					pNode->F = savQ;
-				}
+				// reject `OR` if unordered
+				if (pNode->Q >= pNode->F)
+					return 0;
 			} else if (pIsType[qtf] & PACKED_XOR) {
-				// swap `XOR` if unordered
-				if (this->compare(pNode->Q, *this, pNode->F) > 0) {
-					unsigned savQ = pNode->Q;
-					pNode->Q = pNode->F;
-					pNode->F = savQ;
-					pNode->T = savQ ^ IBIT;
-				}
+				// reject `XOR` if unordered
+				if (pNode->Q >= pNode->F)
+					return 0;
 			} else {
-				// swap `AND` if unordered
-				if (this->compare(pNode->Q, *this, pNode->T) > 0) {
-					unsigned savQ = pNode->Q;
-					pNode->Q = pNode->T;
-					pNode->T = savQ;
-				}
+				// reject `AND` if unordered
+				if (pNode->Q >= pNode->T)
+					return 0;
 			}
 		}
 

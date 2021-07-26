@@ -28,6 +28,13 @@
  * The idea is to set `restartTabDepth` one level deeper to get a better resolution.
  * Then create jobs for the restart points and count the number of candidates until the next/final restart point.
  * Collect outputs.
+ *
+ * @date 2021-07-25 21:20:15
+ *
+ *   Since structure based compare it is possible to assume trees are fully normalised
+ *   The endpoints represent tree heads which can have arbitrary node ID's.
+ *   And speed is still amazing:
+ *     [2021-07-25 23:14:56] 907188280660(189953599/s) 58.30050% eta=0:56:55
  */
 
 /*
@@ -226,6 +233,35 @@ struct genrestartdataContext_t : callable_t {
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
 	bool foundTreePrintTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+		static char keyName[tinyTree_t::TINYTREE_NEND * 4 + 1];
+
+		/*
+		 * Translate to key/display name
+		 */
+		char *pKeyName = keyName;
+		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
+			unsigned qtf = tree.packedN[iNode];
+			unsigned Q   = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
+			unsigned To  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
+			unsigned F   = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
+			unsigned Ti  = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
+
+			if (Q >= tinyTree_t::TINYTREE_NSTART)
+				*pKeyName++ = "123456789"[Q - tinyTree_t::TINYTREE_NSTART ];
+			else
+				*pKeyName++ = "0abcdefghi"[Q];
+			if (To >= tinyTree_t::TINYTREE_NSTART)
+				*pKeyName++ = "123456789"[To - tinyTree_t::TINYTREE_NSTART];
+			else
+				*pKeyName++ = "0abcdefghi"[To];
+			if (F >= tinyTree_t::TINYTREE_NSTART)
+				*pKeyName++ = "123456789"[F - tinyTree_t::TINYTREE_NSTART];
+			else
+				*pKeyName++ = "0abcdefghi"[F];
+			*pKeyName++ = Ti ? '!' : '?';
+		}
+		*pKeyName++ = 0;
+
 		/*
 		 * Simply count how often called
 		 */
@@ -244,37 +280,15 @@ struct genrestartdataContext_t : callable_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d %s",
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, keyName);
 			}
 
 			ctx.tick = 0;
 		}
 
 		// tree is incomplete and requires a slightly different notation
-		printf("%12ldLL/*", ctx.progress);
-		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
-			unsigned qtf = tree.packedN[iNode];
-			unsigned Q   = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
-			unsigned To  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
-			unsigned F   = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
-			unsigned Ti  = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
-
-			if (Q >= tinyTree_t::TINYTREE_NSTART)
-				putchar("123456789"[Q - tinyTree_t::TINYTREE_NSTART]);
-			else
-				putchar("0abcdefghi"[Q]);
-			if (To >= tinyTree_t::TINYTREE_NSTART)
-				putchar("123456789"[To - tinyTree_t::TINYTREE_NSTART]);
-			else
-				putchar("0abcdefghi"[To]);
-			if (F >= tinyTree_t::TINYTREE_NSTART)
-				putchar("123456789"[F - tinyTree_t::TINYTREE_NSTART]);
-			else
-				putchar("0abcdefghi"[F]);
-			putchar(Ti ? '!' : '?');
-		}
-		printf("*/,");
+		printf("%12ldLL/*%s*/,", ctx.progress, keyName);
 
 		// `genprogress` needs to know how many restart points are generated.
 		this->numRestart++;
