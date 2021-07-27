@@ -353,8 +353,11 @@ struct genmemberContext_t : dbtool_t {
 
 			pMember->tid  = 0;
 
-			unsigned ix = pStore->lookupPair(pMember - pStore->members, 0);
-			pMember->Qmt = pMember->Tmt = pMember->Fmt = pStore->pairIndex[ix];
+			// root entries have no references
+			pMember->Qmt = pMember->Tmt = pMember->Fmt = 0;
+
+			for (unsigned j = 0; j < member_t::MAXHEAD; j++)
+				pMember->heads[j] = 0;
 
 			return true;
 		}
@@ -364,8 +367,11 @@ struct genmemberContext_t : dbtool_t {
 
 			pMember->tid  = 0;
 
-			unsigned ix = pStore->lookupPair(pMember - pStore->members, 0);
-			pMember->Qmt = pMember->Tmt = pMember->Fmt = pStore->pairIndex[ix];
+			// root entries have no references
+			pMember->Qmt = pMember->Tmt = pMember->Fmt = 0;
+
+			for (unsigned j = 0; j < member_t::MAXHEAD; j++)
+				pMember->heads[j] = 0;
 
 			return true;
 		}
@@ -445,7 +451,9 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			unsigned Tu = treeR.N[treeR.root].T & ~IBIT;
-			{
+			if (!Tu) {
+				pMember->Tmt = 0;
+			} else {
 				// fast
 				treeR.saveString(Tu, name, skin);
 				uint32_t ix = pStore->lookupMember(name);
@@ -479,7 +487,7 @@ struct genmemberContext_t : dbtool_t {
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
-			if (F == Tu) {
+			if (F == 0 || F == Tu) {
 				// de-dup T/F
 				pMember->Fmt = 0;
 			} else {

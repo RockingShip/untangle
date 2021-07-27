@@ -307,8 +307,8 @@ struct gendepreciateContext_t : dbtool_t {
 		// <name> <flag>
 		for (;;) {
 			static char line[512];
-			static char     name[64];
-			static char     flags[64];
+			static char name[64];
+			static char flags[64];
 
 			if (::fgets(line, sizeof(line), f) == 0)
 				break; // end-of-input
@@ -337,15 +337,17 @@ struct gendepreciateContext_t : dbtool_t {
 					  __FUNCTION__, __FILE__, __LINE__, ctx.progress, name);
 			}
 
-			if (strcmp(flags, "D") == 0) {
-				// depreciate
-				pStore->members[mid].flags |= member_t::MEMMASK_DEPR;
-			} else if (strcmp(flags, "L") == 0) {
-				// locked
-				pStore->members[mid].flags |= member_t::MEMMASK_LOCKED;
-			} else {
-				ctx.fatal("\n{\"error\":\"invalid flags\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"flags\":\"%s\"}\n",
-				  __FUNCTION__, __FILE__, __LINE__, ctx.progress, flags);
+			for (const char *pFlag = flags; *pFlag; pFlag++) {
+				if (*pFlag == 'C') {
+					pStore->members[mid].flags |= member_t::MEMMASK_COMP; // component
+				} else if (*pFlag == 'L') {
+					pStore->members[mid].flags |= member_t::MEMMASK_LOCKED; // locked
+				} else if (*pFlag == 'D') {
+					pStore->members[mid].flags |= member_t::MEMMASK_DEPR; // depreciated
+				} else  {
+					ctx.fatal("\n{\"error\":\"invalid flag\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"flag\":\"%c\"}\n",
+						  __FUNCTION__, __FILE__, __LINE__, ctx.progress, *pFlag);
+				}
 			}
 		}
 
@@ -394,7 +396,7 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 
 			if (cntActive == 0) {
-				ctx.fatal("\n{\"error\":\"signature becomes unsafe\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
+				ctx.fatal("\n{\"error\":\"signature becomes empty\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
 					  __FUNCTION__, __FILE__, __LINE__, ctx.progress, iSid, pSignature->name);
 			}
 		}
@@ -423,9 +425,26 @@ struct gendepreciateContext_t : dbtool_t {
 			fprintf(stderr, "\r\e[K[%s] numMember=%u numComponent=%u numLocked=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponent, numLocked);
 	}
 
+	/*
+	 * @date 2021-07-26 21:49:19
+	 *
+	 * Update flags
+	 */
 	unsigned /*__attribute__((optimize("O0")))*/ updateLocked(void) {
 
-		unsigned cntLocked        = 0;
+		unsigned cntLocked = 0;
+
+		/*
+		 * Lock the roots
+		 */
+
+		uint32_t ix = pStore->lookupMember("0");
+		if (pStore->memberIndex[ix] != 0)
+			pStore->members[pStore->memberIndex[ix]].flags |= member_t::MEMMASK_LOCKED | member_t::MEMMASK_COMP;
+
+		ix = pStore->lookupMember("a");
+		if (pStore->memberIndex[ix] != 0)
+			pStore->members[pStore->memberIndex[ix]].flags |= member_t::MEMMASK_LOCKED | member_t::MEMMASK_COMP;
 
 		/*
 		 * count already present locked members
@@ -436,15 +455,14 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 
 		/*
-		 * Find single active member signatures and lock them and their head+tail components
+		 * Find and lock single active member groups
 		 */
 		for (uint32_t iSid = pStore->numSignature - 1; iSid >= 1; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
-			++iVersionSelect;
-
 			unsigned cntActive = 0; // number of active members for this signature
 			unsigned lastActive = 0; // last encountered active member
+
 			/*
 			 * count active members
 			 */
@@ -638,6 +656,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 		// allocate
 		refcnt_t *pRefcnts = (refcnt_t*) calloc(pStore->numMember, sizeof *pRefcnts);
+
 		// populate
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
@@ -654,14 +673,17 @@ struct gendepreciateContext_t : dbtool_t {
 				if (pMember->heads[2]) pRefcnts[pMember->heads[2]].refcnt++;
 				if (pMember->heads[3]) pRefcnts[pMember->heads[3]].refcnt++;
 				if (pMember->heads[4]) pRefcnts[pMember->heads[4]].refcnt++;
+				assert(member_t::MAXHEAD == 5);
 			}
 		}
+
 		// remove locked
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED)
 				pRefcnts[iMid].refcnt = 0;
 		}
 
+		// construct initial heap
 		heap_t heap(pStore->numMember, pRefcnts);
 
 		unsigned cntSid, cntMid;
@@ -764,7 +786,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 				// display what was selected
 				for (unsigned k = 0; k < cntSelect; k++) {
-					refcnt_t *pCurr = heap.pop();
+					refcnt_t *pCurr   = heap.pop();
 					unsigned iMid     = pCurr - pRefcnts;
 					member_t *pMember = pStore->members + iMid;
 
@@ -868,6 +890,8 @@ struct gendepreciateContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numMember=%u numComponent=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponents, numLocked, cntDepr, cntLock);
+
+		free(pRefcnts);
 
 		return false;
 	}
@@ -1430,15 +1454,15 @@ int main(int argc, char *argv[]) {
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0) {
 			app.numEmpty++;
-		} else if (store.signatures[iSid].flags & signature_t::SIGMASK_SAFE) {
-			uint32_t iMid = store.signatures[iSid].firstMember;
-			if (!(store.members[iMid].flags & member_t::MEMMASK_SAFE)) fprintf(stderr, "S %u\n", iSid);
-			if ((store.members[iMid].flags & member_t::MEMMASK_DEPR)) fprintf(stderr, "D %u\n", iSid);
-
-//			assert(store.members[iMid].flags & member_t::MEMMASK_SAFE);
-//			assert(!(store.members[iMid].flags & member_t::MEMMASK_DEPR));
-		} else {
+		} else if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)) {
 			app.numUnsafe++;
+		} else {
+			uint32_t iMid = store.signatures[iSid].firstMember;
+
+//			if (!(store.members[iMid].flags & member_t::MEMMASK_SAFE)) fprintf(stderr, "S %u\n", iSid);
+//			if ((store.members[iMid].flags & member_t::MEMMASK_DEPR)) fprintf(stderr, "D %u\n", iSid);
+			assert(store.members[iMid].flags & member_t::MEMMASK_SAFE);
+			assert(!(store.members[iMid].flags & member_t::MEMMASK_DEPR));
 		}
 	}
 
@@ -1466,9 +1490,9 @@ int main(int argc, char *argv[]) {
 				cntUnsafe++;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
-				assert(app.pSafeMid[iMid] != app.iVersionSafe);
+				assert(app.pSafeMid[iMid] != app.iVersionSafe); // depreciated should not be in the appreciated set
 			} else {
-				assert(app.pSafeMid[iMid] == app.iVersionSafe);
+				assert(app.pSafeMid[iMid] == app.iVersionSafe); // depreciated must be in the appreciated set
 			}
 
 			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].sidmid < iMid);
@@ -1517,24 +1541,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	/*
-	 * re-order and re-index members
-	 */
-
-	if (!app.readOnlyMode) {
-		/*
-		 * Check that all unsafe groups have no safe members (or the group would have been safe)
-		 */
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE)) {
-				for (unsigned iMid = store.signatures[iSid].firstMember; iMid; iMid = store.members[iMid].nextMember) {
-					assert(!(store.members[iMid].flags & member_t::MEMMASK_SAFE));
-				}
-			}
-		}
-	}
-
-	 app.showCounts();
+	app.showCounts();
 
 	/*
 	 * Validate, all members should be safe and properly ordered
