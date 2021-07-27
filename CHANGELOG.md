@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+TODO: `bexplain` still has errors.
+TODO: `--maxpair=` issue
+TODO: no sorting when read-only
+TODO: gensignature --pure db flag
+TODO: genmember --maxpair=2191056  --pairindexsize=66403 with ./genmember --task=sge  member-4n9.db 5 --text=1 --pure --maxmember=33932605 --maxpair=2086721
+
 ## [Unreleased]
 
 ```
+2021-07-27 20:21:10 Fixed: Nasty typo in `testStringSafe()`.
 2021-07-26 22:26:31 Changed: Database record offsets are `uint32_t`.
 2021-07-26 12:29:00 Changed: Reject signature swapped alternatives.
 2021-07-26 12:14:46 Added: Checks to `finaliseMembers()`.

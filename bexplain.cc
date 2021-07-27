@@ -300,7 +300,7 @@ struct bevalContext_t {
 				stack[stackPos++] = slot[skin[5] - 'a'];
 				break;
 			case 'g':
-				stack[stackPos++] = slot[skin[5] - 'a'];
+				stack[stackPos++] = slot[skin[6] - 'a'];
 				break;
 			case 'h':
 				stack[stackPos++] = slot[skin[7] - 'a'];
@@ -719,7 +719,7 @@ struct bevalContext_t {
 			}
 			if (Q == 0) {
 				// "0?T:F" -> "F"
-				printf(",\"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
+				printf(",   \"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
 				return F;
 			}
 
@@ -732,7 +732,7 @@ struct bevalContext_t {
 			}
 
 			if (changed) {
-				printf(",\"level1\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				printf(",   \"level1\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 			}
 		}
 
@@ -749,7 +749,7 @@ struct bevalContext_t {
 					if (F == Q || F == 0) {
 						// SELF
 						// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
-						printf(",\"level2\":\"Q\",\"N\":%s%u}", ibit ? "~" : "", Q);
+						printf(",   \"level2\":\"Q\",\"N\":%s%u}", ibit ? "~" : "", Q);
 						return Q ^ ibit;
 					} else {
 						// OR
@@ -759,7 +759,7 @@ struct bevalContext_t {
 					if (F == Q || F == 0) {
 						// ZERO
 						// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
-						printf(",\"level2\":\"0\",\"N\":%s%u}", ibit ? "~" : "", 0);
+						printf(",   \"level2\":\"0\",\"N\":%s%u}", ibit ? "~" : "", 0);
 						return 0 ^ ibit;
 					} else {
 						// LESS-THAN
@@ -792,7 +792,7 @@ struct bevalContext_t {
 					if (F == Q || F == 0) {
 						// ZERO
 						// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
-						printf(",\"level2\":\"0\",\"N\":%s%u}", ibit ? "~" : "", 0);
+						printf(",   \"level2\":\"0\",\"N\":%s%u}", ibit ? "~" : "", 0);
 						return 0 ^ ibit;
 					} else {
 						// LESS-THAN
@@ -807,7 +807,7 @@ struct bevalContext_t {
 					if (F == Q || F == 0) {
 						// SELF
 						// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
-						printf(",\"level2\":\"Q\",\"N\":%s%u}", ibit ? "~" : "", Q);
+						printf(",   \"level2\":\"Q\",\"N\":%s%u}", ibit ? "~" : "", Q);
 						return Q ^ ibit;
 					} else {
 						// OR
@@ -827,7 +827,7 @@ struct bevalContext_t {
 					} else if (T == F) {
 						// SELF
 						// "Q?F:F" [18] -> "F"
-						printf(",\"level2\":\"F\",\"N\":%s%u}", ibit ? "~" : "", F);
+						printf(",   \"level2\":\"F\",\"N\":%s%u}", ibit ? "~" : "", F);
 						return F ^ ibit;
 					} else {
 						// QTF (old unified operator)
@@ -837,7 +837,7 @@ struct bevalContext_t {
 			}
 
 			if (changed) {
-				printf(",\"level2\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				printf(",   \"level2\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 			}
 		}
 
@@ -1011,7 +1011,7 @@ struct bevalContext_t {
 
 			/*
 			 * @date 2021-07-14 22:38:41
-			 * Normalize to sanitize the name foor lookups
+			 * Normalize to sanitize the name for lookups
 			 */
 			tree.saveString(tree.root, level3name, NULL);
 			tree.loadStringSafe(level3name);
@@ -1023,7 +1023,7 @@ struct bevalContext_t {
 			 * then apply the reverse transform of the skin to update the slots.
 			 */
 
-			printf(",\"level3\":{\"rwslots\"");
+			printf(",   \"level3\":{\"rwslots\"");
 			for (unsigned i=tinyTree_t::TINYTREE_KSTART; i < nextSlotId; i++) {
 				if (i == tinyTree_t::TINYTREE_KSTART)
 					printf(":[%u", rwSlots[i]);
@@ -1126,7 +1126,7 @@ struct bevalContext_t {
 
 						if (needSwap) {
 							if (!displayed)
-								printf(",\"level4\":[");
+								printf(",   \"level4\":[");
 							else
 								printf(",");
 							printf("%.*s", pSignature->numPlaceholder, pStore->fwdTransformNames[tid]);
@@ -1186,8 +1186,10 @@ struct bevalContext_t {
 						level5mid = iMid;
 						bestCount = testCount - pTree->ncount;
 
-						if (bestCount)
-							break; // all run-time components are present, use this member
+						if (bestCount == 0) {
+							break; // its already there
+						} else if (bestCount == 1)
+							break; // everything present except top-level
 					}
 				}
 				printf("]");
@@ -1197,20 +1199,33 @@ struct bevalContext_t {
 			// apply best
 			member_t *pMember = pStore->members + level5mid;
 
-			printf(",\"level5\":{\"member\":\"%u:%s/%u:%.*s\"",
+			printf(",   \"level5\":{\"member\":\"%u:%s/%u:%.*s\"",
 					level5mid, pMember->name,
 					pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid]);
 
 			uint32_t ret;
-			if (level3mid == level5mid) {
+			if (level3mid == level5mid || bestCount <= 1) {
+				// apply found member
 				ret = testStringSafe(false/*dryRun*/, pTree, NULL, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
 			} else {
+				// explain another level
 				printf("\n\t");
 				ret = expandString(depth, pTree, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
 				printf("\n");
 			}
 
 			printf("},\"N\":%s%u}", ibit ? "~" : "", ret);
+
+			/*
+			 * @date 2021-07-27 12:41:30
+			 *
+			 * ./bexplain 'cd^agd1!eh^!a2gdgcd!^c!!!' 'cd^agd1!eh^!a2gdgcd!^c!!!'
+			 *
+			 * The second argument builds a different tree!
+			 * This is because normalisation adapts to what is already found in the tree.
+			 * The first argument creates intermediates that are reused more efficiently for the second.
+			 * The top-level node is a rigorous rewrite creating two intermediates.
+\			 */
 
 			return ret ^ ibit;
 		}
