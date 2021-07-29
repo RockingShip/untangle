@@ -122,7 +122,6 @@
  *      - rebuild/inherit/copy database sections
  *      - load candidate signatures from file when `"--load"` with `"--task=" "--window="`
  *      - generate candidate signatures when `"--generate"` `"--task=" "--window="`
- *      - sort signatures when `"--sort"`
  *
  * @date 2020-04-24 18:14:26
  *
@@ -215,8 +214,6 @@ struct gensignatureContext_t : dbtool_t {
 	const char *opt_load;
 	/// @var {number} save imprints with given interleave
 	unsigned   opt_saveInterleave;
-	/// @var {number} sort signatures before saving
-	unsigned   opt_sort;
 	/// @var {number} task Id. First task=1
 	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -264,7 +261,6 @@ struct gensignatureContext_t : dbtool_t {
 		opt_listUnsafe     = 0;
 		opt_load           = NULL;
 		opt_saveInterleave = 0;
-		opt_sort           = 1;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
 		opt_text           = 0;

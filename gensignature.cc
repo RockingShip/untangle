@@ -137,6 +137,12 @@
  * It is perfect for ultra-high speed pre-processing and low storage.
  * Only activate with `--fast` option and issue a warning that it is experimental.
  *
+ * @date 2021-07-28 19:56:51
+ *
+ * The advantage of `--truncate` is when exploring a new space (like 5n9-pure)
+ *   and the guessing for `--maximprint` was too optimistic that it overflows.
+ * This option will safely stop at the moment of overflow and write a database.
+ * The database can be reindexed/redimensioned and pressing can continue.
  */
 
 /*
@@ -254,7 +260,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --saveinterleave=<number>       Save with interleave [default=%u]\n", app.opt_saveInterleave);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
-		fprintf(stderr, "\t   --[no-]sort                     Sort signatures before saving [default=%s]\n", app.opt_sort ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text[=1]                      Selected signatures calling `foundTree()` that challenged and passed current display name\n");
@@ -306,13 +311,11 @@ int main(int argc, char *argv[]) {
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
 			LO_SAVEINTERLEAVE,
-			LO_NOSORT,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
 			LO_SAVEINDEX,
 			LO_SIGNATUREINDEXSIZE,
-			LO_SORT,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
@@ -344,7 +347,6 @@ int main(int argc, char *argv[]) {
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
 			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
-			{"no-sort",            0, 0, LO_NOSORT},
 			{"paranoid",           0, 0, LO_PARANOID},
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
@@ -352,7 +354,6 @@ int main(int argc, char *argv[]) {
 			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"saveinterleave",     1, 0, LO_SAVEINTERLEAVE},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
-			{"sort",               0, 0, LO_SORT},
 			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
@@ -440,9 +441,6 @@ int main(int argc, char *argv[]) {
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
 			break;
-		case LO_NOSORT:
-			app.opt_sort = 0;
-			break;
 		case LO_SAVEINTERLEAVE:
 			app.opt_saveInterleave = ::strtoul(optarg, NULL, 0);
 			if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
@@ -465,9 +463,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_SIGNATUREINDEXSIZE:
 			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-			break;
-		case LO_SORT:
-			app.opt_sort = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_sort + 1;
 			break;
 		case LO_TASK: {
 			if (::strcmp(optarg, "sge") == 0) {
@@ -781,7 +776,7 @@ int main(int argc, char *argv[]) {
 	 * sort signatures and ...
 	 */
 
-	if (!app.readOnlyMode && app.opt_sort) {
+	if (!app.readOnlyMode) {
 		// Sort signatures. This will invalidate index and imprints. hints are safe.
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
@@ -866,7 +861,7 @@ int main(int argc, char *argv[]) {
 			store.interleaveStep     = 0;
 			store.memberIndexSize    = 0;
 			store.pairIndexSize      = 0;
-		} else if (app.opt_sort) {
+		} else {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
 				// find matching `interleaveStep`
