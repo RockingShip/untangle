@@ -5,15 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-TODO: `bexplain` still has errors.
-TODO: `--maxpair=` issue
 TODO: no sorting when read-only
-TODO: gensignature --pure db flag
-TODO: genmember --maxpair=2191056  --pairindexsize=66403 with ./genmember --task=sge  member-4n9.db 5 --text=1 --pure --maxmember=33932605 --maxpair=2086721
 
 ## [Unreleased]
 
 ```
+2021-08-01 21:43:05 (MAJOR) Fixed: `genmember` `numPlaceholder` false-positives.
 2021-08-01 17:48:47 Added: `gensignature --mixed`.
 2021-08-01 17:26:47 Fixed: Allow mixing of `gensignature`/`genmember`.
 2021-07-29 20:37:14 Changed: Signatures are always sorted.

@@ -896,7 +896,13 @@ struct genmemberContext_t : dbtool_t {
 		 * early-reject
 		 */
 
-		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+		if (numPlaceholder > pSignature->numPlaceholder) {
+			/*
+			 * @date 2021-07-31 17:33:50
+			 * Don't add unnecessary placeholders
+			 */
+			cmp = '*'; // reject
+		} else if (pSignature->flags & signature_t::SIGMASK_SAFE) {
 			/*
 			 * @date 2021-06-20 19:06:44
 			 * Just like primes with component dependency chains, members can be larger than signatures
