@@ -689,6 +689,11 @@ int main(int argc, char *argv[]) {
 	// assign sizes to output sections
 	app.sizeDatabaseSections(store, db, app.arg_numNodes, !app.readOnlyMode);
 
+	if (db.numTransform == 0)
+		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
+	if (db.numEvaluator == 0)
+		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
+
 	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
 		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
 
@@ -788,21 +793,70 @@ int main(int argc, char *argv[]) {
 		// clear name index
 		::memset(store.signatureIndex, 0, store.signatureIndexSize * sizeof(*store.signatureIndex));
 
-		// remove hints
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
-
-			// erase members
-			pSignature->firstMember = 0;
-
+		// reindex
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			// re-index name
-			unsigned ix = store.lookupSignature(store.signatures[iSid].name);
+			uint32_t ix = store.lookupSignature(store.signatures[iSid].name);
 			assert(store.signatureIndex[ix] == 0);
 			store.signatureIndex[ix] = iSid;
 		}
 
-		store.numImprint = 0;
-		store.numMember  = 0;
+		app.rebuildImprints();
+
+		/*
+		 * @date 2021-07-31 11:40:31
+		 *
+		 * Existing signatures may not change.
+		 * That is, signatures are grouped by tree size, so is this run adds signatures with the same size as existing then...
+		 * This happens when extending 4n9 with toplevel mixed.
+		 */
+		bool changed = false;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			if (strcmp(db.signatures[iSid].name, store.signatures[iSid].name) != 0) {
+				changed = true;
+				break;
+			}
+		}
+
+		if (changed) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+				fprintf(stderr, "[%s] WARNING: Old signatures changed position, rebuilding.\n", ctx.timeAsString());
+
+			/*
+			 * Allocate and find initial mapping
+			 */
+			uint32_t *pNewSid = (uint32_t *) ctx.myAlloc("pNewSid", store.maxSignature, sizeof(*pNewSid));
+			uint32_t *pNewTid = (uint32_t *) ctx.myAlloc("pNewTid", store.maxSignature, sizeof(*pNewTid));
+
+			for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+				uint32_t ix = store.lookupSignature(db.signatures[iSid].name);
+				pNewSid[iSid] = store.signatureIndex[ix];
+				pNewTid[iSid] = 0;
+
+				if (pNewSid[iSid] == 0) {
+					// this run changed an old signature name, perform imprint lookup
+					tinyTree_t tree(ctx);
+					tree.loadStringFast(db.signatures[iSid].name);
+					store.lookupImprintAssociative(&tree, store.fwdEvaluator, store.revEvaluator, &pNewSid[iSid], &pNewTid[iSid]);
+				}
+				// this run changed
+				assert(pNewSid[iSid] != 0);
+			}
+
+			/*
+			 * Remap sids, this has no effect on the member index
+			 */
+			for (uint32_t iMember =1; iMember < store.numMember; iMember++) {
+				member_t *pMember = store.members + iMember;
+
+				assert(pMember->sid < db.numSignature);
+
+				pMember->tid = pNewTid[pMember->sid]; // tid first because of array index
+				pMember->sid = pNewSid[pMember->sid];
+			}
+
+			ctx.myFree("pNewSid", pNewSid);
+		}
 	}
 
 	/*
@@ -810,13 +864,13 @@ int main(int argc, char *argv[]) {
 	 */
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%s\n", pSignature->name);
 		}
 	}
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 			printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 		}
@@ -859,8 +913,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
-			store.memberIndexSize    = 0;
 			store.pairIndexSize      = 0;
+			store.memberIndexSize    = 0;
 		} else {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
@@ -871,9 +925,6 @@ int main(int argc, char *argv[]) {
 				store.interleave     = pMetrics->numStored;
 				store.interleaveStep = pMetrics->interleaveStep;
 			}
-
-			// rebuild imprints here because it takes long
-			app.rebuildImprints();
 		}
 
 		/*

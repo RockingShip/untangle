@@ -655,7 +655,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 */
 
 		// allocate
-		refcnt_t *pRefcnts = (refcnt_t*) calloc(pStore->numMember, sizeof *pRefcnts);
+		refcnt_t *pRefcnts = (refcnt_t*) ctx.myAlloc("pRefcnts", pStore->numMember, sizeof *pRefcnts);
 
 		// populate
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
@@ -891,7 +891,7 @@ struct gendepreciateContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] numMember=%u numComponent=%u numLocked=%u | cntDepr=%u cntLock=%u\n", ctx.timeAsString(), pStore->numMember - numDepr, numComponents, numLocked, cntDepr, cntLock);
 
-		free(pRefcnts);
+		ctx.myFree("pRefcnts", pRefcnts);
 
 		return false;
 	}
@@ -1641,8 +1641,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
-			store.memberIndexSize    = 0;
 			store.pairIndexSize      = 0;
+			store.memberIndexSize    = 0;
 		}
 
 		// unexpected termination should unlink the outputs

@@ -832,7 +832,7 @@ struct tinyTree_t {
 
 			if (isalnum(*pCh) && stackPos >= TINYTREE_MAXSTACK)
 				return DERR_OVERFLOW;
-			if (!isalnum(*pCh) && count >= TINYTREE_NEND - 1)
+			if (!isalnum(*pCh) && count >= TINYTREE_NEND)
 				return DERR_SIZE;
 			if (islower(*pCh) && !islower(pSkin[*pCh - 'a']))
 				return DERR_PLACEHOLDER;
@@ -1261,6 +1261,8 @@ struct tinyTree_t {
 				return;
 			}
 		}
+
+		assert(this->count <= tinyTree_t::TINYTREE_NEND);
 
 		// store result into root
 		this->root = stack[stackPos - 1];

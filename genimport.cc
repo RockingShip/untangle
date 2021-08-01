@@ -501,8 +501,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
-			store.memberIndexSize    = 0;
 			store.pairIndexSize      = 0;
+			store.memberIndexSize    = 0;
 		}
 
 		/*

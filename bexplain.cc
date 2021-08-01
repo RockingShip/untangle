@@ -1043,6 +1043,18 @@ struct bevalContext_t {
 
 
 			/*
+			 * Lookup signature
+			 */
+			uint32_t tid;
+
+			// lookup the tree used by the detector
+			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &level3sid, &tid);
+			assert(level3sid);
+
+			printf(",\"sid\":\"%u:%s\"",
+			       level3sid, pStore->signatures[level3sid].name);
+
+			/*
 			 * Lookup member
 			 */
 
@@ -1058,18 +1070,6 @@ struct bevalContext_t {
 					level3mid, pMember->name,
 					pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid]);
 			}
-
-			/*
-			 * Lookup signature
-			 */
-			uint32_t tid;
-
-			// lookup the tree used by the detector
-			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &level3sid, &tid);
-			assert(level3sid);
-
-			printf(",\"sid\":\"%u:%s\"",
-				level3sid, pStore->signatures[level3sid].name);
 
 			/*
 			 * Translate slots relative to `rwSlots[]`

@@ -728,6 +728,15 @@ int main(int argc, char *argv[]) {
 	if (!app.readOnlyMode)
 		app.opt_maxSignature = db.numSignature;
 
+	if (db.numTransform == 0)
+		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
+	if (db.numEvaluator == 0)
+		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
+	if (db.numSignature == 0)
+		ctx.fatal("Missing signature section: %s\n", app.arg_inputDatabase);
+	if (db.numSwap == 0)
+		ctx.fatal("Missing swap section: %s\n", app.arg_inputDatabase);
+
 	// assign sizes to output sections
 	app.sizeDatabaseSections(store, db, minNodes, !app.readOnlyMode);
 
@@ -941,8 +950,8 @@ int main(int argc, char *argv[]) {
 			store.numImprint         = 0;
 			store.interleave         = 0;
 			store.interleaveStep     = 0;
-			store.memberIndexSize    = 0;
 			store.pairIndexSize      = 0;
+			store.memberIndexSize    = 0;
 		}
 
 		// unexpected termination should unlink the outputs

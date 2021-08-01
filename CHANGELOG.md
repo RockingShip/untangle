@@ -14,6 +14,7 @@ TODO: genmember --maxpair=2191056  --pairindexsize=66403 with ./genmember --task
 ## [Unreleased]
 
 ```
+2021-08-01 17:26:47 Fixed: Allow mixing of `gensignature`/`genmember`.
 2021-07-29 20:37:14 Changed: Signatures are always sorted.
 2021-07-27 20:24:31 Changed: Cleanup in `genmember`/gendepreciate`.
 2021-07-27 20:21:10 Fixed: Nasty typo in `testStringSafe()`.

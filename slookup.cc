@@ -179,7 +179,6 @@ struct slookupContext_t {
 		if (opt_member) {
 			unsigned    lenName = 0, lenQ = 0, lenT = 0, lenF = 0, lenHead = 0, len;
 			static char txt[256];
-			tinyTree_t  tree(ctx);
 
 			/*
 			 * Determine column widths
@@ -244,7 +243,7 @@ struct slookupContext_t {
 				sprintf(txt, "%u:%s/%u:%.*s", iMid, pMember->name, pStore->lookupFwdTransform(skin), pMember->numPlaceholder, skin);
 				printf("\t%-*s", lenName, txt);
 
-				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", tree.count - tinyTree_t::TINYTREE_NSTART, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
+				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 				if (this->opt_member > 1) {
 					uint32_t Qsid = pStore->pairs[pMember->Qmt].sidmid, Qtid = pStore->pairs[pMember->Qmt].tid;
