@@ -233,7 +233,7 @@ struct gensignatureContext_t : dbtool_t {
 	 * However, this is undesirable for signatures where the top-level node may be mixed.
 	 * Save the use gesture here, let the generator run in mixed mode and set the database flag just before saving.
 	 */
-	unsigned opt_pureSignature;
+	unsigned opt_toplevelMixed;
 
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
@@ -268,7 +268,7 @@ struct gensignatureContext_t : dbtool_t {
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
-		opt_pureSignature  = 0;
+		opt_toplevelMixed = 0;
 
 		pStore        = NULL;
 		skipDuplicate = 0;
@@ -358,7 +358,7 @@ struct gensignatureContext_t : dbtool_t {
 		 * `--pure` v2 experiment: components must be QnTF, except signature top-level
 		 * Generator is still mixed mode so use a different flag and test explicitly here
 		 */
-		if (opt_pureSignature) {
+		if (opt_toplevelMixed) {
 			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
 				if (!(treeR.N[k].T & IBIT))
 					return true;

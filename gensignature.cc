@@ -131,7 +131,7 @@
  * With the new add-if-not-found database can be stored/archived with `"--interleave=1"` and have imprints quickly created on the fly.
  * This massively saves storage.
  *
- * @date2020-04-25 21:49:21
+ * @date 2020-04-25 21:49:21
  *
  * add-if-not-found only works if tid's can be ignored, otherwise it creates false positives.
  * It is perfect for ultra-high speed pre-processing and low storage.
@@ -253,6 +253,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --mixed                         Top-level node may be mixed QnTF/QTF\n");
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
@@ -305,6 +306,7 @@ int main(int argc, char *argv[]) {
 			LO_LOAD,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
+			LO_MIXED,
 			LO_NOAINF,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
@@ -342,6 +344,7 @@ int main(int argc, char *argv[]) {
 			{"load",               1, 0, LO_LOAD},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
+			{"mixed",              0, 0, LO_MIXED},
 			{"no-ainf",            0, 0, LO_NOAINF},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
@@ -426,6 +429,9 @@ int main(int argc, char *argv[]) {
 		case LO_MAXSIGNATURE:
 			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
 			break;
+		case LO_MIXED:
+			app.opt_toplevelMixed = 1;
+			break;
 		case LO_NOAINF:
 			ctx.flags &= ~context_t::MAGICMASK_AINF;
 			break;
@@ -436,7 +442,7 @@ int main(int argc, char *argv[]) {
 			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
 			break;
 		case LO_NOPURE:
-			app.opt_pureSignature = 0;
+			ctx.flags &= ~context_t::MAGICMASK_PURE;
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
@@ -450,7 +456,7 @@ int main(int argc, char *argv[]) {
 			ctx.flags |= context_t::MAGICMASK_PARANOID;
 			break;
 		case LO_PURE:
-			app.opt_pureSignature = 1;
+			ctx.flags |= context_t::MAGICMASK_PURE;
 			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
@@ -512,7 +518,7 @@ int main(int argc, char *argv[]) {
 			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
 			break;
 		case LO_TRUNCATE:
-			app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
+			app.opt_truncate++;
 			break;
 		case LO_VERBOSE:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
@@ -903,9 +909,6 @@ int main(int argc, char *argv[]) {
 	 */
 
 	if (app.arg_outputDatabase) {
-		if (app.opt_pureSignature)
-			store.creationFlags |= context_t::MAGICMASK_PURE;
-
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
 			store.hintIndexSize      = 0;
