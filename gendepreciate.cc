@@ -1470,7 +1470,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
 			ctx.timeAsString(),
 			store.numMember, store.numMember * 100.0 / store.maxMember,
-			app.numEmpty, app.numUnsafe - app.numEmpty);
+			app.numEmpty, app.numUnsafe);
 
 	/*
 	 * Validate, all members should be safe and properly ordered

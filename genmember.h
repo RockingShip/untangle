@@ -145,6 +145,7 @@
  *                  <cmp> is the result of `comparSignature()` between the candidate and the current display name.
  *
  *              <cmp> can be:
+ *                  cmp = '*'; // candidate has excess placeholders
  *                  cmp = '<'; // worse, group safe, candidate unsafe
  *                  cmp = '-'; // worse, candidate too large for group
  *                  cmp = '='; // equal, group unsafe, candidate unsafe
@@ -809,7 +810,7 @@ struct genmemberContext_t : dbtool_t {
 					ctx.timeAsString(), ctx.progress, perSecond,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-					numEmpty, numUnsafe - numEmpty,
+					numEmpty, numUnsafe,
 					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
@@ -824,7 +825,7 @@ struct genmemberContext_t : dbtool_t {
 					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-					numEmpty, numUnsafe - numEmpty,
+					numEmpty, numUnsafe,
 					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
@@ -909,23 +910,8 @@ struct genmemberContext_t : dbtool_t {
 			 * Larger candidates will always be rejected, so reject now before doing expensive testing
 			 * Grouping can be either by node size or score
 			 */
-
 			if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSafeSize[sid]) {
-				cmp = '*'; // reject
-			}
-		} else {
-			/*
-			 * @date 2021-06-20 19:15:49
-			 * unsafe groups are a collection of everything that matches.
-			 * however, keep the difference less than 1 nodes, primarily to protect 5n9 against populating <= 3n9
-			 * for `--pure` difference is 2
-			 */
-			if (ctx.flags & context_t::MAGICMASK_PURE) {
-				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 2u)
-					cmp = '*'; // reject
-			} else {
-				if (treeR.count - tinyTree_t::TINYTREE_NSTART > pSignature->size + 1u)
-					cmp = '*'; // reject
+				cmp = '-'; // reject
 			}
 		}
 
@@ -951,7 +937,6 @@ struct genmemberContext_t : dbtool_t {
 				return true;
 			}
 		}
-
 
 		/*
 		 * Determine if safe when heads/tails are all safe
@@ -984,21 +969,33 @@ struct genmemberContext_t : dbtool_t {
 		 * Verify if candidate member is acceptable
 		 */
 
-		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
+		if (pSignature->firstMember == 0) {
+			// group is empty, this is first member
+			numEmpty--;
+			if (tmpMember.flags & member_t::MEMMASK_SAFE) {
+				// group is empty, candidate is safe. Accept
+				cmp = '>';
+			} else {
+				// group is empty, candidate is unsafe. Accept.
+				cmp = '=';
+				numUnsafe++;
+			}
+		} else if (pSignature->flags & signature_t::SIGMASK_SAFE) {
 			if (!(tmpMember.flags & member_t::MEMMASK_SAFE)) {
 				// group is safe, candidate not. Reject
 				cmp = '<';
 				skipUnsafe++;
 			} else {
-				// group/candidate both safe. Accept
+				// group and candidate both safe. Accept
 				cmp = '+';
 			}
 		} else {
 			if (tmpMember.flags & member_t::MEMMASK_SAFE) {
 				// group is unsafe, candidate is safe. Accept
 				cmp = '>';
+				numUnsafe--;
 			} else {
-				// group/candidate both unsafe. Accept.
+				// group and candidate both unsafe. Accept.
 				cmp = '=';
 			}
 		}
@@ -1013,7 +1010,7 @@ struct genmemberContext_t : dbtool_t {
 		if (opt_text == OPTTEXT_WON)
 			printf("%s\n", pNameR);
 
-		if (cmp == '>' || cmp == '!') {
+		if (cmp == '>') {
 			/*
 			 * group changes from unsafe to save, or safe group flush: remove all (unsafe) members
 			 */
@@ -1078,21 +1075,12 @@ struct genmemberContext_t : dbtool_t {
 						this->memberFree(p);
 					}
 				}
-
-				// group has become empty
-				numEmpty++;
 			}
-		}
 
-		if (cmp == '>') {
-			// mark group as safe
+			// mark group safe
 			pSignature->flags |= signature_t::SIGMASK_SAFE;
-			numUnsafe--;
-		}
 
-		// going to add member to group.
-		if (pSignature->firstMember == 0)
-			numEmpty--;
+		}
 
 		/*
 		 * promote candidate to member
@@ -1227,7 +1215,7 @@ struct genmemberContext_t : dbtool_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 						ctx.timeAsString(), ctx.progress, perSecond,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1240,7 +1228,7 @@ struct genmemberContext_t : dbtool_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
@@ -1276,7 +1264,7 @@ struct genmemberContext_t : dbtool_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
+			else if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 
 			ctx.progress++;
@@ -1294,7 +1282,7 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f\n",
 				ctx.timeAsString(),
 				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+				numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 	}
 
 	/**
@@ -1410,7 +1398,7 @@ struct genmemberContext_t : dbtool_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 						ctx.timeAsString(), ctx.progress, perSecond,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -1423,7 +1411,7 @@ struct genmemberContext_t : dbtool_t {
 					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f",
 						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+						numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 				}
 
 				ctx.tick = 0;
@@ -1456,7 +1444,7 @@ struct genmemberContext_t : dbtool_t {
 			// stats
 			if (pSignature->firstMember == 0)
 				numEmpty++;
-			if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
+			else if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 
 			ctx.progress++;
@@ -1474,7 +1462,7 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Created imprints. numImprint=%u(%.0f%%) numEmpty=%u numUnsafe=%u | hash=%.3f\n",
 				ctx.timeAsString(),
 				pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-				numEmpty, numUnsafe - numEmpty, (double) ctx.cntCompare / ctx.cntHash);
+				numEmpty, numUnsafe, (double) ctx.cntCompare / ctx.cntHash);
 
 		ctx.myFree("pSignatureIndex", pHintMap);
 	}
@@ -1588,7 +1576,7 @@ struct genmemberContext_t : dbtool_t {
 				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				numEmpty, numUnsafe - numEmpty,
+				numEmpty, numUnsafe,
 				skipDuplicate, skipSize, skipUnsafe);
 	}
 
@@ -1681,7 +1669,7 @@ struct genmemberContext_t : dbtool_t {
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
-				numEmpty, numUnsafe - numEmpty,
+				numEmpty, numUnsafe,
 				skipDuplicate, skipSize, skipUnsafe);
 	}
 
@@ -1926,7 +1914,7 @@ struct genmemberContext_t : dbtool_t {
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 			if (pStore->signatures[iSid].firstMember == 0)
 				numEmpty++;
-			if (!(pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE))
+			else if (!(pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
 		}
 

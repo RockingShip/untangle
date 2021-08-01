@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-01 21:44:12 Changed: Simplified `numEmpty`/`numUnsafe`.
 2021-08-01 21:43:05 (MAJOR) Fixed: `genmember` `numPlaceholder` false-positives.
 2021-08-01 17:48:47 Added: `gensignature --mixed`.
 2021-08-01 17:26:47 Fixed: Allow mixing of `gensignature`/`genmember`.

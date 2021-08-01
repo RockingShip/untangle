@@ -814,7 +814,7 @@ int main(int argc, char *argv[]) {
 	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0)
 			app.numEmpty++;
-		if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
+		else if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
 			app.numUnsafe++;
 	}
 
@@ -823,7 +823,7 @@ int main(int argc, char *argv[]) {
 			ctx.timeAsString(),
 			store.numImprint, store.numImprint * 100.0 / store.maxImprint,
 			store.numMember, store.numMember * 100.0 / store.maxMember,
-			app.numEmpty, app.numUnsafe - app.numEmpty);
+			app.numEmpty, app.numUnsafe);
 
 	/*
 	 * Determine tree size for safe groups
