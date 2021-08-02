@@ -344,7 +344,7 @@ int main(int argc, char *argv[]) {
 			{"load",               1, 0, LO_LOAD},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
-			{"mixed",              0, 0, LO_MIXED},
+			{"mixed",              2, 0, LO_MIXED},
 			{"no-ainf",            0, 0, LO_NOAINF},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
@@ -430,7 +430,7 @@ int main(int argc, char *argv[]) {
 			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
 			break;
 		case LO_MIXED:
-			app.opt_toplevelMixed = 1;
+			app.opt_toplevelMixed = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_toplevelMixed + 1;
 			break;
 		case LO_NOAINF:
 			ctx.flags &= ~context_t::MAGICMASK_AINF;

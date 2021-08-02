@@ -363,6 +363,19 @@ struct gensignatureContext_t : dbtool_t {
 				if (!(treeR.N[k].T & IBIT))
 					return true;
 			}
+
+			/*
+			 * @date 2021-08-02 00:06:03
+			 *
+			 * Only add signatures that `rewriteData[]` can detect, intended for `4n9` only
+			 * Reject top-level QTF that does not load in slots, that is only accept `abc!def!ghi!!` and friends.
+			 */
+			if (opt_toplevelMixed > 1 && arg_numNodes >= 4) {
+				if (treeR.N[treeR.root].T & IBIT) {
+					if (treeR.N[treeR.root].Q < tinyTree_t::TINYTREE_NSTART || (treeR.N[treeR.root].T & ~IBIT) < tinyTree_t::TINYTREE_NSTART || treeR.N[treeR.root].F < tinyTree_t::TINYTREE_NSTART)
+						return true;
+				}
+			}
 		}
 
 		/*
