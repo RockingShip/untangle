@@ -311,7 +311,8 @@ int main(int argc, char *argv[]) {
 		// Long option shortcuts
 		enum {
 			// long-only opts
-			LO_DEBUG   = 1,
+			LO_ALTGEN = 1,
+			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
@@ -347,6 +348,7 @@ int main(int argc, char *argv[]) {
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
+			{"altgen",             0, 0, LO_ALTGEN},
 			{"debug",              1, 0, LO_DEBUG},
 			{"force",              0, 0, LO_FORCE},
 			{"generate",           0, 0, LO_GENERATE},
@@ -405,6 +407,9 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
+		case LO_ALTGEN:
+			app.opt_altgen++; // EXPERIMENTAL!
+			break;
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 			break;
@@ -866,7 +871,11 @@ int main(int argc, char *argv[]) {
 			app.membersFromGenerator();
 			app.arg_numNodes = 1;
 		}
-		app.membersFromGenerator();
+
+		if (app.opt_altgen)
+			app.membersFromAltGenerator(); // alternative generator for 7n9
+		else
+			app.membersFromGenerator();
 	}
 
 	/*

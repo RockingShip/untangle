@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-02 13:21:21 Added: Alternative member generator for 7n9 (Experimental).
 2021-08-02 13:19:09 Fixed: `genmember --truncate`.
 2021-08-01 21:44:12 Changed: Simplified `numEmpty`/`numUnsafe`.
 2021-08-01 17:51:27 (MAJOR) Fixed: `genmember` `numPlaceholder` false-positives.

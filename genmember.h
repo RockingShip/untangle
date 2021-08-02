@@ -229,6 +229,8 @@ struct genmemberContext_t : dbtool_t {
 	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
+	/// @var {number} --altgen, Alternative generator for 7n9 space (EXPERIMENTAL!)
+	unsigned   opt_altgen;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -286,6 +288,7 @@ struct genmemberContext_t : dbtool_t {
 		arg_inputDatabase  = NULL;
 		arg_numNodes       = 0;
 		arg_outputDatabase = NULL;
+		opt_altgen         = 0;
 		opt_force          = 0;
 		opt_generate       = 1;
 		opt_taskId         = 0;
@@ -1929,6 +1932,430 @@ struct genmemberContext_t : dbtool_t {
 			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
 		}
+	}
+
+	/*
+	 * @date 2021-07-31 19:44:50
+	 *
+	 * Experimental generator that creates new safe members based on already existing safe members.
+	 * Instead on using safe components(tails) it used a safe head and adds a node in all possible combinations.
+	 * This is an attempt for find missing members in 6n9/7n9 space.
+	 * Metrics don't really match and a `Assertion `!wasSafe || isSafe'` happened with `../genmember m-3n9.db 4 m-4n9.db --pure`
+	 *
+	 * task/window selection not yet supported.
+	 *
+	 */
+	void membersFromAltGenerator() {
+
+		if (opt_taskId || opt_taskLast || opt_windowLo || opt_windowHi)
+			ctx.fatal("--task and --window not supported in combination with --altgen\n");
+
+		// determine loop size
+		unsigned numTest = 0, numTree = 0;
+
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			/*
+			 * member must be safe and right size
+			 */
+			if (!(pMember->flags & member_t::MEMMASK_SAFE))
+				continue;
+			if (pMember->size != arg_numNodes - 1)
+				continue;
+
+			numTree++;
+
+			/*
+			 * Generate first node
+			 */
+
+			// @formatter:off
+			for (uint32_t F = 0; F < tinyTree_t::TINYTREE_NSTART; F++)
+			for (uint32_t Ti = 1; Ti < 2; Ti++)
+			for (uint32_t Tu = 0; Tu < tinyTree_t::TINYTREE_NSTART; Tu++)
+			for (uint32_t Q = 0; Q < tinyTree_t::TINYTREE_NSTART; Q++) {
+			// @formatter:on
+
+				// test if combo is normalised
+				if (Q == Tu)
+					continue;  // Q?Q:F or Q?~Q:F
+				if (Q == F)
+					continue; // Q?T:Q or Q?~T:Q
+				if (Q == 0)
+					continue; // 0?X:Y
+				if (Tu == F && F == 0)
+					continue; // Q?~0:0
+				if (Tu == F && !Ti)
+					continue; // "SELF" Q?F:F
+				if (Tu == 0 && !Ti)
+					continue; // "LT" Q?0:F -> F?~Q:0
+
+				numTest++;
+			}
+		}
+
+		fprintf(stderr, "numTree=%u, numTest=%u\n", numTree, numTest);
+		// reset ticker
+		ctx.setupSpeed(numTest);
+		ctx.tick = 0;
+
+		/*
+		 * Main loop
+		 */
+
+		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+			member_t *pMember = pStore->members + iMid;
+
+			/*
+			 * member must be safe and right size
+			 */
+			if (!(pMember->flags & member_t::MEMMASK_SAFE))
+				continue;
+			if (pMember->size != arg_numNodes - 1)
+				continue;
+
+			/*
+			 * Generate first node
+			 */
+
+			// @formatter:off
+			for (uint32_t F = 0; F < tinyTree_t::TINYTREE_NSTART; F++)
+			for (uint32_t Ti = 1; Ti < 2; Ti++)
+			for (uint32_t Tu = 0; Tu < tinyTree_t::TINYTREE_NSTART; Tu++)
+			for (uint32_t Q = 0; Q < tinyTree_t::TINYTREE_NSTART; Q++) {
+			// @formatter:on
+
+				// test if combo is normalised
+				if (Q == Tu)
+					continue;  // Q?Q:F or Q?~Q:F
+				if (Q == F)
+					continue; // Q?T:Q or Q?~T:Q
+				if (Q == 0)
+					continue; // 0?X:Y
+				if (Tu == F && F == 0)
+					continue; // Q?~0:0
+				if (Tu == F && !Ti)
+					continue; // "SELF" Q?F:F
+				if (Tu == 0 && !Ti)
+					continue; // "LT" Q?0:F -> F?~Q:0
+
+				ctx.progress++;
+
+				/*
+				 * Create a mask bases of number of endpoints
+				 */
+				unsigned maskHi = 1 << pMember->numEndpoint;
+
+				for (unsigned mask = 1; mask < maskHi; mask++) {
+
+					// add new node as first
+					generator.clearTree();
+					generator.root = generator.addNode(Q, Ti ? Tu ^ IBIT : Tu, F);
+					assert(generator.root == tinyTree_t::TINYTREE_NSTART);
+
+					/*
+					 * Inject member with substituted endpoints on top of this
+					 */
+					{
+						// state storage for postfix notation
+						uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+						int      stackPos    = 0;
+						uint32_t beenThere[tinyTree_t::TINYTREE_NEND]; // track id's of display operators.
+						unsigned nextNode    = tinyTree_t::TINYTREE_NSTART; // next visual node
+						unsigned numEndpoint = 0;
+
+						// walk through the notation until end or until placeholder/skin separator
+						for (const char *pCh = pMember->name; *pCh; pCh++) {
+
+							assert(!isalnum(*pCh) || stackPos < tinyTree_t::TINYTREE_MAXSTACK);
+							assert(isalnum(*pCh) || generator.count < tinyTree_t::TINYTREE_NEND);
+
+							switch (*pCh) {
+							case '0':
+								stack[stackPos++] = 0;
+								break;
+							case 'a':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 0);
+								break;
+							case 'b':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 1);
+								break;
+							case 'c':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 2);
+								break;
+							case 'd':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 3);
+								break;
+							case 'e':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 4);
+								break;
+							case 'f':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 5);
+								break;
+							case 'g':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 6);
+								break;
+							case 'h':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 7);
+								break;
+							case 'i':
+								if (mask & (1 << numEndpoint++))
+									stack[stackPos++] = tinyTree_t::TINYTREE_NSTART;
+								else
+									stack[stackPos++] = (unsigned) (tinyTree_t::TINYTREE_KSTART + 8);
+								break;
+							case '1':
+								stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
+								break;
+							case '2':
+								stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
+								break;
+							case '3':
+								stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
+								break;
+							case '4':
+								stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
+								break;
+							case '5':
+								stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
+								break;
+							case '6':
+								stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
+								break;
+							case '7':
+								stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
+								break;
+							case '8':
+								stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
+								break;
+							case '9':
+								stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
+								break;
+
+							case '>': {
+								// GT (appreciated)
+								assert (stackPos >= 2);
+
+								//pop operands
+								unsigned R = stack[--stackPos]; // right hand side
+								unsigned L = stack[--stackPos]; // left hand side
+
+								// create operator
+								unsigned nid = generator.addNormalised(L, R ^ IBIT, 0);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '+': {
+								// OR (appreciated)
+								assert (stackPos >= 2);
+
+								// pop operands
+								unsigned R = stack[--stackPos]; // right hand side
+								unsigned L = stack[--stackPos]; // left hand side
+
+								// create operator
+								unsigned nid = generator.addNormalised(L, 0 ^ IBIT, R);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '^': {
+								// XOR/NE (appreciated)
+								assert (stackPos >= 2);
+
+								//pop operands
+								unsigned R = stack[--stackPos]; // right hand side
+								unsigned L = stack[--stackPos]; // left hand side
+
+								// create operator
+								unsigned nid = generator.addNormalised(L, R ^ IBIT, R);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '!': {
+								// QnTF (appreciated)
+								assert (stackPos >= 3);
+
+								// pop operands
+								unsigned F = stack[--stackPos];
+								unsigned T = stack[--stackPos];
+								unsigned Q = stack[--stackPos];
+
+								// create operator
+								unsigned nid = generator.addNormalised(Q, T ^ IBIT, F);
+
+								// push
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '&': {
+								// AND (depreciated)
+								assert (stackPos >= 2);
+
+								// pop operands
+								unsigned R = stack[--stackPos]; // right hand side
+								unsigned L = stack[--stackPos]; // left hand side
+
+								// create operator
+								unsigned nid = generator.addNormalised(L, R, 0);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '<': {
+								// LT (obsolete)
+								assert (stackPos >= 2);
+
+								//pop operands
+								unsigned R = stack[--stackPos]; // right hand side
+								unsigned L = stack[--stackPos]; // left hand side
+
+								// create operator
+								unsigned nid = generator.addNormalised(L, 0, R);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[stackPos++] = nid; // save actual index for back references
+								break;
+							}
+							case '?': {
+								// QTF (depreciated)
+								assert (stackPos >= 3);
+
+								// pop operands
+								unsigned F = stack[--stackPos];
+								unsigned T = stack[--stackPos];
+								unsigned Q = stack[--stackPos];
+
+								// create operator
+								unsigned nid = generator.addNormalised(Q, T, F);
+
+								stack[stackPos++]     = nid; // push
+								beenThere[nextNode++] = nid; // save actual index for back references
+								break;
+							}
+							case '~': {
+								// NOT (support)
+								assert (stackPos >= 1);
+
+								// invert top-of-stack
+								stack[stackPos - 1] ^= IBIT;
+								break;
+							}
+
+							case '/':
+								// separator between placeholder/skin
+								while (pCh[1])
+									pCh++;
+								break;
+							case ' ':
+								// skip spaces
+								break;
+							default:
+								assert(0);
+							}
+						}
+
+						assert (stackPos == 1);
+
+						assert(generator.count <= tinyTree_t::TINYTREE_NEND);
+
+						// store result into root
+						generator.root = stack[stackPos - 1];
+					}
+
+					if (generator.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
+						continue;
+
+					/*
+					 * Normalise the name
+					 */
+					char skin[MAXSLOTS + 1];
+					char name[tinyTree_t::TINYTREE_NAMELEN + 1];
+
+					generator.saveString(generator.root, name, skin); // save it because tree is not normalised
+					generator.loadStringSafe(name); // reload to normalise
+					generator.saveString(generator.root, name, skin); // save with skin, byt dyadics are not normalised
+					generator.loadStringSafe(name); // reload to normalise
+
+					if (generator.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
+						continue;
+
+					// calculate values
+					unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
+					unsigned        beenThere      = 0;
+					for (const char *p             = name; *p; p++) {
+						if (::islower(*p)) {
+							if (!(beenThere & (1 << (*p - 'a')))) {
+								newPlaceholder++;
+								beenThere |= 1 << (*p - 'a');
+							}
+							newEndpoint++;
+						} else if (::isdigit(*p) && *p != '0') {
+							newBackRef++;
+						}
+					}
+
+					if (strcmp(name, "aaabc!d!d!") == 0)
+						fprintf(stderr,".");
+					/*
+					 * call `foundTreeMember()`
+					 */
+
+					if (!foundTreeMember(generator, name, newPlaceholder, newEndpoint, newBackRef))
+						break;
+
+				}
+			}
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (truncated) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
+				fprintf(stderr, "[%s] WARNING: Pair/Member storage full. Truncating at progress=%lu \"%s\"\n",
+					ctx.timeAsString(), this->truncated, this->truncatedName);
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
+				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
+				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
+				numEmpty, numUnsafe,
+				skipDuplicate, skipSize, skipUnsafe);
 	}
 
 };
