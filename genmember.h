@@ -412,6 +412,7 @@ struct genmemberContext_t : dbtool_t {
 		tinyTree_t tree2(ctx);
 		char skin[MAXSLOTS + 1];
 		char name[tinyTree_t::TINYTREE_NAMELEN + 1];
+		uint32_t Qmid = 0, Qtid = 0, Tmid = 0, Ttid = 0, Fmid = 0, Ftid = 0;
 
 		{
 			unsigned Q = treeR.N[treeR.root].Q;
@@ -435,7 +436,7 @@ struct genmemberContext_t : dbtool_t {
 					ix = pStore->lookupMember(name);
 				}
 
-				uint32_t Qmid = pStore->memberIndex[ix];
+				Qmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
 				if (Qmid == 0 || (!(pStore->members[Qmid].flags & member_t::MEMMASK_SAFE))) {
@@ -443,21 +444,11 @@ struct genmemberContext_t : dbtool_t {
 					return false;
 				}
 
-				uint32_t Qtid = pStore->lookupFwdTransform(skin);
-
-				// convert mid/tid to pair
-				ix = pStore->lookupPair(Qmid, Qtid);
-				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
-					// new
-					pStore->pairIndex[ix] = pStore->addPair(Qmid, Qtid);
-				}
-				pMember->Qmt = pStore->pairIndex[ix];
+				Qtid = pStore->lookupFwdTransform(skin);
 			}
 
 			unsigned Tu = treeR.N[treeR.root].T & ~IBIT;
-			if (!Tu) {
-				pMember->Tmt = 0;
-			} else {
+			if (Tu != 0) {
 				// fast
 				treeR.saveString(Tu, name, skin);
 				uint32_t ix = pStore->lookupMember(name);
@@ -471,7 +462,7 @@ struct genmemberContext_t : dbtool_t {
 					ix = pStore->lookupMember(name);
 				}
 
-				uint32_t Tmid = pStore->memberIndex[ix];
+				Tmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
 				if (Tmid == 0 || (!(pStore->members[Tmid].flags & member_t::MEMMASK_SAFE))) {
@@ -479,22 +470,11 @@ struct genmemberContext_t : dbtool_t {
 					return false;
 				}
 
-				uint32_t Ttid = pStore->lookupFwdTransform(skin);
-
-				// convert mid/tid to pair
-				ix = pStore->lookupPair(Tmid, Ttid);
-				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
-					// new
-					pStore->pairIndex[ix] = pStore->addPair(Tmid, Ttid);
-				}
-				pMember->Tmt = pStore->pairIndex[ix];
+				Ttid = pStore->lookupFwdTransform(skin);
 			}
 
 			unsigned F = treeR.N[treeR.root].F;
-			if (F == 0 || F == Tu) {
-				// de-dup T/F
-				pMember->Fmt = 0;
-			} else {
+			if (F != 0 && F != Tu) {
 				// fast
 				treeR.saveString(F, name, skin);
 				uint32_t ix = pStore->lookupMember(name);
@@ -509,7 +489,7 @@ struct genmemberContext_t : dbtool_t {
 				}
 
 
-				uint32_t Fmid = pStore->memberIndex[ix];
+				Fmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
 				if (Fmid == 0 || (!(pStore->members[Fmid].flags & member_t::MEMMASK_SAFE))) {
@@ -517,15 +497,7 @@ struct genmemberContext_t : dbtool_t {
 					return false;
 				}
 
-				uint32_t Ftid = pStore->lookupFwdTransform(skin);
-
-				// convert mid/tid to pair
-				ix = pStore->lookupPair(Fmid, Ftid);
-				if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
-					// new
-					pStore->pairIndex[ix] = pStore->addPair(Fmid, Ftid);
-				}
-				pMember->Fmt = pStore->pairIndex[ix];
+				Ftid = pStore->lookupFwdTransform(skin);
 			}
 		}
 
@@ -721,6 +693,48 @@ struct genmemberContext_t : dbtool_t {
 					pMember->heads[numHead++] = midHead;
 				}
 			}
+		}
+
+		/*
+		 * @date 2021-08-02 14:13:43
+		 *
+		 * Only when all ok lookup/add pairs
+		 */
+
+		if (!Qmid) {
+			pMember->Qmt = 0;
+		} else {
+			// convert mid/tid to pair
+			uint32_t ix = pStore->lookupPair(Qmid, Qtid);
+			if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
+				// new
+				pStore->pairIndex[ix] = pStore->addPair(Qmid, Qtid);
+			}
+			pMember->Qmt = pStore->pairIndex[ix];
+		}
+
+		if (!Tmid) {
+			pMember->Tmt = 0;
+		} else {
+			// convert mid/tid to pair
+			uint32_t ix = pStore->lookupPair(Tmid, Ttid);
+			if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
+				// new
+				pStore->pairIndex[ix] = pStore->addPair(Tmid, Ttid);
+			}
+			pMember->Tmt = pStore->pairIndex[ix];
+		}
+
+		if (!Fmid) {
+			pMember->Fmt = 0;
+		} else {
+			// convert mid/tid to pair
+			uint32_t ix = pStore->lookupPair(Fmid, Ftid);
+			if (pStore->pairIndex[ix] == 0 && !readOnlyMode) {
+				// new
+				pStore->pairIndex[ix] = pStore->addPair(Fmid, Ftid);
+			}
+			pMember->Fmt = pStore->pairIndex[ix];
 		}
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
