@@ -854,7 +854,7 @@ struct genmemberContext_t : dbtool_t {
 		 */
 		if (this->opt_truncate) {
 			// avoid `"storage full"`. Give warning later
-			if (pStore->maxImprint - pStore->numImprint <= pStore->interleave || pStore->maxSignature - pStore->numSignature <= 1) {
+			if (pStore->maxPair - pStore->numPair <= 3 || pStore->maxMember - pStore->numMember <= 1) {
 				// break now, display text later/ Leave progress untouched
 				this->truncated = ctx.progress;
 				::strcpy(this->truncatedName, pNameR);
@@ -1562,7 +1562,7 @@ struct genmemberContext_t : dbtool_t {
 
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
+				fprintf(stderr, "[%s] WARNING: Pair/Member storage full. Truncating at progress=%lu \"%s\"\n",
 					ctx.timeAsString(), this->truncated, this->truncatedName);
 
 			// save position for final status
@@ -1660,7 +1660,7 @@ struct genmemberContext_t : dbtool_t {
 
 		if (truncated) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_WARNING)
-				fprintf(stderr, "[%s] WARNING: Signature/Imprint storage full. Truncating at progress=%lu \"%s\"\n",
+				fprintf(stderr, "[%s] WARNING: Pair/Member storage full. Truncating at progress=%lu \"%s\"\n",
 					ctx.timeAsString(), this->truncated, this->truncatedName);
 		}
 

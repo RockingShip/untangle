@@ -10,8 +10,9 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-02 13:19:09 Fixed: `genmember --truncate`.
 2021-08-01 21:44:12 Changed: Simplified `numEmpty`/`numUnsafe`.
-2021-08-01 21:43:05 (MAJOR) Fixed: `genmember` `numPlaceholder` false-positives.
+2021-08-01 17:51:27 (MAJOR) Fixed: `genmember` `numPlaceholder` false-positives.
 2021-08-01 17:48:47 Added: `gensignature --mixed`.
 2021-08-01 17:26:47 Fixed: Allow mixing of `gensignature`/`genmember`.
 2021-07-29 20:37:14 Changed: Signatures are always sorted.
@@ -25,9 +26,9 @@ TODO: no sorting when read-only
 2021-07-26 11:49:39 Fixed: Capture flags in `database_t::create()`.
 2021-07-26 11:42:17 Changed: Tickers.
 2021-07-26 11:40:10 Fixed: Create pairs only when in write mode.
-2021-07-26 11:32:40 Fixed: member matching in `findHeadTail()`. (SEVERE)
+2021-07-26 11:32:40 (CRITICAL) Fixed: member matching in `findHeadTail()`.
 2021-07-26 11:30:05 Changed: `lookupImprintAssociative()` with explicit root.
-2021-07-26 11:01:56 Fixed: Ambiguous `tinyTree_t::saveString()`. (SEVERE)
+2021-07-26 11:01:56 (CRITICAL) Fixed: Ambiguous `tinyTree_t::saveString()`.
 2021-07-25 22:59:28 Fixed: Generator pre-calculated iterator dyadic ordering.
 ```
 
