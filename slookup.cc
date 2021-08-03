@@ -153,11 +153,12 @@ struct slookupContext_t {
 		       tid, pSignature->numPlaceholder, pStore->fwdTransformNames[tid],
 		       pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 
-		printf(" flags=[%x:%s%s%s]",
+		printf(" flags=[%x:%s%s%s%s]",
 		       pSignature->flags,
 		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
-		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "");
+		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "",
+		       (pSignature->flags & signature_t::SIGMASK_REWRITE) ? " REWRITE" : "");
 
 		if (opt_swap) {
 			if (pStore->numSwap == 0) {

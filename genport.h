@@ -106,6 +106,8 @@ struct genportContext_t : dbtool_t {
 				signatureCRC = crc32Name(signatureCRC, "P");
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 				signatureCRC = crc32Name(signatureCRC, "R");
+			if (pSignature->flags & signature_t::SIGMASK_REWRITE)
+				signatureCRC = crc32Name(signatureCRC, "W");
 		}
 
 		return signatureCRC;
@@ -326,6 +328,8 @@ struct genportContext_t : dbtool_t {
 				fprintf(f, "P");
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 				fprintf(f, "R");
+			if (pSignature->flags & signature_t::SIGMASK_REWRITE)
+				fprintf(f, "W");
 
 			fprintf(f, "\"]\n");
 		}
@@ -408,6 +412,8 @@ struct genportContext_t : dbtool_t {
 					pSignature->flags |= signature_t::SIGMASK_PROVIDES;
 				else if (*pFlags == 'R')
 					pSignature->flags |= signature_t::SIGMASK_REQUIRED;
+				else if (*pFlags == 'W')
+					pSignature->flags |= signature_t::SIGMASK_REWRITE;
 				else
 					ctx.fatal("\n{\"error\":\"unknown flag\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
 

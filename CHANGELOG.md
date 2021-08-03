@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-03 21:47:46 Added: `signature_t::SIGMASK_REWRITE` to mark rewrite lookups.
 2021-08-03 13:34:46 Fixed: `pair_t::sidmid` to `id`.
 2021-08-02 14:13:43 Fixed: Add pairs as very last in `findHeadTail()`.
 2021-08-02 13:23:55 Added: `gensignature --mixed=2`.
