@@ -181,18 +181,18 @@ struct selftestContext_t : dbtool_t {
 			 */
 
 			// @formatter:off
-			for (unsigned Fo = 0; Fo < tinyTree_t::TINYTREE_KSTART + 3; Fo++) // operand of F: 0, a, b, c
+			for (unsigned Fu = 0; Fu < tinyTree_t::TINYTREE_KSTART + 3; Fu++) // operand of F: 0, a, b, c
 			for (unsigned Fi = 0; Fi < 2; Fi++)                               // inverting of F
-			for (unsigned To = 0; To < tinyTree_t::TINYTREE_KSTART + 3; To++)
+			for (unsigned Tu = 0; Tu < tinyTree_t::TINYTREE_KSTART + 3; Tu++)
 			for (unsigned Ti = 0; Ti < 2; Ti++)
-			for (unsigned Qo = 0; Qo < tinyTree_t::TINYTREE_KSTART + 3; Qo++)
+			for (unsigned Qu = 0; Qu < tinyTree_t::TINYTREE_KSTART + 3; Qu++)
 			for (unsigned Qi = 0; Qi < 2; Qi++) {
 			// @formatter:on
 
 				// additional rangecheck
-				if (Qo && Qo < tinyTree_t::TINYTREE_KSTART) continue;
-				if (To && To < tinyTree_t::TINYTREE_KSTART) continue;
-				if (Fo && Fo < tinyTree_t::TINYTREE_KSTART) continue;
+				if (Qu && Qu < tinyTree_t::TINYTREE_KSTART) continue;
+				if (Tu && Tu < tinyTree_t::TINYTREE_KSTART) continue;
+				if (Fu && Fu < tinyTree_t::TINYTREE_KSTART) continue;
 
 				// bump test number
 				testNr++;
@@ -203,7 +203,7 @@ struct selftestContext_t : dbtool_t {
 
 				ctx.flags = context_t::MAGICMASK_PARANOID | (iPure ? context_t::MAGICMASK_PURE : 0);
 				generator.clearTree();
-				generator.root = generator.addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+				generator.root = generator.addNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
 
 				/*
 				 * save with placeholders and reload
@@ -263,30 +263,27 @@ struct selftestContext_t : dbtool_t {
 					// bump test number
 					testNr++;
 
-					unsigned q, t, f;
+					unsigned q = 0, t = 0, f = 0;
 
 					/*
 					 * Substitute endpoints `a-c` with their actual values.
 					 */
 					// @formatter:off
-					switch (Qo) {
-					case 0:                                 q = 0; break;
+					switch (Qu) {
 					case (tinyTree_t::TINYTREE_KSTART + 0): q = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): q = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): q = c; break;
 					}
 					if (Qi) q ^= 1;
 
-					switch (To) {
-					case 0:                                 t = 0; break;
+					switch (Tu) {
 					case (tinyTree_t::TINYTREE_KSTART + 0): t = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): t = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): t = c; break;
 					}
 					if (Ti) t ^= 1;
 
-					switch (Fo) {
-					case 0:                                 f = 0; break;
+					switch (Fu) {
 					case (tinyTree_t::TINYTREE_KSTART + 0): f = a; break;
 					case (tinyTree_t::TINYTREE_KSTART + 1): f = b; break;
 					case (tinyTree_t::TINYTREE_KSTART + 2): f = c; break;
@@ -308,7 +305,7 @@ struct selftestContext_t : dbtool_t {
 
 					if (expected != encountered) {
 						printf("{\"error\":\"compare failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
-						       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qu, Ti ? '~' : ' ', Tu, Fi ? '~' : ' ', Fu, q, t, f, c, b, a, treeName);
 						exit(1);
 					}
 					numPassed++;
