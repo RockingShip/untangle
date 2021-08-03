@@ -910,20 +910,20 @@ int main(int argc, char *argv[]) {
 				printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
 				printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
 
-				uint32_t Qsid = store.pairs[pMember->Qmt].sidmid, Qtid = store.pairs[pMember->Qmt].tid;
+				uint32_t Qmid = store.pairs[pMember->Qmt].id, Qtid = store.pairs[pMember->Qmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Qsid, store.members[Qsid].name,
-				       Qtid, store.signatures[Qsid].numPlaceholder, store.fwdTransformNames[Qtid]);
+				       Qmid, store.members[Qmid].name,
+				       Qtid, store.signatures[store.members[Qmid].sid].numPlaceholder, store.fwdTransformNames[Qtid]);
 
-				uint32_t Tsid = store.pairs[pMember->Tmt].sidmid, Ttid = store.pairs[pMember->Tmt].tid;
+				uint32_t Tmid = store.pairs[pMember->Tmt].id, Ttid = store.pairs[pMember->Tmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Tsid, store.members[Tsid].name,
-				       Ttid, store.signatures[Tsid].numPlaceholder, store.fwdTransformNames[Ttid]);
+				       Tmid, store.members[Tmid].name,
+				       Ttid, store.signatures[store.members[Tmid].sid].numPlaceholder, store.fwdTransformNames[Ttid]);
 
-				uint32_t Fsid = store.pairs[pMember->Fmt].sidmid, Ftid = store.pairs[pMember->Fmt].tid;
+				uint32_t Fmid = store.pairs[pMember->Fmt].id, Ftid = store.pairs[pMember->Fmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Fsid, store.members[Fsid].name,
-				       Ftid, store.signatures[Fsid].numPlaceholder, store.fwdTransformNames[Ftid]);
+				       Fmid, store.members[Fmid].name,
+				       Ftid, store.signatures[store.members[Fmid].sid].numPlaceholder, store.fwdTransformNames[Ftid]);
 
 				for (unsigned i = 0; i < member_t::MAXHEAD; i++)
 					printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);

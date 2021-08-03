@@ -2132,17 +2132,17 @@ struct database_t {
 	 * Returns the offset within the index.
 	 * If contents of index is 0, then not found, otherwise it the index where to find the sid/tid pair.
 	 *
-	 * @param sidmid {uint32_t} - key value
+	 * @param id {uint32_t} - key value
 	 * @param tid {uint32_t} - key value
 	 * @return {number} offset into index
 	 */
-	inline unsigned lookupPair(uint32_t sidmid, uint32_t tid) {
+	inline unsigned lookupPair(uint32_t id, uint32_t tid) {
 		ctx.cntHash++;
 
 		// calculate starting position
 		unsigned crc32 = 0;
 
-		crc32 = __builtin_ia32_crc32si(crc32, sidmid);
+		crc32 = __builtin_ia32_crc32si(crc32, id);
 		crc32 = __builtin_ia32_crc32si(crc32, tid);
 
 		unsigned ix   = crc32 % pairIndexSize;
@@ -2157,7 +2157,7 @@ struct database_t {
 			if (this->pairIndex[ix] == 0)
 				return ix; // "not-found"
 
-			if (this->pairs[this->pairIndex[ix]].equals(sidmid, tid))
+			if (this->pairs[this->pairIndex[ix]].equals(id, tid))
 				return ix; // "found"
 
 			// overflow, jump to next entry
@@ -2171,18 +2171,18 @@ struct database_t {
 	/**
  	 * Add a new sid/tid pair to the dataset
  	 *
-	 * @param sid {uint32_t} - key value
+	 * @param id {uint32_t} - key value
 	 * @param tid {uint32_t} - key value
 	 * @return {number} pairId
 	 */
-	inline unsigned addPair(uint32_t sid, uint32_t tid) {
+	inline unsigned addPair(uint32_t id, uint32_t tid) {
 		unsigned pairId = this->numPair++;
 
 		if (this->numPair > this->maxPair)
 			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxPair\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxPair);
 
-		this->pairs[pairId].sidmid = sid;
-		this->pairs[pairId].tid    = tid;
+		this->pairs[pairId].id  = id;
+		this->pairs[pairId].tid = tid;
 
 		return pairId;
 	}
@@ -2484,7 +2484,7 @@ struct database_t {
 
 				const pair_t *pPair = this->pairs + iPair;
 
-				unsigned ix = this->lookupPair(pPair->sidmid, pPair->tid);
+				unsigned ix = this->lookupPair(pPair->id, pPair->tid);
 				assert(this->pairIndex[ix] == 0);
 				this->pairIndex[ix] = iPair;
 

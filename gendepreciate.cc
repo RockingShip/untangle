@@ -248,9 +248,9 @@ struct gendepreciateContext_t : dbtool_t {
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
 				// member already depreciated
 				numDepr++;
-			} else if ((pMember->Qmt != 0 && (pStore->members[pStore->pairs[pMember->Qmt].sidmid].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->Tmt != 0 && (pStore->members[pStore->pairs[pMember->Tmt].sidmid].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->Fmt != 0 && (pStore->members[pStore->pairs[pMember->Fmt].sidmid].flags & member_t::MEMMASK_DEPR))
+			} else if ((pMember->Qmt != 0 && (pStore->members[pStore->pairs[pMember->Qmt].id].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Tmt != 0 && (pStore->members[pStore->pairs[pMember->Tmt].id].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Fmt != 0 && (pStore->members[pStore->pairs[pMember->Fmt].id].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[0] != 0 && (pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[1] != 0 && (pStore->members[pMember->heads[1]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[2] != 0 && (pStore->members[pMember->heads[2]].flags & member_t::MEMMASK_DEPR))
@@ -366,9 +366,9 @@ struct gendepreciateContext_t : dbtool_t {
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
 				// member already depreciated
 				numDepr++;
-			} else if ((pMember->Qmt != 0 && (pStore->members[pStore->pairs[pMember->Qmt].sidmid].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->Tmt != 0 && (pStore->members[pStore->pairs[pMember->Tmt].sidmid].flags & member_t::MEMMASK_DEPR))
-				   || (pMember->Fmt != 0 && (pStore->members[pStore->pairs[pMember->Fmt].sidmid].flags & member_t::MEMMASK_DEPR))
+			} else if ((pMember->Qmt != 0 && (pStore->members[pStore->pairs[pMember->Qmt].id].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Tmt != 0 && (pStore->members[pStore->pairs[pMember->Tmt].id].flags & member_t::MEMMASK_DEPR))
+				   || (pMember->Fmt != 0 && (pStore->members[pStore->pairs[pMember->Fmt].id].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[0] != 0 && (pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[1] != 0 && (pStore->members[pMember->heads[1]].flags & member_t::MEMMASK_DEPR))
 				   || (pMember->heads[2] != 0 && (pStore->members[pMember->heads[2]].flags & member_t::MEMMASK_DEPR))
@@ -487,20 +487,20 @@ struct gendepreciateContext_t : dbtool_t {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED) {
-				uint32_t Qsid = pStore->pairs[pMember->Qmt].sidmid;
-				uint32_t Tsid = pStore->pairs[pMember->Tmt].sidmid;
-				uint32_t Fsid = pStore->pairs[pMember->Fmt].sidmid;
+				uint32_t Qmid = pStore->pairs[pMember->Qmt].id;
+				uint32_t Tmid = pStore->pairs[pMember->Tmt].id;
+				uint32_t Fmid = pStore->pairs[pMember->Fmt].id;
 
-				if (Qsid && !(pStore->members[Qsid].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[Qsid].flags |= member_t::MEMMASK_LOCKED;
+				if (Qmid && !(pStore->members[Qmid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[Qmid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
-				if (Tsid && !(pStore->members[Tsid].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[Tsid].flags |= member_t::MEMMASK_LOCKED;
+				if (Tmid && !(pStore->members[Tmid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[Tmid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
-				if (Fsid && !(pStore->members[Fsid].flags & member_t::MEMMASK_LOCKED)) {
-					pStore->members[Fsid].flags |= member_t::MEMMASK_LOCKED;
+				if (Fmid && !(pStore->members[Fmid].flags & member_t::MEMMASK_LOCKED)) {
+					pStore->members[Fmid].flags |= member_t::MEMMASK_LOCKED;
 					cntLocked++;
 				}
 				if (pMember->heads[0] && !(pStore->members[pMember->heads[0]].flags & member_t::MEMMASK_LOCKED)) {
@@ -665,9 +665,9 @@ struct gendepreciateContext_t : dbtool_t {
 				continue;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
-				if (pMember->Qmt) pRefcnts[pStore->pairs[pMember->Qmt].sidmid].refcnt++;
-				if (pMember->Tmt) pRefcnts[pStore->pairs[pMember->Tmt].sidmid].refcnt++;
-				if (pMember->Fmt) pRefcnts[pStore->pairs[pMember->Fmt].sidmid].refcnt++;
+				if (pMember->Qmt) pRefcnts[pStore->pairs[pMember->Qmt].id].refcnt++;
+				if (pMember->Tmt) pRefcnts[pStore->pairs[pMember->Tmt].id].refcnt++;
+				if (pMember->Fmt) pRefcnts[pStore->pairs[pMember->Fmt].id].refcnt++;
 				if (pMember->heads[0]) pRefcnts[pMember->heads[0]].refcnt++;
 				if (pMember->heads[1]) pRefcnts[pMember->heads[1]].refcnt++;
 				if (pMember->heads[2]) pRefcnts[pMember->heads[2]].refcnt++;
@@ -815,21 +815,21 @@ struct gendepreciateContext_t : dbtool_t {
 
 						// release references and reposition them in list of candidates
 						if (!(pDepr->flags & member_t::MEMMASK_DEPR)) {
-							unsigned Qsid = pStore->pairs[pDepr->Qmt].sidmid;
-							unsigned Tsid = pStore->pairs[pDepr->Tmt].sidmid;
-							unsigned Fsid = pStore->pairs[pDepr->Fmt].sidmid;
+							unsigned Qmid = pStore->pairs[pDepr->Qmt].id;
+							unsigned Tmid = pStore->pairs[pDepr->Tmt].id;
+							unsigned Fmid = pStore->pairs[pDepr->Fmt].id;
 
-							if (Qsid) {
-								pRefcnts[Qsid].refcnt--;
-								heap.down(pRefcnts + Qsid);
+							if (Qmid) {
+								pRefcnts[Qmid].refcnt--;
+								heap.down(pRefcnts + Qmid);
 							}
-							if (Tsid) {
-								pRefcnts[Tsid].refcnt--;
-								heap.down(pRefcnts + Tsid);
+							if (Tmid) {
+								pRefcnts[Tmid].refcnt--;
+								heap.down(pRefcnts + Tmid);
 							}
-							if (Fsid) {
-								pRefcnts[Fsid].refcnt--;
-								heap.down(pRefcnts + Fsid);
+							if (Fmid) {
+								pRefcnts[Fmid].refcnt--;
+								heap.down(pRefcnts + Fmid);
 							}
 							if (pDepr->heads[0]) {
 								pRefcnts[pDepr->heads[0]].refcnt--;
@@ -924,9 +924,9 @@ struct gendepreciateContext_t : dbtool_t {
 					pSafeSid[pMember->sid] = iVersionSafe;
 					cntSid++;
 				}
-			} else if ((pMember->Qmt == 0 || pSafeMid[pStore->pairs[pMember->Qmt].sidmid] == iVersionSafe)
-					&& (pMember->Tmt == 0 || pSafeMid[pStore->pairs[pMember->Tmt].sidmid] == iVersionSafe)
-					&& (pMember->Fmt == 0 || pSafeMid[pStore->pairs[pMember->Fmt].sidmid] == iVersionSafe)
+			} else if ((pMember->Qmt == 0 || pSafeMid[pStore->pairs[pMember->Qmt].id] == iVersionSafe)
+					&& (pMember->Tmt == 0 || pSafeMid[pStore->pairs[pMember->Tmt].id] == iVersionSafe)
+					&& (pMember->Fmt == 0 || pSafeMid[pStore->pairs[pMember->Fmt].id] == iVersionSafe)
 					&& (pMember->heads[0] == 0 || pSafeMid[pMember->heads[0]] == iVersionSafe)
 					&& (pMember->heads[1] == 0 || pSafeMid[pMember->heads[1]] == iVersionSafe)
 					&& (pMember->heads[2] == 0 || pSafeMid[pMember->heads[2]] == iVersionSafe)
@@ -1495,9 +1495,9 @@ int main(int argc, char *argv[]) {
 				assert(app.pSafeMid[iMid] == app.iVersionSafe); // depreciated must be in the appreciated set
 			}
 
-			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].sidmid < iMid);
-			assert(pMember->Tmt == 0 || store.pairs[pMember->Tmt].sidmid < iMid);
-			assert(pMember->Fmt == 0 || store.pairs[pMember->Fmt].sidmid < iMid);
+			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].id < iMid);
+			assert(pMember->Tmt == 0 || store.pairs[pMember->Tmt].id < iMid);
+			assert(pMember->Fmt == 0 || store.pairs[pMember->Fmt].id < iMid);
 
 			assert(pMember->heads[0] == 0 || pMember->heads[0] < iMid);
 			assert(pMember->heads[1] == 0 || pMember->heads[1] < iMid);
@@ -1565,9 +1565,9 @@ int main(int argc, char *argv[]) {
 			if (!(pMember->flags & member_t::MEMMASK_SAFE))
 				cntUnsafe++;
 
-			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].sidmid < iMid);
-			assert(pMember->Tmt == 0 || store.pairs[pMember->Tmt].sidmid < iMid);
-			assert(pMember->Fmt == 0 || store.pairs[pMember->Fmt].sidmid < iMid);
+			assert(pMember->Qmt == 0 || store.pairs[pMember->Qmt].id < iMid);
+			assert(pMember->Tmt == 0 || store.pairs[pMember->Tmt].id < iMid);
+			assert(pMember->Fmt == 0 || store.pairs[pMember->Fmt].id < iMid);
 
 			assert(pMember->heads[0] == 0 || pMember->heads[0] < iMid);
 			assert(pMember->heads[1] == 0 || pMember->heads[1] < iMid);

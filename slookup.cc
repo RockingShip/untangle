@@ -191,25 +191,25 @@ struct slookupContext_t {
 					lenName = len;
 
 				if (this->opt_member > 1) {
-					uint32_t Qsid = pStore->pairs[pMember->Qmt].sidmid, Qtid = pStore->pairs[pMember->Qmt].tid;
-					uint32_t Tsid = pStore->pairs[pMember->Tmt].sidmid, Ttid = pStore->pairs[pMember->Tmt].tid;
-					uint32_t Fsid = pStore->pairs[pMember->Fmt].sidmid, Ftid = pStore->pairs[pMember->Fmt].tid;
+					uint32_t Qmid = pStore->pairs[pMember->Qmt].id, Qtid = pStore->pairs[pMember->Qmt].tid;
+					uint32_t Tmid = pStore->pairs[pMember->Tmt].id, Ttid = pStore->pairs[pMember->Tmt].tid;
+					uint32_t Fmid = pStore->pairs[pMember->Fmt].id, Ftid = pStore->pairs[pMember->Fmt].tid;
 
 					len = sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Qsid, pStore->members[Qsid].name,
-						      Qtid, pStore->signatures[Qsid].numPlaceholder, pStore->fwdTransformNames[Qtid]);
+						      Qmid, pStore->members[Qmid].name,
+						      Qtid, pStore->signatures[pStore->members[Qmid].sid].numPlaceholder, pStore->fwdTransformNames[Qtid]);
 					if (lenQ < len)
 						lenQ = len;
 
 					len = sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Tsid, pStore->members[Tsid].name,
-						      Ttid, pStore->signatures[Tsid].numPlaceholder, pStore->fwdTransformNames[Ttid]);
+						      Tmid, pStore->members[Tmid].name,
+						      Ttid, pStore->signatures[pStore->members[Tmid].sid].numPlaceholder, pStore->fwdTransformNames[Ttid]);
 					if (lenT < len)
 						lenT = len;
 
 					len = sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Fsid, pStore->members[Fsid].name,
-						      Ftid, pStore->signatures[Fsid].numPlaceholder, pStore->fwdTransformNames[Ftid]);
+						      Fmid, pStore->members[Fmid].name,
+						      Ftid, pStore->signatures[pStore->members[Fmid].sid].numPlaceholder, pStore->fwdTransformNames[Ftid]);
 					if (lenF < len)
 						lenF = len;
 
@@ -246,23 +246,23 @@ struct slookupContext_t {
 				printf(" size=%u numPlaceholder=%u numEndpoint=%-2u numBackRef=%u", pMember->size, pMember->numPlaceholder, pMember->numEndpoint, pMember->numBackRef);
 
 				if (this->opt_member > 1) {
-					uint32_t Qsid = pStore->pairs[pMember->Qmt].sidmid, Qtid = pStore->pairs[pMember->Qmt].tid;
-					uint32_t Tsid = pStore->pairs[pMember->Tmt].sidmid, Ttid = pStore->pairs[pMember->Tmt].tid;
-					uint32_t Fsid = pStore->pairs[pMember->Fmt].sidmid, Ftid = pStore->pairs[pMember->Fmt].tid;
+					uint32_t Qmid = pStore->pairs[pMember->Qmt].id, Qtid = pStore->pairs[pMember->Qmt].tid;
+					uint32_t Tmid = pStore->pairs[pMember->Tmt].id, Ttid = pStore->pairs[pMember->Tmt].tid;
+					uint32_t Fmid = pStore->pairs[pMember->Fmt].id, Ftid = pStore->pairs[pMember->Fmt].tid;
 
 					sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Qsid, pStore->members[Qsid].name,
-						      Qtid, pStore->signatures[Qsid].numPlaceholder, pStore->fwdTransformNames[Qtid]);
+						      Qmid, pStore->members[Qmid].name,
+						      Qtid, pStore->signatures[pStore->members[Qmid].sid].numPlaceholder, pStore->fwdTransformNames[Qtid]);
 					printf(" Q=%-*s", lenQ, txt);
 
 					sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Tsid, pStore->members[Tsid].name,
-						      Ttid, pStore->signatures[Tsid].numPlaceholder, pStore->fwdTransformNames[Ttid]);
+						      Tmid, pStore->members[Tmid].name,
+						      Ttid, pStore->signatures[pStore->members[Tmid].sid].numPlaceholder, pStore->fwdTransformNames[Ttid]);
 					printf(" T=%-*s", lenT, txt);
 
 					sprintf(txt, "%u:%s/%u:%.*s\t",
-						      Fsid, pStore->members[Fsid].name,
-						      Ftid, pStore->signatures[Fsid].numPlaceholder, pStore->fwdTransformNames[Ftid]);
+						      Fmid, pStore->members[Fmid].name,
+						      Ftid, pStore->signatures[pStore->members[Fmid].sid].numPlaceholder, pStore->fwdTransformNames[Ftid]);
 					printf(" F=%-*s", lenF, txt);
 
 					len = 0;

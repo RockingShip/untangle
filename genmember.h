@@ -740,9 +740,9 @@ struct genmemberContext_t : dbtool_t {
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			unsigned iMid = pMember - pStore->members;
 
-			assert(pMember->Qmt == 0 || pStore->pairs[pMember->Qmt].sidmid < iMid);
-			assert(pMember->Tmt == 0 || pStore->pairs[pMember->Tmt].sidmid < iMid);
-			assert(pMember->Fmt == 0 || pStore->pairs[pMember->Fmt].sidmid < iMid);
+			assert(pMember->Qmt == 0 || pStore->pairs[pMember->Qmt].id < iMid);
+			assert(pMember->Tmt == 0 || pStore->pairs[pMember->Tmt].id < iMid);
+			assert(pMember->Fmt == 0 || pStore->pairs[pMember->Fmt].id < iMid);
 
 			for (unsigned k = 0; k < member_t::MAXHEAD; k++)
 				assert(pMember->heads[k] == 0 || pMember->heads[k] < iMid);
@@ -1068,15 +1068,15 @@ struct genmemberContext_t : dbtool_t {
 					for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
 						member_t *p = pStore->members + iMid;
 
-						if (pStore->members[pStore->pairs[p->Qmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+						if (pStore->members[pStore->pairs[p->Qmt].id].flags & member_t::MEMMASK_DELETE) {
 							assert(!(p->flags & member_t::MEMMASK_SAFE));
 							p->Qmt = 0;
 						}
-						if (pStore->members[pStore->pairs[p->Tmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+						if (pStore->members[pStore->pairs[p->Tmt].id].flags & member_t::MEMMASK_DELETE) {
 							assert(!(p->flags & member_t::MEMMASK_SAFE));
 							p->Tmt = 0;
 						}
-						if (pStore->members[pStore->pairs[p->Fmt].sidmid].flags & member_t::MEMMASK_DELETE) {
+						if (pStore->members[pStore->pairs[p->Fmt].id].flags & member_t::MEMMASK_DELETE) {
 							assert(!(p->flags & member_t::MEMMASK_SAFE));
 							p->Fmt = 0;
 						}
@@ -1875,17 +1875,17 @@ struct genmemberContext_t : dbtool_t {
 
 			if (pMember->flags & member_t::MEMMASK_SAFE) {
 				if (pMember->Qmt) {
-					unsigned m = pStore->pairs[pMember->Qmt].sidmid;
+					unsigned m = pStore->pairs[pMember->Qmt].id;
 					assert(m < iMid);
 					assert(pStore->members[m].sid != 0);
 				}
 				if (pMember->Tmt) {
-					unsigned m = pStore->pairs[pMember->Tmt].sidmid;
+					unsigned m = pStore->pairs[pMember->Tmt].id;
 					assert(m < iMid);
 					assert(pStore->members[m].sid != 0);
 				}
 				if (pMember->Fmt) {
-					unsigned m = pStore->pairs[pMember->Fmt].sidmid;
+					unsigned m = pStore->pairs[pMember->Fmt].id;
 					assert(m < iMid);
 					assert(pStore->members[m].sid != 0);
 				}
@@ -1909,11 +1909,11 @@ struct genmemberContext_t : dbtool_t {
 
 			if (pMember->flags & member_t::MEMMASK_SAFE) {
 				if (pMember->Qmt)
-					pStore->members[pStore->pairs[pMember->Qmt].sidmid].flags |= member_t::MEMMASK_COMP;
+					pStore->members[pStore->pairs[pMember->Qmt].id].flags |= member_t::MEMMASK_COMP;
 				if (pMember->Tmt)
-					pStore->members[pStore->pairs[pMember->Tmt].sidmid].flags |= member_t::MEMMASK_COMP;
+					pStore->members[pStore->pairs[pMember->Tmt].id].flags |= member_t::MEMMASK_COMP;
 				if (pMember->Fmt)
-					pStore->members[pStore->pairs[pMember->Fmt].sidmid].flags |= member_t::MEMMASK_COMP;
+					pStore->members[pStore->pairs[pMember->Fmt].id].flags |= member_t::MEMMASK_COMP;
 
 				for (unsigned k = 0; k < member_t::MAXHEAD; k++) {
 					if (pMember->heads[k])

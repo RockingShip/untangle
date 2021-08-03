@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-03 13:34:46 Fixed: `pair_t::sidmid` to `id`.
 2021-08-02 14:13:43 Fixed: Add pairs as very last in `findHeadTail()`.
 2021-08-02 13:23:55 Added: `gensignature --mixed=2`.
 2021-08-02 13:21:21 Added: Alternative member generator for 7n9 (Experimental).
@@ -24,7 +25,7 @@ TODO: no sorting when read-only
 2021-07-26 22:26:31 Changed: Database record offsets are `uint32_t`.
 2021-07-26 12:29:00 Changed: Reject signature swapped alternatives.
 2021-07-26 12:14:46 Added: Checks to `finaliseMembers()`.
-2021-07-26 12:02:36 Changed: Renamed `genmember::pSafeScore[]` to `pSafeSize`.
+2021-07-26 12:02:36 Renamed: `genmember::pSafeScore[]` to `pSafeSize`.
 2021-07-26 12:01:02 Changed: Moved `--listsafe`/`--listunsafe` to `gensignature`.
 2021-07-26 11:49:39 Fixed: Capture flags in `database_t::create()`.
 2021-07-26 11:42:17 Changed: Tickers.

@@ -310,7 +310,7 @@ struct imprint_t {
  */
 struct pair_t {
 
-	uint32_t sidmid;
+	uint32_t id;
 	uint32_t tid;
 
 	/**
@@ -321,8 +321,8 @@ struct pair_t {
 	 * @param {pair_t} rhs - right hand side of comparison
 	 * @return {boolean} `true` if same, `false` if different
 	 */
-	inline bool equals(uint32_t sidmid, uint32_t tid) const {
-		return this->sidmid == sidmid && this->tid == tid;
+	inline bool equals(uint32_t id, uint32_t tid) const {
+		return this->id == id && this->tid == tid;
 	}
 
 };

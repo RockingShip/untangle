@@ -167,22 +167,22 @@ struct genportContext_t : dbtool_t {
 
 			assert(pMember->Qmt < pStore->numPair);
 			pair_t *pPair = pStore->pairs + pMember->Qmt;
-			assert(pPair->sidmid < pStore->numMember);
-			memberCRC = crc32Name(memberCRC, pStore->members[pPair->sidmid].name);
+			assert(pPair->id < pStore->numMember);
+			memberCRC = crc32Name(memberCRC, pStore->members[pPair->id].name);
 			assert(pPair->tid < pStore->numTransform);
 			memberCRC = crc32Name(memberCRC, pStore->fwdTransformNames[pPair->tid]);
 
 			assert(pMember->Tmt < pStore->numPair);
 			pPair = pStore->pairs + pMember->Tmt;
-			assert(pPair->sidmid < pStore->numMember);
-			memberCRC = crc32Name(memberCRC, pStore->members[pPair->sidmid].name);
+			assert(pPair->id < pStore->numMember);
+			memberCRC = crc32Name(memberCRC, pStore->members[pPair->id].name);
 			assert(pPair->tid < pStore->numTransform);
 			memberCRC = crc32Name(memberCRC, pStore->fwdTransformNames[pPair->tid]);
 
 			assert(pMember->Fmt < pStore->numPair);
 			pPair = pStore->pairs + pMember->Fmt;
-			assert(pPair->sidmid < pStore->numMember);
-			memberCRC = crc32Name(memberCRC, pStore->members[pPair->sidmid].name);
+			assert(pPair->id < pStore->numMember);
+			memberCRC = crc32Name(memberCRC, pStore->members[pPair->id].name);
 			assert(pPair->tid < pStore->numTransform);
 			memberCRC = crc32Name(memberCRC, pStore->fwdTransformNames[pPair->tid]);
 
