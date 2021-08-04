@@ -251,6 +251,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --listsafe                      List safe signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listunsafe                    List empty/unsafe signatures, for exclusion\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --markmixed                     Flag signatures that have pure with top-level mixed members\n");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
 		fprintf(stderr, "\t   --mixed                         Top-level node may be mixed QnTF/QTF\n");
@@ -304,6 +305,7 @@ int main(int argc, char *argv[]) {
 			LO_LISTSAFE,
 			LO_LISTUNSAFE,
 			LO_LOAD,
+			LO_MARKMIXED,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
 			LO_MIXED,
@@ -342,6 +344,7 @@ int main(int argc, char *argv[]) {
 			{"listsafe",           0, 0, LO_LISTSAFE},
 			{"listunsafe",         0, 0, LO_LISTUNSAFE},
 			{"load",               1, 0, LO_LOAD},
+			{"markmixed",          0, 0, LO_MARKMIXED},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
 			{"mixed",              2, 0, LO_MIXED},
@@ -422,6 +425,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
+			break;
+		case LO_MARKMIXED:
+			app.opt_markMixed++;
 			break;
 		case LO_MAXIMPRINT:
 			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
@@ -852,7 +858,7 @@ int main(int argc, char *argv[]) {
 			/*
 			 * Remap sids, this has no effect on the member index
 			 */
-			for (uint32_t iMember =1; iMember < store.numMember; iMember++) {
+			for (uint32_t iMember = 1; iMember < store.numMember; iMember++) {
 				member_t *pMember = store.members + iMember;
 
 				assert(pMember->sid < db.numSignature);
@@ -890,14 +896,14 @@ int main(int argc, char *argv[]) {
 	 * Interesting will be how full-throttle normalising will rewrite using basic "QTF->QnTF" conversion
 	 */
 	if (app.opt_listSafe) {
-		for (uint32_t iSid=1; iSid < store.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			signature_t *pSignature = store.signatures + iSid;
 			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
 				printf("%s\n", pSignature->name);
 		}
 	}
 	if (app.opt_listUnsafe) {
-		for (uint32_t iSid=1; iSid < store.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			signature_t *pSignature = store.signatures + iSid;
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				printf("%s\n", pSignature->name);

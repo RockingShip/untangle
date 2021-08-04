@@ -212,6 +212,8 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_listUnsafe;
 	/// @var {string} name of file containing members
 	const char *opt_load;
+	/// @var {number} flag signatures that have pure with top-level mixed members
+	unsigned   opt_markMixed;
 	/// @var {number} save imprints with given interleave
 	unsigned   opt_saveInterleave;
 	/// @var {number} task Id. First task=1
@@ -260,6 +262,7 @@ struct gensignatureContext_t : dbtool_t {
 		opt_listSafe       = 0;
 		opt_listUnsafe     = 0;
 		opt_load           = NULL;
+		opt_markMixed      = 0;
 		opt_saveInterleave = 0;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
@@ -353,32 +356,6 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		/*
-		 * @date 2021-07-20 09:51:35
-		 *
-		 * `--pure` v2 experiment: components must be QnTF, except signature top-level
-		 * Generator is still mixed mode so use a different flag and test explicitly here
-		 */
-		if (opt_toplevelMixed) {
-			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
-				if (!(treeR.N[k].T & IBIT))
-					return true;
-			}
-
-			/*
-			 * @date 2021-08-02 00:06:03
-			 *
-			 * Only add signatures that `rewriteData[]` can detect, intended for `4n9` only
-			 * Reject top-level QTF that does not load in slots, that is only accept `abc!def!ghi!!` and friends.
-			 */
-			if (opt_toplevelMixed > 1 && arg_numNodes >= 4) {
-				if (treeR.N[treeR.root].T & IBIT) {
-					if (treeR.N[treeR.root].Q < tinyTree_t::TINYTREE_NSTART || (treeR.N[treeR.root].T & ~IBIT) < tinyTree_t::TINYTREE_NSTART || treeR.N[treeR.root].F < tinyTree_t::TINYTREE_NSTART)
-						return true;
-				}
-			}
-		}
-
-		/*
 		 * test for duplicates
 		 */
 
@@ -403,6 +380,29 @@ struct gensignatureContext_t : dbtool_t {
 				return false;
 			}
 		}
+
+		/*
+		 * @date 2021-07-20 09:51:35
+		 *
+		 * `--pure` v2 experiment: components must be QnTF, except signature top-level
+		 * Generator is still mixed mode so use a different flag and test explicitly here
+		 *
+		 * @date 2021-08-04 11:58:56
+		 *
+		 * Record if a signature contains a full/mixed/pure structure
+		 * This is to flag the core collection that should be available for lookups.
+		 */
+		enum { FULL, MIXED, PURE } area;
+		area = PURE;
+
+		for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
+			if (!(treeR.N[k].T & IBIT)) {
+				area = FULL;
+				break;
+			}
+		}
+		if (area == PURE && !(treeR.N[treeR.root].T & IBIT))
+			area = MIXED;
 
 		/*
 		 * Lookup/add data store.
@@ -458,6 +458,10 @@ struct gensignatureContext_t : dbtool_t {
 
 				signature_t *pSignature = pStore->signatures + sid;
 				pSignature->flags = 0;
+				if (opt_markMixed) {
+					if (area == MIXED)
+						pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+				}
 				pSignature->size  = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
@@ -469,6 +473,12 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		signature_t *pSignature = pStore->signatures + sid;
+
+		if (opt_markMixed) {
+			// update flags
+			if (area == MIXED && !this->readOnlyMode)
+				pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+		}
 
 		/*
 		 * !! NOTE: The following selection is just for the display name.
