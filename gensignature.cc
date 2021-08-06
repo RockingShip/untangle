@@ -448,7 +448,7 @@ int main(int argc, char *argv[]) {
 			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
 			break;
 		case LO_MIXED:
-			app.opt_toplevelMixed = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_toplevelMixed + 1;
+			app.opt_mixed = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_mixed + 1;
 			break;
 		case LO_NOAINF:
 			ctx.flags &= ~context_t::MAGICMASK_AINF;

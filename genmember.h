@@ -920,7 +920,8 @@ struct genmemberContext_t : dbtool_t {
 			if (area == PURE && !(treeR.N[treeR.root].T & IBIT))
 				area = MIXED;
 
-			if (area != FULL)
+			// with `--mixed`, only accept PURE/MIXED
+			if (area == FULL)
 				return true;
 		}
 

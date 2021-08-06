@@ -128,12 +128,15 @@
  * With the new add-if-not-found database can be stored/archived with `"--interleave=1"` and have imprints quickly created on the fly.
  * This massively saves storage.
  *
- * @date2020-04-25 21:49:21
+ * @date 2020-04-25 21:49:21
  *
  * add-if-not-found only works if tid's can be ignored, otherwise it creates false positives.
  * It is perfect for ultra-high speed pre-processing and low storage.
  * Only activate with `--fast` option and issue a warning that it is experimental.
  *
+ * @date 2021-08-06 15:35:26
+ *
+ * `--markmixed` is intended to flag signatures that are used for `mixed` lookups.
  */
 
 /*
@@ -217,9 +220,11 @@ struct gensignatureContext_t : dbtool_t {
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} flag signatures that have pure with top-level mixed members
-	unsigned   opt_markMixed;
+	unsigned opt_markMixed;
+	/// @var {number} --mixed, consider/accept top-level mixed
+	unsigned opt_mixed;
 	/// @var {number} save imprints with given interleave
-	unsigned   opt_saveInterleave;
+	unsigned opt_saveInterleave;
 	/// @var {number} task Id. First task=1
 	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -232,14 +237,6 @@ struct gensignatureContext_t : dbtool_t {
 	uint64_t   opt_windowHi;
 	/// @var {number} generator lower bound
 	uint64_t   opt_windowLo;
-
-	/*
-	 * @date  2021-07-21 15:51:26
-	 * `--pure` will normally set the generator to `QnTF` only mode.
-	 * However, this is undesirable for signatures where the top-level node may be mixed.
-	 * Save the use gesture here, let the generator run in mixed mode and set the database flag just before saving.
-	 */
-	unsigned opt_toplevelMixed;
 
 	/// @var {database_t} - Database store to place results
 	database_t  *pStore;
@@ -269,6 +266,7 @@ struct gensignatureContext_t : dbtool_t {
 		opt_listUsed       = 0;
 		opt_load           = NULL;
 		opt_markMixed      = 0;
+		opt_mixed          = 0;
 		opt_saveInterleave = 0;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
@@ -277,11 +275,9 @@ struct gensignatureContext_t : dbtool_t {
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
-		opt_toplevelMixed = 0;
-
-		pStore        = NULL;
-		skipDuplicate = 0;
-		truncated     = 0;
+		pStore           = NULL;
+		skipDuplicate    = 0;
+		truncated        = 0;
 		truncatedName[0] = 0;
 	}
 
@@ -410,6 +406,10 @@ struct gensignatureContext_t : dbtool_t {
 		if (area == PURE && !(treeR.N[treeR.root].T & IBIT))
 			area = MIXED;
 
+		// with `--mixed`, only accept PURE/MIXED
+		if (opt_mixed && area == FULL)
+			return true;
+
 		/*
 		 * Lookup/add data store.
 		 * Consider signature groups `unsafe` (no members yet)
@@ -421,8 +421,8 @@ struct gensignatureContext_t : dbtool_t {
 		 * If imprints are writable perform fast 'add-if-not-found'
 		 */
 
-		unsigned sid     = 0;
-		unsigned markSid = pStore->numSignature;
+		unsigned sid              = 0;
+		unsigned origNumSignature = pStore->numSignature;
 
 		if ((ctx.flags & context_t::MAGICMASK_AINF) && !this->readOnlyMode) {
 			/*
@@ -434,7 +434,7 @@ struct gensignatureContext_t : dbtool_t {
 			 *          To get better results, re-run with next increment interleave.
 			 */
 			// add to imprints to index
-			sid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, markSid);
+			sid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, origNumSignature);
 		} else {
 			unsigned tid = 0;
 			pStore->lookupImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
@@ -451,7 +451,7 @@ struct gensignatureContext_t : dbtool_t {
 
 				// add signature to database
 				sid = pStore->addSignature(pNameR);
-				assert(sid == markSid);
+				assert(sid == origNumSignature);
 
 				// add to name index
 				pStore->signatureIndex[six] = sid;
@@ -459,15 +459,13 @@ struct gensignatureContext_t : dbtool_t {
 				// add to imprints to index
 				if (!(ctx.flags & context_t::MAGICMASK_AINF)) {
 					unsigned newSid = pStore->addImprintAssociative(&treeR, pStore->fwdEvaluator, pStore->revEvaluator, sid);
-					assert(newSid == 0 || newSid == markSid);
+					assert(newSid == 0 || newSid == origNumSignature);
 				}
 
 				signature_t *pSignature = pStore->signatures + sid;
 				pSignature->flags = 0;
-				if (opt_markMixed) {
-					if (area == MIXED)
-						pSignature->flags |= signature_t::SIGMASK_LOOKUP;
-				}
+				if (opt_markMixed && area != FULL)
+					pSignature->flags |= signature_t::SIGMASK_LOOKUP;
 				pSignature->size  = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
@@ -480,10 +478,9 @@ struct gensignatureContext_t : dbtool_t {
 
 		signature_t *pSignature = pStore->signatures + sid;
 
-		if (opt_markMixed) {
+		if (opt_markMixed && area != FULL && !this->readOnlyMode) {
 			// update flags
-			if (area == MIXED && !this->readOnlyMode)
-				pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+			pSignature->flags |= signature_t::SIGMASK_LOOKUP;
 		}
 
 		/*
