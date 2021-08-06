@@ -247,6 +247,10 @@ struct genmemberContext_t : dbtool_t {
 	unsigned   opt_listLookup;
 	/// @var {string} name of file containing members
 	const char *opt_load;
+	/// @var {string} --mixed, Consider/accept top-level mixed members only
+	unsigned   opt_mixed;
+	/// @var {string} --safe, Consider/accept safe members only
+	unsigned   opt_safe;
 	/// @var {number} Sid range upper bound
 	unsigned   opt_sidHi;
 	/// @var {number} Sid range lower bound
@@ -305,6 +309,8 @@ struct genmemberContext_t : dbtool_t {
 		opt_taskLast       = 0;
 		opt_listLookup     = 0;
 		opt_load           = NULL;
+		opt_mixed          = 0;
+		opt_safe           = 0;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
 		opt_text           = 0;
@@ -899,6 +905,25 @@ struct genmemberContext_t : dbtool_t {
 			}
 		}
 
+		if (opt_mixed) {
+			enum {
+				FULL, MIXED, PURE
+			} area;
+			area = PURE;
+
+			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
+				if (!(treeR.N[k].T & IBIT)) {
+					area = FULL;
+					break;
+				}
+			}
+			if (area == PURE && !(treeR.N[treeR.root].T & IBIT))
+				area = MIXED;
+
+			if (area != FULL)
+				return true;
+		}
+
 		/*
 		 * Find the matching signature group. It's layout only so ignore transformId.
 		 */
@@ -999,6 +1024,11 @@ struct genmemberContext_t : dbtool_t {
 		bool found = findHeadTail(&tmpMember, treeR);
 		if (!found)
 			found = false; // for debugger breakpoint
+
+		if (!found && opt_safe) {
+			skipUnsafe++;
+			return true;
+		}
 
 		/*
 		 * Verify if candidate member is acceptable

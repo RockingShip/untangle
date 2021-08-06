@@ -273,10 +273,12 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --maxpair=<number>              Maximum number of sid/tid pairs [default=%u]\n", app.opt_maxPair);
 		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
+		fprintf(stderr, "\t   --mixed                         Consider top-level mixed members only\n");
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --safe                          Consider safe members only\n");
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --sid=[<low>,]<high>            Sid range upper bound  [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --pairindexsize=<number>        Size of sid/tid pair index [default=%u]\n", app.opt_pairIndexSize);
@@ -324,6 +326,7 @@ int main(int argc, char *argv[]) {
 			LO_MAXMEMBER,
 			LO_MAXPAIR,
 			LO_MEMBERINDEXSIZE,
+			LO_MIXED,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
@@ -332,6 +335,7 @@ int main(int argc, char *argv[]) {
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
+			LO_SAFE,
 			LO_SAVEINDEX,
 			LO_SID,
 			LO_PAIRINDEXSIZE,
@@ -363,6 +367,7 @@ int main(int argc, char *argv[]) {
 			{"maxmember",          1, 0, LO_MAXMEMBER},
 			{"maxpair",            1, 0, LO_MAXPAIR},
 			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
+			{"mixed",              0, 0, LO_MIXED},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
@@ -372,6 +377,7 @@ int main(int argc, char *argv[]) {
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
+			{"safe",               0, 0, LO_SAFE},
 			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"sid",                1, 0, LO_SID},
 			{"pairindexsize",      1, 0, LO_PAIRINDEXSIZE},
@@ -451,6 +457,9 @@ int main(int argc, char *argv[]) {
 		case LO_MEMBERINDEXSIZE:
 			app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
+		case LO_MIXED:
+			app.opt_mixed++;
+			break;
 		case LO_NOGENERATE:
 			app.opt_generate = 0;
 			break;
@@ -459,6 +468,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_NOPURE:
 			ctx.flags &= ~context_t::MAGICMASK_PURE;
+			break;
+		case LO_NOSAVEINDEX:
+			app.opt_saveIndex = 0;
 			break;
 		case LO_NOUNSAFE:
 			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
@@ -475,8 +487,8 @@ int main(int argc, char *argv[]) {
 		case LO_RATIO:
 			app.opt_ratio = strtof(optarg, NULL);
 			break;
-		case LO_NOSAVEINDEX:
-			app.opt_saveIndex = 0;
+		case LO_SAFE:
+			app.opt_safe++;
 			break;
 		case LO_SAVEINDEX:
 			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;

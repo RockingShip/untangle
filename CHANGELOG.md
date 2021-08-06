@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-06 15:15:10 Added: `genmember --mixed` and `--safe`.
 2021-08-06 15:15:10 Added: `genmember --listlookup`.
 2021-08-06 14:56:55 Renamed: `signature_t::SIGMASK_REWRITE` to `SIGMASK_LOOKUP`.
 2021-08-04 16:46:24 Added: `gensignature --listincomplete`.
