@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-06 16:13:38 (MAJOR) Fixed: `gendepreciate` heap.
 2021-08-06 16:04:52 Fixed: `--mixed` and `--markmixed`.
 2021-08-04 16:46:24 Added: `gensignature --listused`.
 2021-08-06 15:15:10 Added: `genmember --mixed` and `--safe`.

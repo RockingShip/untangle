@@ -531,8 +531,8 @@ struct gendepreciateContext_t : dbtool_t {
 	}
 
 	struct refcnt_t {
-		uint32_t refcnt;
-		uint32_t heapIdx; // index in heap
+		unsigned refcnt;
+		int heapIdx; // index in heap, -1 if not
 
 		refcnt_t() : refcnt(0), heapIdx(0) {
 		}
@@ -582,19 +582,6 @@ struct gendepreciateContext_t : dbtool_t {
 		heap_t(unsigned count, refcnt_t *pArr) {
 			this->count = 0;
 			this->buf   = (refcnt_t **) calloc(count, sizeof *this->buf);
-
-			// assign non-zero refcounts
-			for (unsigned i = 0; i < count; i++) {
-				if (pArr[i].refcnt > 0)
-					this->buf[this->count++] = pArr + i;
-			}
-
-			// initial sort
-			qsort(this->buf, this->count, sizeof *this->buf, comparHeap);
-
-			// assign indices
-			for (unsigned i = 0; i < this->count; i++)
-				this->buf[i]->heapIdx = i;
 		}
 
 		~heap_t() {
@@ -605,8 +592,11 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 
 		void down(refcnt_t *p) {
-			unsigned lo = p->heapIdx;
-			unsigned hi = this->count - 1;
+			if (p->heapIdx < 0)
+				return; // entry not added to heap
+
+			unsigned lo = 0;
+			unsigned hi = p->heapIdx;
 
 			while (lo < hi) {
 				unsigned t = (lo + hi) >> 1;
@@ -618,7 +608,7 @@ struct gendepreciateContext_t : dbtool_t {
 			assert(lo == hi);
 
 
-			if (lo != p->heapIdx) {
+			if (lo != (unsigned) p->heapIdx) {
 				// rotate
 				memmove(buf + lo+1, buf+lo, (p->heapIdx-lo) * sizeof *buf);
 				buf[lo] = p;
@@ -634,7 +624,12 @@ struct gendepreciateContext_t : dbtool_t {
 			if (this->count == 0)
 				return NULL;
 
-			return this->buf[--this->count];
+			refcnt_t *p = this->buf[--this->count];
+
+			// mark removed from heap
+			p->heapIdx = -1;
+
+			return p;
 		}
 
 	};
@@ -645,6 +640,9 @@ struct gendepreciateContext_t : dbtool_t {
 
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
+
+			// clear locked flags, may be outdated
+			pMember->flags &= ~member_t::MEMMASK_LOCKED;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
 				numComponents++;
@@ -661,9 +659,6 @@ struct gendepreciateContext_t : dbtool_t {
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
-			if (arg_numNodes > 0 && pMember->size != arg_numNodes)
-				continue;
-
 			if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
 				if (pMember->Qmt) pRefcnts[pStore->pairs[pMember->Qmt].id].refcnt++;
 				if (pMember->Tmt) pRefcnts[pStore->pairs[pMember->Tmt].id].refcnt++;
@@ -677,14 +672,34 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 		}
 
-		// remove locked
-		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
-			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED)
-				pRefcnts[iMid].refcnt = 0;
-		}
-
 		// construct initial heap
 		heap_t heap(pStore->numMember, pRefcnts);
+
+		{
+			// add candidates to heap
+			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+				member_t *pMember = pStore->members + iMid;
+
+				// entry not on heap
+				pRefcnts[iMid].heapIdx = -1;
+
+				// put entry on heap?
+				if (arg_numNodes > 0 && pMember->size != arg_numNodes)
+					continue;
+				if (pMember->flags & member_t::MEMMASK_LOCKED)
+					continue;
+
+				// yes
+				heap.buf[heap.count++] = pRefcnts + iMid;
+			}
+
+			// initial sort
+			qsort(heap.buf, heap.count, sizeof *heap.buf, comparHeap);
+
+			// assign back-references
+			for (unsigned i = 0; i < heap.count; i++)
+				heap.buf[i]->heapIdx = i;
+		}
 
 		unsigned cntSid, cntMid;
 		unsigned cntDepr=0, cntLock = 0;
@@ -700,14 +715,7 @@ struct gendepreciateContext_t : dbtool_t {
 		ctx.setupSpeed(heap.count);
 		ctx.tick = 0;
 
-		for (;;) {
-			// remove leading empties
-			while (heap.count > 0 && heap.buf[heap.count - 1]->refcnt == 0) {
-				heap.pop();
-			}
-			if (heap.count == 0)
-				break;
-
+		while (heap.count > 0) {
 			refcnt_t *pCurr = heap.buf[heap.count - 1];
 
 			// separate lines at exact points for performance comparison
@@ -728,8 +736,8 @@ struct gendepreciateContext_t : dbtool_t {
 				unsigned iMid     = pCurr - pRefcnts;
 				member_t *pMember = pStore->members + iMid;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u numComponent=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u %s",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember - numDepr, numComponents, cntDepr, cntLock, pCurr->refcnt, iMid, pMember->name);
+				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u numComponent=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u heap=%u %s",
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember - numDepr, numComponents, cntDepr, cntLock, pCurr->refcnt, iMid, heap.count, pMember->name);
 
 				ctx.tick = 0;
 			}
@@ -760,7 +768,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 			for (int k = heap.count - 1; k >= 0 && cntSelect < burstSize && heap.buf[k]->refcnt == heap.buf[heap.count - 1]->refcnt; --k) {
 				unsigned iMid = heap.buf[k] - pRefcnts;
-				assert(!(pStore->members[iMid].flags & member_t::MEMMASK_LOCKED));
+
 				pSelect[iMid] = iVersionSelect;
 				cntSelect++;
 			}
@@ -775,8 +783,22 @@ struct gendepreciateContext_t : dbtool_t {
 			 * then an unflagged locked member is still in the remaining part.
 			 * In such a case, anticipate this by reducing the burst size too (or the next round is certain to fail).
 			 */
+			bool allSafe = true;
+			if (true) {
+				// only the lookup signatures must be safe
+				for (uint32_t k = 1; k < pStore->numSignature; k++) {
+					if (pStore->signatures[k].flags & signature_t::SIGMASK_LOOKUP)
+						if (pSafeSid[k] != iVersionSafe) {
+							allSafe = false; // rewrites must be safe
+							break;
+						}
+				}
+			} else {
+				// all signature groups must be safe
+				allSafe = cntSid == pStore->numSignature - 1;
+			}
 
-			if (cntSid == pStore->numSignature - 1) {
+			if (allSafe) {
 				// update
 				numDepr = pStore->numMember - 1 - cntMid;
 
@@ -790,70 +812,83 @@ struct gendepreciateContext_t : dbtool_t {
 					unsigned iMid     = pCurr - pRefcnts;
 					member_t *pMember = pStore->members + iMid;
 
+					ctx.progress++;
+
 					if (opt_text == OPTTEXT_COMPARE)
 						printf("D\t%u\t%u\t%u\t%s\n", numComponents, iMid, pCurr->refcnt, pMember->name);
 					else if (opt_text == OPTTEXT_WON)
 						printf("%s\tD\n", pMember->name);
 					cntDepr++;
-					ctx.progress++;
 				}
 
 				// update ref counts
-				for (uint32_t iDepr = 1; iDepr < pStore->numMember; iDepr++) {
+				for (uint32_t iDepr = pStore->numMember - 1; iDepr >= 1; iDepr--) {
 					member_t *pDepr = pStore->members + iDepr;
 
 					// depreciate all (new) orphans
 					if (pSafeMid[iDepr] != iVersionSafe && !(pDepr->flags & member_t::MEMMASK_DEPR)) {
 						assert(!(pDepr->flags & member_t::MEMMASK_LOCKED));
+						assert(pRefcnts[iDepr].refcnt == 0);
 
 						// mark depreciated
 						pDepr->flags |= member_t::MEMMASK_DEPR;
 
+						// release references and reposition them in list of candidates
+						uint32_t mid;
+
+						mid = pStore->pairs[pDepr->Qmt].id;
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pStore->pairs[pDepr->Tmt].id;
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pStore->pairs[pDepr->Fmt].id;
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pDepr->heads[0];
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pDepr->heads[1];
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pDepr->heads[2];
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pDepr->heads[3];
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						mid = pDepr->heads[4];
+						if (mid) {
+							assert(pRefcnts[mid].refcnt > 0);
+							pRefcnts[mid].refcnt--;
+							heap.down(pRefcnts + mid);
+						}
+						assert(member_t::MAXHEAD == 5);
+
 						// if a component, update counter
 						if (pDepr->flags & member_t::MEMMASK_COMP)
 							--numComponents;
-
-						// release references and reposition them in list of candidates
-						if (!(pDepr->flags & member_t::MEMMASK_DEPR)) {
-							unsigned Qmid = pStore->pairs[pDepr->Qmt].id;
-							unsigned Tmid = pStore->pairs[pDepr->Tmt].id;
-							unsigned Fmid = pStore->pairs[pDepr->Fmt].id;
-
-							if (Qmid) {
-								pRefcnts[Qmid].refcnt--;
-								heap.down(pRefcnts + Qmid);
-							}
-							if (Tmid) {
-								pRefcnts[Tmid].refcnt--;
-								heap.down(pRefcnts + Tmid);
-							}
-							if (Fmid) {
-								pRefcnts[Fmid].refcnt--;
-								heap.down(pRefcnts + Fmid);
-							}
-							if (pDepr->heads[0]) {
-								pRefcnts[pDepr->heads[0]].refcnt--;
-								heap.down(pRefcnts + pDepr->heads[0]);
-							}
-							if (pDepr->heads[1]) {
-								pRefcnts[pDepr->heads[1]].refcnt--;
-								heap.down(pRefcnts + pDepr->heads[1]);
-							}
-							if (pDepr->heads[2]) {
-								pRefcnts[pDepr->heads[2]].refcnt--;
-								heap.down(pRefcnts + pDepr->heads[2]);
-							}
-							if (pDepr->heads[3]) {
-								pRefcnts[pDepr->heads[3]].refcnt--;
-								heap.down(pRefcnts + pDepr->heads[3]);
-							}
-							if (pDepr->heads[4]) {
-								pRefcnts[pDepr->heads[4]].refcnt--;
-								heap.down(pRefcnts + pDepr->heads[4]);
-							}
-							assert(member_t::MAXHEAD == 5);
-						}
-
 					}
 				}
 
@@ -863,17 +898,18 @@ struct gendepreciateContext_t : dbtool_t {
 				unsigned iMid     = pCurr - pRefcnts;
 				member_t *pMember = pStore->members + iMid;
 
-				if (pMember->flags & member_t::MEMMASK_LOCKED)
-					continue;
-				pMember->flags |= member_t::MEMMASK_LOCKED;
-
-				if (opt_text == OPTTEXT_COMPARE)
-					printf("L\t%u\t%u\t%u\t%s\n", numComponents, iMid, pCurr->refcnt, pMember->name);
-				else if (opt_text == OPTTEXT_WON)
-					printf("%s\tL\n", pMember->name);
-
-				cntLock++;
 				ctx.progress++;
+
+				if (!(pMember->flags & member_t::MEMMASK_LOCKED)) {
+					pMember->flags |= member_t::MEMMASK_LOCKED;
+
+					if (opt_text == OPTTEXT_COMPARE)
+						printf("L\t%u\t%u\t%u\t%s\n", numComponents, iMid, pCurr->refcnt, pMember->name);
+					else if (opt_text == OPTTEXT_WON)
+						printf("%s\tL\n", pMember->name);
+
+					cntLock++;
+				}
 
 				// reset burst size
 				burstSize = opt_burst;
@@ -885,6 +921,17 @@ struct gendepreciateContext_t : dbtool_t {
 		}
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
+
+		/*
+		 * Empty signatures lose their SAFE state
+		 */
+		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+			signature_t *pSignature = pStore->signatures + iSid;
+
+			if (pSignature->firstMember == 0)
+				pSignature->flags &= ~signature_t::SIGMASK_SAFE;
+
+		}
 
 		unsigned numLocked = updateLocked();
 
@@ -913,7 +960,6 @@ struct gendepreciateContext_t : dbtool_t {
 				continue;
 			} else if (pSelect[iMid] == iVersionSelect) {
 				// explicitly excluded
-				assert (pMember->flags & member_t::MEMMASK_COMP); // must be a component
 				assert (!(pMember->flags & member_t::MEMMASK_LOCKED)); // may not be locked
 				continue;
 			} else if (pMember->sid == 1 || pMember->sid == 2) {
