@@ -162,6 +162,14 @@
  *              NOTE: requires sorting and will copy (not inherit) imprint section
  *
  *              <mid> <sid> <tid> <name> <Qmid> <Tmid> <Fmid> <HeadMids> <Safe/Nonsafe-member> <Safe/Nonsafe-signature>
+ *
+ * @date 2021-08-03 23:24:58
+ *
+ *   `--listlookup` in combination with `--pure`
+ *   List missing member that would otherwise make a signature safe.
+ *   Those members lie outside 4n9-pure.
+ *   As a member it is a placeholder signature name.
+ *   Mark this signature SAFE, second-pass: target rescan 5n9 signature space for group representative.
  */
 
 /*
@@ -235,6 +243,8 @@ struct genmemberContext_t : dbtool_t {
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned   opt_generate;
+	/// @var {string} let `findHeadTail()` show what is missing instead of failing
+	unsigned   opt_listLookup;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} Sid range upper bound
@@ -293,6 +303,7 @@ struct genmemberContext_t : dbtool_t {
 		opt_generate       = 1;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
+		opt_listLookup     = 0;
 		opt_load           = NULL;
 		opt_sidHi          = 0;
 		opt_sidLo          = 0;
@@ -439,7 +450,10 @@ struct genmemberContext_t : dbtool_t {
 				Qmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (Qmid == 0 || (!(pStore->members[Qmid].flags & member_t::MEMMASK_SAFE))) {
+				if (Qmid == 0 && opt_listLookup) {
+					printf("%s\n", name);
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+				} else if (Qmid == 0 || (!(pStore->members[Qmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
@@ -465,7 +479,10 @@ struct genmemberContext_t : dbtool_t {
 				Tmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (Tmid == 0 || (!(pStore->members[Tmid].flags & member_t::MEMMASK_SAFE))) {
+				if (Tmid == 0 && opt_listLookup) {
+					printf("%s\n", name);
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+				} else if (Tmid == 0 || (!(pStore->members[Tmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
@@ -492,7 +509,10 @@ struct genmemberContext_t : dbtool_t {
 				Fmid = pStore->memberIndex[ix];
 
 				// member is unsafe if component not found or unsafe
-				if (Fmid == 0 || (!(pStore->members[Fmid].flags & member_t::MEMMASK_SAFE))) {
+				if (Fmid == 0 && opt_listLookup) {
+					printf("%s\n", name);
+					pMember->flags &= ~member_t::MEMMASK_SAFE;
+				} else if (Fmid == 0 || (!(pStore->members[Fmid].flags & member_t::MEMMASK_SAFE))) {
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
 				}
@@ -666,13 +686,11 @@ struct genmemberContext_t : dbtool_t {
 				}
 				unsigned midHead = pStore->memberIndex[ix];
 
-				if (midHead == 0) {
+				if (midHead == 0 && opt_listLookup) {
 					// component not found
+					printf("%s\n", name);
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
-					return false;
-				}
-
-				if (!(pStore->members[midHead].flags & member_t::MEMMASK_SAFE)) {
+				} else if (midHead == 0 || !(pStore->members[midHead].flags & member_t::MEMMASK_SAFE)) {
 					// component unsafe
 					pMember->flags &= ~member_t::MEMMASK_SAFE;
 					return false;
@@ -1927,12 +1945,18 @@ struct genmemberContext_t : dbtool_t {
 		 * Recalculate empty/unsafe groups
 		 */
 
+		unsigned numIncomplete = 0;
+
 		numEmpty = numUnsafe = 0;
 		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
-			if (pStore->signatures[iSid].firstMember == 0)
+			signature_t *pSignature = pStore->signatures + iSid;
+
+			if (pSignature->firstMember == 0)
 				numEmpty++;
-			else if (!(pStore->signatures[iSid].flags & signature_t::SIGMASK_SAFE))
+			else if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
+			if ((pSignature->flags & signature_t::SIGMASK_LOOKUP) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+				numIncomplete++;
 		}
 
 		/*
@@ -1942,9 +1966,9 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "[%s] {\"numSlot\":%u,\"pure\":%u,\"interleave\":%u,\"numNode\":%u,\"numImprint\":%u,\"numSignature\":%u,\"numPair\":%u,\"numMember\":%u,\"numEmpty\":%u,\"numUnsafe\":%u}\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, pStore->interleave, arg_numNodes, pStore->numImprint, pStore->numSignature, pStore->numPair, pStore->numMember, numEmpty, numUnsafe);
 
-		if (numEmpty || numUnsafe) {
+		if (numEmpty || numUnsafe || numIncomplete) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-				fprintf(stderr, "[%s] WARNING: %u empty and %u unsafe signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe);
+				fprintf(stderr, "[%s] WARNING: %u empty, %u unsafe and %u incomplete signature groups\n", ctx.timeAsString(), numEmpty, numUnsafe, numIncomplete);
 		}
 	}
 
