@@ -212,6 +212,8 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_listSafe;
 	/// @var {number} List safe signatures, for inclusion
 	unsigned   opt_listUnsafe;
+	/// @var {number} List used signatures (have members), for inclusion
+	unsigned   opt_listUsed;
 	/// @var {string} name of file containing members
 	const char *opt_load;
 	/// @var {number} flag signatures that have pure with top-level mixed members
@@ -264,6 +266,7 @@ struct gensignatureContext_t : dbtool_t {
 		opt_listIncomplete = 0;
 		opt_listSafe       = 0;
 		opt_listUnsafe     = 0;
+		opt_listUsed       = 0;
 		opt_load           = NULL;
 		opt_markMixed      = 0;
 		opt_saveInterleave = 0;

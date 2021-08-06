@@ -251,6 +251,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --listincomplete                List unsafe core signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listsafe                      List safe signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listunsafe                    List empty/unsafe signatures, for exclusion\n");
+		fprintf(stderr, "\t   --listused                      List used/non-empty signatures, for inclusion\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --markmixed                     Flag signatures that have pure with top-level mixed members\n");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
@@ -306,6 +307,7 @@ int main(int argc, char *argv[]) {
 			LO_LISTINCOMPLETE,
 			LO_LISTSAFE,
 			LO_LISTUNSAFE,
+			LO_LISTUSED,
 			LO_LOAD,
 			LO_MARKMIXED,
 			LO_MAXIMPRINT,
@@ -346,6 +348,7 @@ int main(int argc, char *argv[]) {
 			{"listincomplete",     0, 0, LO_LISTINCOMPLETE},
 			{"listsafe",           0, 0, LO_LISTSAFE},
 			{"listunsafe",         0, 0, LO_LISTUNSAFE},
+			{"listused",           0, 0, LO_LISTUSED},
 			{"load",               1, 0, LO_LOAD},
 			{"markmixed",          0, 0, LO_MARKMIXED},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
@@ -428,6 +431,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_LISTUNSAFE:
 			app.opt_listUnsafe++;
+			break;
+		case LO_LISTUSED:
+			app.opt_listUsed++;
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
@@ -916,6 +922,18 @@ int main(int argc, char *argv[]) {
 			signature_t *pSignature = store.signatures + iSid;
 
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
+				printf("%s\n", pSignature->name);
+		}
+	}
+	/*
+	 * @date 2021-08-06 11:58:26
+	 * List signature still in use after `gendepreciate`
+	 */
+	if (app.opt_listUsed) {
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+			signature_t *pSignature = store.signatures + iSid;
+
+			if (pSignature->firstMember != 0)
 				printf("%s\n", pSignature->name);
 		}
 	}
