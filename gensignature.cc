@@ -248,6 +248,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --listincomplete                List unsafe core signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listsafe                      List safe signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listunsafe                    List empty/unsafe signatures, for exclusion\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
@@ -302,6 +303,7 @@ int main(int argc, char *argv[]) {
 			LO_GENERATE,
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
+			LO_LISTINCOMPLETE,
 			LO_LISTSAFE,
 			LO_LISTUNSAFE,
 			LO_LOAD,
@@ -341,6 +343,7 @@ int main(int argc, char *argv[]) {
 			{"help",               0, 0, LO_HELP},
 			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",         1, 0, LO_INTERLEAVE},
+			{"listincomplete",     0, 0, LO_LISTINCOMPLETE},
 			{"listsafe",           0, 0, LO_LISTSAFE},
 			{"listunsafe",         0, 0, LO_LISTUNSAFE},
 			{"load",               1, 0, LO_LOAD},
@@ -416,6 +419,9 @@ int main(int argc, char *argv[]) {
 			app.opt_interleave = ::strtoul(optarg, NULL, 0);
 			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
 				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+			break;
+		case LO_LISTINCOMPLETE:
+			app.opt_listIncomplete++;
 			break;
 		case LO_LISTSAFE:
 			app.opt_listSafe++;
@@ -896,16 +902,29 @@ int main(int argc, char *argv[]) {
 	 * Interesting will be how full-throttle normalising will rewrite using basic "QTF->QnTF" conversion
 	 */
 	if (app.opt_listSafe) {
+		// list all safe signatures
 		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			signature_t *pSignature = store.signatures + iSid;
+
 			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
 				printf("%s\n", pSignature->name);
 		}
 	}
 	if (app.opt_listUnsafe) {
+		// list all signatures that are empty or unsafe
 		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			signature_t *pSignature = store.signatures + iSid;
+
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
+				printf("%s\n", pSignature->name);
+		}
+	}
+	if (app.opt_listIncomplete) {
+		// list sigatures used for lookups but are not SAFE
+		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+			signature_t *pSignature = store.signatures + iSid;
+
+			if ((pSignature->flags & signature_t::SIGMASK_LOOKUP) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				printf("%s\n", pSignature->name);
 		}
 	}

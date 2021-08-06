@@ -206,6 +206,8 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
 	unsigned   opt_generate;
+	/// @var {number} List incomplete signatures (LOOKUP and !SAFE), for inclusion
+	unsigned   opt_listIncomplete;
 	/// @var {number} List empty/unsafe signatures, for exclusion
 	unsigned   opt_listSafe;
 	/// @var {number} List safe signatures, for inclusion
@@ -259,6 +261,7 @@ struct gensignatureContext_t : dbtool_t {
 		arg_outputDatabase = NULL;
 		opt_force          = 0;
 		opt_generate       = 1;
+		opt_listIncomplete = 0;
 		opt_listSafe       = 0;
 		opt_listUnsafe     = 0;
 		opt_load           = NULL;
