@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-06 14:56:55 Renamed: `signature_t::SIGMASK_REWRITE` to `SIGMASK_LOOKUP`.
 2021-08-04 15:50:36 Added: `gensignature --markmixed`.
 2021-08-03 21:50:57 Renamed: `selftest` `Qo/To/Fo` to `Qu/Tu/Fu`.
 2021-08-03 21:47:46 Added: `signature_t::SIGMASK_REWRITE` to mark rewrite lookups.

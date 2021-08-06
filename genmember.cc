@@ -934,7 +934,7 @@ int main(int argc, char *argv[]) {
 					else
 						printf("s");
 				}
-				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_REWRITE)
+				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_LOOKUP)
 					printf("W");
 				if (pMember->flags & member_t::MEMMASK_COMP)
 					printf("C");

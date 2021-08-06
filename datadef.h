@@ -165,13 +165,13 @@ struct signature_t {
 		SIGFLAG_SAFE     = 0, // It is safe to use the display name to reconstruct structures
 		SIGFLAG_PROVIDES = 1, // this signature provides as an operand
 		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
-		SIGFLAG_REWRITE  = 3, // this signature is referenced by `rewriteData[]`
+		SIGFLAG_LOOKUP   = 3, // this signature is referenced by `rewriteData[]`
 
 		// @formatter: off
 		SIGMASK_SAFE     = 1 << SIGFLAG_SAFE,
 		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
 		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
-		SIGMASK_REWRITE   = 1 << SIGFLAG_REWRITE,
+		SIGMASK_LOOKUP   = 1 << SIGFLAG_LOOKUP,
 		// @formatter: on
 	};
 
@@ -346,7 +346,7 @@ struct member_t {
 	enum {
 		MEMFLAG_SAFE   = 0,  // Member is safe
 		MEMFLAG_COMP   = 1,  // Member is a component
-		MEMFLAG_LOCKED = 2,  // Member is required
+		MEMFLAG_LOCKED = 2,  // Member is required, may not be depreciated or deleted
 		MEMFLAG_DEPR   = 3,  // Member is depreciated and should be ignored, used by `rewritedata[]` to force-rewrite into a better alternative
 		MEMFLAG_DELETE = 4,  // Member is no-existent because one of the Q/T/F components is depreciated
 
