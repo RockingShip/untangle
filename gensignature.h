@@ -706,6 +706,27 @@ struct gensignatureContext_t : dbtool_t {
 	}
 
 	/**
+	 * @date 2021-08-08 11:04:51
+	 *
+	 * Output a signaure with flags
+	 */
+	inline void signatureLine(signature_t *pSignature) {
+		printf("%s", pSignature->name);
+
+		if (pSignature->flags)
+			putchar('\t');
+		if (pSignature->flags & signature_t::SIGMASK_SAFE)
+			putchar('S');
+		if (pSignature->flags & signature_t::SIGMASK_PROVIDES)
+			putchar('P');
+		if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
+			putchar('R');
+		if (pSignature->flags & signature_t::SIGMASK_LOOKUP)
+			putchar('L');
+		putchar('\n');
+	}
+
+	/**
 	 * @date 2020-04-21 18:56:28
 	 *
 	 * Read signatures from file
@@ -733,24 +754,47 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.tick = 0;
 		skipDuplicate = 0;
 
-		char     name[64];
-		unsigned numPlaceholder, numEndpoint, numBackRef;
-		this->truncated = 0;
-
 		// <name> [ <numPlaceholder> <numEndpoint> <numBackRef> ]
 		for (;;) {
 			static char line[512];
+			char *pLine = line;
 
 			if (::fgets(line, sizeof(line), f) == 0)
 				break; // end-of-input
 
-			name[0] = 0;
-			int ret = ::sscanf(line, "%s %u %u %u\n", name, &numPlaceholder, &numEndpoint, &numBackRef);
+			/*
+			 * load name
+			 */
+
+			char *pName = pLine;
+
+			while (*pLine && !::isspace(*pLine))
+				pLine++;
+			*pLine++ = 0; // terminator
+
+			if (!pName[0])
+				ctx.fatal("\n{\"error\":\"bad or empty line\",\"where\":\"%s:%s:%d\",\"line\":%lu}\n",
+					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
+
+			/*
+			 * load flags
+			 */
+
+			char *pFlags = pLine;
+
+			while (*pLine && !::isspace(*pLine))
+				pLine++;
+			*pLine++ = 0; // terminator
+
+			/*
+			 * construct tree
+			 */
+			generator.loadStringFast(pName);
 
 			// calculate values
 			unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
 			unsigned        beenThere      = 0;
-			for (const char *p             = name; *p; p++) {
+			for (const char *p             = pName; *p; p++) {
 				if (::islower(*p)) {
 					if (!(beenThere & (1 << (*p - 'a')))) {
 						newPlaceholder++;
@@ -762,31 +806,42 @@ struct gensignatureContext_t : dbtool_t {
 				}
 			}
 
-			if (ret < 1)
-				ctx.fatal("\n{\"error\":\"bad/empty line\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
-			if (ret == 4)
-				ctx.fatal("\n{\"error\":\"line has incorrect values\",\"where\":\"%s:%s:%d\",\"linenr\":%lu}\n",
-					  __FUNCTION__, __FILE__, __LINE__, ctx.progress);
-
-			// test if line is within progress range
-			// NOTE: first line has `progress==0`
-			if ((generator.windowLo && ctx.progress < generator.windowLo) || (generator.windowHi && ctx.progress >= generator.windowHi)) {
-				ctx.progress++;
-				continue;
-			}
-
-			/*
-			 * construct tree
-			 */
-			generator.loadStringFast(name);
-
 			/*
 			 * call `foundTreeSignature()`
 			 */
 
-			if (!foundTreeSignature(generator, name, newPlaceholder, newEndpoint, newBackRef))
+			if (!foundTreeSignature(generator, pName, newPlaceholder, newEndpoint, newBackRef))
 				break;
+
+			/*
+			 * Perform a lookup to update the flags
+			 */
+			 if (pFlags) {
+				unsigned ix  = pStore->lookupSignature(pName);
+				unsigned sid = pStore->signatureIndex[ix];
+
+				if (sid) {
+					signature_t *pSignature = pStore->signatures + sid;
+
+					/*
+					 * Update flags
+					 */
+					while (*pFlags) {
+						if (*pFlags == 'S')
+							pSignature->flags |= signature_t::SIGMASK_SAFE;
+						else if (*pFlags == 'P')
+							pSignature->flags |= signature_t::SIGMASK_PROVIDES;
+						else if (*pFlags == 'R')
+							pSignature->flags |= signature_t::SIGMASK_REQUIRED;
+						else if (*pFlags == 'K')
+							pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+						else
+							ctx.fatal("\n{\"error\":\"unknown flag\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
+
+						pFlags++;
+					}
+				}
+			 }
 
 			ctx.progress++;
 		}

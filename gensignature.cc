@@ -913,7 +913,7 @@ int main(int argc, char *argv[]) {
 			signature_t *pSignature = store.signatures + iSid;
 
 			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
-				printf("%s\n", pSignature->name);
+				app.signatureLine(pSignature);
 		}
 	}
 	if (app.opt_listUnsafe) {
@@ -922,7 +922,7 @@ int main(int argc, char *argv[]) {
 			signature_t *pSignature = store.signatures + iSid;
 
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
-				printf("%s\n", pSignature->name);
+				app.signatureLine(pSignature);
 		}
 	}
 	/*
@@ -934,7 +934,7 @@ int main(int argc, char *argv[]) {
 			signature_t *pSignature = store.signatures + iSid;
 
 			if (pSignature->firstMember != 0)
-				printf("%s\n", pSignature->name);
+				app.signatureLine(pSignature);
 		}
 	}
 	if (app.opt_listIncomplete) {
@@ -943,7 +943,7 @@ int main(int argc, char *argv[]) {
 			signature_t *pSignature = store.signatures + iSid;
 
 			if ((pSignature->flags & signature_t::SIGMASK_LOOKUP) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
-				printf("%s\n", pSignature->name);
+				app.signatureLine(pSignature);
 		}
 	}
 

@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-08 11:11:15 Added: Save/load flags with signature names.
 2021-08-06 16:13:38 (MAJOR) Fixed: `gendepreciate` heap.
 2021-08-06 16:04:52 Fixed: `--mixed` and `--markmixed`.
 2021-08-04 16:46:24 Added: `gensignature --listused`.
