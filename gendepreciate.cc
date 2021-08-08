@@ -168,7 +168,9 @@ struct gendepreciateContext_t : dbtool_t {
 	/// @var {number} reverse order of signatures
 	unsigned   opt_reverse;
 	/// @var {number} --text, textual output instead of binary database
-	unsigned   opt_text;
+	unsigned opt_text;
+	/// @var {string} only lookup signatures are safe
+	unsigned opt_lookupSafe;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -211,6 +213,7 @@ struct gendepreciateContext_t : dbtool_t {
 		opt_load           = NULL;
 		opt_reverse        = 0;
 		opt_text           = 0;
+		opt_lookupSafe     = 0;
 
 		pStore      = NULL;
 
@@ -396,8 +399,9 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 
 			if (cntActive == 0) {
-				ctx.fatal("\n{\"error\":\"signature becomes empty\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
-					  __FUNCTION__, __FILE__, __LINE__, ctx.progress, iSid, pSignature->name);
+				if (!opt_lookupSafe || (pSignature->flags & signature_t::SIGMASK_LOOKUP))
+					ctx.fatal("\n{\"error\":\"signature becomes empty\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
+						  __FUNCTION__, __FILE__, __LINE__, ctx.progress, iSid, pSignature->name);
 			}
 		}
 
@@ -456,11 +460,17 @@ struct gendepreciateContext_t : dbtool_t {
 
 		/*
 		 * Find and lock single active member groups
+		 *
+		 * @date 2021-08-06 21:53:02
+		 * Only for `SIGMASK_LOOKUP` signatures, others might be optimised away
 		 */
 		for (uint32_t iSid = pStore->numSignature - 1; iSid >= 1; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
-			unsigned cntActive = 0; // number of active members for this signature
+			if (opt_lookupSafe && !(pSignature->flags & signature_t::SIGMASK_LOOKUP))
+				continue;
+
+			unsigned cntActive  = 0; // number of active members for this signature
 			unsigned lastActive = 0; // last encountered active member
 
 			/*
@@ -641,9 +651,6 @@ struct gendepreciateContext_t : dbtool_t {
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
-			// clear locked flags, may be outdated
-			pMember->flags &= ~member_t::MEMMASK_LOCKED;
-
 			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
 				numComponents++;
 		}
@@ -784,7 +791,7 @@ struct gendepreciateContext_t : dbtool_t {
 			 * In such a case, anticipate this by reducing the burst size too (or the next round is certain to fail).
 			 */
 			bool allSafe = true;
-			if (true) {
+			if (opt_lookupSafe) {
 				// only the lookup signatures must be safe
 				for (uint32_t k = 1; k < pStore->numSignature; k++) {
 					if (pStore->signatures[k].flags & signature_t::SIGMASK_LOOKUP)
@@ -795,7 +802,7 @@ struct gendepreciateContext_t : dbtool_t {
 				}
 			} else {
 				// all signature groups must be safe
-				allSafe = cntSid == pStore->numSignature - 1;
+				allSafe = (cntSid == pStore->numSignature - 1);
 			}
 
 			if (allSafe) {
@@ -1066,6 +1073,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
 		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --lookupsafe                    Only lookup signatures are safe\n");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
 		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
@@ -1112,6 +1120,7 @@ int main(int argc, char *argv[]) {
 			LO_IMPRINTINDEXSIZE,
 			LO_INTERLEAVE,
 			LO_LOAD,
+			LO_LOOKUPSAFE,
 			LO_MAXIMPRINT,
 			LO_MAXMEMBER,
 			LO_MEMBERINDEXSIZE,
@@ -1147,6 +1156,7 @@ int main(int argc, char *argv[]) {
 			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
 			{"interleave",         1, 0, LO_INTERLEAVE},
 			{"load",               1, 0, LO_LOAD},
+			{"lookupsafe",         0, 0, LO_LOOKUPSAFE},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxmember",          1, 0, LO_MAXMEMBER},
 			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
@@ -1220,6 +1230,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
+			break;
+		case LO_LOOKUPSAFE:
+			app.opt_lookupSafe++;
 			break;
 		case LO_MAXIMPRINT:
 			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
@@ -1563,6 +1576,10 @@ int main(int argc, char *argv[]) {
 	// if input is empty, skip reserved entries
 	if (!app.readOnlyMode) {
 		assert(store.numMember > 0);
+
+		// reset locked bit, they may be outdated
+		for (uint32_t iMid = 1; iMid < store.numMember; iMid++)
+			store.members[iMid].flags &= ~member_t::MEMMASK_LOCKED;
 	}
 
 	// update locking
