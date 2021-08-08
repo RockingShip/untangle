@@ -722,6 +722,8 @@ struct gendepreciateContext_t : dbtool_t {
 		ctx.setupSpeed(heap.count);
 		ctx.tick = 0;
 
+		int countDown = 60 * 10; // 10 minutes before restarting
+
 		while (heap.count > 0) {
 			refcnt_t *pCurr = heap.buf[heap.count - 1];
 
@@ -745,6 +747,18 @@ struct gendepreciateContext_t : dbtool_t {
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%3d/s) %.5f%% eta=%d:%02d:%02d | numMember=%u numComponent=%u | cntDepr=%u cntLock=%u | refcnt=%u mid=%u heap=%u %s",
 					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pStore->numMember - numDepr, numComponents, cntDepr, cntLock, pCurr->refcnt, iMid, heap.count, pMember->name);
+
+				/*
+				 * @date 2021-08-08 11:18:04
+				 * Speed cack - restart every 10 minutes to shrink the number of members
+				 */
+				countDown -= ctx.opt_timer;
+				if (countDown < 0) {
+					fprintf(stderr, "\n[%s] restart\n", ctx.timeAsString());
+
+					ctx.myFree("pRefcnts", pRefcnts);
+					return true;
+				}
 
 				ctx.tick = 0;
 			}
@@ -1595,12 +1609,17 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	if (app.opt_generate) {
-		app.showCounts();
-		app.depreciateFromGenerator();
+		for (;;) {
+			app.showCounts();
+			bool restart = app.depreciateFromGenerator();
 
-		if (!app.readOnlyMode) {
-			// compact, sort and reindex members
-			appMember.finaliseMembers();
+			if (!app.readOnlyMode) {
+				// compact, sort and reindex members
+				appMember.finaliseMembers();
+			}
+
+			if (!restart)
+				break;
 		}
 	}
 

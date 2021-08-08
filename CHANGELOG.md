@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-08 11:18:04 Added: `gendepreciate` restarts every 10 minutes to shrink members section.
 2021-08-08 11:16:36 Added: `gendepreciate --lookupsafe`.
 2021-08-08 11:11:15 Added: Save/load flags with signature names.
 2021-08-06 16:13:38 (MAJOR) Fixed: `gendepreciate` heap.
