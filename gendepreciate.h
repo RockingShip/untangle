@@ -548,9 +548,28 @@ struct gendepreciateContext_t : dbtool_t {
 			/*
 			 * @date 2021-07-01 13:58:02
 			 * `&rhs-this` does slightly better with 599759 4n9 components, as opposed to 600040 with `this-&rhs`.
+			 *
+			 * @date 2021-08-08 13:10:00
+			 * inverted second ordering to make result more aligned to keep 'lowest' names for last so they have greater chance of surviving
+			 *
+			 * @date 2021-08-08 22:27:47
+			 *
+			 * "this - &rhs" (also chooses final names better)
+			 *
+			 * 2n9 [00:02:26] numMember=33200385 numComponent=652668 numLocked=33114
+			 * 3n9 [00:17:33] numMember=15972090 numComponent=402853 numLocked=43632
+			 * 4n9 [02:18:07] numMember=588159 numComponent=102316 numLocked=172819
+			 * 5n9 [00:17:18] numMember=208976 numComponent=86409 numLocked=208956
+			 *
+			 * "&rhs - this"
+			 *
+			 * 2n9 [00:02:29] numMember=33200385 numComponent=652668 numLocked=33114
+			 * 3n9 [00:17:08] numMember=15972098 numComponent=402856 numLocked=43632
+			 * 4n9 [02:44:23] numMember=590174 numComponent=102308 numLocked=172984
+			 * 5n9 [00:21:38] numMember=208986 numComponent=82249 numLocked=208968
 			 */
 			if (cmp == 0)
-				cmp = &rhs - this;
+				cmp = this - &rhs;
 			return cmp;
 		}
 	};

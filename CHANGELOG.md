@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-09 15:42:26 Changed: `gendepreciate` secondary ordering of todo list.
 2021-08-09 15:41:09 Added: `gensignature` include flags in checkpoints.
 2021-08-09 15:39:31 Added: `genmember --cascade`.
 2021-08-03 13:34:46 Renamed: `signature_t::SIGMASK_LOCKED` to `signature_t::SIGMASK_KEY`.
