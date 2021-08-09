@@ -890,13 +890,27 @@ int main(int argc, char *argv[]) {
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
 		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
-			printf("%s\n", pSignature->name);
+
+			app.signatureLine(pSignature);
 		}
 	}
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
 		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
-			printf("%u\t%s\t%u\t%u\t%u\t%u\n", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+
+			printf("%u\t%s\t%u\t%u\t%u\t%u", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
+
+			if (pSignature->flags)
+				putchar('\t');
+			if (pSignature->flags & signature_t::SIGMASK_SAFE)
+				putchar('S');
+			if (pSignature->flags & signature_t::SIGMASK_PROVIDES)
+				putchar('P');
+			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
+				putchar('R');
+			if (pSignature->flags & signature_t::SIGMASK_KEY)
+				putchar('K');
+			putchar('\n');
 		}
 	}
 

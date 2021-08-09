@@ -710,7 +710,7 @@ struct gensignatureContext_t : dbtool_t {
 	 *
 	 * Output a signaure with flags
 	 */
-	inline void signatureLine(signature_t *pSignature) {
+	inline void signatureLine(const signature_t *pSignature) {
 		printf("%s", pSignature->name);
 
 		if (pSignature->flags)
