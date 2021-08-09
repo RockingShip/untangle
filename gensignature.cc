@@ -942,7 +942,7 @@ int main(int argc, char *argv[]) {
 		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
 			signature_t *pSignature = store.signatures + iSid;
 
-			if ((pSignature->flags & signature_t::SIGMASK_LOOKUP) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				app.signatureLine(pSignature);
 		}
 	}

@@ -394,7 +394,7 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 
 			if (cntActive == 0) {
-				if (!opt_lookupSafe || (pSignature->flags & signature_t::SIGMASK_LOOKUP))
+				if (!opt_lookupSafe || (pSignature->flags & signature_t::SIGMASK_KEY))
 					ctx.fatal("\n{\"error\":\"signature becomes empty\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
 						  __FUNCTION__, __FILE__, __LINE__, ctx.progress, iSid, pSignature->name);
 			}
@@ -462,7 +462,7 @@ struct gendepreciateContext_t : dbtool_t {
 		for (uint32_t iSid = pStore->numSignature - 1; iSid >= 1; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
-			if (opt_lookupSafe && !(pSignature->flags & signature_t::SIGMASK_LOOKUP))
+			if (opt_lookupSafe && !(pSignature->flags & signature_t::SIGMASK_KEY))
 				continue;
 
 			unsigned cntActive  = 0; // number of active members for this signature
@@ -803,7 +803,7 @@ struct gendepreciateContext_t : dbtool_t {
 			if (opt_lookupSafe) {
 				// only the lookup signatures must be safe
 				for (uint32_t k = 1; k < pStore->numSignature; k++) {
-					if (pStore->signatures[k].flags & signature_t::SIGMASK_LOOKUP)
+					if (pStore->signatures[k].flags & signature_t::SIGMASK_KEY)
 						if (pSafeSid[k] != iVersionSafe) {
 							allSafe = false; // rewrites must be safe
 							break;

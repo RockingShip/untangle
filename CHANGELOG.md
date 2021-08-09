@@ -9,6 +9,10 @@ TODO: no sorting when read-only
 
 ## [Unreleased]
 
+```
+2021-08-03 13:34:46 Renamed: `signature_t::SIGMASK_LOCKED` to `signature_t::SIGMASK_KEY`.
+```
+
 ## 2021-08-08 11:29:20 [Version 2.9.0]
 
 Focus on tuning the generators and creating safe datasets.

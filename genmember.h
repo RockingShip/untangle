@@ -1986,7 +1986,7 @@ struct genmemberContext_t : dbtool_t {
 				numEmpty++;
 			else if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
-			if ((pSignature->flags & signature_t::SIGMASK_LOOKUP) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numIncomplete++;
 		}
 

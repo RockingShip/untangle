@@ -158,7 +158,7 @@ struct slookupContext_t {
 		       (pSignature->flags & signature_t::SIGMASK_SAFE) ? " SAFE" : "",
 		       (pSignature->flags & signature_t::SIGMASK_PROVIDES) ? " PROVIDES" : "",
 		       (pSignature->flags & signature_t::SIGMASK_REQUIRED) ? " REQUIRED" : "",
-		       (pSignature->flags & signature_t::SIGMASK_LOOKUP) ? " LOOKUP" : "");
+		       (pSignature->flags & signature_t::SIGMASK_KEY) ? " KEY" : "");
 
 		if (opt_swap) {
 			if (pStore->numSwap == 0) {

@@ -465,7 +465,7 @@ struct gensignatureContext_t : dbtool_t {
 				signature_t *pSignature = pStore->signatures + sid;
 				pSignature->flags = 0;
 				if (opt_markMixed && area != FULL)
-					pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+					pSignature->flags |= signature_t::SIGMASK_KEY;
 				pSignature->size  = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
@@ -480,7 +480,7 @@ struct gensignatureContext_t : dbtool_t {
 
 		if (opt_markMixed && area != FULL && !this->readOnlyMode) {
 			// update flags
-			pSignature->flags |= signature_t::SIGMASK_LOOKUP;
+			pSignature->flags |= signature_t::SIGMASK_KEY;
 		}
 
 		/*
@@ -721,8 +721,8 @@ struct gensignatureContext_t : dbtool_t {
 			putchar('P');
 		if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 			putchar('R');
-		if (pSignature->flags & signature_t::SIGMASK_LOOKUP)
-			putchar('L');
+		if (pSignature->flags & signature_t::SIGMASK_KEY)
+			putchar('K');
 		putchar('\n');
 	}
 
@@ -827,15 +827,16 @@ struct gensignatureContext_t : dbtool_t {
 					 * Update flags
 					 */
 					while (*pFlags) {
-						if (*pFlags == 'S')
-							pSignature->flags |= signature_t::SIGMASK_SAFE;
-						else if (*pFlags == 'P')
+						if (*pFlags == 'S') {
+							// This should be calculated
+							// pSignature->flags |= signature_t::SIGMASK_SAFE;
+						} else if (*pFlags == 'P') {
 							pSignature->flags |= signature_t::SIGMASK_PROVIDES;
-						else if (*pFlags == 'R')
+						} else if (*pFlags == 'R') {
 							pSignature->flags |= signature_t::SIGMASK_REQUIRED;
-						else if (*pFlags == 'K')
-							pSignature->flags |= signature_t::SIGMASK_LOOKUP;
-						else
+						} else if (*pFlags == 'K') {
+							pSignature->flags |= signature_t::SIGMASK_KEY;
+						} else
 							ctx.fatal("\n{\"error\":\"unknown flag\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
 
 						pFlags++;

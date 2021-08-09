@@ -952,8 +952,8 @@ int main(int argc, char *argv[]) {
 					else
 						printf("s");
 				}
-				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_LOOKUP)
-					printf("W");
+				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_KEY)
+					printf("K");
 				if (pMember->flags & member_t::MEMMASK_COMP)
 					printf("C");
 				if (pMember->flags & member_t::MEMMASK_LOCKED)
