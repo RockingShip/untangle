@@ -239,6 +239,8 @@ struct genmemberContext_t : dbtool_t {
 	const char *arg_outputDatabase;
 	/// @var {number} --altgen, Alternative generator for 7n9 space (EXPERIMENTAL!)
 	unsigned   opt_altgen;
+	/// @var {number} --cascade, Apply cascading dyadic normalisation
+	unsigned   opt_cascade;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -283,6 +285,8 @@ struct genmemberContext_t : dbtool_t {
 	unsigned        numEmpty;
 	/// @var {number} - Number of unsafe signatures left
 	unsigned        numUnsafe;
+	/// @var {number} cascading dyadics
+	unsigned        skipCascade;
 	/// @var {number} `foundTree()` duplicate by name
 	unsigned        skipDuplicate;
 	/// @var {number} `foundTree()` too large for signature
@@ -303,6 +307,7 @@ struct genmemberContext_t : dbtool_t {
 		arg_numNodes       = 0;
 		arg_outputDatabase = NULL;
 		opt_altgen         = 0;
+		opt_cascade        = 0;
 		opt_force          = 0;
 		opt_generate       = 1;
 		opt_taskId         = 0;
@@ -324,6 +329,7 @@ struct genmemberContext_t : dbtool_t {
 		activeHintIndex  = 0;
 		freeMemberRoot   = 0;
 		numUnsafe        = 0;
+		skipCascade      = 0;
 		skipDuplicate    = 0;
 		skipSize         = 0;
 		skipUnsafe       = 0;
@@ -847,12 +853,12 @@ struct genmemberContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipCascade=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					numEmpty, numUnsafe,
-					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					skipDuplicate, skipSize, skipUnsafe, skipCascade, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -862,12 +868,12 @@ struct genmemberContext_t : dbtool_t {
 				eta %= 60;
 				int etaS = eta;
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipCascade=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					numEmpty, numUnsafe,
-					skipDuplicate, skipSize, skipUnsafe, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					skipDuplicate, skipSize, skipUnsafe, skipCascade, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			}
 
 			if (ctx.restartTick) {
@@ -923,6 +929,54 @@ struct genmemberContext_t : dbtool_t {
 			// with `--mixed`, only accept PURE/MIXED
 			if (area == FULL)
 				return true;
+		}
+
+		/*
+		 * test or cascading dyadics (cascaded operators may not fork)
+		 */
+		if (opt_cascade) {
+			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.count; k++) {
+				const tinyNode_t *pNode = treeR.N + k;
+				uint32_t Q = pNode->Q;
+				uint32_t T = pNode->T;
+				uint32_t F = pNode->F;
+
+				// OR
+				if (T == IBIT && Q >= tinyTree_t::TINYTREE_NSTART && F >= tinyTree_t::TINYTREE_NSTART) {
+					const tinyNode_t *pQ = treeR.N + Q;
+					const tinyNode_t *pF = treeR.N + F;
+
+					// Q/F may not both be OR
+					if (pQ->T == IBIT && pF->T == IBIT) {
+						skipCascade++;
+						return true;
+					}
+				}
+
+				// NE
+				if ((T & ~IBIT) == F && Q >= tinyTree_t::TINYTREE_NSTART && F >= tinyTree_t::TINYTREE_NSTART) {
+					const tinyNode_t *pQ = treeR.N + Q;
+					const tinyNode_t *pF = treeR.N + F;
+
+					// Q/F may not both be NE
+					if ((pQ->T & ~IBIT) == pQ->F && (pF->T & ~IBIT) == pF->F) {
+						skipCascade++;
+						return true;
+					}
+				}
+
+				// AND
+				if (!(T & IBIT) && F == 0 && Q >= tinyTree_t::TINYTREE_NSTART && T >= tinyTree_t::TINYTREE_NSTART) {
+					const tinyNode_t *pQ = treeR.N + Q;
+					const tinyNode_t *pT = treeR.N + T;
+
+					// Q/F may not both be AND
+					if (!(pQ->T & IBIT) && pQ->F == 0 && !(pT->T & IBIT) && pT->F == 0) {
+						skipCascade++;
+						return true;
+					}
+				}
+			}
 		}
 
 		/*
@@ -1561,7 +1615,7 @@ struct genmemberContext_t : dbtool_t {
 		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
-		skipDuplicate = skipSize = skipUnsafe = 0;
+		skipDuplicate = skipSize = skipUnsafe = skipCascade = 0;
 
 		char     name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
@@ -1636,14 +1690,14 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] Read %lu members. numSignature=%u(%.0f%%) numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipCascade=%u\n",
 				ctx.timeAsString(),
 				ctx.progress,
 				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				numEmpty, numUnsafe,
-				skipDuplicate, skipSize, skipUnsafe);
+				skipDuplicate, skipSize, skipUnsafe, skipCascade);
 	}
 
 	/**
@@ -1694,7 +1748,7 @@ struct genmemberContext_t : dbtool_t {
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		}
 		ctx.tick = 0;
-		skipDuplicate = skipSize = skipUnsafe = 0;
+		skipDuplicate = skipSize = skipUnsafe = skipCascade = 0;
 
 		/*
 		 * Generate candidates
@@ -1731,12 +1785,12 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipCascade=%u\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				numEmpty, numUnsafe,
-				skipDuplicate, skipSize, skipUnsafe);
+				skipDuplicate, skipSize, skipUnsafe, skipCascade);
 	}
 
 	/**
@@ -1791,7 +1845,7 @@ struct genmemberContext_t : dbtool_t {
 			pStore->signatures[iSid].firstMember = 0;
 			pStore->signatures[iSid].flags &= ~signature_t::SIGMASK_SAFE;
 		}
-		skipDuplicate = skipSize = skipUnsafe = 0;
+		skipDuplicate = skipSize = skipUnsafe = skipCascade = 0;
 
 		// sort entries (skipping first)
 		assert(pStore->numMember >= 1);
@@ -2419,12 +2473,12 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipcascade=%u\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 				pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 				pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 				numEmpty, numUnsafe,
-				skipDuplicate, skipSize, skipUnsafe);
+				skipDuplicate, skipSize, skipUnsafe, skipCascade);
 	}
 
 };

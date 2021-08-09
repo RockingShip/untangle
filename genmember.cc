@@ -262,6 +262,7 @@ void usage(char *argv[], bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
+		fprintf(stderr, "\t   --cascade                       Apply cascade normalisation\n");
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
@@ -315,6 +316,7 @@ int main(int argc, char *argv[]) {
 		enum {
 			// long-only opts
 			LO_ALTGEN = 1,
+			LO_CASCADE,
 			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
@@ -355,6 +357,7 @@ int main(int argc, char *argv[]) {
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
 			{"altgen",             0, 0, LO_ALTGEN},
+			{"cascade",            0, 0, LO_CASCADE},
 			{"debug",              1, 0, LO_DEBUG},
 			{"force",              0, 0, LO_FORCE},
 			{"generate",           0, 0, LO_GENERATE},
@@ -418,6 +421,9 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case LO_ALTGEN:
 			app.opt_altgen++; // EXPERIMENTAL!
+			break;
+		case LO_CASCADE:
+			app.opt_cascade++;
 			break;
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
