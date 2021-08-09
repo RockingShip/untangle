@@ -451,14 +451,14 @@ int main(int argc, char *argv[]) {
 
 	// Default `--burst` depends on the size of the prune collection
 	if (app.opt_burst == 0) {
-		if (app.arg_numNodes == 5)
-			app.opt_burst = 16;
+		if (app.arg_numNodes >= 5)
+			app.opt_burst = 32;
 		else if (app.arg_numNodes == 4)
+			app.opt_burst = 8;
+		else if (app.arg_numNodes == 3)
 			app.opt_burst = 2;
-		else if (app.arg_numNodes > 1)
-			app.opt_burst = 1;
 		else
-			app.opt_burst = 16; // 0 is most likely used for a final checkup
+			app.opt_burst = 1;
 	}
 
 	/*
