@@ -942,36 +942,24 @@ struct genmemberContext_t : dbtool_t {
 				uint32_t F = pNode->F;
 
 				// OR
-				if (T == IBIT && Q >= tinyTree_t::TINYTREE_NSTART && F >= tinyTree_t::TINYTREE_NSTART) {
-					const tinyNode_t *pQ = treeR.N + Q;
-					const tinyNode_t *pF = treeR.N + F;
-
-					// Q/F may not both be OR
-					if (pQ->T == IBIT && pF->T == IBIT) {
+				if (pNode->isOR()) {
+					if (treeR.isOR(Q) || treeR.isOR(F)) {
 						skipCascade++;
 						return true;
 					}
 				}
 
 				// NE
-				if ((T & ~IBIT) == F && Q >= tinyTree_t::TINYTREE_NSTART && F >= tinyTree_t::TINYTREE_NSTART) {
-					const tinyNode_t *pQ = treeR.N + Q;
-					const tinyNode_t *pF = treeR.N + F;
-
-					// Q/F may not both be NE
-					if ((pQ->T & ~IBIT) == pQ->F && (pF->T & ~IBIT) == pF->F) {
+				if (pNode->isNE()) {
+					if (treeR.isNE(Q) || treeR.isNE(F)) {
 						skipCascade++;
 						return true;
 					}
 				}
 
 				// AND
-				if (!(T & IBIT) && F == 0 && Q >= tinyTree_t::TINYTREE_NSTART && T >= tinyTree_t::TINYTREE_NSTART) {
-					const tinyNode_t *pQ = treeR.N + Q;
-					const tinyNode_t *pT = treeR.N + T;
-
-					// Q/F may not both be AND
-					if (!(pQ->T & IBIT) && pQ->F == 0 && !(pT->T & IBIT) && pT->F == 0) {
+				if (pNode->isAND()) {
+					if (treeR.isAND(Q) || treeR.isAND(T)) {
 						skipCascade++;
 						return true;
 					}

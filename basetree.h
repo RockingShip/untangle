@@ -89,7 +89,7 @@ struct baseNode_t {
 
 	// GT (L?~R:0) is second because it has the QnTF signature
 	inline bool __attribute__((pure)) isGT(void) const {
-		return (T & IBIT) && F != 0;
+		return (T & IBIT) && F == 0;
 	}
 
 	// NE (L?~R:R) third because Ti is set (QnTF) but Tu==F
@@ -728,29 +728,42 @@ struct baseTree_t {
 	 * Difference between these tests and the `baseNode_t` versions, is that these also test is arguments are keys
 	 */
 
-	// OR is first because it has the QnTF signature
+	// OR (L?~0:R)
 	inline bool __attribute__((pure)) isOR(uint32_t i) const {
 		return i >= nstart && N[i].isOR();
 	}
 
-	// NE second because Ti is set (QnTF) buf Tu==F
+	// GT (L?~R:0)
+	inline bool __attribute__((pure)) isGT(uint32_t i) const {
+		return i >= nstart && N[i].isGT();
+	}
+
+	// NE (L?~R:R)
 	inline bool __attribute__((pure)) isNE(uint32_t i) const {
 		return i >= nstart && N[i].isNE();
 	}
 
-	// AND last because not QnTF
+	// AND (L?R:0)
 	inline bool __attribute__((pure)) isAND(uint32_t i) const {
 		return i >= nstart && N[i].isAND();
 	}
 
+	// OR (L?~0:R)
 	inline bool __attribute__((const)) isOR(uint32_t Q, uint32_t T, uint32_t F) const {
 		return T == IBIT;
 	}
 
+	// GT (L?~R:0)
+	inline bool __attribute__((const)) isGT(uint32_t Q, uint32_t T, uint32_t F) const {
+		return (T & IBIT) && F == 0;
+	}
+
+	// NE (L?~R:R)
 	inline bool __attribute__((const)) isNE(uint32_t Q, uint32_t T, uint32_t F) const {
 		return (T & ~IBIT) == F;
 	}
 
+	// AND (L?R:0)
 	inline bool __attribute__((const)) isAND(uint32_t Q, uint32_t T, uint32_t F) const {
 		return !(T & IBIT) && F == 0;
 	}

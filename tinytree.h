@@ -69,6 +69,26 @@ struct tinyNode_t {
 	uint32_t T;
 	/// @var {number} - reference to `"when-false"`
 	uint32_t F;
+
+	// OR (L?~0:R)
+	inline bool __attribute__((pure)) isOR(void) const {
+		return T == IBIT;
+	}
+
+	// GT (L?~R:0)
+	inline bool __attribute__((pure)) isGT(void) const {
+		return (T & IBIT) && F == 0;
+	}
+
+	// NE (L?~R:R)
+	inline bool __attribute__((pure)) isNE(void) const {
+		return (T & ~IBIT) == F;
+	}
+
+	// AND (L?R:0)
+	inline bool __attribute__((pure)) isAND(void) const {
+		return !(T & IBIT) && F == 0;
+	}
 };
 
 /**
@@ -157,6 +177,46 @@ struct tinyTree_t {
 	inline void clearTree(void) {
 		this->count = TINYTREE_NSTART; // rewind first free node
 		this->root  = 0; // set result to zero-reference
+	}
+
+	// OR (L?~0:R)
+	inline bool __attribute__((pure)) isOR(uint32_t i) const {
+		return i >= TINYTREE_NSTART && N[i].isOR();
+	}
+
+	// GT (L?~R:0)
+	inline bool __attribute__((pure)) isGT(uint32_t i) const {
+		return i >= TINYTREE_NSTART && N[i].isGT();
+	}
+
+	// NE (L?~R:R)
+	inline bool __attribute__((pure)) isNE(uint32_t i) const {
+		return i >= TINYTREE_NSTART && N[i].isNE();
+	}
+
+	// AND (L?R:0)
+	inline bool __attribute__((pure)) isAND(uint32_t i) const {
+		return i >= TINYTREE_NSTART && N[i].isAND();
+	}
+
+	// OR (L?~0:R)
+	inline bool __attribute__((const)) isOR(uint32_t Q, uint32_t T, uint32_t F) const {
+		return T == IBIT;
+	}
+
+	// GT (L?~R:0)
+	inline bool __attribute__((const)) isGT(uint32_t Q, uint32_t T, uint32_t F) const {
+		return (T & IBIT) && F == 0;
+	}
+
+	// NE (L?~R:R)
+	inline bool __attribute__((const)) isNE(uint32_t Q, uint32_t T, uint32_t F) const {
+		return (T & ~IBIT) == F;
+	}
+
+	// AND (L?R:0)
+	inline bool __attribute__((const)) isAND(uint32_t Q, uint32_t T, uint32_t F) const {
+		return !(T & IBIT) && F == 0;
 	}
 
 	/**
@@ -896,22 +956,6 @@ struct tinyTree_t {
 				stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
 				break;
 
-			case '>': {
-				// GT (appreciated)
-				if (stackPos < 2)
-					return DERR_UNDERFLOW;
-
-				//pop operands
-				unsigned R = stack[--stackPos]; // right hand side
-				unsigned L = stack[--stackPos]; // left hand side
-
-				// create operator
-				unsigned nid = addNode(L, R ^ IBIT, 0);
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
 			case '+': {
 				// OR (appreciated)
 				if (stackPos < 2)
@@ -923,6 +967,22 @@ struct tinyTree_t {
 
 				// create operator
 				unsigned nid = addNode(L, 0 ^ IBIT, R);
+
+				stack[stackPos++]     = nid; // push
+				beenThere[nextNode++] = nid; // save actual index for back references
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+				if (stackPos < 2)
+					return DERR_UNDERFLOW;
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				// create operator
+				unsigned nid = addNode(L, R ^ IBIT, 0);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -1125,23 +1185,6 @@ struct tinyTree_t {
 			case '9':
 				stack[stackPos++] = this->count - ('9' - '0');
 				break;
-			case '>': {
-				// GT (appreciated)
-
-				//pop operands
-				unsigned R = stack[--stackPos]; // right hand side
-				unsigned L = stack[--stackPos]; // left hand side
-
-				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
-				this->N[nid].T = R ^ IBIT;
-				this->N[nid].F = 0;
-
-				// push
-				stack[stackPos++] = nid;
-				break;
-			}
 			case '+': {
 				// OR (appreciated)
 
@@ -1154,6 +1197,23 @@ struct tinyTree_t {
 				this->N[nid].Q = L;
 				this->N[nid].T = 0 ^ IBIT;
 				this->N[nid].F = R;
+
+				// push
+				stack[stackPos++] = nid;
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+
+				//pop operands
+				unsigned R = stack[--stackPos]; // right hand side
+				unsigned L = stack[--stackPos]; // left hand side
+
+				// create operator
+				unsigned nid = this->count++;
+				this->N[nid].Q = L;
+				this->N[nid].T = R ^ IBIT;
+				this->N[nid].F = 0;
 
 				// push
 				stack[stackPos++] = nid;
