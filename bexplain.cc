@@ -240,8 +240,11 @@ struct bevalContext_t {
 	/*
 	 * @date 2021-07-08 05:00:04
 	 * dry-run adding a node and count if it would be new
+	 *
+	 * @date 2021-08-11 21:56:30
+	 * add `expectId` as recursion end condition
 	 */
-	uint32_t testBasicNode(bool dryRun, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, uint32_t *pTestCount) {
+	uint32_t testBasicNode(bool dryRun, unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, uint32_t *pTestCount) {
 		ctx.cntHash++;
 
 		// lookup
@@ -251,8 +254,16 @@ struct bevalContext_t {
 		} else if (dryRun) {
 			// simulate the creation of a new node
 			return (*pTestCount)++;
+		} else if (pTree->ncount != expectId) {
+			/*
+			 * @date 2021-08-11 21:59:48
+			 * if the node id is not what is expected, then something changed and needs to be re-evaluated again
+			 */
+			return explainNode(depth, pTree->ncount, pTree, Q, T, F);
 		} else {
-			// add node to tree
+			/*
+			 * situation is stable, create node
+			 */
 			return pTree->basicNode(Q, T, F);
 		}
 	}
@@ -261,7 +272,7 @@ struct bevalContext_t {
 	 * @date 2021-07-08 04:49:14
 	 * dry-run loading a string and count how many nodes would be created
 	 */
-	uint32_t testStringSafe(bool dryRun, baseTree_t *pTree, uint32_t *pTestCount, const char name[], const char skin[], const uint32_t slot[]) {
+	uint32_t testStringSafe(bool dryRun, unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t *pTestCount, const char name[], const char skin[], const uint32_t slot[]) {
 
 		// state storage for postfix notation
 		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -346,7 +357,7 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, pTree, L, R ^ IBIT, 0, pTestCount);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R ^ IBIT, 0, pTestCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -362,7 +373,8 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				unsigned nid = (L < R) ? testBasicNode(dryRun, pTree, L, 0 ^ IBIT, R, pTestCount) : testBasicNode(dryRun, pTree, R, 0 ^ IBIT, L, pTestCount);
+				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, 0 ^ IBIT, R, pTestCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -378,7 +390,8 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				unsigned nid = (L < R) ? testBasicNode(dryRun, pTree, L, R ^ IBIT, R, pTestCount) : testBasicNode(dryRun, pTree, R, L ^ IBIT, L, pTestCount);
+				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R ^ IBIT, R, pTestCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -395,7 +408,7 @@ struct bevalContext_t {
 				unsigned Q = stack[--stackPos];
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, pTree, Q, T ^ IBIT, F, pTestCount);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, Q, T ^ IBIT, F, pTestCount);
 
 				// push
 				stack[stackPos++]     = nid; // push
@@ -412,7 +425,8 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				unsigned nid = (L < R) ? testBasicNode(dryRun, pTree, L, R, 0, pTestCount) : testBasicNode(dryRun, pTree, R, L, 0, pTestCount);
+				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R, 0, pTestCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -429,7 +443,7 @@ struct bevalContext_t {
 				unsigned Q = stack[--stackPos];
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, pTree, Q, T, F, pTestCount);
+				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, Q, T, F, pTestCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -469,7 +483,7 @@ struct bevalContext_t {
 	 * @date 2021-07-14 13:12:05
 	 * dry-run loading a string and count how many nodes would be created
 	 */
-	uint32_t expandString(unsigned depth, baseTree_t *pTree, const char name[], const char skin[], const uint32_t slot[]) {
+	uint32_t expandString(unsigned depth, uint32_t expectId, baseTree_t *pTree, const char name[], const char skin[], const uint32_t slot[]) {
 
 		// state storage for postfix notation
 		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -554,7 +568,7 @@ struct bevalContext_t {
 				uint32_t L = stack[--stackPos]; // left hand side
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, L, R ^ IBIT, 0);
+				uint32_t nid =  explainNode(depth, expectId, pTree, L, R ^ IBIT, 0);
 				printf("\n");
 
 				stack[stackPos++]     = nid; // push
@@ -571,7 +585,7 @@ struct bevalContext_t {
 				uint32_t L = stack[--stackPos]; // left hand side
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, L, 0 ^ IBIT, R);
+				uint32_t nid =  explainNode(depth, expectId, pTree, L, 0 ^ IBIT, R);
 				printf("\n");
 
 				stack[stackPos++]     = nid; // push
@@ -588,7 +602,7 @@ struct bevalContext_t {
 				uint32_t L = stack[--stackPos]; // left hand side
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, L, R ^ IBIT, R);
+				uint32_t nid =  explainNode(depth, expectId, pTree, L, R ^ IBIT, R);
 				printf("\n");
 
 				stack[stackPos++]     = nid; // push
@@ -606,7 +620,7 @@ struct bevalContext_t {
 				uint32_t Q = stack[--stackPos];
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, Q, T ^ IBIT, F);
+				uint32_t nid =  explainNode(depth, expectId, pTree, Q, T ^ IBIT, F);
 				printf("\n");
 
 				// push
@@ -624,7 +638,7 @@ struct bevalContext_t {
 				uint32_t L = stack[--stackPos]; // left hand side
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, L, R, 0);
+				uint32_t nid =  explainNode(depth, expectId, pTree, L, R, 0);
 				printf("\n");
 
 				stack[stackPos++]     = nid; // push
@@ -642,7 +656,7 @@ struct bevalContext_t {
 				uint32_t Q = stack[--stackPos];
 
 				// create operator
-				uint32_t nid =  explainNode(depth, pTree, Q, T, F);
+				uint32_t nid =  explainNode(depth, expectId, pTree, Q, T, F);
 				printf("\n");
 
 				stack[stackPos++]     = nid; // push
@@ -684,7 +698,7 @@ struct bevalContext_t {
 	 *
 	 * Local copy of `baseTree_t::normaliseNode()`
 	 */
-	uint32_t explainNode(unsigned depth, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F) {
+	uint32_t explainNode(unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F) {
 
 		printf("%*s{\"Q\":%s%u,\"T\":%s%u,\"F\":%s%u",
 		       depth, "",
@@ -1175,7 +1189,7 @@ struct bevalContext_t {
 						break;
 
 					uint32_t testCount = pTree->ncount;
-					testStringSafe(true/*dryRun*/, pTree, &testCount, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
+					testStringSafe(true/*dryRun*/, depth + 1, expectId, pTree, &testCount, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
 					if (level5mid != 0)
 						printf(",");
 					printf("{\"name\":\"%u:%s/%u:%.*s\",\"miss\":%u}", iMid, pMember->name,
@@ -1203,16 +1217,8 @@ struct bevalContext_t {
 					level5mid, pMember->name,
 					pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid]);
 
-			uint32_t ret;
-			if (level3mid == level5mid || bestCount <= 1) {
-				// apply found member
-				ret = testStringSafe(false/*dryRun*/, pTree, NULL, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
-			} else {
-				// explain another level
-				printf("\n\t");
-				ret = expandString(depth, pTree, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
-				printf("\n");
-			}
+			// apply found member
+			uint32_t ret = testStringSafe(false/*dryRun*/, depth + 1, expectId, pTree, NULL, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
 
 			printf("},\"N\":%s%u}", ibit ? "~" : "", ret);
 
@@ -1608,7 +1614,7 @@ struct bevalContext_t {
 				uint32_t R = pStack[--stackPos];
 				uint32_t L = pStack[--stackPos];
 
-				nid = explainNode(depth, pTree, L, R ^ IBIT, 0);
+				nid = explainNode(depth, pTree->ncount, pTree, L, R ^ IBIT, 0);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1624,7 +1630,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree, L, IBIT, R);
+				nid = explainNode(depth, pTree->ncount, pTree, L, IBIT, R);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1640,7 +1646,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree, L, R ^ IBIT, R);
+				nid = explainNode(depth, pTree->ncount, pTree, L, R ^ IBIT, R);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1657,7 +1663,7 @@ struct bevalContext_t {
 				uint32_t Q = pStack[--stackPos];
 
 				// create operator
-				nid = explainNode(depth, pTree, Q, T ^ IBIT, F);
+				nid = explainNode(depth, pTree->ncount, pTree, Q, T ^ IBIT, F);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1673,7 +1679,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree, L, R, 0);
+				nid = explainNode(depth, pTree->ncount, pTree, L, R, 0);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1690,7 +1696,7 @@ struct bevalContext_t {
 				uint32_t Q = pStack[--stackPos];
 
 				// create operator
-				nid = explainNode(depth, pTree, Q, T, F);
+				nid = explainNode(depth, pTree->ncount, pTree, Q, T, F);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
