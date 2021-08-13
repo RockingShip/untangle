@@ -237,42 +237,754 @@ struct bevalContext_t {
 		return crc;
 	}
 
-	/*
-	 * @date 2021-07-08 05:00:04
-	 * dry-run adding a node and count if it would be new
+	/**
+	 * @date 2021-08-13 13:33:13
 	 *
-	 * @date 2021-08-11 21:56:30
-	 * add `expectId` as recursion end condition
+	 * Add a node to tree
+	 *
+	 * If the node already exists then use that.
+	 * Otherwise, add a node to tree if it has the expected node ID.
+	 * Otherwise, Something changed since the recursion was invoked, re-analyse
+	 *
+	 * @param {number} depth - Recursion depth
+	 * @param {number} expectId - Recursion end condition, the node id to be added
+	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @param {number} Q - component
+	 * @param {number} T - component
+	 * @param {number} F - component
+	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
+	 * @return {number} newly created nodeId
 	 */
-	uint32_t testBasicNode(bool dryRun, unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, uint32_t *pTestCount) {
+	uint32_t explainBasicNode(unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount) {
 		ctx.cntHash++;
 
 		// lookup
 		uint32_t ix = pTree->lookupNode(Q, T, F);
 		if (pTree->nodeIndex[ix] != 0) {
+			// node already exists
+			printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, pTree->nodeIndex[ix]);
 			return pTree->nodeIndex[ix];
-		} else if (dryRun) {
-			// simulate the creation of a new node
-			return (*pTestCount)++;
 		} else if (pTree->ncount != expectId) {
 			/*
 			 * @date 2021-08-11 21:59:48
 			 * if the node id is not what is expected, then something changed and needs to be re-evaluated again
 			 */
-			return explainNode(depth, pTree->ncount, pTree, Q, T, F);
-		} else {
+			printf("\n");
+			return explainNormaliseNode(depth + 1, pTree->ncount, pTree, Q, T, F, pFailCount);
+		} else if (pFailCount != NULL) {
 			/*
-			 * situation is stable, create node
+			 * Simulate the creation of a new node.
+			 * The returned node id must be unique and must not be an end condition `ncount`.
 			 */
-			return pTree->basicNode(Q, T, F);
+			(*pFailCount)++;
+			return pTree->ncount + *pFailCount;
+		} else {
+			// situation is stable, create node
+			uint32_t ret = pTree->basicNode(Q, T, F);
+			printf(",   \"new\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, ret);
+			return ret;
 		}
+	}
+
+	/**
+	 * @date 2021-08-13 13:44:17
+	 *
+	 * Apply dyadic ordering and add node(s) to tree.
+	 *
+	 * The added structures are one of: "ab^cd^^", "cab^^", "ab^" or "a".
+	 *
+	 * Important NOTE:
+	 * The structure "dcab^^^" will cause oscillations.
+	 * Say that this is the top of a longer cascading chain, then `b` is also a "^".
+	 * Within the current detect span ("dcab^^^"), it is likely that `b` and `d` will swap positions.
+	 * The expanded resulting structure will look like "xy^cad^^^", who's head is "xy^cz^^". (`b`="xy^",`z`="ad^")
+	 * This new head would trigger a rewrite to "zcxy^^^" making the cycle complete.
+	 *
+	 * @param {number} depth - Recursion depth
+	 * @param {number} expectId - Recursion end condition, the node id to be added
+	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @param {number} Q - component
+	 * @param {number} T - component
+	 * @param {number} F - component
+	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
+	 * @return {number} newly created nodeId
+	 */
+	uint32_t explainOrderedNode(unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount) {
+
+		// OR (L?~0:R)
+		if (pTree->isOR(Q, T, F)) {
+
+			if (pTree->isOR(Q) && pTree->isOR(F)) {
+				/*
+				 * cascade split
+				 * already valid: QQ < QF, FQ < FF
+				 */
+				uint32_t AB = Q;
+				uint32_t CD = F;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = pTree->N[CD].Q;
+				uint32_t D  = pTree->N[CD].F;
+				int      cmp;
+
+				if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+						// A<B<C<D, no change
+						Q = AB;
+						T = IBIT;
+						F = CD;
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abcd\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abd\",\"ab+\":\n", A, B, C, D);
+						uint32_t AB = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, B, pFailCount);
+						Q = AB;
+						T = IBIT;
+						F = D;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// A<C<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acbd\",\"ac+\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, C, pFailCount);
+						printf(",\"bd+\":\n");
+						uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, IBIT, D, pFailCount);
+						Q = AC;
+						T = IBIT;
+						F = BD;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<C<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acb\",\"ac+\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, C, pFailCount);
+						Q = AC;
+						T = IBIT;
+						F = B;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else {
+						// A<C<D<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acdb\",\"ac+\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, C, pFailCount);
+						printf(",\"bd+\":\n");
+						uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, IBIT, D, pFailCount);
+						Q = AC;
+						T = IBIT;
+						F = BD;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if (cmp == 0) {
+					// A==C collapse
+					if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// A<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abd\",\"ab+\":\n", A, B, C, D);
+						uint32_t AB = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, B, pFailCount);
+						Q = AB;
+						T = IBIT;
+						F = D;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<B
+						Q = A;
+						T = IBIT;
+						F = B;
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"ab\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else {
+						// A<D<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"adb\",\"ad+\":\n", A, B, C, D);
+						uint32_t AD = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, D, pFailCount);
+						Q = AD;
+						T = IBIT;
+						F = B;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+					// C<A<B<D
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cabd\",\"ca+\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					printf(",\"bd+\":\n");
+					uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, IBIT, D, pFailCount);
+					Q = CA;
+					T = IBIT;
+					F = BD;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cab\",\"ab+\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					Q = CA;
+					T = IBIT;
+					F = B;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if ((cmp = pTree->compare(pTree, A, pTree, D)) < 0) {
+					// C<A<D<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cadb\",\"ca+\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					printf(",\"db+\":\n");
+					uint32_t DB = explainNormaliseNode(depth + 1, expectId, pTree, D, IBIT, B, pFailCount);
+					Q = CA;
+					T = IBIT;
+					F = DB;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cab\",\"ab+\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					Q = CA;
+					T = IBIT;
+					F = B;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else {
+					// C<A<D<B
+					Q = CD;
+					T = IBIT;
+					F = AB;
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cdab\",\"qtf\":[%u,%s%u,%u]}", C, D, A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isOR(Q)) {
+				/*
+				 * cascade left
+				 */
+				uint32_t AB = Q;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = F;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac+\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, C, pFailCount);
+					Q = B;
+					T = IBIT;
+					F = AC;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca+\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					Q = B;
+					T = IBIT;
+					F = CA;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isOR(F)) {
+				/*
+				 * cascade right
+				 */
+				uint32_t AB = F;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = Q;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac+\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, IBIT, C, pFailCount);
+					Q = B;
+					T = IBIT;
+					F = AC;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca+\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, IBIT, A, pFailCount);
+					Q = B;
+					T = IBIT;
+					F = CA;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->compare(pTree, Q, pTree, F) > 0) {
+				/*
+				 * Single node
+				 */
+				uint32_t tmp = Q;
+				Q = F;
+				T = IBIT;
+				F = tmp;
+				printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"ba\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			}
+		}
+
+		// XOR/NE (L?~R:R)
+		if (pTree->isNE(Q, T, F)) {
+
+			if (pTree->isNE(Q) && pTree->isNE(F)) {
+				/*
+				 * cascade split
+				 * already valid: QQ < QF, FQ < FF
+				 */
+				uint32_t AB = Q;
+				uint32_t CD = F;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = pTree->N[CD].Q;
+				uint32_t D  = pTree->N[CD].F;
+				int      cmp;
+
+				if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+						// A<B<C<D, no change
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abcd\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<D
+						Q = A;
+						T = D ^ IBIT;
+						F = D;
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"ad\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// A<C<B<D
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acbd\",\"ac^\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
+						printf(",\"bd^\":\n");
+						uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, D ^ IBIT, D, pFailCount);
+						Q = AC;
+						T = BD ^ IBIT;
+						F = BD;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<C
+						Q = A;
+						T = C ^ IBIT;
+						F = C;
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"ac\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else {
+						// A<C<D<B
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acdb\",\"ac^\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
+						printf(",\"bd^\":\n");
+						uint32_t DB = explainNormaliseNode(depth + 1, expectId, pTree, D, B ^ IBIT, B, pFailCount);
+						Q = AC;
+						T = DB ^ IBIT;
+						F = DB;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if (cmp == 0) {
+					if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// B<D
+						Q = B;
+						T = D ^ IBIT;
+						F = D;
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"bd\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// 0
+						assert(0); // this would imply that A==C and B==D
+					} else {
+						Q = D;
+						T = B ^ IBIT;
+						F = B;
+						printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"db\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+					// C<A<B<D
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cabd\",\"ca^\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A ^ IBIT, A, pFailCount);
+					printf(",\"bd^\":\n");
+					uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, D ^ IBIT, D, pFailCount);
+					Q = CA;
+					T = BD ^ IBIT;
+					F = BD;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<A
+					Q = C;
+					T = A ^ IBIT;
+					F = A;
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"ca\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if ((cmp = pTree->compare(pTree, A, pTree, D)) < 0) {
+					// C<A<D<B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cadb\",\"ca^\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A ^ IBIT, A, pFailCount);
+					printf(",\"db^\":\n");
+					uint32_t DB = explainNormaliseNode(depth + 1, expectId, pTree, D, B ^ IBIT, B, pFailCount);
+					Q = CA;
+					T = DB ^ IBIT;
+					F = DB;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<B
+					Q = C;
+					T = B ^ IBIT;
+					F = B;
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cb\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else {
+					// C<D<A<B
+					Q = CD;
+					T = AB ^ IBIT;
+					F = AB;
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cdab\",\"qtf\":%u,%s%u,%u]}", C, D, A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isNE(Q)) {
+				/*
+				 * cascade left
+				 */
+				uint32_t AB = Q;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = F;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
+					Q = B;
+					T = AC ^ IBIT;
+					F = AC;
+					printf(",\"qtf\":[%u,:%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A ^ IBIT, A, pFailCount);
+					Q = B;
+					T = CA ^ IBIT;
+					F = CA;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isNE(F)) {
+				/*
+				 * cascade right
+				 */
+				uint32_t AB = F;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = Q;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
+					Q = B;
+					T = AC ^ IBIT;
+					F = AC;
+					printf(",\"qtf\":[%u,:%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A ^ IBIT, A, pFailCount);
+					Q = B;
+					T = CA ^ IBIT;
+					F = CA;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->compare(pTree, Q, pTree, F) > 0) {
+				/*
+				 * Single node
+				 */
+				uint32_t tmp = Q;
+				Q = F;
+				T = tmp ^ IBIT;
+				F = tmp;
+				printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"ba\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			}
+		}
+
+		// AND (L?T:0)
+		if (pTree->isAND(Q, T, F)) {
+
+			if (pTree->isAND(Q) && pTree->isAND(T)) {
+				/*
+				 * cascade split
+				 * already valid: QQ < QF, FQ < FF
+				 */
+				uint32_t AB = Q;
+				uint32_t CD = F;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].F;
+				uint32_t C  = pTree->N[CD].Q;
+				uint32_t D  = pTree->N[CD].F;
+				int      cmp;
+
+				if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+						// A<B<C<D, no change
+						Q = AB;
+						T = CD;
+						F = 0;
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abcd\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abd\",\"ab&\":\n", A, B, C, D);
+						uint32_t AB = explainNormaliseNode(depth + 1, expectId, pTree, A, B, 0, pFailCount);
+						Q = AB;
+						T = D;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// A<C<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acbd\",\"ac&\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C, 0, pFailCount);
+						printf(",\"bd&\":\n");
+						uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, D, 0, pFailCount);
+						Q = AC;
+						T = BD;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<C<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acb\",\"ac&\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C, 0, pFailCount);
+						Q = AC;
+						T = B;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else {
+						// A<C<D<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"acdb\",\"ac&\":\n", A, B, C, D);
+						uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C, 0, pFailCount);
+						printf(",\"bd&\":\n");
+						uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, D, 0, pFailCount);
+						Q = AC;
+						T = BD;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if (cmp == 0) {
+					// A==C collapse
+					if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+						// A<B<D
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"abd\",\"ab&\":\n", A, B, C, D);
+						uint32_t AB = explainNormaliseNode(depth + 1, expectId, pTree, A, B, 0, pFailCount);
+						Q = AB;
+						T = D;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else if (cmp == 0) {
+						// A<B
+						Q = A;
+						T = B;
+						F = 0;
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"ab\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					} else {
+						// A<D<B
+						printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"adb\",\"ad&\":\n", A, B, C, D);
+						uint32_t AD = explainNormaliseNode(depth + 1, expectId, pTree, A, D, 0, pFailCount);
+						Q = AD;
+						T = B;
+						F = 0;
+						printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					}
+				} else if ((cmp = pTree->compare(pTree, B, pTree, D)) < 0) {
+					// C<A<B<D
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cabd\",\"ca&\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					printf(",\"bd&\":\n");
+					uint32_t BD = explainNormaliseNode(depth + 1, expectId, pTree, B, D, 0, pFailCount);
+					Q = CA;
+					T = BD;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cab\",\"ab&\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					Q = CA;
+					T = B;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if ((cmp = pTree->compare(pTree, A, pTree, D)) < 0) {
+					// C<A<D<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cadb\",\"ca&\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					printf(",\"db&\":\n");
+					uint32_t DB = explainNormaliseNode(depth + 1, expectId, pTree, D, B, 0, pFailCount);
+					Q = CA;
+					T = DB;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cab\",\"ab&\":\n", A, B, C, D);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					Q = CA;
+					T = B;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else {
+					// C<A<D<B
+					Q = CD;
+					T = AB;
+					F = 0;
+					printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"cdab\",\"qtf\":[%u,%s%u,%u]}", C, D, A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isAND(Q)) {
+				/*
+				 * cascade left
+				 */
+				uint32_t AB = Q;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].T;
+				uint32_t C  = T;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac&\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C, 0, pFailCount);
+					Q = B;
+					T = AC;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca&\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					Q = B;
+					T = CA;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->isAND(T)) {
+				/*
+				 * cascade right
+				 */
+				uint32_t AB = T;
+				uint32_t A  = pTree->N[AB].Q;
+				uint32_t B  = pTree->N[AB].T;
+				uint32_t C  = Q;
+				int      cmp;
+
+				/*
+				 * where does c fit relative to ab
+				 */
+
+				if ((cmp = pTree->compare(pTree, B, pTree, C)) < 0) {
+					// A<B<C, no change
+				} else if (cmp == 0) {
+					// A
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"a\",\"N\":%u}}", A, B, C, A);
+					return A;
+				} else if ((cmp = pTree->compare(pTree, A, pTree, C)) < 0) {
+					// A<C<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"acb\",\"ac&\":\n", A, B, C);
+					uint32_t AC = explainNormaliseNode(depth + 1, expectId, pTree, A, C, 0, pFailCount);
+					Q = B;
+					T = AC;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else if (cmp == 0) {
+					// B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"b\",\"N\":%u}}", A, B, C, B);
+					return B;
+				} else {
+					// C<A<B
+					printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"cab\",\"ca&\":\n", A, B, C);
+					uint32_t CA = explainNormaliseNode(depth + 1, expectId, pTree, C, A, 0, pFailCount);
+					Q = B;
+					T = CA;
+					F = 0;
+					printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+
+			} else if (pTree->compare(pTree, Q, pTree, T) > 0) {
+				/*
+				 * Single node
+				 */
+				uint32_t tmp = Q;
+				Q = T;
+				T = tmp;
+				F = 0;
+				printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"ba\",\"qtf\":[%u,%s%u,%u]}", Q, T, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			}
+		}
+
+		return explainBasicNode(depth, expectId, pTree, Q, T, F, pFailCount);
 	}
 
 	/*
 	 * @date 2021-07-08 04:49:14
-	 * dry-run loading a string and count how many nodes would be created
+	 *
+	 * Expand and create a structure name with transform.
+	 * Fast version specifically for `tinyTree_t` structures.
+	 *
+	 * @param {number} depth - Recursion depth
+	 * @param {number} expectId - Recursion end condition, the node id to be added
+	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @param {string} name - structure name
+	 * @param {string} skin - structure skin
+	 * @param {number[]} slots - structure run-time slots
+	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
+	 * @return {number} newly created nodeId
 	 */
-	uint32_t testStringSafe(bool dryRun, unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t *pTestCount, const char name[], const char skin[], const uint32_t slot[]) {
+	uint32_t explainStringFast(unsigned depth, uint32_t expectId, baseTree_t *pTree, const char name[], const char skin[], const uint32_t slot[], unsigned *pFailCount) {
 
 		// state storage for postfix notation
 		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -357,7 +1069,7 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R ^ IBIT, 0, pTestCount);
+				unsigned nid = explainBasicNode(depth, expectId, pTree, L, R ^ IBIT, 0, pFailCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -373,8 +1085,11 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, 0 ^ IBIT, R, pTestCount);
+				unsigned nid;
+				if (pFailCount != NULL && (L >= pTree->ncount || R >= pTree->ncount))
+					nid = L; // L/R no longer valid
+				else
+					nid = explainOrderedNode(depth, expectId, pTree, L, 0 ^ IBIT, R, pFailCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -390,8 +1105,11 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R ^ IBIT, R, pTestCount);
+				unsigned nid;
+				if (pFailCount != NULL && (L >= pTree->ncount || R >= pTree->ncount))
+					nid = L; // L/R no longer valid
+				else
+					nid = explainOrderedNode(depth, expectId, pTree, L, R ^ IBIT, R, pFailCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -408,7 +1126,7 @@ struct bevalContext_t {
 				unsigned Q = stack[--stackPos];
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, Q, T ^ IBIT, F, pTestCount);
+				unsigned nid = explainBasicNode(depth, expectId, pTree, Q, T ^ IBIT, F, pFailCount);
 
 				// push
 				stack[stackPos++]     = nid; // push
@@ -425,8 +1143,11 @@ struct bevalContext_t {
 				unsigned L = stack[--stackPos]; // left hand side
 
 				// create operator
-				//assert(baseTree_t::compare(pTree, L, pTree, R) < 0);
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, L, R, 0, pTestCount);
+				unsigned nid;
+				if (pFailCount != NULL && (L >= pTree->ncount || R >= pTree->ncount))
+					nid = L; // L/R no longer valid
+				else
+					nid = explainOrderedNode(depth, expectId, pTree, L, R, 0, pFailCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -443,221 +1164,7 @@ struct bevalContext_t {
 				unsigned Q = stack[--stackPos];
 
 				// create operator
-				unsigned nid = testBasicNode(dryRun, depth, expectId, pTree, Q, T, F, pTestCount);
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '~': {
-				// NOT
-				if (stackPos < 1)
-					assert(!"DERR_UNDERFLOW");
-
-				// invert top-of-stack
-				stack[stackPos - 1] ^= IBIT;
-				break;
-			}
-
-			case '/':
-				// separator between placeholder/skin
-				while (pCh[1])
-					pCh++;
-				break;
-			case ' ':
-				// skip spaces
-				break;
-			default:
-				assert(!"DERR_UNDERFLOW");
-			}
-		}
-
-		if (stackPos != 1)
-			assert(!"DERR_UNDERFLOW");
-
-		// store result into root
-		return stack[stackPos - 1];
-	}
-
-	/*
-	 * @date 2021-07-14 13:12:05
-	 * dry-run loading a string and count how many nodes would be created
-	 */
-	uint32_t expandString(unsigned depth, uint32_t expectId, baseTree_t *pTree, const char name[], const char skin[], const uint32_t slot[]) {
-
-		// state storage for postfix notation
-		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int      stackPos = 0;
-		uint32_t beenThere[tinyTree_t::TINYTREE_NEND]; // track id's of display operators.
-		unsigned nextNode = tinyTree_t::TINYTREE_NSTART; // next visual node
-
-		// walk through the notation until end or until placeholder/skin separator
-		for (const char *pCh = name; *pCh; pCh++) {
-
-			if (isalnum(*pCh) && stackPos >= tinyTree_t::TINYTREE_MAXSTACK)
-				assert(!"DERR_OVERFLOW");
-			if (islower(*pCh) && !islower(skin[*pCh - 'a']))
-				assert(!"DERR_PLACEHOLDER");
-
-			switch (*pCh) {
-			case '0':
-				stack[stackPos++] = 0;
-				break;
-			case 'a':
-				stack[stackPos++] = slot[skin[0] - 'a'];
-				break;
-			case 'b':
-				stack[stackPos++] = slot[skin[1] - 'a'];
-				break;
-			case 'c':
-				stack[stackPos++] = slot[skin[2] - 'a'];
-				break;
-			case 'd':
-				stack[stackPos++] = slot[skin[3] - 'a'];
-				break;
-			case 'e':
-				stack[stackPos++] = slot[skin[4] - 'a'];
-				break;
-			case 'f':
-				stack[stackPos++] = slot[skin[5] - 'a'];
-				break;
-			case 'g':
-				stack[stackPos++] = slot[skin[6] - 'a'];
-				break;
-			case 'h':
-				stack[stackPos++] = slot[skin[7] - 'a'];
-				break;
-			case 'i':
-				stack[stackPos++] = slot[skin[8] - 'a'];
-				break;
-			case '1':
-				stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
-				break;
-			case '2':
-				stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
-				break;
-			case '3':
-				stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
-				break;
-			case '4':
-				stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
-				break;
-			case '5':
-				stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
-				break;
-			case '6':
-				stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
-				break;
-			case '7':
-				stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
-				break;
-			case '8':
-				stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
-				break;
-			case '9':
-				stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
-				break;
-
-			case '>': {
-				// GT
-				if (stackPos < 2)
-					assert(!"DERR_UNDERFLOW");
-
-				//pop operands
-				uint32_t R = stack[--stackPos]; // right hand side
-				uint32_t L = stack[--stackPos]; // left hand side
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, L, R ^ IBIT, 0);
-				printf("\n");
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '+': {
-				// OR
-				if (stackPos < 2)
-					assert(!"DERR_UNDERFLOW");
-
-				// pop operands
-				uint32_t R = stack[--stackPos]; // right hand side
-				uint32_t L = stack[--stackPos]; // left hand side
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, L, 0 ^ IBIT, R);
-				printf("\n");
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '^': {
-				// XOR/NE
-				if (stackPos < 2)
-					assert(!"DERR_UNDERFLOW");
-
-				//pop operands
-				uint32_t R = stack[--stackPos]; // right hand side
-				uint32_t L = stack[--stackPos]; // left hand side
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, L, R ^ IBIT, R);
-				printf("\n");
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '!': {
-				// QnTF
-				if (stackPos < 3)
-					assert(!"DERR_UNDERFLOW");
-
-				// pop operands
-				uint32_t F = stack[--stackPos];
-				uint32_t T = stack[--stackPos];
-				uint32_t Q = stack[--stackPos];
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, Q, T ^ IBIT, F);
-				printf("\n");
-
-				// push
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '&': {
-				// AND
-				if (stackPos < 2)
-					assert(!"DERR_UNDERFLOW");
-
-				// pop operands
-				uint32_t R = stack[--stackPos]; // right hand side
-				uint32_t L = stack[--stackPos]; // left hand side
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, L, R, 0);
-				printf("\n");
-
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
-				break;
-			}
-			case '?': {
-				// QTF
-				if (stackPos < 3)
-					assert(!"DERR_UNDERFLOW");
-
-				// pop operands
-				uint32_t F = stack[--stackPos];
-				uint32_t T = stack[--stackPos];
-				uint32_t Q = stack[--stackPos];
-
-				// create operator
-				uint32_t nid =  explainNode(depth, expectId, pTree, Q, T, F);
-				printf("\n");
+				unsigned nid = explainBasicNode(depth, expectId, pTree, Q, T, F, pFailCount);
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
@@ -696,9 +1203,18 @@ struct bevalContext_t {
 	/*
 	 * @date 2021-07-05 19:23:46
 	 *
-	 * Local copy of `baseTree_t::normaliseNode()`
+	 * Normalise Q/T/F and add to tree
+	 *
+	 * @param {number} depth - Recursion depth
+	 * @param {number} expectId - Recursion end condition, the node id to be added
+	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @param {number} Q - component
+	 * @param {number} T - component
+	 * @param {number} F - component
+	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
+	 * @return {number} newly created nodeId
 	 */
-	uint32_t explainNode(unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F) {
+	uint32_t explainNormaliseNode(unsigned depth, uint32_t expectId, baseTree_t *pTree, uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount) {
 
 		printf("%*s{\"Q\":%s%u,\"T\":%s%u,\"F\":%s%u",
 		       depth, "",
@@ -706,7 +1222,7 @@ struct bevalContext_t {
 		       (T & IBIT) ? "~" : "", (T & ~IBIT),
 		       (F & IBIT) ? "~" : "", (F & ~IBIT));
 
-		assert(++depth < 20);
+		assert(++depth < 40);
 
 		assert ((Q & ~IBIT) < pTree->ncount);
 		assert ((T & ~IBIT) < pTree->ncount);
@@ -1188,17 +1704,17 @@ struct bevalContext_t {
 					if (pMember->flags & member_t::MEMMASK_DEPR)
 						break;
 
-					uint32_t testCount = pTree->ncount;
-					testStringSafe(true/*dryRun*/, depth + 1, expectId, pTree, &testCount, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
+					uint32_t failCount = 0;
+					explainStringFast(depth + 1, expectId, pTree, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART, &failCount);
 					if (level5mid != 0)
 						printf(",");
 					printf("{\"name\":\"%u:%s/%u:%.*s\",\"miss\":%u}", iMid, pMember->name,
 					       pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid],
-					       testCount - pTree->ncount);
+					       failCount);
 
-					if (level5mid == 0 || testCount - pTree->ncount < bestCount) {
+					if (level5mid == 0 || failCount < bestCount) {
 						level5mid = iMid;
-						bestCount = testCount - pTree->ncount;
+						bestCount = failCount;
 
 						if (bestCount == 0) {
 							break; // its already there
@@ -1213,274 +1729,47 @@ struct bevalContext_t {
 			// apply best
 			member_t *pMember = pStore->members + level5mid;
 
-			printf(",   \"level5\":{\"member\":\"%u:%s/%u:%.*s\"",
-					level5mid, pMember->name,
-					pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid]);
-
-			// apply found member
-			uint32_t ret = testStringSafe(false/*dryRun*/, depth + 1, expectId, pTree, NULL, pMember->name, pStore->revTransformNames[pMember->tid], sidSlots + tinyTree_t::TINYTREE_KSTART);
-
-			printf("},\"N\":%s%u}", ibit ? "~" : "", ret);
-
-			/*
-			 * @date 2021-07-27 12:41:30
-			 *
-			 * ./bexplain 'cd^agd1!eh^!a2gdgcd!^c!!!' 'cd^agd1!eh^!a2gdgcd!^c!!!'
-			 *
-			 * The second argument builds a different tree!
-			 * This is because normalisation adapts to what is already found in the tree.
-			 * The first argument creates intermediates that are reused more efficiently for the second.
-			 * The top-level node is a rigorous rewrite creating two intermediates.
-\			 */
-
-			return ret ^ ibit;
-		}
-
-#if 0
-		if (pTree->flags & ctx.MAGICMASK_REWRITE) {
-
-			// perform a lookup
-			uint32_t ret =  rewriteNode(Q, T, F);
-
-			// if lookup triggered a rewrite, return what was found
-			if (ret != IBIT)
-				return ret ^ ibit;
-
-			// else continue assuming combo is level-2 normalised
-
-		} else if (T & IBIT) {
-
-			if (T == IBIT) {
-				if (F == Q || F == 0) {
-					// SELF
-					// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
-					return Q ^ ibit;
-				} else {
-					// OR
-					// "Q?!0:F" [2]
-				}
-			} else if ((T & ~IBIT) == Q) {
-				if (F == Q || F == 0) {
-					// ZERO
-					// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
-					return 0 ^ ibit;
-				} else {
-					// LESS-THAN
-					// "Q?!Q:F" [5] -> "F?!Q:F" -> "F?!Q:0"
-					Q = F;
-					F = 0;
-				}
-			} else {
-				if (F == Q || F == 0) {
-					// GREATER-THAN
-					// "Q?!T:Q" [7] -> "Q?!T:0" [6]
-					F = 0;
-				} else if ((T & ~IBIT) == F) {
-					// NOT-EQUAL
-					// "Q?!F:F" [8]
-				} else {
-					// QnTF (new unified operator)
-					// "Q?!T:F" [9]
-				}
-			}
-
-		} else {
-
-			if (T == 0) {
-				if (F == Q || F == 0) {
-					// ZERO
-					// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
-					return 0 ^ ibit;
-				} else {
-					// LESS-THAN
-					// "Q?0:F" [12] -> "F?!Q:0" [6]
-					T = Q ^ IBIT;
-					Q = F;
-					F = 0;
-				}
-
-			} else if (T == Q) {
-				if (F == Q || F == 0) {
-					// SELF
-					// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
-					return Q ^ ibit;
-				} else {
-					// OR
-					// "Q?Q:F" [15] -> "Q?!0:F" [2]
-					T = 0 ^ IBIT;
-				}
-			} else {
-				if (F == Q || F == 0) {
-					// AND
-					// "Q?T:Q" [17] -> "Q?T:0" [16]
-					F = 0;
-				} else if (T == F) {
-					// SELF
-					// "Q?F:F" [18] -> "F"
-					return F ^ ibit;
-				} else {
-					// QTF (old unified operator)
-					// "Q?T:F" [19]
-				}
-			}
+			printf(",   \"level5\":{\"member\":\"%u:%s/%u:%.*s\"}",
+			       level5mid, pMember->name,
+			       pMember->tid, pStore->signatures[pMember->sid].numPlaceholder, pStore->revTransformNames[pMember->tid]);
 		}
 
 		/*
-		 * Rewrite QTF into QTnF
+		 * apply found member
 		 */
-		if (pTree->flags & ctx.MAGICMASK_PURE) {
-			assert(0)
-			/*
-			 * rewrite  "a ? b : c" into "a? !(a ? !b : c) : c"
-			 * ./eval "abc?" "aabc!c!"
-			 */
-			if (!(T & IBIT)) {
-				// Q?T:F -> Q?!(Q?!T:F):F)
-				T = pTree->normaliseNode(Q, T ^ IBIT, F) ^ IBIT;
-			}
-		}
-#endif
+		uint32_t ret = explainStringFast(depth + 1, expectId, pTree, pStore->members[level5mid].name, pStore->revTransformNames[pStore->members[level5mid].tid], sidSlots + tinyTree_t::TINYTREE_KSTART, NULL);
+
+		printf(",   \"N\":%s%u}", ibit ? "~" : "", ret);
 
 		/*
-		 * Level 3 normalisation: cascade OR/NE/AND
+		 * @date 2021-08-11 22:38:55
+		 * Sometimes a rerun may result in a different tree.
+		 * This is because normalisation adapts to what is already found in the tree.
+		 *
+		 * Some used samples
+		 * ./bexplain 'cd^agd1!eh^!a2gdgcd!^c!!!' 'cd^agd1!eh^!a2gdgcd!^c!!!'
+		 * ./bexplain 'ef^eg!gg2^^eg!ab^c1dacab!^!^^1aabccd^a7>!+2!^B2ac!ccdB3!^ac!>!^^2!C6C1B5^1g>C8!^1C5c>C6d1!^ggef+^eD5>!5caB1C6!C6!!^93^4gB0^^9B0!>!^^'
 		 */
 
-		static int xcnt;
-		xcnt++;
-
-#if 0
-		// OR
-		if (T == IBIT) {
-			// test for slow path
-			if (this->flags & ctx.MAGICMASK_CASCADE) {
-				if (isOR(Q)) {
-					if (isOR(F))
-						return mergeOR(Q, F) ^ ibit; // cascades may never fork
-
-					// test if F is properly ordered
-					if (!isOR(N[Q].F)) {
-						if (compare(this, F, this, N[Q].F) <= 0)
-							return mergeOR(Q, F) ^ ibit;
-					} else if (!isOR(N[Q].Q)) {
-						if (compare(this, F, this, N[Q].Q) <= 0)
-							return mergeOR(Q, F) ^ ibit;
-					}
-
-				} else if (isOR(F)) {
-
-					// test if Q is properly ordered
-					if (!isOR(N[F].F)) {
-						if (compare(this, Q, this, N[F].F) <= 0)
-							return mergeOR(Q, F) ^ ibit;
-					} else if (!isOR(N[F].Q)) {
-						if (compare(this, Q, this, N[F].Q) <= 0)
-							return mergeOR(Q, F) ^ ibit;
-					}
-				}
-			}
-
-			// otherwise fast path
-			if (compare(this, Q, this, F) > 0) {
-				// swap
-				uint32_t savQ = Q;
-				Q = F;
-				F = savQ;
-			}
-		}
-
-		// NE
-		if ((T & ~IBIT) == F) {
-			// test for slow path
-			if (this->flags & ctx.MAGICMASK_CASCADE) {
-				if (isNE(Q)) {
-					if (isNE(F))
-						return mergeNE(Q, F) ^ ibit; // cascades may never fork
-
-					// test if F is properly ordered
-					if (!isNE(N[Q].F)) {
-						if (compare(this, F, this, N[Q].F) <= 0)
-							return mergeNE(Q, F) ^ ibit;
-					} else if (!isNE(N[Q].Q)) {
-						if (compare(this, F, this, N[Q].Q) <= 0)
-							return mergeNE(Q, F) ^ ibit;
-					}
-
-				} else if (isNE(F)) {
-
-					// test if Q is properly ordered
-					if (!isNE(N[F].F)) {
-						if (compare(this, Q, this, N[F].F) <= 0)
-							return mergeNE(Q, F) ^ ibit;
-					} else if (!isNE(N[F].Q)) {
-						if (compare(this, Q, this, N[F].Q) <= 0)
-							return mergeNE(Q, F) ^ ibit;
-					}
-				}
-			}
-
-			// otherwise fast path
-			if (compare(this, Q, this, F) > 0) {
-				// swap
-				uint32_t savQ = Q;
-				Q = F;
-				F = savQ;
-				T = savQ ^ IBIT;
-			}
-		}
-
-		// AND
-		if (!(T & IBIT) && F == 0) {
-			// test for slow path
-			if (this->flags & ctx.MAGICMASK_CASCADE) {
-				if (isAND(Q)) {
-					if (isAND(T))
-						return mergeAND(Q, T) ^ ibit; // cascades may never fork
-
-					// test if T is properly ordered
-					if (!isAND(N[Q].T)) {
-						if (compare(this, T, this, N[Q].T) <= 0)
-							return mergeAND(Q, T) ^ ibit;
-					} else if (!isAND(N[Q].Q)) {
-						if (compare(this, T, this, N[Q].Q) <= 0)
-							return mergeAND(Q, T) ^ ibit;
-					}
-
-				} else if (isAND(T)) {
-
-					// test if Q is properly ordered
-					if (!isAND(N[T].T)) {
-						if (compare(this, Q, this, N[T].T) <= 0)
-							return mergeAND(Q, T) ^ ibit;
-					} else if (!isAND(N[T].Q)) {
-						if (compare(this, Q, this, N[T].Q) <= 0)
-							return mergeAND(Q, T) ^ ibit;
-					}
-				}
-			}
-
-			// otherwise fast path
-			if (compare(this, Q, this, T) > 0) {
-				// swap
-				uint32_t savQ = Q;
-				Q = T;
-				T = savQ;
-			}
-		}
-#endif
-
-		uint32_t ret = pTree->basicNode(Q, T, F) ^ ibit;
-
-		printf(" [N] %s%u\n", ret & IBIT ? "~" : "", ret & ~IBIT);
-
-		return ret;
+		return ret ^ ibit;
 	}
 
 	/*
 	 * @date 2021-07-05 19:19:25
 	 *
-	 * Local copy of `baseTree_t::loadNormalisedString()`, only calling local `explainNode()`
+	 * Expand and create a structure name with transform.
+	 * Fast version specifically for user input
+	 *
+	 * @param {number} depth - Recursion depth
+	 * @param {number} expectId - Recursion end condition, the node id to be added
+	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @param {string} name - structure name
+	 * @param {string} skin - structure skin
+	 * @param {number[]} slots - structure run-time slots
+	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
+	 * @return {number} newly created nodeId
 	 */
-	uint32_t explainNormaliseString(unsigned depth, baseTree_t *pTree, const char *pPattern, const char *pTransform) {
+	uint32_t explainStringSafe(unsigned depth, baseTree_t *pTree, const char *pPattern, const char *pTransform) {
 
 		// modify if transform is present
 		uint32_t *transformList = NULL;
@@ -1614,7 +1903,7 @@ struct bevalContext_t {
 				uint32_t R = pStack[--stackPos];
 				uint32_t L = pStack[--stackPos];
 
-				nid = explainNode(depth, pTree->ncount, pTree, L, R ^ IBIT, 0);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, L, R ^ IBIT, 0, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1630,7 +1919,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree->ncount, pTree, L, IBIT, R);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, L, IBIT, R, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1646,7 +1935,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree->ncount, pTree, L, R ^ IBIT, R);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, L, R ^ IBIT, R, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1663,7 +1952,7 @@ struct bevalContext_t {
 				uint32_t Q = pStack[--stackPos];
 
 				// create operator
-				nid = explainNode(depth, pTree->ncount, pTree, Q, T ^ IBIT, F);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, Q, T ^ IBIT, F, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1679,7 +1968,7 @@ struct bevalContext_t {
 				uint32_t L = pStack[--stackPos]; // left hand side
 
 				// create operator
-				nid = explainNode(depth, pTree->ncount, pTree, L, R, 0);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, L, R, 0, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1696,7 +1985,7 @@ struct bevalContext_t {
 				uint32_t Q = pStack[--stackPos];
 
 				// create operator
-				nid = explainNode(depth, pTree->ncount, pTree, Q, T, F);
+				nid = explainNormaliseNode(depth, pTree->ncount, pTree, Q, T, F, NULL);
 				printf("\n");
 
 				pStack[stackPos++] = pMap[nextNode++] = nid;
@@ -1825,9 +2114,9 @@ struct bevalContext_t {
 			const char *pTransform = strchr(inputArgs[iArg], '/');
 
 			if (pTransform)
-				pTree->roots[iRoot] = explainNormaliseString(0, pTree, inputArgs[iArg], pTransform + 1);
+				pTree->roots[iRoot] = explainStringSafe(0, pTree, inputArgs[iArg], pTransform + 1);
 			else
-				pTree->roots[iRoot] = explainNormaliseString(0, pTree, inputArgs[iArg], NULL);
+				pTree->roots[iRoot] = explainStringSafe(0, pTree, inputArgs[iArg], NULL);
 
 			/*
 			 * Display expression
