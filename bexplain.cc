@@ -1372,6 +1372,24 @@ struct bevalContext_t {
 		}
 
 		/*
+		 * test if node is available
+		 *
+		 * @date 2021-08-11 22:49:54
+		 * This is intended as a fast-path, only it might be that the found node has been depreciated from a different context
+		 * `testBasicNode()` now handles the end-condition
+		 *
+		 * @date 2021-08-13 00:22:55
+		 * Now with ordered nodes, the written database should be fully ordered, making this test valid again
+		 */
+		{
+			uint32_t ix = pTree->lookupNode(Q, T, F);
+			if (pTree->nodeIndex[ix] != 0) {
+				printf(",   \"lookup\":%s%u}}", ibit ? "~" : "", pTree->nodeIndex[ix]);
+				return pTree->nodeIndex[ix] ^ ibit;
+			}
+		}
+
+		/*
 		 * Level-3 normalisation: single node rewrites
 		 * simulate what `genrewritedata()` does:
 		 *   Populate slots, perform member lookup, if not found/depreciated perform signature lookup

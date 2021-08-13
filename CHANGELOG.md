@@ -10,7 +10,9 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
-2021-08-11 22:18:57 Added: expectId` as recursion end condition in `bexplain`.
+2021-08-13 23:00:26 Added: Test if node already present before searching sid in `bexplain`.
+2021-08-13 22:55:49 Added: `bexplain::explainOrderedNode()` and fixed recursion.
+2021-08-11 22:18:57 Added: `expectId` as recursion end condition in `bexplain`.
 2021-08-11 20:19:58 Added: `TinyTree_t::isOR(),isGT(),isNE(),isAND()`.
 2021-08-09 23:10:58 Version 2.9.1
 2021-08-09 15:43:42 Changed: `gendepreciate` default burst.
