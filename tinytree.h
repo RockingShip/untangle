@@ -1401,7 +1401,7 @@ struct tinyTree_t {
 
 				const tinyNode_t *pNode = this->N + curr;
 				const uint32_t   Q      = pNode->Q;
-				const uint32_t   To     = pNode->T & ~IBIT;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
 //				const uint32_t   Ti     = pNode->T & IBIT;
 				const uint32_t   F      = pNode->F;
 
@@ -1415,8 +1415,8 @@ struct tinyTree_t {
 					// push unvisited references
 					if (F >= TINYTREE_NSTART && !(beenThere & (1 << F)))
 						stack[stackPos++] = F;
-					if (To != F && To >= TINYTREE_NSTART && !(beenThere & (1 << To)))
-						stack[stackPos++] = To;
+					if (Tu != F && Tu >= TINYTREE_NSTART && !(beenThere & (1 << Tu)))
+						stack[stackPos++] = Tu;
 					if (Q >= TINYTREE_NSTART && !(beenThere & (1 << Q)))
 						stack[stackPos++] = Q;
 
@@ -1433,10 +1433,10 @@ struct tinyTree_t {
 						pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
 					}
 
-					if (To < TINYTREE_NSTART && !(beenThere & (1 << To))) {
-						beenThere |= (1 << To);
-						beenWhat[To]            = TINYTREE_KSTART + numPlaceholder;
-						pSkin[numPlaceholder++] = (char) ('a' + To - TINYTREE_KSTART);
+					if (Tu < TINYTREE_NSTART && !(beenThere & (1 << Tu))) {
+						beenThere |= (1 << Tu);
+						beenWhat[Tu]            = TINYTREE_KSTART + numPlaceholder;
+						pSkin[numPlaceholder++] = (char) ('a' + Tu - TINYTREE_KSTART);
 					}
 
 					if (F < TINYTREE_NSTART && !(beenThere & (1 << F))) {
@@ -1480,7 +1480,7 @@ struct tinyTree_t {
 
 			const tinyNode_t *pNode = this->N + curr;
 			const uint32_t   Q      = pNode->Q;
-			const uint32_t   To     = pNode->T & ~IBIT;
+			const uint32_t   Tu     = pNode->T & ~IBIT;
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
@@ -1494,8 +1494,8 @@ struct tinyTree_t {
 				// push non-zero endpoints
 				if (F >= TINYTREE_KSTART)
 					stack[stackPos++] = F;
-				if (To != F && To >= TINYTREE_KSTART)
-					stack[stackPos++] = To;
+				if (Tu != F && Tu >= TINYTREE_KSTART)
+					stack[stackPos++] = Tu;
 				if (Q >= TINYTREE_KSTART)
 					stack[stackPos++] = Q;
 
@@ -1510,10 +1510,10 @@ struct tinyTree_t {
 					if (F == 0) {
 						// GT Q?!T:0
 						pName[nameLen++] = '>';
-					} else if (To == 0) {
+					} else if (Tu == 0) {
 						// OR Q?!0:F
 						pName[nameLen++] = '+';
-					} else if (F == To) {
+					} else if (F == Tu) {
 						// XOR Q?!F:F
 						pName[nameLen++] = '^';
 					} else {
@@ -1524,10 +1524,10 @@ struct tinyTree_t {
 					if (F == 0) {
 						// AND Q?T:0
 						pName[nameLen++] = '&';
-					} else if (To == 0) {
+					} else if (Tu == 0) {
 						// LT Q?0:F
 						pName[nameLen++] = '<';
-					} else if (F == To) {
+					} else if (F == Tu) {
 						// SELF Q?F:F
 						assert(!"Q?F:F");
 					} else {

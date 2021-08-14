@@ -111,7 +111,7 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	enum {
 		// +-------+----------+-------------+----+----+----+----+
-		// | stack | endpoint | placeholder | Ti | Q  | To |  F |
+		// | stack | endpoint | placeholder | Ti | Q  | Tu |  F |
 		// +-------+----------+-------------+----+----+----+----+
 		// <---8--><----4----><------4-----><-1-><-5-><-5-><-5->
 		// <---------------16--------------><--------16-------->
@@ -275,7 +275,7 @@ struct generatorTree_t : tinyTree_t {
 	 */
 	static const char *decodePacked(unsigned packed) {
 		static char name[128];
-		sprintf(name, "newStack=%x newEndpoint=%u newPlaceholder=%u Ti=%u Q=%u To=%u F=%u",
+		sprintf(name, "newStack=%x newEndpoint=%u newPlaceholder=%u Ti=%u Q=%u Tu=%u F=%u",
 		        (packed >> PACKED_POS_STACK) & ((1 << PACKED_WIDTH_STACK) - 1),
 		        (packed >> PACKED_POS_ENDPOINT) & ((1 << PACKED_WIDTH_ENDPOINT) - 1),
 		        (packed >> PACKED_POS_PLACEHOLDER) & ((1 << PACKED_WIDTH_PLACEHOLDER) - 1),
@@ -302,28 +302,28 @@ struct generatorTree_t : tinyTree_t {
 		// @formatter:off
 		for (unsigned Ti = 0; Ti < 2; Ti++)
 		for (unsigned F = 0; F < (1 << PACKED_WIDTH); F++)
-		for (unsigned To = 0; To < (1 << PACKED_WIDTH); To++)
+		for (unsigned Tu = 0; Tu < (1 << PACKED_WIDTH); Tu++)
 		for (unsigned Q = 0; Q < (1 << PACKED_WIDTH); Q++) {
 		// @formatter:on
 
 			// create packed notation
-			unsigned ix = (Ti ? 1 << 15 : 0 << 15) | Q << 10 | To << 5 | F << 0;
+			unsigned ix = (Ti ? 1 << 15 : 0 << 15) | Q << 10 | Tu << 5 | F << 0;
 
 			// default, not normalised
 			pIsType[ix] = 0;
 
 			// test if combo is normalised
-			if (Q == To)
+			if (Q == Tu)
 				continue;  // Q?Q:F or Q?~Q:F
 			if (Q == F)
 				continue; // Q?T:Q or Q?~T:Q
 			if (Q == 0)
 				continue; // 0?X:Y
-			if (To == F && F == 0)
+			if (Tu == F && F == 0)
 				continue; // Q?~0:0
-			if (To == F && !Ti)
+			if (Tu == F && !Ti)
 				continue; // "SELF" Q?F:F
-			if (To == 0 && !Ti)
+			if (Tu == 0 && !Ti)
 				continue; // "LT" Q?0:F -> F?~Q:0
 
 			// passed, normalised
@@ -339,11 +339,11 @@ struct generatorTree_t : tinyTree_t {
 			 */
 
 			if (Ti) {
-				if (To == 0)
+				if (Tu == 0)
 					pIsType[ix] |= PACKED_OR;
 				else if (F == 0)
 					pIsType[ix] |= PACKED_GT;
-				else if (F == To)
+				else if (F == Tu)
 					pIsType[ix] |= PACKED_XOR;
 				else
 					pIsType[ix] |= PACKED_QnTF;
@@ -373,9 +373,9 @@ struct generatorTree_t : tinyTree_t {
 					pIsType[ix] = 0; // reject
 			}
 			if (pIsType[ix] & PACKED_AND) {
-				if (Q >= TINYTREE_NSTART && To >= TINYTREE_NSTART)
+				if (Q >= TINYTREE_NSTART && Tu >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
-				else if (Q > To)
+				else if (Q > Tu)
 					pIsType[ix] = 0; // reject
 			}
 		}
@@ -436,7 +436,7 @@ struct generatorTree_t : tinyTree_t {
 			// @formatter:off
 			for (int Ti = 1; Ti >= 0; Ti--)
 			for (unsigned Q = 0; Q < TINYTREE_NSTART + numNode; Q++)
-			for (unsigned To = 0; To < TINYTREE_NSTART + numNode; To++)
+			for (unsigned Tu = 0; Tu < TINYTREE_NSTART + numNode; Tu++)
 			for (unsigned F = 0; F < TINYTREE_NSTART + numNode; F++) {
 			// @formatter:on
 
@@ -453,7 +453,7 @@ struct generatorTree_t : tinyTree_t {
 				/*
 				 * create packed notation
 				 */
-				unsigned qtf = (Ti << PACKED_TIPOS) | (Q << PACKED_QPOS) | (To << PACKED_TPOS) | (F << PACKED_FPOS);
+				unsigned qtf = (Ti << PACKED_TIPOS) | (Q << PACKED_QPOS) | (Tu << PACKED_TPOS) | (F << PACKED_FPOS);
 
 				if (pIsType[qtf] == 0)
 					continue; // must be normalised
@@ -470,10 +470,10 @@ struct generatorTree_t : tinyTree_t {
 					newEndpoint++;
 				}
 
-				if (pTOS[newStack >> TINYTREE_NSTART] && To == pTOS[newStack >> TINYTREE_NSTART]) {
+				if (pTOS[newStack >> TINYTREE_NSTART] && Tu == pTOS[newStack >> TINYTREE_NSTART]) {
 					// pop stack entry
-					newStack &= ~(1 << To);
-				} else if (To >= TINYTREE_NSTART) {
+					newStack &= ~(1 << Tu);
+				} else if (Tu >= TINYTREE_NSTART) {
 					// back-reference counts as endpoint
 					newEndpoint++;
 				}
@@ -506,12 +506,12 @@ struct generatorTree_t : tinyTree_t {
 					newEndpoint++;
 				}
 
-				if (To >= TINYTREE_NSTART) {
+				if (Tu >= TINYTREE_NSTART) {
 					// component
-				} else if (To > TINYTREE_KSTART + newPlaceholder && To < TINYTREE_NSTART) {
+				} else if (Tu > TINYTREE_KSTART + newPlaceholder && Tu < TINYTREE_NSTART) {
 					// placeholder not created yet
 					continue;
-				} else if (To == TINYTREE_KSTART + newPlaceholder) {
+				} else if (Tu == TINYTREE_KSTART + newPlaceholder) {
 					// bump placeholder if using for the first time
 					newPlaceholder++;
 					newEndpoint++;
@@ -551,7 +551,7 @@ struct generatorTree_t : tinyTree_t {
 				newStack >>= TINYTREE_NSTART;
 
 				assert(!(Q & ~PACKED_MASK));
-				assert(!(To & ~PACKED_MASK));
+				assert(!(Tu & ~PACKED_MASK));
 				assert(!(newPlaceholder & ~((1 << PACKED_WIDTH_PLACEHOLDER) - 1)));
 				assert(!(newEndpoint & ~((1 << PACKED_WIDTH_ENDPOINT) - 1)));
 				assert(!(newStack & ~((1 << PACKED_WIDTH_STACK) - 1)));
@@ -561,7 +561,7 @@ struct generatorTree_t : tinyTree_t {
 				 */
 
 				// add template
-				pTemplateData[numTemplateData] = (Ti << PACKED_TIPOS) | Q << PACKED_QPOS | To << PACKED_TPOS | F << PACKED_FPOS;
+				pTemplateData[numTemplateData] = (Ti << PACKED_TIPOS) | Q << PACKED_QPOS | Tu << PACKED_TPOS | F << PACKED_FPOS;
 				pTemplateData[numTemplateData] |= newPlaceholder << PACKED_POS_PLACEHOLDER;
 				pTemplateData[numTemplateData] |= newEndpoint << PACKED_POS_ENDPOINT;
 				pTemplateData[numTemplateData] |= newStack << PACKED_POS_STACK;
@@ -789,10 +789,10 @@ struct generatorTree_t : tinyTree_t {
 				 */
 
 				const tinyNode_t *pNode = this->N + curr;
-				const unsigned Q = pNode->Q;
-				const unsigned To = pNode->T & ~IBIT;
-				const unsigned Ti = pNode->T & IBIT;
-				const unsigned F = pNode->F;
+				const unsigned   Q      = pNode->Q;
+				const unsigned   Tu     = pNode->T & ~IBIT;
+				const unsigned   Ti     = pNode->T & IBIT;
+				const unsigned   F      = pNode->F;
 
 				// determine if node already handled
 				if (!(beenThere & (1 << curr))) {
@@ -804,8 +804,8 @@ struct generatorTree_t : tinyTree_t {
 					// push non-zero endpoints
 					if (F >= TINYTREE_KSTART)
 						stack[stackPos++] = F;
-					if (To != F && To >= TINYTREE_KSTART)
-						stack[stackPos++] = To;
+					if (Tu != F && Tu >= TINYTREE_KSTART)
+						stack[stackPos++] = Tu;
 					if (Q >= TINYTREE_KSTART)
 						stack[stackPos++] = Q;
 
@@ -827,9 +827,9 @@ struct generatorTree_t : tinyTree_t {
 						numPlaceholder++;
 					}
 
-					if (To < TINYTREE_NSTART && !(beenThere & (1 << To))) {
-						beenThere |= (1 << To);
-						if (To != TINYTREE_KSTART + numPlaceholder)
+					if (Tu < TINYTREE_NSTART && !(beenThere & (1 << Tu))) {
+						beenThere |= (1 << Tu);
+						if (Tu != TINYTREE_KSTART + numPlaceholder)
 							return;
 						numPlaceholder++;
 					}
@@ -845,10 +845,10 @@ struct generatorTree_t : tinyTree_t {
 						if (F == 0) {
 							// GT Q?!T:0
 							name[nameLen++] = '>';
-						} else if (To == 0) {
+						} else if (Tu == 0) {
 							// OR Q?!0:F
 							name[nameLen++] = '+';
-						} else if (F == To) {
+						} else if (F == Tu) {
 							// XOR Q?!F:F
 							name[nameLen++] = '^';
 						} else {
@@ -859,10 +859,10 @@ struct generatorTree_t : tinyTree_t {
 						if (F == 0) {
 							// AND Q?T:0
 							name[nameLen++] = '&';
-						} else if (To == 0) {
+						} else if (Tu == 0) {
 							// LT Q?0:F
 							name[nameLen++] = '<';
-						} else if (F == To) {
+						} else if (F == Tu) {
 							// SELF Q?F:F
 							assert(!"Q?F:F");
 						} else {

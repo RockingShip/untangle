@@ -242,7 +242,7 @@ struct genrestartdataContext_t : callable_t {
 		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
 			unsigned qtf = tree.packedN[iNode];
 			unsigned Q   = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
-			unsigned To  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
+			unsigned Tu  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
 			unsigned F   = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
 			unsigned Ti  = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
 
@@ -250,10 +250,10 @@ struct genrestartdataContext_t : callable_t {
 				*pKeyName++ = "123456789"[Q - tinyTree_t::TINYTREE_NSTART ];
 			else
 				*pKeyName++ = "0abcdefghi"[Q];
-			if (To >= tinyTree_t::TINYTREE_NSTART)
-				*pKeyName++ = "123456789"[To - tinyTree_t::TINYTREE_NSTART];
+			if (Tu >= tinyTree_t::TINYTREE_NSTART)
+				*pKeyName++ = "123456789"[Tu - tinyTree_t::TINYTREE_NSTART];
 			else
-				*pKeyName++ = "0abcdefghi"[To];
+				*pKeyName++ = "0abcdefghi"[Tu];
 			if (F >= tinyTree_t::TINYTREE_NSTART)
 				*pKeyName++ = "123456789"[F - tinyTree_t::TINYTREE_NSTART];
 			else

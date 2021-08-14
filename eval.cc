@@ -2384,18 +2384,18 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 		 */
 
 		// @formatter:off
-		for (unsigned Fo = 0; Fo < pTree->kstart + 3; Fo++) // operand of F: 0, a, b, c
+		for (unsigned Fu = 0; Fu < pTree->kstart + 3; Fu++) // operand of F: 0, a, b, c
 		for (unsigned Fi = 0; Fi < 2; Fi++)          // inverting of F
-		for (unsigned To = 0; To < pTree->kstart + 3; To++)
+		for (unsigned Tu = 0; Tu < pTree->kstart + 3; Tu++)
 		for (unsigned Ti = 0; Ti < 2; Ti++)
-		for (unsigned Qo = 0; Qo < pTree->kstart + 3; Qo++)
+		for (unsigned Qu = 0; Qu < pTree->kstart + 3; Qu++)
 		for (unsigned Qi = 0; Qi < 2; Qi++) {
 		// @formatter:on
 
 			// additional rangecheck
-			if (Qo && Qo < pTree->kstart) continue;
-			if (To && To < pTree->kstart) continue;
-			if (Fo && Fo < pTree->kstart) continue;
+			if (Qu && Qu < pTree->kstart) continue;
+			if (Tu && Tu < pTree->kstart) continue;
+			if (Fu && Fu < pTree->kstart) continue;
 
 			// bump test number
 			testNr++;
@@ -2409,7 +2409,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 			pTree->nstart = pTree->kstart + 3;
 			pTree->count  = pTree->nstart;
-			pTree->root   = pTree->addNode(Qo ^ (Qi ? IBIT : 0), To ^ (Ti ? IBIT : 0), Fo ^ (Fi ? IBIT : 0));
+			pTree->root   = pTree->addNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
 
 			/*
 			 * save with placeholders and reload
@@ -2451,7 +2451,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				 * Substitute endpoints `a-c` with their actual values.
 				 */
 				// @formatter:off
-				switch (Qo) {
+				switch (Qu) {
 				case 0:            q = 0; break;
 				case (KSTART + 0): q = a; break;
 				case (KSTART + 1): q = b; break;
@@ -2459,7 +2459,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				}
 				if (Qi) q ^= 1;
 
-				switch (To) {
+				switch (Tu) {
 				case 0:            t = 0; break;
 				case (KSTART + 0): t = a; break;
 				case (KSTART + 1): t = b; break;
@@ -2467,7 +2467,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 				}
 				if (Ti) t ^= 1;
 
-				switch (Fo) {
+				switch (Fu) {
 				case 0:            f = 0; break;
 				case (KSTART + 0): f = a; break;
 				case (KSTART + 1): f = b; break;
@@ -2490,7 +2490,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 
 				if (expected != encountered) {
 					fprintf(stderr, "fail: testNr=%u iFast=%u iPure=%u iSkin=%u expected=%08x encountered:%08x Q=%c%x T=%c%x F=%c%x q=%x t=%x f=%x c=%x b=%x a=%x tree=%s\n",
-						testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qo, Ti ? '~' : ' ', To, Fi ? '~' : ' ', Fo, q, t, f, c, b, a, treeName);
+						testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qu, Ti ? '~' : ' ', Tu, Fi ? '~' : ' ', Fu, q, t, f, c, b, a, treeName);
 					exit(1);
 				}
 				numPassed++;

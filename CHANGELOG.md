@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-14 10:50:10 Changed: Renamed `To` to `Tu`. No code change.
 2021-08-13 23:00:26 Added: Test if node already present before searching sid in `bexplain`.
 2021-08-13 22:55:49 Added: `bexplain::explainOrderedNode()` and fixed recursion.
 2021-08-11 22:18:57 Added: `expectId` as recursion end condition in `bexplain`.
