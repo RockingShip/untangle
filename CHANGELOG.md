@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-18 23:44:17 Added: `baseexplain.h` and updated `bexplain`.
 2021-08-18 22:08:54 Fixed: Construction of `rwSlots[]` in `explainNormaliseNode()`.
 2021-08-18 21:39:12 Fixed: `baseTree_t::countActive()` and `baseTree_t::importActive()`.
 2021-08-18 21:37:21 Changed: Increased `eval::NEND` to 1000000.

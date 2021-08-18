@@ -177,7 +177,7 @@ rewritedata.c : genrewritedata.cc
 	./genrewritedata > rewritedata.c
 
 # @date 2021-07-11 19:07:21
-bexplain_SOURCES = bexplain.cc basetree.h context.h
+bexplain_SOURCES = bexplain.cc baseexplain.h basetree.h context.h
 bexplain_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-08 10:19:45
