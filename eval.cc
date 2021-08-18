@@ -90,7 +90,7 @@ int main() {
 /// @constant {number} KSTART - Starting index in tree where to find the input endpoints.
 #define KSTART 1
 /// @constant {number} NEND - Maximum number of nodes the tree can contain. Keep large for selftest
-#define NEND 20000
+#define NEND 1000000
 /// @constant {number} SBUFMAX - Maximum size of constructed notation. Roughly assuming 3 characters per operand and operator
 #define SBUFMAX (10 * NEND)
 
