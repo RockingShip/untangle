@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-18 21:39:12 Fixed: `baseTree_t::countActive()` and `baseTree_t::importActive()`.
 2021-08-18 21:37:21 Changed: Increased `eval::NEND` to 1000000.
 2021-08-14 10:50:10 Changed: Renamed `To` to `Tu`. No code change.
 2021-08-13 23:00:26 Added: Test if node already present before searching sid in `bexplain`.

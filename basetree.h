@@ -3028,7 +3028,7 @@ struct baseTree_t {
 	 * Used to determine the best candidate for folding.
 	 */
 	unsigned countActive(void) {
-		uint32_t *pSelect    = this->allocMap();
+		uint32_t *pSelect    = this->allocVersion();
 		uint32_t thisVersion = ++this->mapVersionNr;
 
 		if (thisVersion == 0) {
@@ -3072,7 +3072,7 @@ struct baseTree_t {
 			pSelect[F] = thisVersion;
 		}
 
-		this->freeMap(pSelect);
+		this->freeVersion(pSelect);
 		return numCount;
 	}
 
@@ -3100,7 +3100,7 @@ struct baseTree_t {
 			thisVersion = ++RHS->mapVersionNr;
 		}
 
-		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+		for (uint32_t iKey = 0; iKey < RHS->nstart; iKey++)
 			pMap[iKey] = iKey;
 
 		/*
@@ -3109,9 +3109,9 @@ struct baseTree_t {
 		 * trace roots, one at a time.
 		 * Last root is a artificial root representing "system"
 		 */
-		for (uint32_t iRoot = 0; iRoot <= this->numRoots; iRoot++) {
+		for (uint32_t iRoot = 0; iRoot <= RHS->numRoots; iRoot++) {
 
-			uint32_t R = (iRoot < this->numRoots) ? RHS->roots[iRoot] : RHS->system;
+			uint32_t R = (iRoot < RHS->numRoots) ? RHS->roots[iRoot] : RHS->system;
 
 			numStack = 0;
 			pStack[numStack++] = R & ~IBIT;
