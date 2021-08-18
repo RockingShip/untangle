@@ -1401,13 +1401,12 @@ struct bevalContext_t {
 
 		{
 			static unsigned iVersion;
-			static uint32_t buildVersion[800000];
-			static uint32_t buildSlot[800000];
-
-			unsigned nextSlotId = tinyTree_t::TINYTREE_KSTART;
+			uint32_t *buildVersion = pTree->allocMap();
+			uint32_t *buildSlot = pTree->allocMap();
 
 			tinyTree_t tree(ctx);
 			unsigned nextNodeId = tinyTree_t::TINYTREE_NSTART;
+			unsigned nextSlotId = tinyTree_t::TINYTREE_KSTART;
 
 			++iVersion;
 			assert(iVersion != 0);
@@ -1457,6 +1456,10 @@ struct bevalContext_t {
 					rwSlots[nextSlotId++] = pQ->F;
 				}
 				tree.N[tlQ].F = buildSlot[pQ->F];
+
+				// add node for back link
+				buildVersion[Q] = iVersion;
+				buildSlot[Q] = tlQ;
 			}
 
 			/*
@@ -1506,6 +1509,10 @@ struct bevalContext_t {
 					rwSlots[nextSlotId++] = pT->F;
 				}
 				tree.N[tlT].F = buildSlot[pT->F];
+
+				// add node for back link
+				buildVersion[Tu] = iVersion;
+				buildSlot[Tu] = tlT;
 			}
 
 			/*
@@ -1538,7 +1545,7 @@ struct bevalContext_t {
 					buildSlot[pF->T & ~IBIT] = nextSlotId;
 					rwSlots[nextSlotId++]    = pF->T & ~IBIT;
 				}
-				tree.N[tlF].T = (buildSlot[pF->T & ~IBIT] ^ (pF->T & IBIT));
+				tree.N[tlF].T = buildSlot[pF->T & ~IBIT] ^ (pF->T & IBIT);
 
 				if (buildVersion[pF->F] != iVersion) {
 					buildVersion[pF->F] = iVersion;
@@ -1623,8 +1630,6 @@ struct bevalContext_t {
 			 * Translate slots relative to `rwSlots[]`
 			 */
 			for (unsigned i = tinyTree_t::TINYTREE_KSTART; i < nextSlotId; i++)
-				sidSlots[i] = rwSlots[i];
-			for (unsigned i     = tinyTree_t::TINYTREE_KSTART; i < nextSlotId; i++)
 				sidSlots[i] = rwSlots[tinyTree_t::TINYTREE_KSTART + pStore->fwdTransformNames[tid][i - tinyTree_t::TINYTREE_KSTART] - 'a'];
 
 			printf(",\"sidslots\"");
@@ -1636,6 +1641,9 @@ struct bevalContext_t {
 			}
 			printf("]");
 			printf("}");
+
+			pTree->freeMap(buildVersion);
+			pTree->freeMap(buildSlot);
 		}
 
 		/*
