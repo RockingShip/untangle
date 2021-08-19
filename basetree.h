@@ -3206,6 +3206,63 @@ struct baseTree_t {
 	}
 
 	/*
+	 * @date 2021-08-18 18:04:14
+	 *
+	 * Import node and its dependencies
+	 */
+	uint32_t importNodes(baseTree_t *RHS, uint32_t nodeId) {
+		uint32_t *pMap       = RHS->allocMap();
+		uint32_t *pSelect    = RHS->allocVersion();
+		uint32_t thisVersion = ++RHS->mapVersionNr;
+
+		if (thisVersion == 0) {
+			::memset(pSelect, 0, RHS->maxNodes * sizeof *pSelect);
+			thisVersion = ++RHS->mapVersionNr;
+		}
+
+		/*
+		 * mark active
+		 */
+		pSelect[nodeId & ~IBIT] = thisVersion;
+
+		for (uint32_t iNode = (nodeId & ~IBIT); iNode >= RHS->nstart; --iNode) {
+			if (pSelect[iNode] == thisVersion) {
+				const baseNode_t *pNode = RHS->N + iNode;
+
+				pSelect[pNode->Q]         = thisVersion;
+				pSelect[pNode->T & ~IBIT] = thisVersion;
+				pSelect[pNode->F]         = thisVersion;
+			}
+		}
+
+		/*
+		 * Add selected nodes
+		 */
+
+		for (uint32_t iNode = 0; iNode < RHS->nstart; iNode++)
+			pMap[iNode] = iNode;
+
+		for (uint32_t iNode = RHS->nstart; iNode <= (nodeId & ~IBIT); iNode++) {
+			if (pSelect[iNode] == thisVersion) {
+				const baseNode_t *pNode = RHS->N + iNode;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
+
+				pMap[iNode] = this->basicNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+			}
+		}
+
+		uint32_t ret = pMap[nodeId & ~IBIT] ^ (nodeId & IBIT);
+
+		RHS->freeVersion(pSelect);
+		RHS->freeMap(pMap);
+
+		return ret;
+	}
+
+	/*
 	 * import/fold
 	 */
 	void importFold(baseTree_t *RHS, uint32_t iFold) {
