@@ -593,7 +593,7 @@ struct baseExplain_t {
 			}
 		}
 
-		// XOR/NE (L?~R:R)
+		// NE (L?~R:R)
 		if (pTree->isNE(Q, T, F)) {
 			if (pTree->isNE(Q) && pTree->isNE(F)) {
 				// AB^CD^^
@@ -605,16 +605,16 @@ struct baseExplain_t {
 				uint32_t D  = pTree->N[CD].F;
 
 				if (A == F) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, B);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, B);
 					return B;
 				} else if (B == F) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, A);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, A);
 					return A;
 				} else if (C == Q) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=C\",\"N\":%u}}", A, B, C, D, D);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=C\",\"N\":%u}}", A, B, C, D, D);
 					return D;
 				} else if (D == Q) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=D\",\"N\":%u}}", A, B, C, D, C);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=D\",\"N\":%u}}", A, B, C, D, C);
 					return C;
 				} else if (A == C) {
 					if (B == D) {
@@ -628,33 +628,33 @@ struct baseExplain_t {
 						 *   used for probing alternatives.
 						 *   it returns (`pFailCount` != NULL) the number of missing nodes.
 						 */
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, 0);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, 0);
 						return 0;
 					} else {
 						// A=C<B<D or A=C<D<B
 						Q = B;
 						T = D ^ IBIT;
 						F = D;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					}
 				} else if (A == D) {
 					// C<A=D<B
 					Q = C;
 					T = B ^ IBIT;
 					F = B;
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else if (B == C) {
 					// A<B=C<D
 					Q = A;
 					T = D ^ IBIT;
 					F = D;
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
 					Q = A;
 					T = C ^ IBIT;
 					F = C;
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else if (baseTree_t::compare(pTree, B, pTree, C) < 0) {
 					// A<B<C<D
 					// unchanged
@@ -663,7 +663,7 @@ struct baseExplain_t {
 					// unchanged
 				} else {
 					// A<C<B<D or A<C<D<B or C<A<B<D or C<A<D<B
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ac^\":\n", A, B, C, D);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ac^\":\n", A, B, C, D);
 					uint32_t AC = explainOrderedNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
 					if (track) printf(",\"bd^\":\n");
 					uint32_t BD = explainOrderedNode(depth + 1, expectId, pTree, B, D ^ IBIT, D, pFailCount);
@@ -681,10 +681,10 @@ struct baseExplain_t {
 				uint32_t R  = pTree->N[LR].F;
 
 				if (F == L) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"F=L\",\"N\":%u}}", L, R, R);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F=L\",\"N\":%u}}", L, R, R);
 					return R;
 				} else if (F == R) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"F=B\",\"N\":%u}}", L, R, L);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F=B\",\"N\":%u}}", L, R, L);
 					return L;
 				}
 
@@ -699,7 +699,7 @@ struct baseExplain_t {
 
 					if (A == F) {
 						// A=F<B<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=F<B<C<D\",\"bc^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=F<B<C<D\",\"bc^\":\n", A, B, C, D);
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
 						Q = D;
 						T = BC ^ IBIT;
@@ -708,7 +708,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else if (B == F) {
 						// A<B=F<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=F<C<D\",\"ac^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=F<C<D\",\"ac^\":\n", A, B, C, D);
 						uint32_t AC = explainOrderedNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
 						Q = D;
 						T = AC ^ IBIT;
@@ -720,16 +720,16 @@ struct baseExplain_t {
 						Q = D;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C=F<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C=F<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (D == F) {
 						// A<B<C<D=F
 						Q = C;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=F\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=F\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (baseTree_t::compare(pTree, D, pTree, F) < 0) {
 						// A<B<C<D<F
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<F\",\"fcd^^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<F\",\"fcd^^\":\n", A, B, C, D);
 						uint32_t CDF = explainOrderedNode(depth + 1, expectId, pTree, F, CD ^ IBIT, CD, pFailCount);
 						Q = AB;
 						T = CDF ^ IBIT;
@@ -738,7 +738,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
 						// A<B<C<F<D or A<B<F<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<F<D\",\"cf^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<F<D\",\"cf^\":\n", A, B, C, D);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
 						if (track) printf(",\"dcf^^\":\n");
 						uint32_t CFD = explainOrderedNode(depth + 1, expectId, pTree, D, CF ^ IBIT, CF, pFailCount);
@@ -749,7 +749,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<F<B<C<D or F<A<B<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<F<B<C<D\",\"af^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<F<B<C<D\",\"af^\":\n", A, B, C, D);
 						uint32_t AF = explainOrderedNode(depth + 1, expectId, pTree, A, F ^ IBIT, F, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -773,20 +773,20 @@ struct baseExplain_t {
 						Q = B;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (B == F) {
 						// A<B=F<C
 						Q = A;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (C == F) {
 						// A<B<C=F
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
 						return AB;
 					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
 						// A<B<C<F or A<B<F<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
 						Q = AB;
 						T = CF ^ IBIT;
@@ -795,7 +795,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<F<B<C or F<A<B<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\",\"af^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\",\"af^\":\n", A, B, C);
 						uint32_t AF = explainOrderedNode(depth + 1, expectId, pTree, A, F ^ IBIT, F, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -817,20 +817,20 @@ struct baseExplain_t {
 						Q = B;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (B == F) {
 						// A<B=F<C
 						Q = A;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (C == F) {
 						// A<B<C=F
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
 						return AB;
 					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
 						// A<B<C<F or A<B<F<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
 						Q = AB;
 						T = CF ^ IBIT;
@@ -839,7 +839,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<F<B<C or F<A<B<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\",\"af^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\",\"af^\":\n", A, B, C);
 						uint32_t AF = explainOrderedNode(depth + 1, expectId, pTree, A, F ^ IBIT, F, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -857,21 +857,21 @@ struct baseExplain_t {
 
 					if (A == F) {
 						// A=F<B
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A=F<B\",\"N\":%u}}", A, B, B);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A=F<B\",\"N\":%u}}", A, B, B);
 						return B;
 					} else if (B == F) {
 						// A<B=F
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, A);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, A);
 						return A;
 					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
 						// A<B<F
 						Q = F;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<B<F\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B<F\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else {
 						// A<F<B or F<A<B
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af^\":\n", A, B);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af^\":\n", A, B);
 						uint32_t AF = explainOrderedNode(depth + 1, expectId, pTree, A, F ^ IBIT, F, pFailCount);
 						Q = B;
 						T = AF ^ IBIT;
@@ -886,10 +886,10 @@ struct baseExplain_t {
 				uint32_t R = pTree->N[F].F;
 
 				if (Q == L) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"Q=L\",\"N\":%u}}", L, R, R);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=L\",\"N\":%u}}", L, R, R);
 					return R;
 				} else if (Q == R) {
-					if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"Q=R\",\"N\":%u}}", L, R, L);
+					if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=R\",\"N\":%u}}", L, R, L);
 					return L;
 				}
 
@@ -904,7 +904,7 @@ struct baseExplain_t {
 
 					if (A == Q) {
 						// A=Q<B<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=Q<B<C<D\",\"bc^^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=Q<B<C<D\",\"bc^^\":\n", A, B, C, D);
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
 						Q = D;
 						T = BC ^ IBIT;
@@ -913,7 +913,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else if (B == Q) {
 						// A<B=Q<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=Q<C<D\",\"ac^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=Q<C<D\",\"ac^\":\n", A, B, C, D);
 						uint32_t AC = explainOrderedNode(depth + 1, expectId, pTree, A, C ^ IBIT, C, pFailCount);
 						Q = D;
 						T = AC ^ IBIT;
@@ -925,16 +925,16 @@ struct baseExplain_t {
 						Q = D;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C=Q<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C=Q<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (D == Q) {
 						// A<B<C<D=Q
 						Q = C;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=Q\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=Q\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (baseTree_t::compare(pTree, D, pTree, Q) < 0) {
 						// A<B<C<D<Q
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<Q\",\"qcd^^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<Q\",\"qcd^^\":\n", A, B, C, D);
 						uint32_t CDQ = explainOrderedNode(depth + 1, expectId, pTree, Q, CD ^ IBIT, CD, pFailCount);
 						Q = AB;
 						T = CDQ ^ IBIT;
@@ -943,7 +943,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
 						// A<B<C<Q<D or A<B<Q<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<Q<D\",\"cf^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<Q<D\",\"cf^\":\n", A, B, C, D);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
 						if (track) printf(",\"dcf^^\":\n");
 						uint32_t CQD = explainOrderedNode(depth + 1, expectId, pTree, D, CQ ^ IBIT, CQ, pFailCount);
@@ -954,7 +954,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<Q<B<C<D or Q<A<B<C<D
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<Q<B<C<D\",\"af^\":\n", A, B, C, D);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<Q<B<C<D\",\"af^\":\n", A, B, C, D);
 						uint32_t AQ = explainOrderedNode(depth + 1, expectId, pTree, A, Q ^ IBIT, Q, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -978,20 +978,20 @@ struct baseExplain_t {
 						Q = B;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (B == Q) {
 						// A<B=Q<C
 						Q = A;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (C == Q) {
 						// A<B<C=Q
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
 						return AB;
 					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
 						// A<B<C<Q or A<B<Q<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
 						Q = AB;
 						T = CQ ^ IBIT;
@@ -1000,7 +1000,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<Q<B<C or Q<A<B<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\",\"aq^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\",\"aq^\":\n", A, B, C);
 						uint32_t AQ = explainOrderedNode(depth + 1, expectId, pTree, A, Q ^ IBIT, Q, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -1022,20 +1022,20 @@ struct baseExplain_t {
 						Q = B;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (B == Q) {
 						// A<B=Q<C
 						Q = A;
 						T = C ^ IBIT;
 						F = C;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else if (C == Q) {
 						// A<B<C=Q
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
 						return AB;
 					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
 						// A<B<C<Q or A<B<Q<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
 						Q = AB;
 						T = CQ ^ IBIT;
@@ -1044,7 +1044,7 @@ struct baseExplain_t {
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
 					} else {
 						// A<Q<B<C or Q<A<B<C
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\",\"aq^\":\n", A, B, C);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\",\"aq^\":\n", A, B, C);
 						uint32_t AQ = explainOrderedNode(depth + 1, expectId, pTree, A, Q ^ IBIT, Q, pFailCount);
 						if (track) printf(",\"bc^\":\n");
 						uint32_t BC = explainOrderedNode(depth + 1, expectId, pTree, B, C ^ IBIT, C, pFailCount);
@@ -1061,28 +1061,28 @@ struct baseExplain_t {
 					uint32_t B  = pTree->N[AB].F;
 
 					if (Q == A) {
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"Q=A\",\"N\":%u}}", A, B, B);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=A\",\"N\":%u}}", A, B, B);
 						return B;
 					} else if (Q == B) {
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"Q=B\",\"N\":%u}}", A, B, A);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=B\",\"N\":%u}}", A, B, A);
 						return A;
 					} else if (A == Q) {
 						// A=Q<B
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A=Q<B\",\"N\":%u}}", A, B, B);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A=Q<B\",\"N\":%u}}", A, B, B);
 						return B;
 					} else if (B == Q) {
 						// A<B=Q
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, A);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, A);
 						return A;
 					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
 						// A<B<Q
 						Q = Q;
 						T = AB ^ IBIT;
 						F = AB;
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<B<Q\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B<Q\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					} else {
 						// A<Q<B or Q<A<B
-						if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq^\":\n", A, B);
+						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq^\":\n", A, B);
 						uint32_t AQ = explainOrderedNode(depth + 1, expectId, pTree, A, Q ^ IBIT, Q, pFailCount);
 						Q = B;
 						T = AQ ^ IBIT;
@@ -1102,7 +1102,7 @@ struct baseExplain_t {
 				Q = F;
 				T = tmp ^ IBIT;
 				F = tmp;
-				if (track) printf(",   \"xor\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 			}
 		}
 

@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-22 19:36:36 Version 2.9.2
 2021-08-19 20:22:03 Added: `kfold` using `baseexplain_t`.
 2021-08-18 23:44:17 Added: `baseexplain.h` and updated `bexplain`.
 2021-08-18 22:08:54 Fixed: Construction of `rwSlots[]` in `explainNormaliseNode()`.
