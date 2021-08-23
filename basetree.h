@@ -589,7 +589,6 @@ struct baseTree_t {
 
 		uint32_t numStackL      = 0; // top of stack
 		uint32_t numStackR      = 0; // top of stack
-		uint32_t nextNode       = treeL->nstart; // relative node
 		uint32_t parentCascadeL = CASCADE_NONE; // parent of current cascading node
 		uint32_t parentCascadeR = CASCADE_NONE; // parent of current cascading node
 
@@ -706,7 +705,7 @@ struct baseTree_t {
 				continue;
 			}
 
-			if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compNodeL[L] != treeR->compNodeR[R]) {
+			if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compNodeL[L] != R || treeR->compNodeR[R] != L) {
 				/*
 				 * Detected a structure difference or a first time visit
 				 */
@@ -716,9 +715,8 @@ struct baseTree_t {
 
 				treeL->compVersionL[L] = thisVersionL;
 				treeR->compVersionR[R] = thisVersionR;
-				treeL->compNodeL[L]    = nextNode;
-				treeR->compNodeR[R]    = nextNode;
-				nextNode++;
+				treeL->compNodeL[L]    = R;
+				treeR->compNodeR[R]    = L;
 
 				// compare Ti
 				if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1b\n");
@@ -768,26 +766,39 @@ struct baseTree_t {
 
 				/*
 				 * Push Q/T/F components for deeper processing
+				 * Test if result is cached
 				 */
 				if (pNodeL->F != 0 && pNodeL->F != (pNodeL->T & ~IBIT)) {
-					treeL->stackL[numStackL++] = thisCascade;
-					treeL->stackL[numStackL++] = pNodeL->F;
-					treeR->stackR[numStackR++] = thisCascade;
-					treeR->stackR[numStackR++] = pNodeR->F;
+					L = pNodeL->F;
+					R = pNodeR->F;
+					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compNodeL[L] != R || treeR->compNodeR[R] != L) {
+						treeL->stackL[numStackL++] = thisCascade;
+						treeL->stackL[numStackL++] = L;
+						treeR->stackR[numStackR++] = thisCascade;
+						treeR->stackR[numStackR++] = R;
+					}
 				}
 
 				if ((pNodeL->T & ~IBIT) != 0) {
-					treeL->stackL[numStackL++] = thisCascade;
-					treeL->stackL[numStackL++] = pNodeL->T & ~IBIT;
-					treeR->stackR[numStackR++] = thisCascade;
-					treeR->stackR[numStackR++] = pNodeR->T & ~IBIT;
+					L = pNodeL->T & ~IBIT;
+					R = pNodeR->T & ~IBIT;
+					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compNodeL[L] != R || treeR->compNodeR[R] != L) {
+						treeL->stackL[numStackL++] = thisCascade;
+						treeL->stackL[numStackL++] = L;
+						treeR->stackR[numStackR++] = thisCascade;
+						treeR->stackR[numStackR++] = R;
+					}
 				}
 
 				{
-					treeL->stackL[numStackL++] = thisCascade;
-					treeL->stackL[numStackL++] = pNodeL->Q;
-					treeR->stackR[numStackR++] = thisCascade;
-					treeR->stackR[numStackR++] = pNodeR->Q;
+					L = pNodeL->Q;
+					R = pNodeR->Q;
+					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compNodeL[L] != R || treeR->compNodeR[R] != L) {
+						treeL->stackL[numStackL++] = thisCascade;
+						treeL->stackL[numStackL++] = L;
+						treeR->stackR[numStackR++] = thisCascade;
+						treeR->stackR[numStackR++] = R;
+					}
 				}
 
 			} else {
