@@ -158,7 +158,7 @@ struct baseExplain_t {
 						// A=C<B=D
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, D) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, D, baseTree_t::CASCADE_OR) < 0) {
 						// A=C<B<D
 						Q = D;
 						T = IBIT;
@@ -192,10 +192,10 @@ struct baseExplain_t {
 					F = AC;
 					if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-				} else if (baseTree_t::compare(pTree, B, pTree, C) < 0) {
+				} else if (baseTree_t::compare(pTree, B, pTree, C, baseTree_t::CASCADE_OR) < 0) {
 					// A<B<C<D
 					// unchanged
-				} else if (baseTree_t::compare(pTree, D, pTree, A) < 0) {
+				} else if (baseTree_t::compare(pTree, D, pTree, A, baseTree_t::CASCADE_OR) < 0) {
 					// C<D<A<B
 					// unchanged
 				} else {
@@ -251,7 +251,7 @@ struct baseExplain_t {
 						// A<B<C<D=F
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=F\",\"N\":%u}}", A, B, C, D, ABCD);
 						return ABCD;
-					} else if (baseTree_t::compare(pTree, D, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, F, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<D<F
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<F\",\"fcd++\":\n", A, B, C, D);
 						uint32_t CDF = explainOrderedNode(depth + 1, expectId, pTree, F, IBIT, CD, pFailCount);
@@ -260,7 +260,7 @@ struct baseExplain_t {
 						F = CDF;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<F<D or A<B<F<C<D
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<F<D\",\"cf+\":\n", A, B, C, D);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, F, pFailCount);
@@ -305,7 +305,7 @@ struct baseExplain_t {
 						// A<B<C=F
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<F or A<B<F<C
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf+\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, F, pFailCount);
@@ -346,7 +346,7 @@ struct baseExplain_t {
 						// A<B<C=F
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<F or A<B<F<C
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf+\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, F, pFailCount);
@@ -381,7 +381,7 @@ struct baseExplain_t {
 						// A<B=F
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<F
 						// unchanged
 					} else {
@@ -434,7 +434,7 @@ struct baseExplain_t {
 						// A<B<C<D=Q
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=Q\",\"N\":%u}}", A, B, C, D, ABCD);
 						return ABCD;
-					} else if (baseTree_t::compare(pTree, D, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<D<Q
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<Q\",\"qcd++\":\n", A, B, C, D);
 						uint32_t CDQ = explainOrderedNode(depth + 1, expectId, pTree, Q, IBIT, CD, pFailCount);
@@ -443,7 +443,7 @@ struct baseExplain_t {
 						F = CDQ;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<Q<D or A<B<Q<C<D
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<Q<D\",\"cf+\":\n", A, B, C, D);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, Q, pFailCount);
@@ -488,7 +488,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<Q or A<B<Q<C
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq+\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, Q, pFailCount);
@@ -529,7 +529,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<C<Q or  A<B<Q<C
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq+\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, IBIT, Q, pFailCount);
@@ -564,7 +564,7 @@ struct baseExplain_t {
 						// A<B=Q
 						if (track) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 						// A<B<Q
 						// unchanged
 					} else {
@@ -581,7 +581,7 @@ struct baseExplain_t {
 			}
 
 			// final top-level order
-			if (baseTree_t::compare(pTree, F, pTree, Q) < 0) {
+			if (baseTree_t::compare(pTree, F, pTree, Q, baseTree_t::CASCADE_OR) < 0) {
 				/*
 				 * Single node
 				 */
@@ -655,10 +655,10 @@ struct baseExplain_t {
 					T = C ^ IBIT;
 					F = C;
 					if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-				} else if (baseTree_t::compare(pTree, B, pTree, C) < 0) {
+				} else if (baseTree_t::compare(pTree, B, pTree, C, baseTree_t::CASCADE_NE) < 0) {
 					// A<B<C<D
 					// unchanged
-				} else if (baseTree_t::compare(pTree, D, pTree, A) < 0) {
+				} else if (baseTree_t::compare(pTree, D, pTree, A, baseTree_t::CASCADE_NE) < 0) {
 					// C<D<A<B
 					// unchanged
 				} else {
@@ -727,7 +727,7 @@ struct baseExplain_t {
 						T = AB ^ IBIT;
 						F = AB;
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=F\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					} else if (baseTree_t::compare(pTree, D, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, F, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<D<F
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<F\",\"fcd^^\":\n", A, B, C, D);
 						uint32_t CDF = explainOrderedNode(depth + 1, expectId, pTree, F, CD ^ IBIT, CD, pFailCount);
@@ -736,7 +736,7 @@ struct baseExplain_t {
 						F = CDF;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<F<D or A<B<F<C<D
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<F<D\",\"cf^\":\n", A, B, C, D);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
@@ -784,7 +784,7 @@ struct baseExplain_t {
 						// A<B<C=F
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<F or A<B<F<C
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
@@ -828,7 +828,7 @@ struct baseExplain_t {
 						// A<B<C=F
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C<D\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<F or A<B<F<C
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<F\",\"cf^\":\n", A, B, C);
 						uint32_t CF = explainOrderedNode(depth + 1, expectId, pTree, C, F ^ IBIT, F, pFailCount);
@@ -863,7 +863,7 @@ struct baseExplain_t {
 						// A<B=F
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, A);
 						return A;
-					} else if (baseTree_t::compare(pTree, B, pTree, F) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, F, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<F
 						Q = F;
 						T = AB ^ IBIT;
@@ -932,7 +932,7 @@ struct baseExplain_t {
 						T = AB ^ IBIT;
 						F = AB;
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=Q\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					} else if (baseTree_t::compare(pTree, D, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<D<Q
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<Q\",\"qcd^^\":\n", A, B, C, D);
 						uint32_t CDQ = explainOrderedNode(depth + 1, expectId, pTree, Q, CD ^ IBIT, CD, pFailCount);
@@ -941,7 +941,7 @@ struct baseExplain_t {
 						F = CDQ;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<Q<D or A<B<Q<C<D
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<Q<D\",\"cf^\":\n", A, B, C, D);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
@@ -989,7 +989,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<Q or A<B<Q<C
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
@@ -1033,7 +1033,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<C<Q or A<B<Q<C
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq^\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q ^ IBIT, Q, pFailCount);
@@ -1074,7 +1074,7 @@ struct baseExplain_t {
 						// A<B=Q
 						if (track) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, A);
 						return A;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 						// A<B<Q
 						Q = Q;
 						T = AB ^ IBIT;
@@ -1094,7 +1094,7 @@ struct baseExplain_t {
 			}
 
 			// final top-level order
-			if (baseTree_t::compare(pTree, F, pTree, Q) < 0) {
+			if (baseTree_t::compare(pTree, F, pTree, Q, baseTree_t::CASCADE_NE) < 0) {
 				/*
 				 * Single node
 				 */
@@ -1135,7 +1135,7 @@ struct baseExplain_t {
 						// A=C<B=D
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, D) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, D, baseTree_t::CASCADE_AND) < 0) {
 						// A=C<B<D
 						Q = D;
 						T = AB;
@@ -1169,10 +1169,10 @@ struct baseExplain_t {
 					F = 0;
 					if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-				} else if (baseTree_t::compare(pTree, B, pTree, C) < 0) {
+				} else if (baseTree_t::compare(pTree, B, pTree, C, baseTree_t::CASCADE_AND) < 0) {
 					// A<B<C<D
 					// unchanged
-				} else if (baseTree_t::compare(pTree, D, pTree, A) < 0) {
+				} else if (baseTree_t::compare(pTree, D, pTree, A, baseTree_t::CASCADE_AND) < 0) {
 					// C<D<A<B
 					// unchanged
 				} else {
@@ -1228,7 +1228,7 @@ struct baseExplain_t {
 						// A<B<C<D=T
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=T\",\"N\":%u}}", A, B, C, D, ABCD);
 						return ABCD;
-					} else if (baseTree_t::compare(pTree, D, pTree, T) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, T, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<D<T
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<T\",\"fcd++\":\n", A, B, C, D);
 						uint32_t CDT = explainOrderedNode(depth + 1, expectId, pTree, T, CD, 0, pFailCount);
@@ -1237,7 +1237,7 @@ struct baseExplain_t {
 						F = 0;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, T) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, T, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<T<D or A<B<T<C<D
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<T<D\",\"cf&\":\n", A, B, C, D);
 						uint32_t CT = explainOrderedNode(depth + 1, expectId, pTree, C, T, 0, pFailCount);
@@ -1282,7 +1282,7 @@ struct baseExplain_t {
 						// A<B<C=T
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=T\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, T) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, T, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<T or A<B<T<C
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<T\",\"ct&\":\n", A, B, C);
 						uint32_t CT = explainOrderedNode(depth + 1, expectId, pTree, C, T, 0, pFailCount);
@@ -1323,7 +1323,7 @@ struct baseExplain_t {
 						// A<B<C=T
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=T\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, T) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, T, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<T or A<B<T<C
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<T\",\"ct&\":\n", A, B, C);
 						uint32_t CT = explainOrderedNode(depth + 1, expectId, pTree, C, T, 0, pFailCount);
@@ -1358,7 +1358,7 @@ struct baseExplain_t {
 						// A<B=T
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=T\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, T) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, T, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<T
 						// unchanged
 					} else {
@@ -1411,7 +1411,7 @@ struct baseExplain_t {
 						// A<B<C<D=Q
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D=Q\",\"N\":%u}}", A, B, C, D, ABCD);
 						return ABCD;
-					} else if (baseTree_t::compare(pTree, D, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, D, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<D<Q
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D<Q\",\"qcd&&\":\n", A, B, C, D);
 						uint32_t CDQ = explainOrderedNode(depth + 1, expectId, pTree, Q, CD, 0, pFailCount);
@@ -1420,7 +1420,7 @@ struct baseExplain_t {
 						F = 0;
 						if (track) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 						return explainOrderedNode(depth + 1, expectId, pTree, Q, T, F, pFailCount);
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<Q<D or A<B<Q<C<D
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<Q<D\",\"ct&\":\n", A, B, C, D);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q, 0, pFailCount);
@@ -1465,7 +1465,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<Q or A<B<Q<C
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq&\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q, 0, pFailCount);
@@ -1506,7 +1506,7 @@ struct baseExplain_t {
 						// A<B<C=Q
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<C<Q or A<B<Q<C
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C<Q\",\"cq&\":\n", A, B, C);
 						uint32_t CQ = explainOrderedNode(depth + 1, expectId, pTree, C, Q, 0, pFailCount);
@@ -1541,7 +1541,7 @@ struct baseExplain_t {
 						// A<B=Q
 						if (track) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (baseTree_t::compare(pTree, B, pTree, Q) < 0) {
+					} else if (baseTree_t::compare(pTree, B, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 						// A<B<Q
 						// unchanged
 					} else {
@@ -1558,7 +1558,7 @@ struct baseExplain_t {
 			}
 
 			// final top-level order
-			if (baseTree_t::compare(pTree, T, pTree, Q) < 0) {
+			if (baseTree_t::compare(pTree, T, pTree, Q, baseTree_t::CASCADE_AND) < 0) {
 				/*
 				 * Single node
 				 */

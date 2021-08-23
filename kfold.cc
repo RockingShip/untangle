@@ -9,6 +9,7 @@
  * Alternative experimental version using `baseExplain_t` and a smaller tree for rotation,
  *   leaving intermediate results in `pResult`.
  * Hitting a wall at iNode=372 numNodes=20883
+ * with 2.9.2: iNode=372 numNodes=1630
  * Discovered that the structure base compare is incomplete and needs additional logic for cascading dyadics.
  * Keep the original `main()` as the new code is word-in-progress.
  */

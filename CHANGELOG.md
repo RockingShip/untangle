@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-23 13:12:21 Added: `explainOrderedNode()` top-level cascade for `compare()`.
 2021-08-22 19:42:11 Changed: Make `baseTree_t::compare()` cascade aware.
 2021-08-22 19:36:36 Version 2.9.2
 2021-08-19 20:22:03 Added: `kfold` using `baseexplain_t`.
