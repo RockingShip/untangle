@@ -72,7 +72,7 @@ struct NODE {
 		this->id = id;
 	}
 
-	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->normaliseNode(Q.id, T.id, F.id); }
+	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->addNormaliseNode(Q.id, T.id, F.id); }
 
 	NODE operator|(const NODE &other) const { return NODE(this->id, IBIT, other.id); }
 
@@ -166,12 +166,12 @@ struct build9bitAdderContext_t {
 		 *  [19] a ?  b : c                  "?" QTF
 		 */
 
-		unsigned leftORright = gTree->normaliseNode(left, IBIT, right);
-		unsigned leftXORright = gTree->normaliseNode(left, right ^ IBIT, right);
-		unsigned leftANDright = gTree->normaliseNode(left, right, 0);
+		unsigned leftORright = gTree->addNormaliseNode(left, IBIT, right);
+		unsigned leftXORright = gTree->addNormaliseNode(left, right ^ IBIT, right);
+		unsigned leftANDright = gTree->addNormaliseNode(left, right, 0);
 
-		*out = gTree->normaliseNode(carryin, leftXORright ^ IBIT, leftXORright);
-		*carryout = gTree->normaliseNode(carryin, leftORright, leftANDright);
+		*out = gTree->addNormaliseNode(carryin, leftXORright ^ IBIT, leftXORright);
+		*carryout = gTree->addNormaliseNode(carryin, leftORright, leftANDright);
 	}
 
 	/*

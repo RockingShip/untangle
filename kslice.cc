@@ -374,7 +374,7 @@ struct ksliceContext_t {
 					F  = F >= pOldTree->nstart && pRefCount[F] >= opt_threshold ? pEid[F] : pMap[F];
 
 					// create new node
-					pMap[iNode] = pNewTree->normaliseNode(Q, Tu ^ Ti, F);
+					pMap[iNode] = pNewTree->addNormaliseNode(Q, Tu ^ Ti, F);
 				}
 			}
 

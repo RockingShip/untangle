@@ -180,7 +180,7 @@ struct kextractContext_t {
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
-			pMap[iNode] = pNewTree->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
 		// merge all keys into system
@@ -191,10 +191,10 @@ struct kextractContext_t {
 
 			if (R != iKey) {
 				// create `keyN ^ roots[keyN]`
-				uint32_t term = pNewTree->normaliseNode(iKey, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
+				uint32_t term = pNewTree->addNormaliseNode(iKey, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
 
 				// append term as `OR` to system
-				pNewTree->system = pNewTree->normaliseNode(pNewTree->system, IBIT, term);
+				pNewTree->system = pNewTree->addNormaliseNode(pNewTree->system, IBIT, term);
 			}
 		}
 

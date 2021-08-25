@@ -82,7 +82,7 @@ struct NODE {
 	}
 
 	NODE(NODE Q, NODE T, NODE F) {
-		this->id = gTree->normaliseNode(Q.id, T.id, F.id);
+		this->id = gTree->addNormaliseNode(Q.id, T.id, F.id);
 
 		context_t &ctx = gTree->ctx;
 

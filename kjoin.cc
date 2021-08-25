@@ -332,7 +332,7 @@ struct kjoinContext_t {
 					pKeyRefCount[F]++;
 
 				// create new node
-				pMap[iNode] = pNewTree->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+				pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 			}
 
 			/*

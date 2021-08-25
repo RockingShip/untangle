@@ -77,7 +77,7 @@ struct NODE {
 		this->id = id;
 	}
 
-	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->normaliseNode(Q.id, T.id, F.id); }
+	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->addNormaliseNode(Q.id, T.id, F.id); }
 
 	NODE operator|(const NODE &other) const { return NODE(this->id, IBIT, other.id); }
 

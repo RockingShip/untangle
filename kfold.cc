@@ -303,7 +303,7 @@ struct kfoldContext_t {
 				/*
 				 * Add single node and release unused roots.
 				 */
-				pNewTree->roots[iOldNode] = pNewTree->normaliseNode(pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F]);
+				pNewTree->roots[iOldNode] = pNewTree->addNormaliseNode(pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F]);
 
 				// release root when no longer used
 				--pNodeRefCount[Q];

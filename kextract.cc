@@ -177,7 +177,7 @@ struct kextractContext_t {
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
-			pMap[iNode] = pNewTree->normaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
 		// all roots are defaults

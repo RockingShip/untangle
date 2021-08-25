@@ -77,7 +77,7 @@ struct NODE {
 		this->id = id;
 	}
 
-	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->normaliseNode(Q.id, T.id, F.id); }
+	NODE(NODE Q, NODE T, NODE F) { this->id = gTree->addNormaliseNode(Q.id, T.id, F.id); }
 
 	NODE operator|(const NODE &other) const { return NODE(this->id, IBIT, other.id); }
 
@@ -182,15 +182,15 @@ struct build9bitTableContext_t {
 					for (unsigned iCol = 0; iCol < TABLEBITS; iCol++) {
 						if (iRow & (1 << iCol)) {
 							// bit set:  "col &= k"
-							lastCol = gTree->normaliseNode(lastCol, gTree->kstart + iCol, 0);
+							lastCol = gTree->addNormaliseNode(lastCol, gTree->kstart + iCol, 0);
 						} else {
 							// bit clear: "col &= !k"
-							lastCol = gTree->normaliseNode(lastCol, (gTree->kstart + iCol) ^ IBIT, 0);
+							lastCol = gTree->addNormaliseNode(lastCol, (gTree->kstart + iCol) ^ IBIT, 0);
 						}
 					}
 
 					// add to rest: "row |= col"
-					lastRow = gTree->normaliseNode(lastRow, IBIT, lastCol);
+					lastRow = gTree->addNormaliseNode(lastRow, IBIT, lastCol);
 				}
 			}
 
