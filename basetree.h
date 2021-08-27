@@ -559,9 +559,7 @@ struct baseTree_t {
 	 */
 	enum { CASCADE_NONE, CASCADE_OR, CASCADE_NE, CASCADE_AND };
 
-	static int compare(baseTree_t *treeL, uint32_t lhs, baseTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
-
-		context_t &ctx = treeL->ctx; // use resources from L
+	int compare(uint32_t lhs, baseTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
 		/*
 		 * This code is a resource hit, but worth the effort.
@@ -575,18 +573,18 @@ struct baseTree_t {
 		 * This function is designed to be not recursive, so static variables are no longer required.
 		 */
 
-		uint32_t thisVersionL = ++treeL->compVersionNr;
+		uint32_t thisVersionL = ++this->compVersionNr;
 		uint32_t thisVersionR = ++treeR->compVersionNr;
 		// version overflow, clear
 		if (thisVersionL == 0) {
-			::memset(treeL->compVersionL, 0, treeL->maxNodes * sizeof *compVersionL);
-			thisVersionL = ++treeL->compVersionNr;
+			::memset(this->compVersionL, 0, this->maxNodes * sizeof *compVersionL);
+			thisVersionL = ++this->compVersionNr;
 		}
 		if (thisVersionR == 0) {
 			::memset(treeR->compVersionR, 0, treeR->maxNodes * sizeof *compVersionR);
 			thisVersionR = ++treeR->compVersionNr;
 		}
-		treeL->numCompare++; // only for L
+		this->numCompare++; // only for L
 
 		assert(!(lhs & IBIT));
 		assert(!(rhs & IBIT));
@@ -597,8 +595,8 @@ struct baseTree_t {
 		uint32_t parentCascadeR = CASCADE_NONE; // parent of current cascading node
 
 		// push arguments on stack
-		treeL->stackL[numStackL++] = topLevelCascade;
-		treeL->stackL[numStackL++] = lhs;
+		this->stackL[numStackL++] = topLevelCascade;
+		this->stackL[numStackL++] = lhs;
 		treeR->stackR[numStackR++] = topLevelCascade;
 		treeR->stackR[numStackR++] = rhs;
 
@@ -615,28 +613,28 @@ struct baseTree_t {
 			 * This should align cascades. eg: `abc++` and `ab+c+`, `ab+cd++` and `abd++`.
 			 */
 			for (;;) {
-				L              = treeL->stackL[--numStackL];
-				parentCascadeL = treeL->stackL[--numStackL];
+				L              = this->stackL[--numStackL];
+				parentCascadeL = this->stackL[--numStackL];
 
-				pNodeL = treeL->N + L;
+				pNodeL = this->N + L;
 
-				if (L < treeL->nstart) {
+				if (L < this->nstart) {
 					break;
 				} else if (parentCascadeL == CASCADE_OR && pNodeL->isOR()) {
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->F;
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->Q;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->F;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->Q;
 				} else if (parentCascadeL == CASCADE_NE && pNodeL->isNE()) {
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->F;
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->Q;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->F;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->Q;
 				} else if (parentCascadeL == CASCADE_AND && pNodeL->isAND()) {
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->T;
-					treeL->stackL[numStackL++] = parentCascadeL;
-					treeL->stackL[numStackL++] = pNodeL->Q;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->T;
+					this->stackL[numStackL++] = parentCascadeL;
+					this->stackL[numStackL++] = pNodeL->Q;
 				} else {
 					break;
 				}
@@ -682,22 +680,22 @@ struct baseTree_t {
 
 			if (ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE))
 				fprintf(stderr, "%x:[%x %x %x] %x:[%x %x %x]\n",
-					L, treeL->N[L].Q, treeL->N[L].T, treeL->N[L].F,
+					L, this->N[L].Q, this->N[L].T, this->N[L].F,
 					R, treeR->N[R].Q, treeR->N[R].T, treeR->N[R].F);
 
 			// for same tree, identical lhs/rhs implies equal
-			if (L == R && treeL == treeR)
+			if (L == R && this == treeR)
 				continue;
 
 			// compare endpoint/tree (structure)
-			if (L < treeL->nstart && R >= treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1a\n");
-			if (L < treeL->nstart && R >= treeR->nstart)
+			if (L < this->nstart && R >= treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1a\n");
+			if (L < this->nstart && R >= treeR->nstart)
 				return -1;
-			if (L >= treeL->nstart && R < treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1a\n");
-			if (L >= treeL->nstart && R < treeR->nstart)
+			if (L >= this->nstart && R < treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1a\n");
+			if (L >= this->nstart && R < treeR->nstart)
 				return +1;
 
-			if (L < treeL->nstart) {
+			if (L < this->nstart) {
 				// compare endpoint/endpoint (contents)
 				if (ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) { if (L < R) fprintf(stderr, "-1\n"); else if (L > R) fprintf(stderr, "+1\n"); }
 				// compare contents, not structure
@@ -708,17 +706,17 @@ struct baseTree_t {
 				continue;
 			}
 
-			if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+			if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
 				/*
 				 * Detected a structure difference or a first time visit
 				 */
 
-				pNodeL = treeL->N + L;
+				pNodeL = this->N + L;
 				pNodeR = treeR->N + R;
 
-				treeL->compVersionL[L]   = thisVersionL;
+				this->compVersionL[L]   = thisVersionL;
 				treeR->compVersionR[R]   = thisVersionR;
-				treeL->compBeenThereL[L] = R;
+				this->compBeenThereL[L] = R;
 				treeR->compBeenThereR[R] = L;
 
 				// compare Ti
@@ -774,9 +772,9 @@ struct baseTree_t {
 				if (pNodeL->F != 0 && pNodeL->F != (pNodeL->T & ~IBIT)) {
 					L = pNodeL->F;
 					R = pNodeR->F;
-					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						treeL->stackL[numStackL++] = thisCascade;
-						treeL->stackL[numStackL++] = L;
+					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+						this->stackL[numStackL++] = thisCascade;
+						this->stackL[numStackL++] = L;
 						treeR->stackR[numStackR++] = thisCascade;
 						treeR->stackR[numStackR++] = R;
 					}
@@ -785,9 +783,9 @@ struct baseTree_t {
 				if ((pNodeL->T & ~IBIT) != 0) {
 					L = pNodeL->T & ~IBIT;
 					R = pNodeR->T & ~IBIT;
-					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						treeL->stackL[numStackL++] = thisCascade;
-						treeL->stackL[numStackL++] = L;
+					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+						this->stackL[numStackL++] = thisCascade;
+						this->stackL[numStackL++] = L;
 						treeR->stackR[numStackR++] = thisCascade;
 						treeR->stackR[numStackR++] = R;
 					}
@@ -796,9 +794,9 @@ struct baseTree_t {
 				{
 					L = pNodeL->Q;
 					R = pNodeR->Q;
-					if (treeL->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || treeL->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						treeL->stackL[numStackL++] = thisCascade;
-						treeL->stackL[numStackL++] = L;
+					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+						this->stackL[numStackL++] = thisCascade;
+						this->stackL[numStackL++] = L;
 						treeR->stackR[numStackR++] = thisCascade;
 						treeR->stackR[numStackR++] = R;
 					}
@@ -968,19 +966,19 @@ struct baseTree_t {
 			assert(Q != F);               // Q/F collapse
 			assert(T != F);               // T/F collapse
 
-			assert((T & ~IBIT) != F || this->compare(this, Q, this, F) < 0);     // NE ordering
-			assert(F != 0 || (T & IBIT) || this->compare(this, Q, this, T) < 0); // AND ordering
-			assert(T != IBIT || this->compare(this, Q, this, F) < 0);            // OR ordering
+			assert((T & ~IBIT) != F || this->compare(Q, this, F) < 0);     // NE ordering
+			assert(F != 0 || (T & IBIT) || this->compare(Q, this, T) < 0); // AND ordering
+			assert(T != IBIT || this->compare(Q, this, F) < 0);            // OR ordering
 
 			// OR ordering and basic chain
 			if (T == IBIT)
-				assert(this->compare(this, Q, this, F) < 0);
+				assert(this->compare(Q, this, F) < 0);
 			// NE ordering
 			if ((T & ~IBIT) == F)
-				assert(this->compare(this, Q, this, F) < 0);
+				assert(this->compare(Q, this, F) < 0);
 			// AND ordering
 			if (F == 0 && !(T & IBIT))
-				assert(this->compare(this, Q, this, T) < 0);
+				assert(this->compare(Q, this, T) < 0);
 
 			if (this->flags & ctx.MAGICMASK_CASCADE) {
 				if (T == IBIT)
@@ -1045,15 +1043,15 @@ struct baseTree_t {
 					const uint32_t   F      = pNode->F;
 
 					if (this->isOR(Q)) {
-						if (top) { assert(this->compare(this, F, this, top) < 0); }
+						if (top) { assert(this->compare(F, this, top) < 0); }
 						top   = F;
 						iNode = Q;
 					} else if (this->isOR(F)) {
-						if (top) { assert(this->compare(this, Q, this, top) < 0); }
+						if (top) { assert(this->compare(Q, this, top) < 0); }
 						top   = Q;
 						iNode = F;
 					} else {
-						if (top) { assert(this->compare(this, F, this, top) < 0); }
+						if (top) { assert(this->compare(F, this, top) < 0); }
 						break;
 					}
 				}
@@ -1069,15 +1067,15 @@ struct baseTree_t {
 					const uint32_t   F      = pNode->F;
 
 					if (this->isNE(Q)) {
-						if (top) { assert(this->compare(this, F, this, top) < 0); }
+						if (top) { assert(this->compare(F, this, top) < 0); }
 						top   = F;
 						iNode = Q;
 					} else if (this->isNE(F)) {
-						if (top) { assert(this->compare(this, Q, this, top) < 0); }
+						if (top) { assert(this->compare(Q, this, top) < 0); }
 						top   = Q;
 						iNode = F;
 					} else {
-						if (top) { assert(this->compare(this, F, this, top) < 0); }
+						if (top) { assert(this->compare(F, this, top) < 0); }
 						break;
 					}
 				}
@@ -1093,15 +1091,15 @@ struct baseTree_t {
 //					const uint32_t   F      = pNode->F;
 
 					if (this->isAND(Q)) {
-						if (top) { assert(this->compare(this, Tu, this, top) < 0); }
+						if (top) { assert(this->compare(Tu, this, top) < 0); }
 						top   = Tu;
 						iNode = Q;
 					} else if (this->isAND(Tu)) {
-						if (top) { assert(this->compare(this, Q, this, top) < 0); }
+						if (top) { assert(this->compare(Q, this, top) < 0); }
 						top   = Q;
 						iNode = Tu;
 					} else {
-						if (top) { assert(this->compare(this, Tu, this, top) < 0); }
+						if (top) { assert(this->compare(Tu, this, top) < 0); }
 						break;
 					}
 				}
@@ -1146,15 +1144,15 @@ struct baseTree_t {
 
 			if (this->isOR(Q, T, F)) {
 				assert(!this->isOR(F));
-				assert(compare(this, Q,this, F, CASCADE_OR) < 0);
+				assert(compare(Q,this, F, CASCADE_OR) < 0);
 			}
 			if (this->isNE(Q, T, F)) {
 				assert(!this->isNE(F));
-				assert(compare(this, Q,this, F, CASCADE_NE) < 0);
+				assert(compare(Q,this, F, CASCADE_NE) < 0);
 			}
 			if (this->isAND(Q, T, F)) {
 				assert(!this->isAND(T));
-				assert(compare(this, Q,this, T, CASCADE_AND) < 0);
+				assert(compare(Q,this, T, CASCADE_AND) < 0);
 			}
 		}
 
@@ -1374,7 +1372,7 @@ struct baseTree_t {
 						// A=C<B=D
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
 						return AB;
-					} else if (compare(this, B, this, D, CASCADE_OR) < 0) {
+					} else if (compare(B, this, D, CASCADE_OR) < 0) {
 						// A=C<B<D
 						Q = AB;
 						T = IBIT;
@@ -1403,12 +1401,12 @@ struct baseTree_t {
 					// A<C<B=D or C<A<B=D
 					// A and C can react, nether will exceed B/D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac+\":\n", A, B, C, D);
-					if (!this->isOR(A) && compare(this, A, this, C, CASCADE_OR) < 0) {
+					if (!this->isOR(A) && compare(A, this, C, CASCADE_OR) < 0) {
 						uint32_t AC = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
 						Q = AC;
 						T = IBIT;
 						F = D;
-					} else if (!this->isOR(C) && compare(this, C, this, A, CASCADE_OR) < 0) {
+					} else if (!this->isOR(C) && compare(C, this, A, CASCADE_OR) < 0) {
 						uint32_t CA = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
 						Q = CA;
 						T = IBIT;
@@ -1421,7 +1419,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, B, this, C, CASCADE_OR) < 0) {
+				} else if (compare(B, this, C, CASCADE_OR) < 0) {
 					// A<B<C<D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
 					if (this->isOR(C)) {
@@ -1439,7 +1437,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, D, this, A, CASCADE_OR) < 0) {
+				} else if (compare(D, this, A, CASCADE_OR) < 0) {
 					// C<D<A<B
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd+a+\":\n", A, B, C, D);
 					if (this->isOR(A)) {
@@ -1456,7 +1454,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, B, this, D, CASCADE_OR) < 0) {
+				} else if (compare(B, this, D, CASCADE_OR) < 0) {
 					// A<C<B<D or C<A<B<D
 					// A and C can react and exceed B, D is definitely last
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab+c+\":\n", A, B, C, D);
@@ -1516,11 +1514,11 @@ struct baseTree_t {
 						// A<B<C=F
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (compare(this, C, this, F, CASCADE_OR) < 0) {
+					} else if (compare(C, this, F, CASCADE_OR) < 0) {
 						// A<B<C<F
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, F, this, A, CASCADE_OR) < 0) {
+					} else if (compare(F, this, A, CASCADE_OR) < 0) {
 						// F<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"F<A<B<C\"", A, B, C);
 						if (this->isOR(F)) {
@@ -1551,7 +1549,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, F, CASCADE_OR) < 0) {
+					} else if (compare(B, this, F, CASCADE_OR) < 0) {
 						// A<B<F<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<F<C\",\"ab+f+\":", A, B, C);
@@ -1618,7 +1616,7 @@ struct baseTree_t {
 						// A<B=F
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (compare(this, B, this, F, CASCADE_OR) < 0) {
+					} else if (compare(B, this, F, CASCADE_OR) < 0) {
 						// A<B<F
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
@@ -1633,7 +1631,7 @@ struct baseTree_t {
 							F = B;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, F, CASCADE_OR) < 0) {
+						} else if (compare(A, this, F, CASCADE_OR) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af+\":", A, B);
 							uint32_t AF = addBasicNode(A, IBIT, F, expectId, pFailCount, depth);
 							Q = AF;
@@ -1688,7 +1686,7 @@ struct baseTree_t {
 						// A<B<C=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (compare(this, C, this, Q, CASCADE_OR) < 0) {
+					} else if (compare(C, this, Q, CASCADE_OR) < 0) {
 						// A<B<C<Q
 						// natural order, sqap Q/F
 						uint32_t tmp = Q;
@@ -1696,7 +1694,7 @@ struct baseTree_t {
 						T = IBIT;
 						F = tmp;
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, Q, this, A, CASCADE_OR) < 0) {
+					} else if (compare(Q, this, A, CASCADE_OR) < 0) {
 						// Q<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
 						if (this->isOR(Q)) {
@@ -1728,7 +1726,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, Q, CASCADE_OR) < 0) {
+					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
 						// A<B<Q<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab+q+\":", A, B, C);
@@ -1795,7 +1793,7 @@ struct baseTree_t {
 						// A<B=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (compare(this, B, this, Q, CASCADE_OR) < 0) {
+					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
 						// A<B<Q
 						// natural order, swap Q/F
 						uint32_t tmp = Q;
@@ -1815,7 +1813,7 @@ struct baseTree_t {
 							F = B;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, Q, CASCADE_OR) < 0) {
+						} else if (compare(A, this, Q, CASCADE_OR) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq+\":", A, B);
 							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId, pFailCount, depth);
 							Q = AQ;
@@ -1837,7 +1835,7 @@ struct baseTree_t {
 			}
 
 			// final top-level order
-			if (compare(this, F, this, Q, CASCADE_OR) < 0) {
+			if (compare(F, this, Q, CASCADE_OR) < 0) {
 				/*
 				 * Single node
 				 */
@@ -1921,7 +1919,7 @@ struct baseTree_t {
 						// slow-path, expand cascade
 						return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
 					}
-				} else if (compare(this, B, this, C, CASCADE_NE) < 0) {
+				} else if (compare(B, this, C, CASCADE_NE) < 0) {
 					// A<B<C<D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
 					if (this->isNE(C)) {
@@ -1939,7 +1937,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, D, this, A, CASCADE_NE) < 0) {
+				} else if (compare(D, this, A, CASCADE_NE) < 0) {
 					// C<D<A<B
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd^a^\":\n", A, B, C, D);
 					if (this->isNE(A)) {
@@ -1956,7 +1954,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, B, this, D, CASCADE_NE) < 0) {
+				} else if (compare(B, this, D, CASCADE_NE) < 0) {
 					// A<C<B<D or C<A<B<D
 					// A and C can react and exceed B, D is definitely last
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab^c^\":\n", A, B, C, D);
@@ -2021,11 +2019,11 @@ struct baseTree_t {
 						// A<B<C=F
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (compare(this, C, this, F, CASCADE_NE) < 0) {
+					} else if (compare(C, this, F, CASCADE_NE) < 0) {
 						// A<B<C<F
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, F, this, A, CASCADE_NE) < 0) {
+					} else if (compare(F, this, A, CASCADE_NE) < 0) {
 						// F<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"F<A<B<C\"", A, B, C);
 						if (this->isNE(F)) {
@@ -2056,7 +2054,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, F, CASCADE_NE) < 0) {
+					} else if (compare(B, this, F, CASCADE_NE) < 0) {
 						// A<B<F<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<F<C\",\"ab^f^\":", A, B, C);
@@ -2123,7 +2121,7 @@ struct baseTree_t {
 						// A<B=F
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, A);
 						return A;
-					} else if (compare(this, B, this, F, CASCADE_NE) < 0) {
+					} else if (compare(B, this, F, CASCADE_NE) < 0) {
 						// A<B<F
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
@@ -2138,7 +2136,7 @@ struct baseTree_t {
 							F = B;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, F, CASCADE_NE) < 0) {
+						} else if (compare(A, this, F, CASCADE_NE) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af^\":", A, B);
 							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId, pFailCount, depth);
 							Q = AF;
@@ -2200,7 +2198,7 @@ struct baseTree_t {
 						// A<B<C=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
 						return AB;
-					} else if (compare(this, C, this, Q, CASCADE_NE) < 0) {
+					} else if (compare(C, this, Q, CASCADE_NE) < 0) {
 						// A<B<C<Q
 						// natural order, swap Q/F
 						uint32_t tmp = Q;
@@ -2208,7 +2206,7 @@ struct baseTree_t {
 						T = tmp ^ IBIT;
 						F = tmp;
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, Q, this, A, CASCADE_NE) < 0) {
+					} else if (compare(Q, this, A, CASCADE_NE) < 0) {
 						// Q<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
 						if (this->isNE(Q)) {
@@ -2240,7 +2238,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, Q, CASCADE_NE) < 0) {
+					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
 						// A<B<Q<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab^q^\":", A, B, C);
@@ -2307,7 +2305,7 @@ struct baseTree_t {
 						// A<B=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, A);
 						return A;
-					} else if (compare(this, B, this, Q, CASCADE_NE) < 0) {
+					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
 						// A<B<Q
 						// natural order, swap Q/F
 						uint32_t tmp = Q;
@@ -2327,7 +2325,7 @@ struct baseTree_t {
 							F = B;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, Q, CASCADE_NE) < 0) {
+						} else if (compare(A, this, Q, CASCADE_NE) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq^\":", A, B);
 							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId, pFailCount, depth);
 							Q = AQ;
@@ -2350,7 +2348,7 @@ struct baseTree_t {
 
 
 			// final top-level order
-			if (compare(this, F, this, Q, CASCADE_NE) < 0) {
+			if (compare(F, this, Q, CASCADE_NE) < 0) {
 				/*
 				 * Single node
 				 */
@@ -2396,7 +2394,7 @@ struct baseTree_t {
 						// A=C<B=D
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
 						return AB;
-					} else if (compare(this, B, this, D, CASCADE_AND) < 0) {
+					} else if (compare(B, this, D, CASCADE_AND) < 0) {
 						// A=C<B<D
 						Q = AB;
 						T = D;
@@ -2425,12 +2423,12 @@ struct baseTree_t {
 					// A<C<B=D or C<A<B=D
 					// A and C can react, nether will exceed B/D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac&\":\n", A, B, C, D);
-					if (!this->isAND(A) && compare(this, A, this, C, CASCADE_AND) < 0) {
+					if (!this->isAND(A) && compare(A, this, C, CASCADE_AND) < 0) {
 						uint32_t AC = addBasicNode(A, C, 0, expectId, pFailCount, depth);
 						Q = AC;
 						T = D;
 						F = 0;
-					} else if (!this->isAND(C) && compare(this, C, this, A, CASCADE_AND) < 0) {
+					} else if (!this->isAND(C) && compare(C, this, A, CASCADE_AND) < 0) {
 						uint32_t CA = addBasicNode(A, C, 0, expectId, pFailCount, depth);
 						Q = CA;
 						T = B;
@@ -2443,7 +2441,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, B, this, C, CASCADE_AND) < 0) {
+				} else if (compare(B, this, C, CASCADE_AND) < 0) {
 					// A<B<C<D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
 					if (this->isAND(C)) {
@@ -2461,7 +2459,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, D, this, A, CASCADE_AND) < 0) {
+				} else if (compare(D, this, A, CASCADE_AND) < 0) {
 					// C<D<A<B
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd&a&\":\n", A, B, C, D);
 					if (this->isAND(A)) {
@@ -2478,7 +2476,7 @@ struct baseTree_t {
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(this, B, this, D, CASCADE_AND) < 0) {
+				} else if (compare(B, this, D, CASCADE_AND) < 0) {
 					// A<C<B<D or C<A<B<D
 					// A and C can react and exceed B, D is definitely last
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab&c&\":\n", A, B, C, D);
@@ -2538,11 +2536,11 @@ struct baseTree_t {
 						// A<B<C=T
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=T\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (compare(this, C, this, T, CASCADE_AND) < 0) {
+					} else if (compare(C, this, T, CASCADE_AND) < 0) {
 						// A<B<C<T
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, T, this, A, CASCADE_AND) < 0) {
+					} else if (compare(T, this, A, CASCADE_AND) < 0) {
 						// T<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"T<A<B<C\"", A, B, C);
 						if (this->isAND(T)) {
@@ -2573,7 +2571,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, T, CASCADE_AND) < 0) {
+					} else if (compare(B, this, T, CASCADE_AND) < 0) {
 						// A<B<T<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<T<C\",\"ab&f&\":", A, B, C);
@@ -2640,7 +2638,7 @@ struct baseTree_t {
 						// A<B=T
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=T\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (compare(this, B, this, T, CASCADE_AND) < 0) {
+					} else if (compare(B, this, T, CASCADE_AND) < 0) {
 						// A<B<T
 						// natural order
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
@@ -2655,7 +2653,7 @@ struct baseTree_t {
 							F = 0;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, T, CASCADE_AND) < 0) {
+						} else if (compare(A, this, T, CASCADE_AND) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<T<B\",\"af&\":", A, B);
 							uint32_t AT = addBasicNode(A, T, 0, expectId, pFailCount, depth);
 							Q = AT;
@@ -2710,7 +2708,7 @@ struct baseTree_t {
 						// A<B<C=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
 						return ABC;
-					} else if (compare(this, C, this, Q, CASCADE_AND) < 0) {
+					} else if (compare(C, this, Q, CASCADE_AND) < 0) {
 						// A<B<C<Q
 						// natural order, sqap Q/T
 						uint32_t tmp = Q;
@@ -2718,7 +2716,7 @@ struct baseTree_t {
 						T = tmp;
 						F = 0;
 						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(this, Q, this, A, CASCADE_AND) < 0) {
+					} else if (compare(Q, this, A, CASCADE_AND) < 0) {
 						// Q<A<B<C
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
 						if (this->isAND(Q)) {
@@ -2750,7 +2748,7 @@ struct baseTree_t {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 						}
-					} else if (compare(this, B, this, Q, CASCADE_AND) < 0) {
+					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
 						// A<B<Q<C
 						// The A cascade is capped by B
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab&q&\":", A, B, C);
@@ -2817,7 +2815,7 @@ struct baseTree_t {
 						// A<B=Q
 						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
 						return AB;
-					} else if (compare(this, B, this, Q, CASCADE_AND) < 0) {
+					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
 						// A<B<Q
 						// natural order, swap Q/T
 						uint32_t tmp = Q;
@@ -2837,7 +2835,7 @@ struct baseTree_t {
 							F = 0;
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(this, A, this, Q, CASCADE_AND) < 0) {
+						} else if (compare(A, this, Q, CASCADE_AND) < 0) {
 							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq&\":", A, B);
 							uint32_t AQ = addBasicNode(A, Q, 0, expectId, pFailCount, depth);
 							Q = AQ;
@@ -2859,7 +2857,7 @@ struct baseTree_t {
 			}
 
 			// final top-level order
-			if (compare(this, T, this, Q, CASCADE_AND) < 0) {
+			if (compare(T, this, Q, CASCADE_AND) < 0) {
 				/*
 				 * Single node
 				 */
@@ -4212,7 +4210,7 @@ struct baseTree_t {
 				uint32_t F = pStack[--stackpos];
 				uint32_t Q = pStack[--stackpos];
 
-				if (compare(this, Q, this, F) < 0)
+				if (compare(Q, this, F) < 0)
 					nid = addNormaliseNode(Q, IBIT, F);
 				else
 					nid = addNormaliseNode(F, IBIT, Q);
@@ -4241,7 +4239,7 @@ struct baseTree_t {
 				uint32_t F = pStack[--stackpos];
 				uint32_t Q = pStack[--stackpos];
 
-				if (compare(this, Q, this, F) < 0)
+				if (compare(Q, this, F) < 0)
 					nid = addNormaliseNode(Q, F ^ IBIT, F);
 				else
 					nid = addNormaliseNode(F, Q ^ IBIT, Q);
@@ -4257,7 +4255,7 @@ struct baseTree_t {
 				uint32_t T = pStack[--stackpos];
 				uint32_t Q = pStack[--stackpos];
 
-				if (compare(this, Q, this, T) < 0)
+				if (compare(Q, this, T) < 0)
 					nid = addNormaliseNode(Q, T, 0);
 				else
 					nid = addNormaliseNode(T, Q, 0);
