@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-27 20:45:50 Changed: Rebase signature `baseTree_t::addOrderNode()`.
 2021-08-27 20:35:14 Changed: Rebase signature `baseTree_t::addOrderNode()` and friends. No code change.
 2021-08-25 22:32:08 Added: `baseTree_t::addOrderNode()`.
 2021-08-23 13:16:53 Changed: Improved caching `baseTree_t::compare()`.

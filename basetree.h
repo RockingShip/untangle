@@ -1404,12 +1404,12 @@ struct baseTree_t {
 					// A and C can react, nether will exceed B/D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac+\":\n", A, B, C, D);
 					if (!this->isOR(A) && compare(this, A, this, C, CASCADE_OR) < 0) {
-						uint32_t AC = addBasicNode(A, IBIT, C, expectId, pFailCount, depth + 1);
+						uint32_t AC = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
 						Q = AC;
 						T = IBIT;
 						F = D;
 					} else if (!this->isOR(C) && compare(this, C, this, A, CASCADE_OR) < 0) {
-						uint32_t CA = addBasicNode(A, IBIT, C, expectId, pFailCount, depth + 1);
+						uint32_t CA = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
 						Q = CA;
 						T = IBIT;
 						F = B;
@@ -1420,7 +1420,7 @@ struct baseTree_t {
 						F = B;
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth + 1);
+					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 				} else if (compare(this, B, this, C, CASCADE_OR) < 0) {
 					// A<B<C<D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
@@ -1538,7 +1538,7 @@ struct baseTree_t {
 							uint32_t FA;
 							if (this->isOR(A)) {
 								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, IBIT, A, expectId, pFailCount, depth);
+								FA = addOrderNode(F, IBIT, A, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								FA = addBasicNode(F, IBIT, A, expectId, pFailCount, depth);
@@ -1714,7 +1714,7 @@ struct baseTree_t {
 							uint32_t QA;
 							if (this->isOR(A)) {
 								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, IBIT, A, expectId, pFailCount, depth);
+								QA = addOrderNode(Q, IBIT, A, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								QA = addBasicNode(Q, IBIT, A, expectId, pFailCount, depth);
@@ -2043,7 +2043,7 @@ struct baseTree_t {
 							uint32_t FA;
 							if (this->isNE(A)) {
 								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, A ^ IBIT, A, expectId, pFailCount, depth);
+								FA = addOrderNode(F, A ^ IBIT, A, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								FA = addBasicNode(F, A ^ IBIT, A, expectId, pFailCount, depth);
@@ -2226,7 +2226,7 @@ struct baseTree_t {
 							uint32_t QA;
 							if (this->isNE(A)) {
 								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A ^ IBIT, A, expectId, pFailCount, depth);
+								QA = addOrderNode(Q, A ^ IBIT, A, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								QA = addBasicNode(Q, A ^ IBIT, A, expectId, pFailCount, depth);
@@ -2426,12 +2426,12 @@ struct baseTree_t {
 					// A and C can react, nether will exceed B/D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac&\":\n", A, B, C, D);
 					if (!this->isAND(A) && compare(this, A, this, C, CASCADE_AND) < 0) {
-						uint32_t AC = addBasicNode(A, C, 0, expectId, pFailCount, depth + 1);
+						uint32_t AC = addBasicNode(A, C, 0, expectId, pFailCount, depth);
 						Q = AC;
 						T = D;
 						F = 0;
 					} else if (!this->isAND(C) && compare(this, C, this, A, CASCADE_AND) < 0) {
-						uint32_t CA = addBasicNode(A, C, 0, expectId, pFailCount, depth + 1);
+						uint32_t CA = addBasicNode(A, C, 0, expectId, pFailCount, depth);
 						Q = CA;
 						T = B;
 						F = 0;
@@ -2442,7 +2442,7 @@ struct baseTree_t {
 						F = 0;
 					}
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth + 1);
+					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 				} else if (compare(this, B, this, C, CASCADE_AND) < 0) {
 					// A<B<C<D
 					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
@@ -2560,7 +2560,7 @@ struct baseTree_t {
 							uint32_t TA;
 							if (this->isAND(A)) {
 								// A cascades and unusable for right-hand-side
-								TA = addOrderNode(T, A, 0, expectId, pFailCount, depth);
+								TA = addOrderNode(T, A, 0, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								TA = addBasicNode(T, A, 0, expectId, pFailCount, depth);
@@ -2736,7 +2736,7 @@ struct baseTree_t {
 							uint32_t QA;
 							if (this->isAND(A)) {
 								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A, 0, expectId, pFailCount, depth);
+								QA = addOrderNode(Q, A, 0, expectId, pFailCount, depth + 1);
 							} else {
 								// A is single term
 								QA = addBasicNode(Q, A, 0, expectId, pFailCount, depth);
