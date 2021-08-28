@@ -1199,7 +1199,7 @@ struct baseTree_t {
 			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\n");
 			/*
 			 * @date 2021-08-24 20:46:27
-			 * todo: change to `normaliseNode()` when it's available
+			 * todo: change to `addRewriteNode()` when it's available
 			 */
 			return addOrderNode(Q, T, F, this->ncount, pFailCount, depth + 1);
 		} else if (pFailCount != NULL) {
@@ -1208,6 +1208,7 @@ struct baseTree_t {
 			 * The returned node id must be unique and must not be an end condition `ncount`.
 			 */
 			uint32_t nid = this->ncount + (*pFailCount)++;
+			assert(nid < this->maxNodes);
 			// set temporary node but do not add to cache
 			this->N[nid].Q = Q;
 			this->N[nid].T = T;

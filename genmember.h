@@ -2162,7 +2162,7 @@ struct genmemberContext_t : dbtool_t {
 
 					// add new node as first
 					generator.clearTree();
-					generator.root = generator.addNode(Q, Ti ? Tu ^ IBIT : Tu, F);
+					generator.root = generator.addNormaliseNode(Q, Ti ? Tu ^ IBIT : Tu, F);
 					assert(generator.root == tinyTree_t::TINYTREE_NSTART);
 
 					/*
@@ -2277,7 +2277,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNormalised(L, R ^ IBIT, 0);
+								unsigned nid = generator.addNode(L, R ^ IBIT, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2292,7 +2292,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNormalised(L, 0 ^ IBIT, R);
+								unsigned nid = generator.addNode(L, 0 ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2307,7 +2307,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNormalised(L, R ^ IBIT, R);
+								unsigned nid = generator.addNode(L, R ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2323,7 +2323,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = generator.addNormalised(Q, T ^ IBIT, F);
+								unsigned nid = generator.addNode(Q, T ^ IBIT, F);
 
 								// push
 								stack[stackPos++]     = nid; // push
@@ -2339,7 +2339,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNormalised(L, R, 0);
+								unsigned nid = generator.addNode(L, R, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2354,7 +2354,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNormalised(L, 0, R);
+								unsigned nid = generator.addNode(L, 0, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[stackPos++] = nid; // save actual index for back references
@@ -2370,7 +2370,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = generator.addNormalised(Q, T, F);
+								unsigned nid = generator.addNode(Q, T, F);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references

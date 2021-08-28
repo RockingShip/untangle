@@ -1069,7 +1069,7 @@ struct genrewritedataContext_t {
 
 						// construct a tree
 						tree.count = nextNode3;
-						tree.root  = tree.addNode(tlQ, tlTu ^ (tlTi ? IBIT : 0), tlF);
+						tree.root  = tree.addNormaliseNode(tlQ, tlTu ^ (tlTi ? IBIT : 0), tlF);
 
 						/*
 						 * @date 2021-06-12 00:00:57
@@ -1171,7 +1171,7 @@ struct genrewritedataContext_t {
 								testTree.N[NSTART + 1] = tree.N[NSTART + 1];
 								testTree.N[NSTART + 2] = tree.N[NSTART + 2];
 								testTree.count = tree.count;
-								testTree.root = testTree.addNode(testQ, testTu ^ (testTi ? IBIT : 0), testF);
+								testTree.root = testTree.addNormaliseNode(testQ, testTu ^ (testTi ? IBIT : 0), testF);
 
 								// create a data word before tree changes (references will change when tree shrinks)
 								uint32_t testData = (testTi ? 1 : 0) << 12 | normMap[testQ] << 8 | normMap[testTu] << 4 | normMap[testF];

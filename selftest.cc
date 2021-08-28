@@ -200,7 +200,7 @@ struct selftestContext_t : dbtool_t {
 
 				ctx.flags = context_t::MAGICMASK_PARANOID | (iPure ? context_t::MAGICMASK_PURE : 0);
 				generator.clearTree();
-				generator.root = generator.addNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
+				generator.root = generator.addNormaliseNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
 
 				/*
 				 * save with placeholders and reload
@@ -1085,6 +1085,7 @@ struct selftestContext_t : dbtool_t {
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
 	bool foundTreeCompare(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), pStore->numSignature * 100.0 / ctx.progressHi);
@@ -1156,6 +1157,7 @@ struct selftestContext_t : dbtool_t {
 		ctx.flags          = 0;
 		generator.windowLo = 0;
 		generator.windowHi = 0;
+		ctx.setupSpeed(16119595);
 
 		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 		generator.clearGenerator();
@@ -1165,15 +1167,6 @@ struct selftestContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
-
-		if (ctx.progressHi != pStore->numSignature) {
-			/*
-			 * @date 2021-07-25 16:08:08
-			 * NOTE just update `setupSpeed()` above
-			 * Could be an indication that some major bug/issue got fixed
-			 */
-			printf("WARNING: performSelfTestCompare() numSignature=%u\n", pStore->numSignature);
-		}
 
 		tinyTree_t treeL(ctx);
 		tinyTree_t treeR(ctx);
