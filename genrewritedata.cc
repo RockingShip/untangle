@@ -1187,7 +1187,7 @@ struct genrewritedataContext_t {
 
 								// determine if better target
 								uint64_t testScore = testTree.calcScoreName(pName);
-								if (bestName[0] == 0 || testScore < bestScore || (testScore == bestScore && testTree.compare(testTree.root, bestTree, bestTree.root) < 0)) {
+								if (bestName[0] == 0 || testScore < bestScore || (testScore == bestScore && testTree.compare(testTree.root, &bestTree, bestTree.root) < 0)) {
 									// rember best candidate
 									for (uint32_t iNode=NSTART; iNode<tree.count; iNode++)
 										bestTree.N[iNode] = tree.N[iNode];

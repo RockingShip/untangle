@@ -2679,7 +2679,7 @@ struct database_t {
 				testTree.loadStringSafe(pName, pTransformStr);
 
 				// test if better
-				if (testTree.compare(testTree.root, tree, tree.root) < 0) {
+				if (testTree.compare(testTree.root, &tree, tree.root) < 0) {
 					// copy tree, including root
 					for (unsigned i = tinyTree_t::TINYTREE_NSTART; i <= testTree.root; i++)
 						tree.N[i] = testTree.N[i];

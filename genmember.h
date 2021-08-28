@@ -629,17 +629,17 @@ struct genmemberContext_t : dbtool_t {
 						 */
 
 						// perform dyadic ordering
-						if (Tu == 0 && Ti && tree.compare(what[Q], tree, what[F]) > 0) {
+						if (Tu == 0 && Ti && tree.compare(what[Q], &tree, what[F]) > 0) {
 							// reorder OR
 							tree.N[tree.count].Q = what[F];
 							tree.N[tree.count].T = IBIT;
 							tree.N[tree.count].F = what[Q];
-						} else if (Tu == F && tree.compare(what[Q], tree, what[F]) > 0) {
+						} else if (Tu == F && tree.compare(what[Q], &tree, what[F]) > 0) {
 							// reorder XOR
 							tree.N[tree.count].Q = what[F];
 							tree.N[tree.count].T = what[Q] ^ IBIT;
 							tree.N[tree.count].F = what[Q];
-						} else if (F == 0 && !Ti && tree.compare(what[Q], tree, what[Tu]) > 0) {
+						} else if (F == 0 && !Ti && tree.compare(what[Q], &tree, what[Tu]) > 0) {
 							// reorder AND
 							tree.N[tree.count].Q = what[Tu];
 							tree.N[tree.count].T = what[Q];
@@ -1270,7 +1270,7 @@ struct genmemberContext_t : dbtool_t {
 		treeL.loadStringFast(pMemberL->name);
 		treeR.loadStringFast(pMemberR->name);
 
-		cmp = treeL.compare(treeL.root, treeR, treeR.root);
+		cmp = treeL.compare(treeL.root, &treeR, treeR.root);
 		return cmp;
 	}
 

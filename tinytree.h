@@ -82,7 +82,7 @@ struct tinyNode_t {
 
 	// NE (L?~R:R)
 	inline bool __attribute__((pure)) isNE(void) const {
-		return (T & ~IBIT) == F;
+		return (T ^ IBIT) == F;
 	}
 
 	// AND (L?R:0)
@@ -211,13 +211,18 @@ struct tinyTree_t {
 
 	// NE (L?~R:R)
 	inline bool __attribute__((const)) isNE(uint32_t Q, uint32_t T, uint32_t F) const {
-		return (T & ~IBIT) == F;
+		return (T ^ IBIT) == F;
 	}
 
 	// AND (L?R:0)
 	inline bool __attribute__((const)) isAND(uint32_t Q, uint32_t T, uint32_t F) const {
 		return !(T & IBIT) && F == 0;
 	}
+
+	/*
+	 * Types of communicative dyadics/cascades
+	 */
+	enum { CASCADE_NONE, CASCADE_OR, CASCADE_NE, CASCADE_AND, CASCADE_SYNC };
 
 	/**
 	 * @date2020-04-09 19:57:28
@@ -239,18 +244,16 @@ struct tinyTree_t {
 	 * @param {boolean} layoutOnly - ignore endpoint values when `true`
 	 * @return {number} `<0` if `lhs<rhs`, `0` if `lhs==rhs` and `>0` if `lhs>rhs`
 	 */
-	int compare(unsigned lhs, const tinyTree_t &treeR, unsigned rhs) const {
+	int compare(unsigned lhs, const tinyTree_t *treeR, unsigned rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int      stackPos = 0;
-		int      secondary = 0;  // compare structure first, then endpoints
 
 		assert(!(lhs & IBIT));
 		assert(!(rhs & IBIT));
 
 		// nodes already processed
-		uint32_t beenThereL;
+		uint32_t beenThereL; // bit set means beenWhatL[] is valid
 		uint32_t beenThereR;
 		uint32_t beenWhatL[TINYTREE_NEND];
 		uint32_t beenWhatR[TINYTREE_NEND];
@@ -261,19 +264,98 @@ struct tinyTree_t {
 		beenWhatL[0] = 0;
 		beenWhatR[0] = 0;
 
-		// push root to start
-		stackL[stackPos] = lhs;
-		stackR[stackPos] = rhs;
-		stackPos++;
+		uint32_t numStackL      = 0; // top of stack
+		uint32_t numStackR      = 0; // top of stack
+		uint32_t parentCascadeL = CASCADE_NONE; // parent of current cascading node
+		uint32_t parentCascadeR = CASCADE_NONE; // parent of current cascading node
+
+		// push arguments on stack
+		stackL[numStackL++] = topLevelCascade;
+		stackL[numStackL++] = lhs;
+		stackR[numStackR++] = topLevelCascade;
+		stackR[numStackR++] = rhs;
 
 		do {
-			// pop stack
-			--stackPos;
-			unsigned L = stackL[stackPos];
-			unsigned R = stackR[stackPos];
+			uint32_t         L, R;
+			const tinyNode_t *pNodeL, *pNodeR;
 
-			// shortcut
-			if (L == R && this == &treeR)
+			/*
+			 * sync left/right to traverse cascade border
+			 * unwind node if part of the parent cascade until border reached
+			 * This should align cascades. eg: `abc++` and `ab+c+`, `ab+cd++` and `abd++`.
+			 */
+			for (;;) {
+				L              = stackL[--numStackL];
+				parentCascadeL = stackL[--numStackL];
+
+				pNodeL = this->N + L;
+
+				if (L < TINYTREE_NSTART) {
+					break;
+				} else if (parentCascadeL == CASCADE_SYNC) {
+					break;
+				} else if (parentCascadeL == CASCADE_OR && pNodeL->isOR()) {
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->F;
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->Q;
+				} else if (parentCascadeL == CASCADE_NE && pNodeL->isNE()) {
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->F;
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->Q;
+				} else if (parentCascadeL == CASCADE_AND && pNodeL->isAND()) {
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->T;
+					stackL[numStackL++] = parentCascadeL;
+					stackL[numStackL++] = pNodeL->Q;
+				} else {
+					break;
+				}
+			}
+			for (;;) {
+				R              = stackR[--numStackR];
+				parentCascadeR = stackR[--numStackR];
+
+				pNodeR = treeR->N + R;
+
+				if (R < TINYTREE_NSTART) {
+					break;
+				} else if (parentCascadeR == CASCADE_SYNC) {
+					break;
+				} else if (parentCascadeR == CASCADE_OR && pNodeR->isOR()) {
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->F;
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->Q;
+				} else if (parentCascadeR == CASCADE_NE && pNodeR->isNE()) {
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->F;
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->Q;
+				} else if (parentCascadeR == CASCADE_AND && pNodeR->isAND()) {
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->T;
+					stackR[numStackR++] = parentCascadeR;
+					stackR[numStackR++] = pNodeR->Q;
+				} else {
+					break;
+				}
+			}
+
+			/*
+			 * Test if cascades are exhausted
+			 */
+			if (parentCascadeL != parentCascadeR) {
+				if (numStackL < numStackR || parentCascadeL == CASCADE_SYNC)
+					return -1; // `lhs` exhausted
+				if (numStackL > numStackR || parentCascadeR == CASCADE_SYNC)
+					return +1; // `rhs` exhausted
+				assert(0);
+			}
+
+			// for same tree, identical lhs/rhs implies equal
+			if (L == R && this == treeR)
 				continue;
 
 			/*
@@ -288,12 +370,10 @@ struct tinyTree_t {
 			 * compare contents
 			 */
 			if (L < TINYTREE_NSTART) {
-				if (secondary == 0) {
-					if (L < R)
-						secondary = -1; // `lhs` < `rhs`
-					else if (L > R)
-						secondary = +1; // `lhs` < `rhs`
-				}
+				if (L < R)
+					return -1; // `lhs` < `rhs`
+				if (L > R)
+					return +1; // `lhs` < `rhs`
 
 				// continue with next stack entry
 				continue;
@@ -302,18 +382,17 @@ struct tinyTree_t {
 			/*
 			 * Been here before
 			 */
-			if ((beenThereL & (1 << L)) && (beenThereR & (1 << R))) {
-				if (beenWhatL[L] == R && beenWhatR[R] == L)
-					continue; // yes
-			}
+			if ((beenThereL & (1 << L)) && (beenThereR & (1 << R)) && beenWhatL[L] == R && beenWhatR[R] == L)
+				continue; // yes
+
 			beenThereL |= 1 << L;
 			beenThereR |= 1 << R;
 			beenWhatL[L] = R;
 			beenWhatR[R] = L;
 
 			// decode L and R
-			const tinyNode_t *pNodeL = this->N + L;
-			const tinyNode_t *pNodeR = treeR.N + R;
+			pNodeL = this->N + L;
+			pNodeR = treeR->N + R;
 
 			/*
 			 * Reminder:
@@ -328,85 +407,104 @@ struct tinyTree_t {
 			/*
 			 * compare structure
 			 */
+
+			// compare Ti
 			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
 				return -1; // `QnTF` < `QTF`
 			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
 				return +1; // `QTF` > `QnTF`
 
+			// compare OR
 			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
 				return -1; // `OR` < !`OR`
 			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
 				return +1; // !`OR` > `OR`
 
+			// compare GT
 			if (pNodeL->F == 0 && pNodeR->F != 0)
 				return -1; // `GT` < !`GT` or `AND` < !`AND`
 			if (pNodeL->F != 0 && pNodeR->F == 0)
 				return +1; // !`GT` > `GT` or !`AND` > `AND`
 
-			if (pNodeL->F == (pNodeL->T ^ IBIT) && pNodeR->F != (pNodeR->T ^ IBIT))
+			// compare NE
+			if ((pNodeL->T ^ IBIT) == pNodeL->F && (pNodeR->T ^ IBIT) != pNodeR->F)
 				return -1; // `XOR` < !`XOR`
-			if (pNodeL->F != (pNodeL->T ^ IBIT) && pNodeR->F == (pNodeR->T ^ IBIT))
+			if ((pNodeL->T ^ IBIT) != pNodeL->F && (pNodeR->T ^ IBIT) == pNodeR->F)
 				return +1; // !`XOR` > `XOR`
 
 			/*
-			 * Push natural walking order
-			 * deep Q, deep T, deep F, endpoint Q, endpoint T, endpoint F
-			 *
+			 * what is current cascade
 			 */
-			if (pNodeL->F) {
-				if (pNodeL->F < TINYTREE_NSTART && pNodeR->F < TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->F;
-					stackR[stackPos] = pNodeR->F;
-					stackPos++;
-				}
+			unsigned thisCascade = CASCADE_NONE;
+
+			if (pNodeL->T & IBIT) {
+				if (pNodeL->T == IBIT)
+					thisCascade = CASCADE_OR; // OR
+				else if ((pNodeL->T & ~IBIT) == pNodeL->F)
+					thisCascade = CASCADE_NE; // NE
+			} else if (pNodeL->F == 0) {
+				thisCascade = CASCADE_AND; // AND
 			}
-			if (pNodeL->T & ~IBIT) {
-				if ((pNodeL->T & ~IBIT) < TINYTREE_NSTART && (pNodeR->T & ~IBIT) < TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->T & ~IBIT;
-					stackR[stackPos] = pNodeR->T & ~IBIT;
-					stackPos++;
-				}
+
+			/*
+			 * @date 2021-08-28 19:18:04
+			 * Push a sync when starting a new cascade to detect an exausted right-hand-side cascade
+			 */
+			if (thisCascade != parentCascadeL && thisCascade != CASCADE_NONE) {
+				stackL[numStackL++] = CASCADE_SYNC;
+				stackL[numStackL++] = 0;
+				stackR[numStackR++] = CASCADE_SYNC;
+				stackR[numStackR++] = 0;
 			}
-			if (pNodeL->Q) {
-				if (pNodeL->Q < TINYTREE_NSTART && pNodeR->Q < TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->Q;
-					stackR[stackPos] = pNodeR->Q;
-					stackPos++;
-				}
-			}
-			if (pNodeL->F) {
-				if (pNodeL->F >= TINYTREE_NSTART || pNodeR->F >= TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->F;
-					stackR[stackPos] = pNodeR->F;
-					stackPos++;
-				}
-			}
-			if (pNodeL->T & ~IBIT) {
-				if ((pNodeL->T & ~IBIT) >= TINYTREE_NSTART || (pNodeR->T & ~IBIT) >= TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->T & ~IBIT;
-					stackR[stackPos] = pNodeR->T & ~IBIT;
-					stackPos++;
-				}
-			}
-			if (pNodeL->Q) {
-				if (pNodeL->Q >= TINYTREE_NSTART || pNodeR->Q >= TINYTREE_NSTART) {
-					stackL[stackPos] = pNodeL->Q;
-					stackR[stackPos] = pNodeR->Q;
-					stackPos++;
+
+			/*
+			 * Push Q/T/F components for deeper processing
+			 * Test if result is cached
+			 */
+			if (pNodeL->F != 0 && (pNodeL->T & ~IBIT) != pNodeL->F) {
+				L = pNodeL->F;
+				R = pNodeR->F;
+				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
+					stackL[numStackL++] = thisCascade;
+					stackL[numStackL++] = L;
+					stackR[numStackR++] = thisCascade;
+					stackR[numStackR++] = R;
 				}
 			}
 
-		} while (stackPos > 0);
+			if ((pNodeL->T & ~IBIT) != 0) {
+				L = pNodeL->T & ~IBIT;
+				R = pNodeR->T & ~IBIT;
+				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
+					stackL[numStackL++] = thisCascade;
+					stackL[numStackL++] = L;
+					stackR[numStackR++] = thisCascade;
+					stackR[numStackR++] = R;
+				}
+			}
+
+			{
+				L = pNodeL->Q;
+				R = pNodeR->Q;
+				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
+					stackL[numStackL++] = thisCascade;
+					stackL[numStackL++] = L;
+					stackR[numStackR++] = thisCascade;
+					stackR[numStackR++] = R;
+				}
+			}
+
+		} while (numStackL > 0 && numStackR > 0);
 
 		/*
-		 * @date 2021-07-23 17:07:50
-		 * The unrolled iterators of the generator are still in ancient mode where syadics are partly ordered.
-		 * Fix that first bedfore enabling the following assert
+		 * test if exhausted
 		 */
-		// assert(secondary || lhs == rhs); // secondary==0 implies lhs==rhs
+		if (numStackL < numStackR)
+			return -1;
+		if (numStackL > numStackR)
+			return +1;
 
-		// identical
-		return secondary;
+		return 0;
 	}
 
 	/**
@@ -733,7 +831,7 @@ struct tinyTree_t {
 
 		if (T == IBIT) {
 			// `OR` ordering
-			if (this->compare(Q, *this, F) > 0) {
+			if (this->compare(Q, this, F) > 0) {
 				// swap
 				unsigned savQ = Q;
 				Q = F;
@@ -742,7 +840,7 @@ struct tinyTree_t {
 		}
 		if (F == (T ^ IBIT)) {
 			// `XOR` ordering
-			if (this->compare(Q, *this, F) > 0) {
+			if (this->compare(Q, this, F) > 0) {
 				// swap
 				unsigned savQ = Q;
 				Q             = F;
@@ -752,7 +850,7 @@ struct tinyTree_t {
 		}
 		if (F == 0 && !(T & IBIT)) {
 			// `AND` ordering
-			if (this->compare(Q, *this, T) > 0) {
+			if (this->compare(Q, this, T) > 0) {
 				// swap
 				unsigned savQ = Q;
 				Q             = T;

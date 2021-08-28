@@ -518,7 +518,7 @@ struct gensignatureContext_t : dbtool_t {
 			tinyTree_t treeL(ctx);
 			treeL.loadStringFast(pSignature->name);
 
-			cmp = treeL.compare(treeL.root, treeR, treeR.root);
+			cmp = treeL.compare(treeL.root, &treeR, treeR.root);
 
 			if (cmp < 0)
 				cmp = '<'; // worse by compare
@@ -604,7 +604,7 @@ struct gensignatureContext_t : dbtool_t {
 			return cmp;
 
 		// Compare layouts, expensive
-		cmp = treeL.compare(treeL.root, treeR, treeR.root);
+		cmp = treeL.compare(treeL.root, &treeR, treeR.root);
 		return cmp;
 	}
 

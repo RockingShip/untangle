@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-28 21:18:29 Changed: `tinyTree_t::compare()` now cascade aware.
 2021-08-27 20:59:10 Removed: static and first argument of `baseTree_t::compare()`.
 2021-08-27 20:45:50 Changed: Rebase signature `baseTree_t::addOrderNode()`.
 2021-08-27 20:35:14 Changed: Rebase signature `baseTree_t::addOrderNode()` and friends. No code change.

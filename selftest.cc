@@ -63,8 +63,6 @@ struct selftestContext_t : dbtool_t {
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
-	/// @var {number} Tree size in nodes to be generated for this invocation;
-	unsigned   arg_numNodes;
 	/// @var {number} Collect metrics intended for "metrics.h"
 	unsigned   opt_metrics;
 	/// @var {number} index/data ratio
@@ -87,7 +85,6 @@ struct selftestContext_t : dbtool_t {
 	 */
 	selftestContext_t(context_t &ctx) : dbtool_t(ctx), generator(ctx) {
 		arg_inputDatabase     = NULL;
-		arg_numNodes          = 0;
 		opt_metrics           = 0;
 		opt_ratio             = METRICS_DEFAULT_RATIO / 10.0;
 		opt_text              = 0;
@@ -1134,7 +1131,7 @@ struct selftestContext_t : dbtool_t {
 		 * Compare
 		 */
 
-		return treeL.compare(treeL.root, treeR, treeR.root);
+		return treeL.compare(treeL.root, &treeR, treeR.root);
 	}
 
 	/*
@@ -1159,8 +1156,6 @@ struct selftestContext_t : dbtool_t {
 		ctx.flags          = 0;
 		generator.windowLo = 0;
 		generator.windowHi = 0;
-		ctx.tick           = 0;
-		ctx.setupSpeed(16119595); // no consequences if value is off
 
 		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 		generator.clearGenerator();
@@ -1180,12 +1175,13 @@ struct selftestContext_t : dbtool_t {
 			printf("WARNING: performSelfTestCompare() numSignature=%u\n", pStore->numSignature);
 		}
 
+		tinyTree_t treeL(ctx);
+		tinyTree_t treeR(ctx);
+
 		unsigned      maxRound = 4;
 		for (unsigned iRound   = 0; iRound < maxRound; iRound++) {
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-				fprintf(stderr, "\r\e[K[%s] collecting %u/%u", ctx.timeAsString(), iRound + 1, maxRound);
-				ctx.tick = 0;
-			}
+			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] collecting round=%u/%u\n", ctx.timeAsString(), iRound + 1, maxRound);
 
 			// apply fisher/yates shuffle. Skip first reserved entry
 			for (unsigned j = pStore->numSignature - 1; j >= 3; j--) {
@@ -1200,9 +1196,8 @@ struct selftestContext_t : dbtool_t {
 				}
 			}
 
-			unsigned r = rand();
-			srand(r);
-			fprintf(stderr, "\r\e[K[%s] sorting %u/%u rand=%u", ctx.timeAsString(), iRound + 1, maxRound, r);
+			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] sorting %u signatures\n", ctx.timeAsString(), pStore->numSignature);
 
 			/*
 			 * Sort signatures.
@@ -1210,31 +1205,64 @@ struct selftestContext_t : dbtool_t {
 			assert(pStore->numSignature >= 1);
 			qsort_r(pStore->signatures + 1, pStore->numSignature - 1, sizeof(*pStore->signatures), this->comparSignature, &ctx);
 
+			if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+				fprintf(stderr, "[%s] comparing signatures\n", ctx.timeAsString());
+
+			ctx.setupSpeed(pStore->numSignature);
+			ctx.progress = 3;
+
 			/*
 			 * two-way compare adjacent signatures
 			 */
 			for (unsigned j = 3; j < pStore->numSignature; j++) {
+				ctx.progress++;
+
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+					int eta       = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d",
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
+
+					ctx.tick = 0;
+				}
+
+				/*
+				 * Compare
+				 */
 				int cmp;
 
-				cmp = this->comparSignature(pStore->signatures + j - 1, pStore->signatures + j, &ctx);
-				if (cmp >= 0) {
+				treeL.loadStringFast(pStore->signatures[j - 1].name);
+				treeR.loadStringFast(pStore->signatures[j].name);
+				cmp = treeL.compare(treeL.root, &treeR, treeR.root);
+				if (cmp > 0) {
 					printf("{\"error\":\"compare fail\",\"where\":\"%s:%s:%d\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
-					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
+					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j - 1].name, pStore->signatures[j].name);
 					exit(1);
 				}
-				cmp = this->comparSignature(pStore->signatures + j, pStore->signatures + j - 1, &ctx);
-				if (cmp <= 0) {
+
+				treeL.loadStringFast(pStore->signatures[j].name);
+				treeR.loadStringFast(pStore->signatures[j - 1].name);
+				cmp = treeL.compare(treeL.root, &treeR, treeR.root);
+				if (cmp < 0) {
 					printf("{\"error\":\"compare fail\",\"where\":\"%s:%s:%d\",\"result\":%d,\",first\":\"%s\",second\":\"%s\"}\n",
-					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j].name, pStore->signatures[j].name);
+					       __FUNCTION__, __FILE__, __LINE__, cmp, pStore->signatures[j].name, pStore->signatures[j - 1].name);
 					exit(1);
 				}
 
 				numPassed++;
 			}
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+				fprintf(stderr, "\r\e[K");
 		}
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
@@ -1653,25 +1681,10 @@ int main(int argc, char *argv[]) {
 	if (argc - optind >= 1)
 		app.arg_inputDatabase = argv[optind++];
 
-	if (argc - optind >= 1) {
-		char *endptr;
-
-		errno = 0; // To distinguish success/failure after call
-		app.arg_numNodes = ::strtoul(argv[optind++], &endptr, 0);
-
-		// strip trailing spaces
-		while (*endptr && isspace(*endptr))
-			endptr++;
-
-		// test for error
-		if (errno != 0 || *endptr != '\0')
-			app.arg_inputDatabase = NULL;
-	}
-
 	// register timer handler
 	if (ctx.opt_timer) {
 		signal(SIGALRM, sigalrmHandler);
-		::alarm(1 /*ctx.opt_timer*/);
+		::alarm(ctx.opt_timer);
 	}
 
 	/*

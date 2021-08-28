@@ -94,7 +94,7 @@ struct baseNode_t {
 
 	// NE (L?~R:R) third because Ti is set (QnTF) but Tu==F
 	inline bool __attribute__((pure)) isNE(void) const {
-		return (T & ~IBIT) == F;
+		return (T ^ IBIT) == F;
 	}
 
 	// AND (L?R:0) last because not QnTF
@@ -542,6 +542,11 @@ struct baseTree_t {
 	}
 
 	/*
+	 * Types of communicative dyadics/cascades
+	 */
+	enum { CASCADE_NONE, CASCADE_OR, CASCADE_NE, CASCADE_AND, CASCADE_SYNC };
+
+	/*
 	 * @date 2021-05-12 01:23:06
 	 *
 	 * Compare two-subtrees
@@ -557,8 +562,6 @@ struct baseTree_t {
 	 *       0 L = R
 	 *      +1 L > R
 	 */
-	enum { CASCADE_NONE, CASCADE_OR, CASCADE_NE, CASCADE_AND };
-
 	int compare(uint32_t lhs, baseTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
 		/*
@@ -620,6 +623,8 @@ struct baseTree_t {
 
 				if (L < this->nstart) {
 					break;
+				} else if (parentCascadeL == CASCADE_SYNC) {
+					break;
 				} else if (parentCascadeL == CASCADE_OR && pNodeL->isOR()) {
 					this->stackL[numStackL++] = parentCascadeL;
 					this->stackL[numStackL++] = pNodeL->F;
@@ -647,6 +652,8 @@ struct baseTree_t {
 
 				if (R < treeR->nstart) {
 					break;
+				} else if (parentCascadeR == CASCADE_SYNC) {
+					break;
 				} else if (parentCascadeR == CASCADE_OR && pNodeR->isOR()) {
 					treeR->stackR[numStackR++] = parentCascadeR;
 					treeR->stackR[numStackR++] = pNodeR->F;
@@ -671,10 +678,10 @@ struct baseTree_t {
 			 * Test if cascades are exhausted
 			 */
 			if (parentCascadeL != parentCascadeR) {
-				if (numStackL < numStackR)
-					return -1;
-				if (numStackL > numStackR)
-					return +1;
+				if (numStackL < numStackR || parentCascadeL == CASCADE_SYNC)
+					return -1; // `lhs` exhausted
+				if (numStackL > numStackR || parentCascadeR == CASCADE_SYNC)
+					return +1; // `rhs` exhausted
 				assert(0);
 			}
 
@@ -687,127 +694,149 @@ struct baseTree_t {
 			if (L == R && this == treeR)
 				continue;
 
-			// compare endpoint/tree (structure)
+			/*
+			 * compare if either is an endpoint
+			 */
 			if (L < this->nstart && R >= treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1a\n");
 			if (L < this->nstart && R >= treeR->nstart)
-				return -1;
+				return -1; // `end` < `ref`
 			if (L >= this->nstart && R < treeR->nstart && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1a\n");
 			if (L >= this->nstart && R < treeR->nstart)
-				return +1;
+				return +1; // `ref` > `end`
 
+			/*
+			 * compare contents
+			 */
 			if (L < this->nstart) {
-				// compare endpoint/endpoint (contents)
 				if (ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) { if (L < R) fprintf(stderr, "-1\n"); else if (L > R) fprintf(stderr, "+1\n"); }
-				// compare contents, not structure
 				if (L < R)
-					return -1;
-				else if (L > R)
-					return +1;
+					return -1; // `lhs` < `rhs`
+				if (L > R)
+					return +1; // `lhs` < `rhs`
 				continue;
 			}
 
-			if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-				/*
-				 * Detected a structure difference or a first time visit
-				 */
+			/*
+			 * Been here before
+			 */
+			if (this->compVersionL[L] == thisVersionL && treeR->compVersionR[R] == thisVersionR && this->compBeenThereL[L] == R && treeR->compBeenThereR[R] == L)
+				continue; // yes
 
-				pNodeL = this->N + L;
-				pNodeR = treeR->N + R;
+			this->compVersionL[L]    = thisVersionL;
+			treeR->compVersionR[R]   = thisVersionR;
+			this->compBeenThereL[L]  = R;
+			treeR->compBeenThereR[R] = L;
 
-				this->compVersionL[L]   = thisVersionL;
-				treeR->compVersionR[R]   = thisVersionR;
-				this->compBeenThereL[L] = R;
-				treeR->compBeenThereR[R] = L;
+			// decode L and R
+			pNodeL = this->N + L;
+			pNodeR = treeR->N + R;
 
-				// compare Ti
-				if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1b\n");
-				if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
-					return -1;
-				if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1b\n");
-				if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
-					return +1;
+			/*
+			 * Reminder:
+			 *  [ 2] a ? ~0 : b                  "+" OR
+			 *  [ 6] a ? ~b : 0                  ">" GT
+			 *  [ 8] a ? ~b : b                  "^" XOR
+			 *  [ 9] a ? ~b : c                  "!" QnTF
+			 *  [16] a ?  b : 0                  "&" AND
+			 *  [19] a ?  b : c                  "?" QTF
+			 */
 
-				// compare OR
-				if (pNodeL->T == IBIT && pNodeR->T != IBIT && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1c\n");
-				if (pNodeL->T == IBIT && pNodeR->T != IBIT)
-					return -1;
-				if (pNodeL->T != IBIT && pNodeR->T == IBIT && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1c\n");
-				if (pNodeL->T != IBIT && pNodeR->T == IBIT)
-					return +1;
+			/*
+			 * compare structure
+			 */
 
-				// compare GT
-				if (pNodeL->F == 0 && pNodeR->F != 0 && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1d\n");
-				if (pNodeL->F == 0 && pNodeR->F != 0)
-					return -1;
-				if (pNodeL->F != 0 && pNodeR->F == 0 && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1d\n");
-				if (pNodeL->F != 0 && pNodeR->F == 0)
-					return +1;
+			// compare Ti
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1b\n");
+			if ((pNodeL->T & IBIT) && !(pNodeR->T & IBIT))
+				return -1; // `QnTF` < `QTF`
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT) && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1b\n");
+			if (!(pNodeL->T & IBIT) && (pNodeR->T & IBIT))
+				return +1; // `QTF` > `QnTF`
 
-				// compare NE
-				if ((pNodeL->T & ~IBIT) == pNodeL->F && (pNodeR->T & ~IBIT) != pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1e\n");
-				if ((pNodeL->T & ~IBIT) == pNodeL->F && (pNodeR->T & ~IBIT) != pNodeR->F)
-					return -1;
-				if ((pNodeL->T & ~IBIT) != pNodeL->F && (pNodeR->T & ~IBIT) == pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1e\n");
-				if ((pNodeL->T & ~IBIT) != pNodeL->F && (pNodeR->T & ~IBIT) == pNodeR->F)
-					return +1;
+			// compare OR
+			if (pNodeL->T == IBIT && pNodeR->T != IBIT && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1c\n");
+			if (pNodeL->T == IBIT && pNodeR->T != IBIT)
+				return -1; // `OR` < !`OR`
+			if (pNodeL->T != IBIT && pNodeR->T == IBIT && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1c\n");
+			if (pNodeL->T != IBIT && pNodeR->T == IBIT)
+				return +1; // !`OR` > `OR`
 
-				/*
-				 * what is current cascade
-				 */
-				unsigned thisCascade = CASCADE_NONE;
+			// compare GT
+			if (pNodeL->F == 0 && pNodeR->F != 0 && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1d\n");
+			if (pNodeL->F == 0 && pNodeR->F != 0)
+				return -1; // `GT` < !`GT` or `AND` < !`AND`
+			if (pNodeL->F != 0 && pNodeR->F == 0 && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1d\n");
+			if (pNodeL->F != 0 && pNodeR->F == 0)
+				return +1; // !`GT` > `GT` or !`AND` > `AND`
 
-				if (pNodeL->T & IBIT) {
-					if (pNodeL->T == IBIT)
-						thisCascade = CASCADE_OR; // OR
-					else if ((pNodeL->T & ~IBIT) == pNodeL->F)
-						thisCascade = CASCADE_NE; // NE
-				} else if (pNodeL->F == 0) {
-					thisCascade = CASCADE_AND; // AND
+			// compare NE
+			if ((pNodeL->T ^ IBIT) == pNodeL->F && (pNodeR->T ^ IBIT) != pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "-1e\n");
+			if ((pNodeL->T ^ IBIT) == pNodeL->F && (pNodeR->T ^ IBIT) != pNodeR->F)
+				return -1; // `XOR` < !`XOR`
+			if ((pNodeL->T ^ IBIT) != pNodeL->F && (pNodeR->T ^ IBIT) == pNodeR->F && ENABLE_DEBUG_COMPARE && (ctx.opt_debug & ctx.DEBUGMASK_COMPARE)) fprintf(stderr, "+1e\n");
+			if ((pNodeL->T ^ IBIT) != pNodeL->F && (pNodeR->T ^ IBIT) == pNodeR->F)
+				return +1; // !`XOR` > `XOR`
+
+			/*
+			 * what is current cascade
+			 */
+			unsigned thisCascade = CASCADE_NONE;
+
+			if (pNodeL->T & IBIT) {
+				if (pNodeL->T == IBIT)
+					thisCascade = CASCADE_OR; // OR
+				else if ((pNodeL->T ^ IBIT) == pNodeL->F)
+					thisCascade = CASCADE_NE; // NE
+			} else if (pNodeL->F == 0) {
+				thisCascade = CASCADE_AND; // AND
+			}
+
+			/*
+			 * @date 2021-08-28 19:18:04
+			 * Push a sync when starting a new cascade to detect an exausted right-hand-side cascade
+			 */
+			if (thisCascade != parentCascadeL && thisCascade != CASCADE_NONE) {
+				this->stackL[numStackL++]  = CASCADE_SYNC;
+				this->stackL[numStackL++]  = 0;
+				treeR->stackR[numStackR++] = CASCADE_SYNC;
+				treeR->stackR[numStackR++] = 0;
+			}
+
+			/*
+			 * Push Q/T/F components for deeper processing
+			 * Test if result is cached
+			 */
+			if (pNodeL->F != 0 && (pNodeL->T ^ IBIT) != pNodeL->F) {
+				L = pNodeL->F;
+				R = pNodeR->F;
+				if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+					this->stackL[numStackL++]  = thisCascade;
+					this->stackL[numStackL++]  = L;
+					treeR->stackR[numStackR++] = thisCascade;
+					treeR->stackR[numStackR++] = R;
 				}
+			}
 
-				/*
-				 * Push Q/T/F components for deeper processing
-				 * Test if result is cached
-				 */
-				if (pNodeL->F != 0 && pNodeL->F != (pNodeL->T & ~IBIT)) {
-					L = pNodeL->F;
-					R = pNodeR->F;
-					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						this->stackL[numStackL++] = thisCascade;
-						this->stackL[numStackL++] = L;
-						treeR->stackR[numStackR++] = thisCascade;
-						treeR->stackR[numStackR++] = R;
-					}
+			if ((pNodeL->T & ~IBIT) != 0) {
+				L = pNodeL->T & ~IBIT;
+				R = pNodeR->T & ~IBIT;
+				if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+					this->stackL[numStackL++]  = thisCascade;
+					this->stackL[numStackL++]  = L;
+					treeR->stackR[numStackR++] = thisCascade;
+					treeR->stackR[numStackR++] = R;
 				}
+			}
 
-				if ((pNodeL->T & ~IBIT) != 0) {
-					L = pNodeL->T & ~IBIT;
-					R = pNodeR->T & ~IBIT;
-					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						this->stackL[numStackL++] = thisCascade;
-						this->stackL[numStackL++] = L;
-						treeR->stackR[numStackR++] = thisCascade;
-						treeR->stackR[numStackR++] = R;
-					}
+			{
+				L = pNodeL->Q;
+				R = pNodeR->Q;
+				if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
+					this->stackL[numStackL++]  = thisCascade;
+					this->stackL[numStackL++]  = L;
+					treeR->stackR[numStackR++] = thisCascade;
+					treeR->stackR[numStackR++] = R;
 				}
-
-				{
-					L = pNodeL->Q;
-					R = pNodeR->Q;
-					if (this->compVersionL[L] != thisVersionL || treeR->compVersionR[R] != thisVersionR || this->compBeenThereL[L] != R || treeR->compBeenThereR[R] != L) {
-						this->stackL[numStackL++] = thisCascade;
-						this->stackL[numStackL++] = L;
-						treeR->stackR[numStackR++] = thisCascade;
-						treeR->stackR[numStackR++] = R;
-					}
-				}
-
-			} else {
-				/*
-				 * Follow-up visit, either the `pushedCurrent` above, or a resolved back-link.
-				 * For `pushedCurrent`, no action is required as the push is used by the cascading variant found below
-				 * For "resolved back-link", no-action as the references have been found to match.
-				 */
 			}
 
 		} while (numStackL > 0 && numStackR > 0);
@@ -861,7 +890,7 @@ struct baseTree_t {
 
 	// NE (L?~R:R)
 	inline bool __attribute__((const)) isNE(uint32_t Q, uint32_t T, uint32_t F) const {
-		return (T & ~IBIT) == F;
+		return (T ^ IBIT) == F;
 	}
 
 	// AND (L?R:0)
