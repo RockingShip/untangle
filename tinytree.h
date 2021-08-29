@@ -859,19 +859,19 @@ struct tinyTree_t {
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
 					// A and C can react, nether will exceed B/D
-					if (!this->isOR(A) && compare(A, this, C, CASCADE_OR) < 0) {
+					if (this->isOR(A) || this->isOR(C)) {
+						uint32_t AC = addOrderNode(A, IBIT, C, expectId);
+						Q = AC;
+						T = IBIT;
+						F = D;
+					} else if (compare(A, this, C, CASCADE_OR) < 0) {
 						uint32_t AC = addBasicNode(A, IBIT, C, expectId);
 						Q = AC;
 						T = IBIT;
 						F = D;
-					} else if (!this->isOR(C) && compare(C, this, A, CASCADE_OR) < 0) {
-						uint32_t CA = addBasicNode(A, IBIT, C, expectId);
-						Q = CA;
-						T = IBIT;
-						F = B;
 					} else {
-						uint32_t AC = addOrderNode(A, IBIT, C, expectId);
-						Q = AC;
+						uint32_t CA = addBasicNode(C, IBIT, A, expectId);
+						Q = CA;
 						T = IBIT;
 						F = B;
 					}
@@ -1714,20 +1714,20 @@ struct tinyTree_t {
 					F = 0;
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
-					// A and C can react, nether will exceed B/D
-					if (!this->isAND(A) && compare(A, this, C, CASCADE_AND) < 0) {
+					// A and C can react, neither will exceed B/D
+					if (this->isAND(A) || this->isAND(C)) {
+						uint32_t AC = addOrderNode(A, C, 0, expectId);
+						Q = AC;
+						T = D;
+						F = 0;
+					} else if (compare(A, this, C, CASCADE_AND) < 0) {
 						uint32_t AC = addBasicNode(A, C, 0, expectId);
 						Q = AC;
 						T = D;
 						F = 0;
-					} else if (!this->isAND(C) && compare(C, this, A, CASCADE_AND) < 0) {
-						uint32_t CA = addBasicNode(A, C, 0, expectId);
-						Q = CA;
-						T = B;
-						F = 0;
 					} else {
-						uint32_t AC = addOrderNode(A, C, 0, expectId);
-						Q = AC;
+						uint32_t CA = addBasicNode(C, A, 0, expectId);
+						Q = CA;
 						T = B;
 						F = 0;
 					}

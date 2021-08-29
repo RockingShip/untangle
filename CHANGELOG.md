@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-29 20:53:23 Fixed: `OR/AND` variant `A<C<B=D` in `tinyTree_t` and `baseTree_t`.
 2021-08-28 23:24:07 Added: `tinyTree_t::addOrderNode()` and rename friends.
 2021-08-28 21:18:29 Changed: `tinyTree_t::compare()` now cascade aware.
 2021-08-27 20:59:10 Removed: static and first argument of `baseTree_t::compare()`.

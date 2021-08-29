@@ -1430,20 +1430,23 @@ struct baseTree_t {
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
 					// A and C can react, nether will exceed B/D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac+\":\n", A, B, C, D);
-					if (!this->isOR(A) && compare(A, this, C, CASCADE_OR) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\"", A, B, C, D);
+					if (this->isOR(A) || this->isOR(C)) {
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":\n");
+						uint32_t AC = addOrderNode(A, IBIT, C, expectId, pFailCount, depth + 1);
+						Q = AC;
+						T = IBIT;
+						F = D;
+					} else if (compare(A, this, C, CASCADE_OR) < 0) {
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":");
 						uint32_t AC = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
 						Q = AC;
 						T = IBIT;
 						F = D;
-					} else if (!this->isOR(C) && compare(C, this, A, CASCADE_OR) < 0) {
-						uint32_t CA = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
-						Q = CA;
-						T = IBIT;
-						F = B;
 					} else {
-						uint32_t AC = addOrderNode(A, IBIT, C, expectId, pFailCount, depth + 1);
-						Q = AC;
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ca+\":");
+						uint32_t CA = addBasicNode(C, IBIT, A, expectId, pFailCount, depth);
+						Q = CA;
 						T = IBIT;
 						F = B;
 					}
@@ -2452,20 +2455,23 @@ struct baseTree_t {
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
 					// A and C can react, nether will exceed B/D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"ac&\":\n", A, B, C, D);
-					if (!this->isAND(A) && compare(A, this, C, CASCADE_AND) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\"", A, B, C, D);
+					if (this->isAND(A) || this->isAND(C)) {
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":\n");
+						uint32_t AC = addOrderNode(A, C, 0, expectId, pFailCount, depth + 1);
+						Q = AC;
+						T = D;
+						F = 0;
+					} else if (compare(A, this, C, CASCADE_AND) < 0) {
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":");
 						uint32_t AC = addBasicNode(A, C, 0, expectId, pFailCount, depth);
 						Q = AC;
 						T = D;
 						F = 0;
-					} else if (!this->isAND(C) && compare(C, this, A, CASCADE_AND) < 0) {
-						uint32_t CA = addBasicNode(A, C, 0, expectId, pFailCount, depth);
-						Q = CA;
-						T = B;
-						F = 0;
 					} else {
-						uint32_t AC = addOrderNode(A, C, 0, expectId, pFailCount, depth + 1);
-						Q = AC;
+						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ca+\":");
+						uint32_t CA = addBasicNode(C, A, 0, expectId, pFailCount, depth);
+						Q = CA;
 						T = B;
 						F = 0;
 					}
