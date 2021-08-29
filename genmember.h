@@ -844,7 +844,7 @@ struct genmemberContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool /*__attribute__((optimize("O0")))*/ foundTreeMember(const generator_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool /*__attribute__((optimize("O0")))*/ foundTreeMember(tinyTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (this->truncated)
 			return false; // quit as fast as possible
@@ -869,7 +869,7 @@ struct genmemberContext_t : dbtool_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPair=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u | skipDuplicate=%u skipSize=%u skipUnsafe=%u skipCascade=%u | hash=%.3f %s",
-					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
 					pStore->numPair, pStore->numPair * 100.0 / pStore->maxPair,
 					pStore->numMember, pStore->numMember * 100.0 / pStore->maxMember,
 					numEmpty, numUnsafe,
@@ -1298,7 +1298,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generator_t tree(ctx);
+		tinyTree_t tree(ctx);
 
 		// show window
 		if (opt_sidLo || opt_sidHi) {
@@ -1488,7 +1488,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generator_t tree(ctx);
+		tinyTree_t tree(ctx);
 
 		// reset ticker
 		ctx.setupSpeed(numHint);
@@ -1609,6 +1609,8 @@ struct genmemberContext_t : dbtool_t {
 		unsigned numPlaceholder, numEndpoint, numBackRef;
 		this->truncated = 0;
 
+		tinyTree_t tree(ctx);
+
 		// <name> [ <numPlaceholder> <numEndpoint> <numBackRef> ]
 		for (;;) {
 			static char line[512];
@@ -1651,13 +1653,13 @@ struct genmemberContext_t : dbtool_t {
 			/*
 			 * construct tree
 			 */
-			generator.loadStringFast(name);
+			tree.loadStringFast(name);
 
 			/*
 			 * call `foundTreeMember()`
 			 */
 
-			if (!foundTreeMember(generator, name, newPlaceholder, newEndpoint, newBackRef))
+			if (!foundTreeMember(tree, name, newPlaceholder, newEndpoint, newBackRef))
 				break;
 
 			ctx.progress++;
@@ -1745,10 +1747,12 @@ struct genmemberContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
 
 		if (arg_numNodes == 0) {
-			generator.root = 0; // "0"
-			foundTreeMember(generator, "0", 0, 0, 0);
-			generator.root = 1; // "a"
-			foundTreeMember(generator, "a", 1, 1, 0);
+			tinyTree_t tree(ctx);
+
+			tree.root = 0; // "0"
+			foundTreeMember(tree, "0", 0, 0, 0);
+			tree.root = 1; // "a"
+			foundTreeMember(tree, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
@@ -2115,6 +2119,8 @@ struct genmemberContext_t : dbtool_t {
 		 * Main loop
 		 */
 
+		tinyTree_t treeR(ctx);
+
 		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
@@ -2161,9 +2167,9 @@ struct genmemberContext_t : dbtool_t {
 				for (unsigned mask = 1; mask < maskHi; mask++) {
 
 					// add new node as first
-					generator.clearTree();
-					generator.root = generator.addNormaliseNode(Q, Ti ? Tu ^ IBIT : Tu, F);
-					assert(generator.root == tinyTree_t::TINYTREE_NSTART);
+					treeR.clearTree();
+					treeR.root = treeR.addNormaliseNode(Q, Ti ? Tu ^ IBIT : Tu, F);
+					assert(treeR.root == tinyTree_t::TINYTREE_NSTART);
 
 					/*
 					 * Inject member with substituted endpoints on top of this
@@ -2180,7 +2186,7 @@ struct genmemberContext_t : dbtool_t {
 						for (const char *pCh = pMember->name; *pCh; pCh++) {
 
 							assert(!isalnum(*pCh) || stackPos < tinyTree_t::TINYTREE_MAXSTACK);
-							assert(isalnum(*pCh) || generator.count < tinyTree_t::TINYTREE_NEND);
+							assert(isalnum(*pCh) || treeR.count < tinyTree_t::TINYTREE_NEND);
 
 							switch (*pCh) {
 							case '0':
@@ -2277,7 +2283,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNode(L, R ^ IBIT, 0);
+								unsigned nid = treeR.addNode(L, R ^ IBIT, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2292,7 +2298,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNode(L, 0 ^ IBIT, R);
+								unsigned nid = treeR.addNode(L, 0 ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2307,7 +2313,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNode(L, R ^ IBIT, R);
+								unsigned nid = treeR.addNode(L, R ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2323,7 +2329,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = generator.addNode(Q, T ^ IBIT, F);
+								unsigned nid = treeR.addNode(Q, T ^ IBIT, F);
 
 								// push
 								stack[stackPos++]     = nid; // push
@@ -2339,7 +2345,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNode(L, R, 0);
+								unsigned nid = treeR.addNode(L, R, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2354,7 +2360,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = generator.addNode(L, 0, R);
+								unsigned nid = treeR.addNode(L, 0, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[stackPos++] = nid; // save actual index for back references
@@ -2370,7 +2376,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = generator.addNode(Q, T, F);
+								unsigned nid = treeR.addNode(Q, T, F);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2400,13 +2406,13 @@ struct genmemberContext_t : dbtool_t {
 
 						assert (stackPos == 1);
 
-						assert(generator.count <= tinyTree_t::TINYTREE_NEND);
+						assert(treeR.count <= tinyTree_t::TINYTREE_NEND);
 
 						// store result into root
-						generator.root = stack[stackPos - 1];
+						treeR.root = stack[stackPos - 1];
 					}
 
-					if (generator.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
+					if (treeR.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
 						continue;
 
 					/*
@@ -2415,12 +2421,12 @@ struct genmemberContext_t : dbtool_t {
 					char skin[MAXSLOTS + 1];
 					char name[tinyTree_t::TINYTREE_NAMELEN + 1];
 
-					generator.saveString(generator.root, name, skin); // save it because tree is not normalised
-					generator.loadStringSafe(name); // reload to normalise
-					generator.saveString(generator.root, name, skin); // save with skin, byt dyadics are not normalised
-					generator.loadStringSafe(name); // reload to normalise
+					treeR.saveString(treeR.root, name, skin); // save it because tree is not normalised
+					treeR.loadStringSafe(name); // reload to normalise
+					treeR.saveString(treeR.root, name, skin); // save with skin, byt dyadics are not normalised
+					treeR.loadStringSafe(name); // reload to normalise
 
-					if (generator.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
+					if (treeR.count - tinyTree_t::TINYTREE_NSTART != arg_numNodes)
 						continue;
 
 					// calculate values
@@ -2444,7 +2450,7 @@ struct genmemberContext_t : dbtool_t {
 					 * call `foundTreeMember()`
 					 */
 
-					if (!foundTreeMember(generator, name, newPlaceholder, newEndpoint, newBackRef))
+					if (!foundTreeMember(treeR, name, newPlaceholder, newEndpoint, newBackRef))
 						break;
 
 				}

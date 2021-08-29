@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-29 21:20:06 Added: re-allocating `buildTree` into `foundTree` in `generator_t`.
 2021-08-29 20:57:26 Changed: Renamed `generatorTree_t` to `generator_t`.
 2021-08-29 20:53:23 Fixed: `OR/AND` variant `A<C<B=D` in `tinyTree_t` and `baseTree_t`.
 2021-08-28 23:24:07 Added: `tinyTree_t::addOrderNode()` and rename friends.

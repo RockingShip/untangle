@@ -122,7 +122,7 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeRestartTab(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeRestartTab(tinyTree_t &noname, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*
 		 * Simply count how often called
 		 */
@@ -232,15 +232,15 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreePrintTab(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreePrintTab(tinyTree_t &noname, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		static char keyName[tinyTree_t::TINYTREE_NEND * 4 + 1];
 
 		/*
 		 * Translate to key/display name
 		 */
 		char *pKeyName = keyName;
-		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
-			unsigned qtf = tree.packedN[iNode];
+		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < generator.buildTree.count; iNode++) {
+			unsigned qtf = generator.packedN[iNode];
 			unsigned Q   = (qtf >> generator_t::PACKED_QPOS) & generator_t::PACKED_MASK;
 			unsigned Tu  = (qtf >> generator_t::PACKED_TPOS) & generator_t::PACKED_MASK;
 			unsigned F   = (qtf >> generator_t::PACKED_FPOS) & generator_t::PACKED_MASK;

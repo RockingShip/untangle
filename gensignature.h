@@ -309,7 +309,7 @@ struct gensignatureContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeSignature(const generator_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeSignature(tinyTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (this->truncated)
 			return false; // quit as fast as possible
@@ -340,7 +340,7 @@ struct gensignatureContext_t : dbtool_t {
 				 *   treeR.windowLo/treeR.windowHi is ctx.progress limits. windowHi can be zero
 				 */
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numSignature=%u(%.0f%%) numImprint=%u(%.0f%%) | skipDuplicate=%u hash=%.3f %s",
-					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - treeR.windowLo) * 100.0 / (ctx.progressHi - treeR.windowLo), etaH, etaM, etaS,
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
 					pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 					pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
 					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
@@ -448,7 +448,6 @@ struct gensignatureContext_t : dbtool_t {
 
 			// only add if signatures are writable
 			if (!this->readOnlyMode) {
-
 				// add signature to database
 				sid = pStore->addSignature(pNameR);
 				assert(sid == origNumSignature);
@@ -630,7 +629,7 @@ struct gensignatureContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generator_t tree(ctx);
+		tinyTree_t tree(ctx);
 
 		// reset ticker
 		ctx.setupSpeed(pStore->numSignature);
@@ -754,6 +753,8 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.tick = 0;
 		skipDuplicate = 0;
 
+		tinyTree_t tree(ctx);
+
 		// <name> [ <numPlaceholder> <numEndpoint> <numBackRef> ]
 		for (;;) {
 			static char line[512];
@@ -789,7 +790,7 @@ struct gensignatureContext_t : dbtool_t {
 			/*
 			 * construct tree
 			 */
-			generator.loadStringFast(pName);
+			tree.loadStringFast(pName);
 
 			// calculate values
 			unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
@@ -810,7 +811,7 @@ struct gensignatureContext_t : dbtool_t {
 			 * call `foundTreeSignature()`
 			 */
 
-			if (!foundTreeSignature(generator, pName, newPlaceholder, newEndpoint, newBackRef))
+			if (!foundTreeSignature(tree, pName, newPlaceholder, newEndpoint, newBackRef))
 				break;
 
 			/*
@@ -918,6 +919,7 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.tick = 0;
 		skipDuplicate = 0;
 
+		tinyTree_t tree(ctx);
 
 		/*
 		 * Generate candidates
@@ -926,10 +928,10 @@ struct gensignatureContext_t : dbtool_t {
 			fprintf(stderr, "[%s] Generating candidates for %un%u%s\n", ctx.timeAsString(), arg_numNodes, MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE ? "-pure" : "");
 
 		if (arg_numNodes == 0) {
-			generator.root = 0; // "0"
-			foundTreeSignature(generator, "0", 0, 0, 0);
-			generator.root = 1; // "a"
-			foundTreeSignature(generator, "a", 1, 1, 0);
+			tree.root = 0; // "0"
+			foundTreeSignature(tree, "0", 0, 0, 0);
+			tree.root = 1; // "a"
+			foundTreeSignature(tree, "a", 1, 1, 0);
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 

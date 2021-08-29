@@ -95,7 +95,7 @@ struct callable_t {
  *
  * `generatorTree_t` extends `tinyTree_t` by giving it tree creation capabilities
  */
-struct generator_t : tinyTree_t {
+struct generator_t {
 
 	/*
 	 * @date 2020-03-19 16:12:52
@@ -164,7 +164,16 @@ struct generator_t : tinyTree_t {
 		/// @constant {number} - size of `pTemplateData[]`
 		TEMPLATE_MAXDATA = 5116361,
 		TEMPLATE_MAXDATA_PURE = 2719253,
+
+		/// @constant {number} - convenience
+		TINYTREE_KSTART = tinyTree_t::TINYTREE_KSTART,
+		TINYTREE_NSTART = tinyTree_t::TINYTREE_NSTART,
+		TINYTREE_NEND = tinyTree_t::TINYTREE_NEND,
+		TINYTREE_MAXNODES = tinyTree_t::TINYTREE_MAXNODES,
 	};
+
+	/// @var {context_t} I/O context
+	context_t &ctx;
 
 	/// @var {number[]} lookup table for `push()` index by packed `QTF`
 	uint32_t *pCacheQTF;
@@ -202,6 +211,9 @@ struct generator_t : tinyTree_t {
 	/// @var {number[7][10][10]} starting offset in `templateData[]`. `templateIndex[SECTION][numNode][numPlaceholder]`
 	uint32_t templateIndex[1 << TINYTREE_MAXNODES][MAXSLOTS + 1][4];
 
+	/// @var {tintTree_t} Tree under construction`
+	tinyTree_t buildTree;
+
 	/// @var {tintTree_t} Tree needed to re-order endpoints before calling `foundTree()`
 	tinyTree_t foundTree;
 
@@ -213,7 +225,7 @@ struct generator_t : tinyTree_t {
 	 *
 	 * @param {context_t} ctx - I/O context
 	 */
-	generator_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
+	generator_t(context_t &ctx) : ctx(ctx), buildTree(ctx), foundTree(ctx) {
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
 		assert(TINYTREE_NEND < 32 - 3);
 
@@ -265,7 +277,7 @@ struct generator_t : tinyTree_t {
 		}
 		iVersion++; // when overflows, next call will clear
 
-		this->clearTree();
+		buildTree.clearTree();
 	}
 
 	/**
@@ -605,7 +617,7 @@ struct generator_t : tinyTree_t {
 			return 0;
 
 		// add/push packed node
-		unsigned nid = this->count;
+		unsigned nid = buildTree.count;
 		assert(nid < TINYTREE_NEND); // overflow
 		assert((nid & ~PACKED_MASK) == 0); // may not overflow packed field
 
@@ -613,7 +625,7 @@ struct generator_t : tinyTree_t {
 		this->packedN[nid] = qtf;
 
 		// populate node
-		tinyNode_t *pNode = this->N + nid;
+		tinyNode_t *pNode = buildTree.N + nid;
 
 		pNode->Q = (qtf >> PACKED_QPOS) & PACKED_MASK;
 		pNode->T = (qtf >> PACKED_TPOS) & PACKED_MASK;
@@ -683,7 +695,7 @@ struct generator_t : tinyTree_t {
 
 		// fixate
 		// add to cache of fast duplicate lookups
-		pCacheQTF[qtf] = this->count++;
+		pCacheQTF[qtf] = buildTree.count++;
 		pCacheVersion[qtf] = iVersion;
 
 		return nid;
@@ -696,7 +708,7 @@ struct generator_t : tinyTree_t {
 	 */
 	inline void pop(void) {
 		// pop node
-		unsigned qtf = this->packedN[--this->count];
+		unsigned qtf = this->packedN[--buildTree.count];
 
 		// erase index
 		pCacheQTF[qtf] = 0;
@@ -715,7 +727,7 @@ struct generator_t : tinyTree_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	typedef bool(callable_t::* generateTreeCallback_t)(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef);
+	typedef bool(callable_t::* generateTreeCallback_t)(tinyTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef);
 
 	/**
 	 * @date 2020-03-18 22:17:26
@@ -727,6 +739,15 @@ struct generator_t : tinyTree_t {
 	 *  - Construct name
 	 *  - Collect stats
 	 *
+	 * @date 2021-08-29 10:43:32
+	 *
+	 * With the renewed structure base compare and naming algorithm it is no longer possible to test/reject naturally ordered endpoints.
+	 * Also, with renewed cascading it is also possible that structure will collapse/fold
+	 *
+	 * The generator builds trees in that is different than the walking path
+	 * Copy/reassign endpoints to `foundTree`.
+	 * This has the extra advantage that the tree may be modified
+	 *
 	 * @param {object} cbObject - callback object
 	 * @param {object} cbMember - callback member in object
 	 */
@@ -737,7 +758,7 @@ struct generator_t : tinyTree_t {
 			return;
 
 		// test that tree is within limits
-		assert(this->count >= TINYTREE_NSTART && this->count <= TINYTREE_NEND);
+		assert(buildTree.count >= TINYTREE_NSTART && buildTree.count <= TINYTREE_NEND);
 
 		// test if tree is within progress range
 		// NOTE: first tree has `progress==0`
@@ -746,29 +767,29 @@ struct generator_t : tinyTree_t {
 		if (windowHi && ctx.progress >= windowHi)
 			return;
 
-		// set root
-		this->root = this->count - 1;
-
 		// stack
-		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int stackPos = 0;
 
 		// name
-		char name[TINYTREE_NAMELEN + 1];
+		char name[tinyTree_t::TINYTREE_NAMELEN + 1];
 		unsigned nameLen = 0;
 
 		// counters
 		unsigned nextNode = TINYTREE_NSTART;
+		unsigned nextPlaceholder = TINYTREE_KSTART;
 		unsigned numEndpoint = 0;
-		unsigned numPlaceholder = 0;
 		unsigned numBackRef = 0;
 
 		// nodes already processed
 		uint32_t beenThere = (1 << 0); // don't let zero count as endpoint
 		uint32_t beenWhat[TINYTREE_NEND];
+		beenWhat[0] = 0;
 
 		// push start on stack
-		stack[stackPos++] = this->root;
+		stack[stackPos++] = buildTree.count - 1;
+
+		foundTree.count = TINYTREE_NSTART;
 
 		do {
 			// pop stack
@@ -780,7 +801,11 @@ struct generator_t : tinyTree_t {
 				 */
 				assert(curr != 0);
 
-				name[nameLen++] = 'a' + curr - TINYTREE_KSTART;
+				if (!(beenThere & (1 << curr))) {
+					beenThere |= (1 << curr);
+					beenWhat[curr] = nextPlaceholder++;
+				}
+				name[nameLen++] = (char) ('a' + curr - TINYTREE_KSTART);
 				numEndpoint++;
 
 			} else {
@@ -788,17 +813,17 @@ struct generator_t : tinyTree_t {
 				 * Reference
 				 */
 
-				const tinyNode_t *pNode = this->N + curr;
-				const unsigned   Q      = pNode->Q;
-				const unsigned   Tu     = pNode->T & ~IBIT;
-				const unsigned   Ti     = pNode->T & IBIT;
-				const unsigned   F      = pNode->F;
+				const tinyNode_t *pNode = buildTree.N + curr;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   F      = pNode->F;
 
 				// determine if node already handled
 				if (!(beenThere & (1 << curr))) {
-					/// first time
+					// first time
 
-					// push id so it visits again a second time
+					// push id so it visits again a second time for the operator
 					stack[stackPos++] = curr;
 
 					// push non-zero endpoints
@@ -809,76 +834,73 @@ struct generator_t : tinyTree_t {
 					if (Q >= TINYTREE_KSTART)
 						stack[stackPos++] = Q;
 
-					// done, flag no endpoint assignment done
+					// done, flag first-time done
 					beenThere |= (1 << curr);
 					beenWhat[curr] = 0;
 
 				} else if (beenWhat[curr] == 0) {
 					// node complete, output operator
-
-					/*
-					 * check that operands are in natural order
-					 */
-
-					if (Q < TINYTREE_NSTART && !(beenThere & (1 << Q))) {
-						beenThere |= (1 << Q);
-						if (Q != TINYTREE_KSTART + numPlaceholder)
-							return;
-						numPlaceholder++;
-					}
-
-					if (Tu < TINYTREE_NSTART && !(beenThere & (1 << Tu))) {
-						beenThere |= (1 << Tu);
-						if (Tu != TINYTREE_KSTART + numPlaceholder)
-							return;
-						numPlaceholder++;
-					}
-
-					if (F < TINYTREE_NSTART && !(beenThere & (1 << F))) {
-						beenThere |= (1 << F);
-						if (F != TINYTREE_KSTART + numPlaceholder)
-							return;
-						numPlaceholder++;
-					}
+					tinyNode_t *pFoundNode = foundTree.N + foundTree.count++;
 
 					if (Ti) {
 						if (F == 0) {
 							// GT Q?!T:0
 							name[nameLen++] = '>';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = beenWhat[Tu] ^ IBIT;
+							pFoundNode->F = 0;
 						} else if (Tu == 0) {
 							// OR Q?!0:F
 							name[nameLen++] = '+';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = IBIT;
+							pFoundNode->F = beenWhat[F];
 						} else if (F == Tu) {
 							// XOR Q?!F:F
 							name[nameLen++] = '^';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = beenWhat[F] ^ IBIT;
+							pFoundNode->F = beenWhat[F];
 						} else {
 							// QnTF Q?!T:F
 							name[nameLen++] = '!';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = beenWhat[Tu] ^ IBIT;
+							pFoundNode->F = beenWhat[F];
 						}
 					} else {
 						if (F == 0) {
 							// AND Q?T:0
 							name[nameLen++] = '&';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = beenWhat[Tu];
+							pFoundNode->F = 0;
 						} else if (Tu == 0) {
 							// LT Q?0:F
 							name[nameLen++] = '<';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = 0;
+							pFoundNode->F = beenWhat[F];
 						} else if (F == Tu) {
 							// SELF Q?F:F
 							assert(!"Q?F:F");
 						} else {
 							// QTF Q?T:F
 							name[nameLen++] = '?';
+							pFoundNode->Q = beenWhat[Q];
+							pFoundNode->T = beenWhat[Tu];
+							pFoundNode->F = beenWhat[F];
 						}
 					}
 
-					// flag endpoints assigned
+					// flag operator done
 					beenWhat[curr] = nextNode++;
 				} else {
 					// back-reference to previous node
 
 					unsigned backref = nextNode - beenWhat[curr];
 					assert(backref <= 9);
-					name[nameLen++] = '0' + backref;
+					name[nameLen++] = (char) ('0' + backref);
 
 					numBackRef++;
 				}
@@ -886,13 +908,15 @@ struct generator_t : tinyTree_t {
 
 		} while (stackPos > 0);
 
-		assert(nameLen <= TINYTREE_NAMELEN);
+		assert(nameLen <= tinyTree_t::TINYTREE_NAMELEN);
 		name[nameLen] = 0;
+
+		foundTree.root = foundTree.count - 1;
 
 		/*
 		 * invoke the callback
 		 */
-		(*cbObject.*cbMember)(*this, name, numPlaceholder, numEndpoint, numBackRef);
+		(*cbObject.*cbMember)(foundTree, name, nextPlaceholder - TINYTREE_KSTART, numEndpoint, numBackRef);
 
 	}
 
@@ -959,7 +983,7 @@ struct generator_t : tinyTree_t {
 		 * Recursion on its 3nd level (when trees are 2 nodes in size) is a good moment to check conditions
 		 * This makes that restarting sensible for trees >= 4 nodes
 		 */
-		if (this->count == this->restartTabDepth) {
+		if (buildTree.count == this->restartTabDepth) {
 			if (this->pRestartData) {
 				/*
 				 * assert that restart data is in sync with reality
@@ -986,7 +1010,8 @@ struct generator_t : tinyTree_t {
 				/*
 				 * Hit a restart tab, intended for `genrestartdata`
 				 */
-				(*cbObject.*cbMember)(*this, "", 0, 0, 0);
+				foundTree.root = 0;
+				(*cbObject.*cbMember)(foundTree, "", 0, 0, 0);
 			}
 		}
 

@@ -108,12 +108,14 @@ struct selftestContext_t : dbtool_t {
 		 * Basic test tree
 		 */
 
+		tinyTree_t tree(ctx);
+
 		// test is test name can be decoded
-		generator.loadStringFast(name);
+		tree.loadStringFast(name);
 
 		// test that tree is what was requested
-		assert(!(generator.root & IBIT));
-		assert(::strcmp(name, generator.saveString(generator.root)) == 0);
+		assert(!(tree.root & IBIT));
+		assert(::strcmp(name, tree.saveString(tree.root)) == 0);
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
@@ -126,10 +128,12 @@ struct selftestContext_t : dbtool_t {
 	 */
 	void performSelfTestTreeNormaliseLevel2(void) {
 
+		tinyTree_t tree(ctx);
+
 		// decode name
-		generator.loadStringSafe("ab>ba+^");
+		tree.loadStringSafe("ab>ba+^");
 		// encode name
-		const char *pName = generator.saveString(generator.root);
+		const char *pName = tree.saveString(tree.root);
 
 		if (::strcmp(pName, "ab+ab>^") != 0) {
 			printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
@@ -163,6 +167,8 @@ struct selftestContext_t : dbtool_t {
 
 		// needs 32 byte alignment for AVX2
 		footprint_t *pEval = (footprint_t *) ::aligned_alloc(32, pStore->align32(sizeof(*pEval) * tinyTree_t::TINYTREE_NEND));
+
+		tinyTree_t tree(ctx);
 
 		/*
 		 * self-test with different program settings
@@ -199,8 +205,8 @@ struct selftestContext_t : dbtool_t {
 				 */
 
 				ctx.flags = context_t::MAGICMASK_PARANOID | (iPure ? context_t::MAGICMASK_PURE : 0);
-				generator.clearTree();
-				generator.root = generator.addNormaliseNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
+				tree.clearTree();
+				tree.root = tree.addNormaliseNode(Qu ^ (Qi ? IBIT : 0), Tu ^ (Ti ? IBIT : 0), Fu ^ (Fi ? IBIT : 0));
 
 				/*
 				 * save with placeholders and reload
@@ -210,11 +216,11 @@ struct selftestContext_t : dbtool_t {
 				if (iSkin) {
 					char skin[MAXSLOTS + 1];
 
-					generator.saveString(generator.root, treeName, skin);
+					tree.saveString(tree.root, treeName, skin);
 					if (iFast) {
-						generator.loadStringFast(treeName, skin);
+						tree.loadStringFast(treeName, skin);
 					} else {
-						int ret = generator.loadStringSafe(treeName, skin);
+						int ret = tree.loadStringSafe(treeName, skin);
 						if (ret != 0) {
 							printf("{\"error\":\"loadStringSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s/%s\",\"ret\":%d}\n",
 							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, skin, ret);
@@ -222,11 +228,11 @@ struct selftestContext_t : dbtool_t {
 						}
 					}
 				} else {
-					generator.saveString(generator.root, treeName, NULL);
+					tree.saveString(tree.root, treeName, NULL);
 					if (iFast) {
-						generator.loadStringFast(treeName);
+						tree.loadStringFast(treeName);
 					} else {
-						int ret = generator.loadStringSafe(treeName);
+						int ret = tree.loadStringSafe(treeName);
 						if (ret != 0) {
 							printf("{\"error\":\"loadStringSafe() failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iPure\":%u,\"iSkin\":%u,\"name\":\"%s\",\"ret\":%d}\n",
 							       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, treeName, ret);
@@ -245,7 +251,7 @@ struct selftestContext_t : dbtool_t {
 				pEval[tinyTree_t::TINYTREE_KSTART + 2].bits[0] = 0b11110000; // v[3]
 
 				// evaluate
-				generator.eval(pEval);
+				tree.eval(pEval);
 
 				/*
 				 * The footprint contains the tree outcome for every possible value combination the endpoints can have
@@ -296,8 +302,8 @@ struct selftestContext_t : dbtool_t {
 
 					// extract encountered from footprint.
 					unsigned ix          = c << 2 | b << 1 | a;
-					unsigned encountered = pEval[generator.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
-					if (generator.root & IBIT)
+					unsigned encountered = pEval[tree.root & ~IBIT].bits[0] & (1 << ix) ? 1 : 0;
+					if (tree.root & IBIT)
 						encountered ^= 1; // invert result
 
 					if (expected != encountered) {
@@ -326,12 +332,12 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeWindowCreate(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowCreate(tinyTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), generator.windowLo * 100.0 / ctx.progressHi);
 			else
-				fprintf(stderr, "\r\e[K[%s] %lu", ctx.timeAsString(), tree.windowLo);
+				fprintf(stderr, "\r\e[K[%s] %lu", ctx.timeAsString(), generator.windowLo);
 			ctx.tick = 0;
 		}
 
@@ -362,12 +368,12 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeWindowVerify(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowVerify(tinyTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
-				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
+				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), generator.windowLo * 100.0 / ctx.progressHi);
 			else
-				fprintf(stderr, "\r\e[K[%s] %lu", ctx.timeAsString(), tree.windowLo);
+				fprintf(stderr, "\r\e[K[%s] %lu", ctx.timeAsString(), generator.windowLo);
 			ctx.tick = 0;
 		}
 
@@ -975,6 +981,8 @@ struct selftestContext_t : dbtool_t {
 		// test name. NOTE: this is deliberately "not ordered"
 		const char *pBasename = "abc!defg!!hi!";
 
+		tinyTree_t tree(ctx);
+
 		/*
 		 * @date 2020-03-17 00:34:54
 		 *
@@ -1007,10 +1015,10 @@ struct selftestContext_t : dbtool_t {
 			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.
 			 */
 
-			generator.loadStringFast(pBasename);
+			tree.loadStringFast(pBasename);
 
 			// add to database
-			pStore->addImprintAssociative(&generator, pEvalFwd, pEvalRev, 0);
+			pStore->addImprintAssociative(&tree, pEvalFwd, pEvalRev, 0);
 
 			/*
 			 * Lookup all possible permutations
@@ -1025,12 +1033,12 @@ struct selftestContext_t : dbtool_t {
 				}
 
 				// Load base name with skin
-				generator.loadStringFast(pBasename, pStore->fwdTransformNames[iTransform]);
+				tree.loadStringFast(pBasename, pStore->fwdTransformNames[iTransform]);
 
 				unsigned sid, tid;
 
 				// lookup
-				if (!pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &sid, &tid)) {
+				if (!pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &sid, &tid)) {
 					printf("{\"error\":\"tree not found\",\"where\":\"%s:%s:%d\",\"interleave\":%u,\"tid\":\"%s\"}\n",
 					       __FUNCTION__, __FILE__, __LINE__, pStore->interleave, pStore->fwdTransformNames[iTransform]);
 					exit(1);
@@ -1084,7 +1092,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeCompare(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeCompare(tinyTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
@@ -1274,7 +1282,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeMetrics(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeMetrics(tinyTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
 
@@ -1360,10 +1368,11 @@ struct selftestContext_t : dbtool_t {
 			ctx.tick = 0;
 
 			// special case (root only)
-			generator.root = 0; // "0"
-			foundTreeMetrics(generator, "0", 0, 0, 0);
-			generator.root = 1; // "a"
-			foundTreeMetrics(generator, "a", 1, 1, 0);
+			tinyTree_t tree(ctx);
+			tree.root = 0; // "0"
+			foundTreeMetrics(tree, "0", 0, 0, 0);
+			tree.root = 1; // "a"
+			foundTreeMetrics(tree, "a", 1, 1, 0);
 
 			// regulars
 			unsigned endpointsLeft = pRound->numNode * 2 + 1;
@@ -1383,9 +1392,11 @@ struct selftestContext_t : dbtool_t {
 			ctx.cntCompare = 0;
 
 			if (this->opt_metrics) {
+				tinyTree_t tree(ctx);
+
 				// wait for a tick
 				for (ctx.tick = 0; ctx.tick == 0;)
-					generator.loadStringFast("ab+"); // waste some time
+					tree.loadStringFast("ab+"); // waste some time
 
 				// do random lookups for 10 seconds
 				for (ctx.tick = 0; ctx.tick < 5;) {
@@ -1394,11 +1405,11 @@ struct selftestContext_t : dbtool_t {
 					unsigned tid = rand() % pStore->numTransform;
 
 					// load tree
-					generator.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
+					tree.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
 
 					// perform a lookup
 					unsigned s = 0, t = 0;
-					pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &s, &t);
+					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &s, &t);
 					assert(sid == s);
 				}
 			}
@@ -1440,12 +1451,14 @@ struct selftestContext_t : dbtool_t {
 
 				fprintf(stderr, "[numImprint=%u imprintIndexSize=%u ratio=%.1f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0);
 
+				tinyTree_t tree(ctx);
+
 				// reindex
 				for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
 					const signature_t *pSignature = pStore->signatures + iSid;
 
-					generator.loadStringFast(pSignature->name);
-					pStore->addImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, iSid);
+					tree.loadStringFast(pSignature->name);
+					pStore->addImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, iSid);
 				}
 
 				fprintf(stderr, "\r\e[K[numImprint=%u imprintIndexSize=%u ratio=%.1f cntHash=%lu cntCompare=%lu hash=%.5f]", pStore->numImprint, pStore->imprintIndexSize, iRatio / 10.0, ctx.cntHash, ctx.cntCompare, (double) ctx.cntCompare / ctx.cntHash);
@@ -1459,7 +1472,7 @@ struct selftestContext_t : dbtool_t {
 
 				// wait for a tick
 				for (ctx.tick = 0; ctx.tick == 0;) {
-					generator.loadStringFast("ab+"); // waste some time
+					tree.loadStringFast("ab+"); // waste some time
 				}
 
 				// do random lookups for 10 seconds
@@ -1469,11 +1482,11 @@ struct selftestContext_t : dbtool_t {
 					unsigned tid = rand() % pStore->numTransform;
 
 					// load tree
-					generator.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
+					tree.loadStringFast(pStore->signatures[sid].name, pStore->fwdTransformNames[tid]);
 
 					// perform a lookup
 					unsigned s = 0, t = 0;
-					pStore->lookupImprintAssociative(&generator, this->pEvalFwd, this->pEvalRev, &s, &t);
+					pStore->lookupImprintAssociative(&tree, this->pEvalFwd, this->pEvalRev, &s, &t);
 					assert(sid == s);
 				}
 
