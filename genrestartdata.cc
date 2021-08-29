@@ -95,7 +95,7 @@ struct genrestartdataContext_t : callable_t {
 	unsigned numRestart;
 
 	/// @var {number} - THE generator
-	generatorTree_t generator;
+	generator_t generator;
 
 	/**
 	 * Constructor
@@ -122,7 +122,7 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeRestartTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeRestartTab(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		/*
 		 * Simply count how often called
 		 */
@@ -151,7 +151,7 @@ struct genrestartdataContext_t : callable_t {
 		unsigned endpointsLeft = numNode * 2 + 1;
 
 		generator.clearGenerator();
-		generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
+		generator.generateTrees(numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
 
 		return numRestart;
 	}
@@ -168,7 +168,7 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeFilterTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeFilterTab(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 
 		/*
@@ -215,7 +215,7 @@ struct genrestartdataContext_t : callable_t {
 		unsigned endpointsLeft = this->arg_numNodes * 2 + 1;
 
 		generator.clearGenerator();
-		generator.generateTrees(this->arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
+		generator.generateTrees(this->arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreeRestartTab));
 
 		printf("called %u times\n", numRestart);
 	}
@@ -232,7 +232,7 @@ struct genrestartdataContext_t : callable_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreePrintTab(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreePrintTab(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		static char keyName[tinyTree_t::TINYTREE_NEND * 4 + 1];
 
 		/*
@@ -241,10 +241,10 @@ struct genrestartdataContext_t : callable_t {
 		char *pKeyName = keyName;
 		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < tree.count; iNode++) {
 			unsigned qtf = tree.packedN[iNode];
-			unsigned Q   = (qtf >> generatorTree_t::PACKED_QPOS) & generatorTree_t::PACKED_MASK;
-			unsigned Tu  = (qtf >> generatorTree_t::PACKED_TPOS) & generatorTree_t::PACKED_MASK;
-			unsigned F   = (qtf >> generatorTree_t::PACKED_FPOS) & generatorTree_t::PACKED_MASK;
-			unsigned Ti  = (qtf & generatorTree_t::PACKED_TIMASK) ? 1 : 0;
+			unsigned Q   = (qtf >> generator_t::PACKED_QPOS) & generator_t::PACKED_MASK;
+			unsigned Tu  = (qtf >> generator_t::PACKED_TPOS) & generator_t::PACKED_MASK;
+			unsigned F   = (qtf >> generator_t::PACKED_FPOS) & generator_t::PACKED_MASK;
+			unsigned Ti  = (qtf & generator_t::PACKED_TIMASK) ? 1 : 0;
 
 			if (Q >= tinyTree_t::TINYTREE_NSTART)
 				*pKeyName++ = "123456789"[Q - tinyTree_t::TINYTREE_NSTART ];
@@ -350,7 +350,7 @@ struct genrestartdataContext_t : callable_t {
 				unsigned endpointsLeft = numArgs * 2 + 1;
 
 				generator.clearGenerator();
-				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
+				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
 
 				// was there any output
 				if (buildProgressIndex[numArgs][iPure] != this->numRestart) {

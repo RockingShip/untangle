@@ -242,9 +242,9 @@ struct gensignatureContext_t : dbtool_t {
 	database_t  *pStore;
 
 	/// @var {number} - THE generator
-	generatorTree_t generator;
+	generator_t generator;
 	/// @var {number} `foundTree()` duplicate by name
-	unsigned        skipDuplicate;
+	unsigned    skipDuplicate;
 	/// @var {number} Where database overflow was caught
 	uint64_t        truncated;
 	/// @var {number} Name of signature causing overflow
@@ -309,7 +309,7 @@ struct gensignatureContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeSignature(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeSignature(const generator_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (this->truncated)
 			return false; // quit as fast as possible
@@ -630,7 +630,7 @@ struct gensignatureContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generatorTree_t tree(ctx);
+		generator_t tree(ctx);
 
 		// reset ticker
 		ctx.setupSpeed(pStore->numSignature);
@@ -935,7 +935,7 @@ struct gensignatureContext_t : dbtool_t {
 
 			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
-			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeSignature));
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeSignature));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)

@@ -276,27 +276,27 @@ struct genmemberContext_t : dbtool_t {
 	database_t  *pStore;
 
 	/// @var {unsigned} - active index for `hints[]`
-	unsigned        activeHintIndex;
+	unsigned    activeHintIndex;
 	/// @var {number} - Head of list of free members to allocate
-	unsigned        freeMemberRoot;
+	unsigned    freeMemberRoot;
 	/// @var {number} - THE generator
-	generatorTree_t generator;
+	generator_t generator;
 	/// @var {number} - Number of empty signatures left
-	unsigned        numEmpty;
+	unsigned    numEmpty;
 	/// @var {number} - Number of unsafe signatures left
-	unsigned        numUnsafe;
+	unsigned    numUnsafe;
 	/// @var {number} cascading dyadics
-	unsigned        skipCascade;
+	unsigned    skipCascade;
 	/// @var {number} `foundTree()` duplicate by name
-	unsigned        skipDuplicate;
+	unsigned    skipDuplicate;
 	/// @var {number} `foundTree()` too large for signature
-	unsigned        skipSize;
+	unsigned    skipSize;
 	/// @var {number} `foundTree()` unsafe abundance
-	unsigned        skipUnsafe;
+	unsigned    skipUnsafe;
 	/// @var {number} Where database overflow was caught
-	uint64_t        truncated;
+	uint64_t    truncated;
 	/// @var {number} Name of signature causing overflow
-	char            truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
+	char        truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
 
 	/**
 	 * Constructor
@@ -844,7 +844,7 @@ struct genmemberContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool /*__attribute__((optimize("O0")))*/ foundTreeMember(const generatorTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool /*__attribute__((optimize("O0")))*/ foundTreeMember(const generator_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (this->truncated)
 			return false; // quit as fast as possible
@@ -1298,7 +1298,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generatorTree_t tree(ctx);
+		generator_t tree(ctx);
 
 		// show window
 		if (opt_sidLo || opt_sidHi) {
@@ -1488,7 +1488,7 @@ struct genmemberContext_t : dbtool_t {
 		 * Create imprints for signature groups
 		 */
 
-		generatorTree_t tree(ctx);
+		generator_t tree(ctx);
 
 		// reset ticker
 		ctx.setupSpeed(numHint);
@@ -1754,7 +1754,7 @@ struct genmemberContext_t : dbtool_t {
 
 			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
 			generator.clearGenerator();
-			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&genmemberContext_t::foundTreeMember));
+			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genmemberContext_t::foundTreeMember));
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)

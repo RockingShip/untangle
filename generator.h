@@ -95,7 +95,7 @@ struct callable_t {
  *
  * `generatorTree_t` extends `tinyTree_t` by giving it tree creation capabilities
  */
-struct generatorTree_t : tinyTree_t {
+struct generator_t : tinyTree_t {
 
 	/*
 	 * @date 2020-03-19 16:12:52
@@ -213,7 +213,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * @param {context_t} ctx - I/O context
 	 */
-	generatorTree_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
+	generator_t(context_t &ctx) : tinyTree_t(ctx), foundTree(ctx) {
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
 		assert(TINYTREE_NEND < 32 - 3);
 
@@ -245,7 +245,7 @@ struct generatorTree_t : tinyTree_t {
 	 *
 	 * Release system resources
 	 */
-	~generatorTree_t() {
+	~generator_t() {
 		ctx.myFree("generatorTree_t::pIsType", this->pIsType);
 		ctx.myFree("generatorTree_t::pCacheQTF", this->pCacheQTF);
 		ctx.myFree("generatorTree_t::pCacheVersion", this->pCacheVersion);
@@ -715,7 +715,7 @@ struct generatorTree_t : tinyTree_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	typedef bool(callable_t::* generateTreeCallback_t)(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef);
+	typedef bool(callable_t::* generateTreeCallback_t)(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef);
 
 	/**
 	 * @date 2020-03-18 22:17:26

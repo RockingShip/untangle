@@ -59,7 +59,7 @@ struct selftestContext_t : dbtool_t {
 	 */
 
 	/// @var {number} - THE generator
-	generatorTree_t generator;
+	generator_t generator;
 
 	/// @var {string} name of input database
 	const char *arg_inputDatabase;
@@ -326,7 +326,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeWindowCreate(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowCreate(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
@@ -362,7 +362,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeWindowVerify(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeWindowVerify(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
 				fprintf(stderr, "\r\e[K[%s] %.5f%%", ctx.timeAsString(), tree.windowLo * 100.0 / ctx.progressHi);
@@ -434,7 +434,7 @@ struct selftestContext_t : dbtool_t {
 			ctx.tick               = 0;
 
 			generator.clearGenerator();
-			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
+			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
 			generator.pRestartData = NULL;
 		}
 
@@ -456,7 +456,7 @@ struct selftestContext_t : dbtool_t {
 			ctx.tick               = 0;
 
 			generator.clearGenerator();
-			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
+			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
 			generator.pRestartData = NULL;
 		}
 
@@ -1084,7 +1084,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeCompare(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeCompare(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			if (ctx.progressHi)
@@ -1163,7 +1163,7 @@ struct selftestContext_t : dbtool_t {
 		generator.clearGenerator();
 		unsigned numNodes     = 4;
 		unsigned numEndpoints = numNodes * 2 + 1;
-		generator.generateTrees(numNodes, numEndpoints, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeCompare));
+		generator.generateTrees(numNodes, numEndpoints, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeCompare));
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
@@ -1274,7 +1274,7 @@ struct selftestContext_t : dbtool_t {
 	 * @param {number} numBackRef - number of back-references
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
-	bool foundTreeMetrics(const generatorTree_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
+	bool foundTreeMetrics(const generator_t &tree, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
 
@@ -1370,7 +1370,7 @@ struct selftestContext_t : dbtool_t {
 
 			// count signatures and imprints
 			generator.clearGenerator();
-			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, static_cast<generatorTree_t::generateTreeCallback_t>(&selftestContext_t::foundTreeMetrics));
+			generator.generateTrees(pRound->numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeMetrics));
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 				fprintf(stderr, "\r\e[K");
