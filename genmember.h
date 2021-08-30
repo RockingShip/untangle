@@ -622,24 +622,24 @@ struct genmemberContext_t : dbtool_t {
 						 * Reminder:
 						 *  [ 2] a ? ~0 : b                  "+" OR
 						 *  [ 6] a ? ~b : 0                  ">" GT
-						 *  [ 8] a ? ~b : b                  "^" XOR
+						 *  [ 8] a ? ~b : b                  "^" NE
 						 *  [ 9] a ? ~b : c                  "!" QnTF
 						 *  [16] a ?  b : 0                  "&" AND
 						 *  [19] a ?  b : c                  "?" QTF
 						 */
 
 						// perform dyadic ordering
-						if (Tu == 0 && Ti && tree.compare(what[Q], &tree, what[F]) > 0) {
+						if (Tu == 0 && Ti && tree.compare(what[Q], &tree, what[F], tinyTree_t::CASCADE_OR) > 0) {
 							// reorder OR
 							tree.N[tree.count].Q = what[F];
 							tree.N[tree.count].T = IBIT;
 							tree.N[tree.count].F = what[Q];
-						} else if (Tu == F && tree.compare(what[Q], &tree, what[F]) > 0) {
+						} else if (Tu == F && tree.compare(what[Q], &tree, what[F], tinyTree_t::CASCADE_NE) > 0) {
 							// reorder XOR
 							tree.N[tree.count].Q = what[F];
 							tree.N[tree.count].T = what[Q] ^ IBIT;
 							tree.N[tree.count].F = what[Q];
-						} else if (F == 0 && !Ti && tree.compare(what[Q], &tree, what[Tu]) > 0) {
+						} else if (F == 0 && !Ti && tree.compare(what[Q], &tree, what[Tu], tinyTree_t::CASCADE_AND) > 0) {
 							// reorder AND
 							tree.N[tree.count].Q = what[Tu];
 							tree.N[tree.count].T = what[Q];
