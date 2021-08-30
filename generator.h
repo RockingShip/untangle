@@ -141,34 +141,34 @@ struct generator_t {
 		PACKED_SIZE = 16,
 
 		/// @constant {number} - position/width of `numPlaceholder`
-		PACKED_POS_PLACEHOLDER = 16,
+		PACKED_POS_PLACEHOLDER   = 16,
 		PACKED_WIDTH_PLACEHOLDER = 4,
 
 		/// @constant {number} - position/width of `numWidth`
-		PACKED_POS_ENDPOINT = 20,
+		PACKED_POS_ENDPOINT   = 20,
 		PACKED_WIDTH_ENDPOINT = 4,
 
 		/// @constant {number} - position/width of `stack`
-		PACKED_POS_STACK = 24,
+		PACKED_POS_STACK   = 24,
 		PACKED_WIDTH_STACK = 12,
 
 		/// @constant {number} - used for `pIsType[]` to indicate type of node
-		PACKED_OR = 0x01,
-		PACKED_GT = 0x02,
-		PACKED_XOR = 0x04,
-		PACKED_QnTF = 0x08,
-		PACKED_AND = 0x10,
-		PACKED_QTF = 0x20,
+		PACKED_OR      = 0x01,
+		PACKED_GT      = 0x02,
+		PACKED_NE      = 0x04,
+		PACKED_QnTF    = 0x08,
+		PACKED_AND     = 0x10,
+		PACKED_QTF     = 0x20,
 		PACKED_COMPARE = 0x40, // needs run-time compare
 
 		/// @constant {number} - size of `pTemplateData[]`
-		TEMPLATE_MAXDATA = 5116361,
-		TEMPLATE_MAXDATA_PURE = 2719253,
+		TEMPLATE_MAXDATA      = 5321417,
+		TEMPLATE_MAXDATA_PURE = 2855957,
 
 		/// @constant {number} - convenience
-		TINYTREE_KSTART = tinyTree_t::TINYTREE_KSTART,
-		TINYTREE_NSTART = tinyTree_t::TINYTREE_NSTART,
-		TINYTREE_NEND = tinyTree_t::TINYTREE_NEND,
+		TINYTREE_KSTART   = tinyTree_t::TINYTREE_KSTART,
+		TINYTREE_NSTART   = tinyTree_t::TINYTREE_NSTART,
+		TINYTREE_NEND     = tinyTree_t::TINYTREE_NEND,
 		TINYTREE_MAXNODES = tinyTree_t::TINYTREE_MAXNODES,
 	};
 
@@ -344,7 +344,7 @@ struct generator_t {
 			 * Reminder:
 			 *  [ 2] a ? ~0 : b                  "+" OR
 			 *  [ 6] a ? ~b : 0                  ">" GT
-			 *  [ 8] a ? ~b : b                  "^" XOR
+			 *  [ 8] a ? ~b : b                  "^" NE
 			 *  [ 9] a ? ~b : c                  "!" QnTF
 			 *  [16] a ?  b : 0                  "&" AND
 			 *  [19] a ?  b : c                  "?" QTF
@@ -356,7 +356,7 @@ struct generator_t {
 				else if (F == 0)
 					pIsType[ix] |= PACKED_GT;
 				else if (F == Tu)
-					pIsType[ix] |= PACKED_XOR;
+					pIsType[ix] |= PACKED_NE;
 				else
 					pIsType[ix] |= PACKED_QnTF;
 			} else {
@@ -375,20 +375,14 @@ struct generator_t {
 			if (pIsType[ix] & PACKED_OR) {
 				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
-				else if (Q > F)
-					pIsType[ix] = 0; // reject
 			}
-			if (pIsType[ix] & PACKED_XOR) {
+			if (pIsType[ix] & PACKED_NE) {
 				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
-				else if (Q > F)
-					pIsType[ix] = 0; // reject
 			}
 			if (pIsType[ix] & PACKED_AND) {
 				if (Q >= TINYTREE_NSTART && Tu >= TINYTREE_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
-				else if (Q > Tu)
-					pIsType[ix] = 0; // reject
 			}
 		}
 
@@ -430,26 +424,29 @@ struct generator_t {
 		// @formatter:off
 		for (unsigned iStack = 0; iStack < (1 << TINYTREE_MAXNODES); iStack++)
 		for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++)
-		for (unsigned numEndpoint=0; numEndpoint < 4; numEndpoint++) {
+		for (unsigned numEndpointLeft=0; numEndpointLeft < 4; numEndpointLeft++) { // no more than 3 endpoints per node
 		// @formatter:on
 
 			/*
 			 * Get number of nodes already allocated.
 			 * Last created nodeId is in top-of-stack.
+			 *
+			 * @date 2021-08-29 19:19:47
+			 * Get the current node ID
 			 */
-			unsigned numNode = (pTOS[iStack]) ? pTOS[iStack] - TINYTREE_NSTART + 1 : 0;
+			unsigned nodeId = (pTOS[iStack]) ? pTOS[iStack] + 1 : TINYTREE_NSTART;
 
 			/*
 			 * Iterate through all possible `Q,T,F` possibilities
 			 */
 
-			templateIndex[iStack][numPlaceholder][numEndpoint] = numTemplateData;
+			templateIndex[iStack][numPlaceholder][numEndpointLeft] = numTemplateData;
 
 			// @formatter:off
 			for (int Ti = 1; Ti >= 0; Ti--)
-			for (unsigned Q = 0; Q < TINYTREE_NSTART + numNode; Q++)
-			for (unsigned Tu = 0; Tu < TINYTREE_NSTART + numNode; Tu++)
-			for (unsigned F = 0; F < TINYTREE_NSTART + numNode; F++) {
+			for (unsigned Q = 0; Q < nodeId; Q++)
+			for (unsigned Tu = 0; Tu < nodeId; Tu++)
+			for (unsigned F = 0; F < nodeId; F++) {
 			// @formatter:on
 
 				if (!Ti && pure) {
@@ -553,13 +550,13 @@ struct generator_t {
 				/*
 				 * Reject if less endpoints were available then required
 				 */
-				if (newEndpoint > numEndpoint)
+				if (newEndpoint > numEndpointLeft)
 					continue;
 
 				/*
 				 * Push new node-id on stack and prepare for packed format
 				 */
-				newStack |= 1 << (TINYTREE_NSTART + numNode);
+				newStack |= 1 << nodeId;
 				newStack >>= TINYTREE_NSTART;
 
 				assert(!(Q & ~PACKED_MASK));
@@ -676,19 +673,28 @@ struct generator_t {
 		 *   If alternatives ar eneeded, then most likely its the top-level and let higher levels be smart and swap where needed
 		 * Also, `rewriteData[]` is based on similarity/equality instead of compare, so that is immune.
 		 *   `patterns` (untngle v1) *might* be influenced, however the structure based compare was introduced in untangle v2.
+		 *
+		 * @date 2021-08-29 16:58:09
+		 * With the renewed cascade,only left-hand-side may cascade
 		 */
-		if (pIsType[qtf] & PACKED_COMPARE) {
+		if (pIsType[qtf] & (PACKED_OR|PACKED_NE|PACKED_AND)) {
+			// reject unordered or right-hand-side cascades
 			if (pIsType[qtf] & PACKED_OR) {
-				// reject `OR` if unordered
-				if (pNode->Q >= pNode->F)
+				if (buildTree.isOR(pNode->F))
 					return 0;
-			} else if (pIsType[qtf] & PACKED_XOR) {
-				// reject `XOR` if unordered
-				if (pNode->Q >= pNode->F)
+				if (buildTree.isOR(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->F, tinyTree_t::CASCADE_OR) >= 0)
 					return 0;
-			} else {
-				// reject `AND` if unordered
-				if (pNode->Q >= pNode->T)
+			}
+			if (pIsType[qtf] & PACKED_NE) {
+				if (buildTree.isNE(pNode->F))
+					return 0;
+				if (buildTree.isNE(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->F, tinyTree_t::CASCADE_NE) >= 0)
+					return 0;
+			}
+			if (pIsType[qtf] & PACKED_AND) {
+				if (buildTree.isAND(pNode->T))
+					return 0;
+				if (buildTree.isNE(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->T, tinyTree_t::CASCADE_AND) >= 0)
 					return 0;
 			}
 		}
@@ -805,7 +811,7 @@ struct generator_t {
 					beenThere |= (1 << curr);
 					beenWhat[curr] = nextPlaceholder++;
 				}
-				name[nameLen++] = (char) ('a' + curr - TINYTREE_KSTART);
+				name[nameLen++] = (char) ('a' + beenWhat[curr] - TINYTREE_KSTART);
 				numEndpoint++;
 
 			} else {
@@ -823,6 +829,15 @@ struct generator_t {
 				if (!(beenThere & (1 << curr))) {
 					// first time
 
+					/*
+					 * @date 2021-08-30 00:18:42
+					 *
+					 * below is the tree-walking sequence
+					 * the signature representative is the structure
+					 * that would be the lowest of all `compare(a,b) < 0`.
+					 * The root node is the first encountered
+					 * Q should be or refer to the first and lowest, endpoint and placeholder.
+					 */
 					// push id so it visits again a second time for the operator
 					stack[stackPos++] = curr;
 
@@ -856,7 +871,7 @@ struct generator_t {
 							pFoundNode->T = IBIT;
 							pFoundNode->F = beenWhat[F];
 						} else if (F == Tu) {
-							// XOR Q?!F:F
+							// NE Q?!F:F
 							name[nameLen++] = '^';
 							pFoundNode->Q = beenWhat[Q];
 							pFoundNode->T = beenWhat[F] ^ IBIT;
