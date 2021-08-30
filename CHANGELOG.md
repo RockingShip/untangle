@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-30 19:15:22 Fixed: `tinyTree_t::saveString()` intermediate node id's.
 2021-08-30 10:50:24 Changed: `generator_t` now left-hand-side cascading aware.
 2021-08-30 10:48:15 Changed: Disable `genmember --cascade` as cascading is now more embedded.
 2021-08-29 21:57:22 Changed: `tinyTree_t::saveString()` and `loadString()` assign endpoints in tree walking order.
