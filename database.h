@@ -1657,6 +1657,7 @@ struct database_t {
 		::memset(pSignature, 0, sizeof(*pSignature));
 
 		// only populate key fields
+		assert(strlen(name) <= signature_t::SIGNATURENAMELENGTH);
 		strcpy(pSignature->name, name);
 
 		return (unsigned) (pSignature - this->signatures);
@@ -2680,7 +2681,7 @@ struct database_t {
 
 				// test if better
 				if (testTree.compare(testTree.root, &tree, tree.root) < 0) {
-					// copy tree, including root
+					// copy tree, including root, as new best candidate
 					for (unsigned i = tinyTree_t::TINYTREE_NSTART; i <= testTree.root; i++)
 						tree.N[i] = testTree.N[i];
 					tree.root = testTree.root;

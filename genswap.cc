@@ -12,7 +12,7 @@
  * - Populate `MAXSLOT` slots with the contents of the endpoints.
  * - Slots are usually assigned in tree walking order. Order is not really important as long as it is consistent.
  * - Apply transform to slots
- * - Compare and reject the worde of th two
+ * - Compare and reject the worst of the two
  * - Repeat for all remaining transforms.
  *
  * NOTE: it's not about applying a transform on the endpoints, like "abc/cab" -> "cab"

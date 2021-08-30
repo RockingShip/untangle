@@ -162,8 +162,8 @@ struct generator_t {
 		PACKED_COMPARE = 0x40, // needs run-time compare
 
 		/// @constant {number} - size of `pTemplateData[]`
-		TEMPLATE_MAXDATA      = 5321417,
-		TEMPLATE_MAXDATA_PURE = 2855957,
+		TEMPLATE_MAXDATA      = 32367761,
+		TEMPLATE_MAXDATA_PURE = 17229285,
 
 		/// @constant {number} - convenience
 		TINYTREE_KSTART   = tinyTree_t::TINYTREE_KSTART,

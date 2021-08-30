@@ -101,8 +101,14 @@ struct tinyNode_t {
 struct tinyTree_t {
 
 	enum {
+		/*
+		 * @date 2021-08-30 15:21:45
+		 * With ordered cascading nodes many get orphaned
+		 * Raising `TINYTREE_MAXNODES` effets the maximum name length,
+		 * However, the database has a dedicated and shorter length.
+		 */
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = 7,
+		TINYTREE_MAXNODES = 9,
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,

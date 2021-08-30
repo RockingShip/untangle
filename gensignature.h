@@ -540,6 +540,7 @@ struct gensignatureContext_t : dbtool_t {
 
 			// only add if signatures are writable
 			if (!this->readOnlyMode) {
+				assert(strlen(pNameR) <= signature_t::SIGNATURENAMELENGTH);
 				::strcpy(pSignature->name, pNameR);
 				pSignature->size           = treeR.count - tinyTree_t::TINYTREE_NSTART;
 				pSignature->numPlaceholder = numPlaceholder;

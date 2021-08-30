@@ -157,8 +157,8 @@ struct footprint_t {
  */
 struct signature_t {
 	enum {
-		/// @constant {number} (numnode*3+1+1/*root invert*/+1/*terminator*/) For 5n9 signatures (4n9 is default) that would be 18
-		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1 + 1),
+		/// @constant {number} (numnode*3+1+1/*root invert*/) For 5n9 signatures (4n9 is default) that would be 18
+		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1),
 	};
 
 	enum {
@@ -208,7 +208,7 @@ struct signature_t {
 	uint8_t numBackRef;
 
 	/// @var {string} Display name of signature. With space for inverted root and terminator
-	char name[SIGNATURENAMELENGTH];
+	char name[SIGNATURENAMELENGTH + 1];
 };
 
 /*
@@ -400,7 +400,7 @@ struct member_t {
 	uint8_t numBackRef;
 
 	/// @var {string} Notation/name of signature. With space for inverted root and terminator
-	char name[signature_t::SIGNATURENAMELENGTH];
+	char name[signature_t::SIGNATURENAMELENGTH + 1];
 };
 
 #endif
