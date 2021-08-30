@@ -931,8 +931,12 @@ struct genmemberContext_t : dbtool_t {
 				return true;
 		}
 
+#if 0
 		/*
 		 * test or cascading dyadics (cascaded operators may not fork)
+		 *
+		 * @date 2021-08-30 10:15:53
+		 * Disabled because cascades are now integrated
 		 */
 		if (opt_cascade) {
 			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.count; k++) {
@@ -942,30 +946,25 @@ struct genmemberContext_t : dbtool_t {
 				uint32_t F = pNode->F;
 
 				// OR
-				if (pNode->isOR()) {
-					if (treeR.isOR(Q) || treeR.isOR(F)) {
-						skipCascade++;
-						return true;
-					}
+				if (pNode->isOR() && treeR.isOR(F)) {
+					skipCascade++;
+					return true;
 				}
 
 				// NE
-				if (pNode->isNE()) {
-					if (treeR.isNE(Q) || treeR.isNE(F)) {
-						skipCascade++;
-						return true;
-					}
+				if (pNode->isNE() && treeR.isNE(F)) {
+					skipCascade++;
+					return true;
 				}
 
 				// AND
-				if (pNode->isAND()) {
-					if (treeR.isAND(Q) || treeR.isAND(T)) {
-						skipCascade++;
-						return true;
-					}
+				if (pNode->isAND() && treeR.isAND(T)) {
+					skipCascade++;
+					return true;
 				}
 			}
 		}
+#endif
 
 		/*
 		 * Find the matching signature group. It's layout only so ignore transformId.

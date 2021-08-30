@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-30 10:48:15 Changed: Disable `genmember --cascade` as cascading is now more embedded.
 2021-08-29 21:57:22 Changed: `tinyTree_t::saveString()` and `loadString()` assign endpoints in tree walking order.
 2021-08-30 01:42:40 Changed: Updated `rewritedata.h`.
 2021-08-29 21:20:06 Added: re-allocating `buildTree` into `foundTree` in `generator_t`.
