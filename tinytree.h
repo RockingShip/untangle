@@ -239,6 +239,12 @@ struct tinyTree_t {
 	 * Make compatible with implementation in `eval.c`
 	 * ordering of dyadics should work now `./slookup --member 'abc!de^^f^'`
 	 *
+	 * @date 2021-08-30 00:39:38
+	 *
+	 * To better understand and simplify the code,
+	 *   remove everything related to cascade.
+	 * Cascades are part of a runtime optimiser.
+	 *
 	 * @param {number} lhs - entrypoint to right side
 	 * @param {number} rhs - entrypoint to right side
 	 * @param {boolean} layoutOnly - ignore endpoint values when `true`
@@ -706,7 +712,7 @@ struct tinyTree_t {
 				return nid;
 		}
 
-		unsigned nid = this->count++;
+		uint32_t nid = this->count++;
 		assert(nid < TINYTREE_NEND);
 
 		tinyNode_t *pNode = this->N + nid;
@@ -2318,14 +2324,19 @@ struct tinyTree_t {
 	 */
 	int loadStringSafe(const char *pName, const char *pSkin = "abcdefghi") {
 
+		assert(pName[0]); // disallow empty name
+
 		// initialise tree
 		this->clearTree();
 
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int      stackPos = 0;
-		uint32_t beenThere[TINYTREE_NEND]; // track id's of display operators.
-		unsigned nextNode = TINYTREE_NSTART; // next visual node
+		int      stackPos        = 0;
+		unsigned nextPlaceholder = TINYTREE_KSTART;
+		unsigned nextNode        = TINYTREE_NSTART; // next visual node
+		uint32_t beenThere       = (1 << 0);
+		uint32_t beenWhat[TINYTREE_NEND]; // track id's of display operators.
+		beenWhat[0] = 0;
 
 		// walk through the notation until end or until placeholder/skin separator
 		for (const char *pCh = pName; *pCh; pCh++) {
@@ -2369,31 +2380,31 @@ struct tinyTree_t {
 				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
 				break;
 			case '1':
-				stack[stackPos++] = beenThere[nextNode - ('1' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('1' - '0')];
 				break;
 			case '2':
-				stack[stackPos++] = beenThere[nextNode - ('2' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('2' - '0')];
 				break;
 			case '3':
-				stack[stackPos++] = beenThere[nextNode - ('3' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('3' - '0')];
 				break;
 			case '4':
-				stack[stackPos++] = beenThere[nextNode - ('4' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('4' - '0')];
 				break;
 			case '5':
-				stack[stackPos++] = beenThere[nextNode - ('5' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('5' - '0')];
 				break;
 			case '6':
-				stack[stackPos++] = beenThere[nextNode - ('6' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('6' - '0')];
 				break;
 			case '7':
-				stack[stackPos++] = beenThere[nextNode - ('7' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('7' - '0')];
 				break;
 			case '8':
-				stack[stackPos++] = beenThere[nextNode - ('8' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('8' - '0')];
 				break;
 			case '9':
-				stack[stackPos++] = beenThere[nextNode - ('9' - '0')];
+				stack[stackPos++] = beenWhat[nextNode - ('9' - '0')];
 				break;
 
 			case '+': {
@@ -2405,11 +2416,23 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
-				// create operator
-				unsigned nid = addNormaliseNode(L, 0 ^ IBIT, R);
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[L], 0 ^ IBIT, beenWhat[R]);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '>': {
@@ -2421,11 +2444,23 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
-				// create operator
-				unsigned nid = addNormaliseNode(L, R ^ IBIT, 0);
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[L], beenWhat[R] ^ IBIT, 0);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '^': {
@@ -2437,11 +2472,23 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
-				// create operator
-				unsigned nid = addNormaliseNode(L, R ^ IBIT, R);
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[L], beenWhat[R] ^ IBIT, beenWhat[R]);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '!': {
@@ -2454,12 +2501,26 @@ struct tinyTree_t {
 				unsigned T = stack[--stackPos];
 				unsigned Q = stack[--stackPos];
 
+				if (!(beenThere & (1 << Q))) {
+					beenThere |= 1 << Q;
+					beenWhat[Q] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << T))) {
+					beenThere |= 1 << T;
+					beenWhat[T] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << F))) {
+					beenThere |= 1 << F;
+					beenWhat[F] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = addNormaliseNode(Q, T ^ IBIT, F);
+				this->root = addNormaliseNode(beenWhat[Q], beenWhat[T] ^ IBIT, beenWhat[F]);
 
 				// push
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '&': {
@@ -2471,11 +2532,23 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
-				// create operator
-				unsigned nid = addNormaliseNode(L, R, 0);
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[L], beenWhat[R], 0);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '<': {
@@ -2487,11 +2560,23 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
-				// create operator
-				unsigned nid = addNormaliseNode(L, 0, R);
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[stackPos++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[L], 0, beenWhat[R]);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '?': {
@@ -2504,11 +2589,26 @@ struct tinyTree_t {
 				unsigned T = stack[--stackPos];
 				unsigned Q = stack[--stackPos];
 
-				// create operator
-				unsigned nid = addNormaliseNode(Q, T, F);
+				if (!(beenThere & (1 << Q))) {
+					beenThere |= 1 << Q;
+					beenWhat[Q] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << T))) {
+					beenThere |= 1 << T;
+					beenWhat[T] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << F))) {
+					beenThere |= 1 << F;
+					beenWhat[F] = nextPlaceholder++;
+				}
 
-				stack[stackPos++]     = nid; // push
-				beenThere[nextNode++] = nid; // save actual index for back references
+				// create operator
+				this->root = addNormaliseNode(beenWhat[Q], beenWhat[T], beenWhat[F]);
+
+				// push
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = this->root;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '~': {
@@ -2538,7 +2638,6 @@ struct tinyTree_t {
 			return DERR_INCOMPLETE;
 
 		// store result into root
-		this->root = stack[stackPos - 1];
 		return DERR_OK;
 	}
 
@@ -2560,11 +2659,16 @@ struct tinyTree_t {
 		// initialise tree
 		this->clearTree();
 
-		// temporary stack storage for postfix notation
+		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int      stackPos = 0;
+		int      stackPos        = 0;
+		unsigned nextPlaceholder = TINYTREE_KSTART;
+		unsigned nextNode        = TINYTREE_NSTART; // next visual node
+		uint32_t beenThere       = (1 << 0);
+		uint32_t beenWhat[TINYTREE_NEND]; // track id's of display operators.
+		beenWhat[0] = 0;
 
-		// walk through the notation
+		// walk through the notation until end or until placeholder/skin separator
 		for (const char *pCh = pName; *pCh; pCh++) {
 
 			switch (*pCh) {
@@ -2599,32 +2703,33 @@ struct tinyTree_t {
 				stack[stackPos++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
 				break;
 			case '1':
-				stack[stackPos++] = this->count - ('1' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('1' - '0')];
 				break;
 			case '2':
-				stack[stackPos++] = this->count - ('2' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('2' - '0')];
 				break;
 			case '3':
-				stack[stackPos++] = this->count - ('3' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('3' - '0')];
 				break;
 			case '4':
-				stack[stackPos++] = this->count - ('4' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('4' - '0')];
 				break;
 			case '5':
-				stack[stackPos++] = this->count - ('5' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('5' - '0')];
 				break;
 			case '6':
-				stack[stackPos++] = this->count - ('6' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('6' - '0')];
 				break;
 			case '7':
-				stack[stackPos++] = this->count - ('7' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('7' - '0')];
 				break;
 			case '8':
-				stack[stackPos++] = this->count - ('8' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('8' - '0')];
 				break;
 			case '9':
-				stack[stackPos++] = this->count - ('9' - '0');
+				stack[stackPos++] = beenWhat[nextNode - ('9' - '0')];
 				break;
+
 			case '+': {
 				// OR (appreciated)
 
@@ -2632,14 +2737,26 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[L];
 				this->N[nid].T = 0 ^ IBIT;
-				this->N[nid].F = R;
+				this->N[nid].F = beenWhat[R];
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '>': {
@@ -2649,14 +2766,26 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
-				this->N[nid].T = R ^ IBIT;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[L];
+				this->N[nid].T = beenWhat[R] ^ IBIT;
 				this->N[nid].F = 0;
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '^': {
@@ -2666,14 +2795,26 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
-				this->N[nid].T = R ^ IBIT;
-				this->N[nid].F = R;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[L];
+				this->N[nid].T = beenWhat[R] ^ IBIT;
+				this->N[nid].F = beenWhat[R];
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '!': {
@@ -2684,14 +2825,29 @@ struct tinyTree_t {
 				unsigned T = stack[--stackPos];
 				unsigned Q = stack[--stackPos];
 
+				if (!(beenThere & (1 << Q))) {
+					beenThere |= 1 << Q;
+					beenWhat[Q] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << T))) {
+					beenThere |= 1 << T;
+					beenWhat[T] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << F))) {
+					beenThere |= 1 << F;
+					beenWhat[F] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = Q;
-				this->N[nid].T = T ^ IBIT;
-				this->N[nid].F = F;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[Q];
+				this->N[nid].T = beenWhat[T] ^ IBIT;
+				this->N[nid].F = beenWhat[F];
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '&': {
@@ -2701,14 +2857,26 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
-				this->N[nid].T = R;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[L];
+				this->N[nid].T = beenWhat[R];
 				this->N[nid].F = 0;
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '<': {
@@ -2718,14 +2886,26 @@ struct tinyTree_t {
 				unsigned R = stack[--stackPos]; // right hand side
 				unsigned L = stack[--stackPos]; // left hand side
 
+				// re-allocate endpoints
+				if (!(beenThere & (1 << L))) {
+					beenThere |= 1 << L;
+					beenWhat[L] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << R))) {
+					beenThere |= 1 << R;
+					beenWhat[R] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = L;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[L];
 				this->N[nid].T = 0;
-				this->N[nid].F = R;
+				this->N[nid].F = beenWhat[R];
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '?': {
@@ -2736,14 +2916,29 @@ struct tinyTree_t {
 				unsigned T = stack[--stackPos];
 				unsigned Q = stack[--stackPos];
 
+				if (!(beenThere & (1 << Q))) {
+					beenThere |= 1 << Q;
+					beenWhat[Q] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << T))) {
+					beenThere |= 1 << T;
+					beenWhat[T] = nextPlaceholder++;
+				}
+				if (!(beenThere & (1 << F))) {
+					beenThere |= 1 << F;
+					beenWhat[F] = nextPlaceholder++;
+				}
+
 				// create operator
-				unsigned nid = this->count++;
-				this->N[nid].Q = Q;
-				this->N[nid].T = T;
-				this->N[nid].F = F;
+				uint32_t nid = this->count++;
+				this->N[nid].Q = beenWhat[Q];
+				this->N[nid].T = beenWhat[T];
+				this->N[nid].F = beenWhat[F];
 
 				// push
-				stack[stackPos++] = nid;
+				beenThere |= 1 << nextNode;
+				beenWhat[nextNode] = nid;
+				stack[stackPos++] = nextNode++;
 				break;
 			}
 			case '~': {
@@ -2753,6 +2948,7 @@ struct tinyTree_t {
 				stack[stackPos - 1] ^= IBIT;
 				break;
 			}
+
 			case '/':
 				// skip delimiter
 
@@ -2762,10 +2958,11 @@ struct tinyTree_t {
 			}
 		}
 
-		assert(this->count <= tinyTree_t::TINYTREE_NEND);
-
 		// store result into root
 		this->root = stack[stackPos - 1];
+
+		assert(this->count <= tinyTree_t::TINYTREE_NEND);
+		assert(nextPlaceholder <= TINYTREE_NSTART);
 	}
 
 	/**
@@ -2773,6 +2970,10 @@ struct tinyTree_t {
 	 *
 	 * Encode a notation describing the tree in "placeholder/skin" notation.
 	 * Within the placeholders, endpoints are assigned in order of natural path which can be used as index for the skin to determine the actual endpoint.
+	 *
+	 * @date 2021-08-29 08:34:38
+	 *
+	 * Assign placeholders in tree-walk order
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {string} pName - The notation describing the tree
@@ -2782,14 +2983,6 @@ struct tinyTree_t {
 
 		unsigned nameLen  = 0;
 
-		// temporary stack storage for postfix notation
-		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int      stackPos = 0;
-
-		unsigned nextNode;
-
-		uint32_t beenThere = 0;
-		uint32_t beenWhat[TINYTREE_NEND];
 
 		if ((id & ~IBIT) < TINYTREE_NSTART) {
 			if (pSkin) {
@@ -2797,7 +2990,7 @@ struct tinyTree_t {
 					pName[nameLen++] = '0';
 					pSkin[0]         = 0;
 				} else {
-					pSkin[0]         = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
+					pSkin[0]         = (char) ('a' + (id & ~IBIT) - TINYTREE_KSTART);
 					pSkin[1]         = 0;
 					pName[nameLen++] = 'a';
 				}
@@ -2806,7 +2999,7 @@ struct tinyTree_t {
 				if ((id & ~IBIT) == 0) {
 					pName[nameLen++] = '0';
 				} else {
-					pName[nameLen++] = 'a' + (id & ~IBIT) - TINYTREE_KSTART;
+					pName[nameLen++] = (char) ('a' + (id & ~IBIT) - TINYTREE_KSTART);
 				}
 			}
 
@@ -2820,100 +3013,40 @@ struct tinyTree_t {
 			return;
 		}
 
-		/*
-		 * For skins, walk the tree depth-first to enumerate the placeholders
-		 */
-		if (pSkin) {
-			unsigned numPlaceholder = 0;
+		// temporary stack storage for postfix notation
+		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		int      stackPos = 0;
 
-			nextNode = TINYTREE_NSTART;
+		unsigned nextNode       = TINYTREE_NSTART;
+		unsigned numPlaceholder = 0;
 
-			// mark `zero` processed
-			beenThere = (1 << 0);
-			beenWhat[0] = 0;
+		uint32_t beenThere = (1 << 0);
+		uint32_t beenWhat[TINYTREE_NEND];
+		beenWhat[0] = 0;
 
-			stackPos = 0;
-			stack[stackPos++] = id & ~IBIT;
-
-			do {
-				// pop stack
-				unsigned curr = stack[--stackPos];
-
-				const tinyNode_t *pNode = this->N + curr;
-				const uint32_t   Q      = pNode->Q;
-				const uint32_t   Tu     = pNode->T & ~IBIT;
-//				const uint32_t   Ti     = pNode->T & IBIT;
-				const uint32_t   F      = pNode->F;
-
-				// determine if node already handled
-				if (!(beenThere & (1 << curr))) {
-					/// first time
-
-					// push id so it visits again a second time
-					stack[stackPos++] = curr;
-
-					// push unvisited references
-					if (F >= TINYTREE_NSTART && !(beenThere & (1 << F)))
-						stack[stackPos++] = F;
-					if (Tu != F && Tu >= TINYTREE_NSTART && !(beenThere & (1 << Tu)))
-						stack[stackPos++] = Tu;
-					if (Q >= TINYTREE_NSTART && !(beenThere & (1 << Q)))
-						stack[stackPos++] = Q;
-
-					// done, flag no endpoint assignment done
-					beenThere |= (1 << curr);
-					beenWhat[curr] = 0;
-
-				} else if (beenWhat[curr] == 0) {
-					// node complete, assign placeholders
-
-					if (Q < TINYTREE_NSTART && !(beenThere & (1 << Q))) {
-						beenThere |= (1 << Q);
-						beenWhat[Q]             = TINYTREE_KSTART + numPlaceholder;
-						pSkin[numPlaceholder++] = (char) ('a' + Q - TINYTREE_KSTART);
-					}
-
-					if (Tu < TINYTREE_NSTART && !(beenThere & (1 << Tu))) {
-						beenThere |= (1 << Tu);
-						beenWhat[Tu]            = TINYTREE_KSTART + numPlaceholder;
-						pSkin[numPlaceholder++] = (char) ('a' + Tu - TINYTREE_KSTART);
-					}
-
-					if (F < TINYTREE_NSTART && !(beenThere & (1 << F))) {
-						beenThere |= (1 << F);
-						beenWhat[F]             = TINYTREE_KSTART + numPlaceholder;
-						pSkin[numPlaceholder++] = (char) ('a' + F - TINYTREE_KSTART);
-					}
-
-					// flaq endpoints assigned
-					beenWhat[curr] = nextNode++;
-				}
-
-			} while (stackPos > 0);
-
-			assert(numPlaceholder <= MAXSLOTS);
-			pSkin[numPlaceholder] = 0;
-		}
-
-		stackPos = 0;
+		// starting point
 		stack[stackPos++] = id & ~IBIT;
-
-		// re-walk the tree
-		nextNode  = TINYTREE_NSTART;
-		beenThere = (1 << 0);
 
 		do {
 			// pop stack
 			unsigned curr = stack[--stackPos];
 
+			assert(curr != 0);
+
 			// if endpoint then emit
 			if (curr < TINYTREE_NSTART) {
-				if (curr == 0)
-					pName[nameLen++] = '0'; // zero
-				else if (!pSkin)
-					pName[nameLen++] = 'a' + curr - TINYTREE_KSTART; // endpoint
-				else
-					pName[nameLen++] = 'a' + beenWhat[curr] - TINYTREE_KSTART; // placeholder
+				if (!pSkin) {
+					// endpoint
+					pName[nameLen++] = (char) ('a' + curr - TINYTREE_KSTART);
+				} else {
+					// placeholder
+					if (!(beenThere & (1 << curr))) {
+						beenThere |= (1 << curr);
+						pSkin[numPlaceholder] = (char) ('a' + curr - TINYTREE_KSTART);
+						beenWhat[curr] = TINYTREE_KSTART + numPlaceholder++;
+					}
+					pName[nameLen++] = (char) ('a' + beenWhat[curr] - TINYTREE_KSTART);
+				}
 
 				continue;
 			}
@@ -2926,9 +3059,9 @@ struct tinyTree_t {
 
 			// determine if node already handled
 			if (!(beenThere & (1 << curr))) {
-				/// first time
+				// first time
 
-				// push id so it visits again a second time after expanding
+				// push id so it visits again a second time for the operator
 				stack[stackPos++] = curr;
 
 				// push non-zero endpoints
@@ -2939,7 +3072,7 @@ struct tinyTree_t {
 				if (Q >= TINYTREE_KSTART)
 					stack[stackPos++] = Q;
 
-				// done, flag no operator done
+				// done, flag first-time done
 				beenThere |= (1 << curr);
 				beenWhat[curr] = 0;
 
@@ -2980,12 +3113,11 @@ struct tinyTree_t {
 				beenWhat[curr] = nextNode++;
 
 			} else {
-				// back-reference to previous opcode
+				// back-reference to previous node
 
 				unsigned backref = nextNode - beenWhat[curr];
 				assert(backref <= 9);
-				pName[nameLen++] = '0' + backref;
-
+				pName[nameLen++] = (char) ('0' + backref);
 			}
 
 		} while (stackPos > 0);
@@ -2994,9 +3126,14 @@ struct tinyTree_t {
 		if (id & IBIT)
 			pName[nameLen++] = '~';
 
-		// terminator
+		// terminators
 		assert(nameLen <= TINYTREE_NAMELEN);
 		pName[nameLen] = 0;
+
+		if (pSkin != NULL) {
+			assert(numPlaceholder <= MAXSLOTS);
+			pSkin[numPlaceholder] = 0;
+		}
 	}
 
 	/**
