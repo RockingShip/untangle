@@ -434,7 +434,7 @@ struct kfoldContext_t {
 				uint32_t newQ = pNewTree->importNodes(pResults, pResults->roots[Q]);
 				uint32_t newT = pNewTree->importNodes(pResults, pResults->roots[Tu] ^ Ti);
 				uint32_t newF = pNewTree->importNodes(pResults, pResults->roots[F]);
-				uint32_t newR = baseExplain.explainNormaliseNode(0, pNewTree->ncount, pNewTree, newQ, newT, newF, NULL);
+				uint32_t newR = pNewTree->addNormaliseNode(newQ, newT, newF);
 				pNewTree->roots[iOldNode] = newR;
 
 // pNewTree->roots[iOldNode] = explainNormaliseNode(0, pNewTree->ncount, pNewTree, pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F], NULL);
@@ -646,8 +646,8 @@ struct kfoldContext_t {
 			const uint32_t   F      = pNode->F;
 
 
-			pMapSet[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F], NULL);
-			pMapClr[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F], NULL);
+			pMapSet[iNode] = pTree->addNormaliseNode(pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F]);
+			pMapClr[iNode] = pTree->addNormaliseNode(pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F]);
 		}
 
 		/*
@@ -657,14 +657,14 @@ struct kfoldContext_t {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
-			pTree->roots[iRoot] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
+			pTree->roots[iRoot] = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
 		if (RHS->system) {
 			uint32_t Ru = RHS->system & ~IBIT;
 			uint32_t Ri = RHS->system & IBIT;
 
-			pTree->system = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
+			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
 		RHS->freeMap(pMapSet);

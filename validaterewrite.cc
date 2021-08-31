@@ -325,7 +325,7 @@ struct validaterewriteContext_t {
 				 * Reload with rewriting
 				 */
 				testTree.rewind();
-				testTree.roots[0] = testTree.loadNormaliseString(origName.c_str());
+				testTree.roots[0] = testTree.loadStringSafe(origName.c_str());
 
 				/*
 				 * Calculate bitmap
@@ -525,7 +525,7 @@ struct validaterewriteContext_t {
 			 * Reload with rewriting
 			 */
 			testTree.rewind();
-			testTree.roots[0] = testTree.loadNormaliseString(origName.c_str());
+			testTree.roots[0] = testTree.loadStringSafe(origName.c_str());
 
 			/*
 			 * Calculate bitmap

@@ -193,7 +193,7 @@ struct kloadContext_t {
 
 			// is there a transform?
 			const char *pSlash = strchr(rootValue, '/');
-			newTree.roots[iRoot] = newTree.loadNormaliseString(rootValue, pSlash ? pSlash + 1 : NULL);
+			newTree.roots[iRoot] = newTree.loadStringSafe(rootValue, pSlash ? pSlash + 1 : NULL);
 
 			/* use key and value ... */
 			iter = json_object_iter_next(jData, iter);
@@ -208,7 +208,7 @@ struct kloadContext_t {
 
 			// is there a transform?
 			const char *pSlash = strchr(systemValue, '/');
-			newTree.system = newTree.loadNormaliseString(systemValue, pSlash ? pSlash + 1 : NULL);
+			newTree.system = newTree.loadStringSafe(systemValue, pSlash ? pSlash + 1 : NULL);
 		}
 
 		/*

@@ -253,9 +253,9 @@ struct bevalContext_t {
 			const char *pTransform = strchr(inputArgs[iArg], '/');
 
 			if (pTransform)
-				pTree->roots[ostart + iArg] = pTree->loadNormaliseString(inputArgs[iArg], pTransform + 1);
+				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg], pTransform + 1);
 			else
-				pTree->roots[ostart + iArg] = pTree->loadNormaliseString(inputArgs[iArg]);
+				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg]);
 		}
 
 		return pTree;
