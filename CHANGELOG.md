@@ -9,6 +9,15 @@ TODO: no sorting when read-only
 
 ## [Unreleased]
 
+## 2021-08-31 20:30:19 [Version 2.10.0]
+
+Trees/nodes are cascade aware.
+Cascades are exclusively left-hand-side.  
+Structure names have endpoints/placeholders assigned in tree walking order.    
+Cascading side-effect, many orphaned nodes, even for `tinyTree_t`.  
+`TinyTree_t` needs larger `MAXNODES` to accommodate orphaned nodes.  
+Unexpectedly, `kfold` with `baseExplain` seems to be less optimal.
+ 
 ```
 2021-08-31 21:34:40 Changed: `kfold` using `baseExplain` again.
 2021-08-31 20:25:14 Changed: `kfold` using history to rescan previous keys.
@@ -405,7 +414,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.9.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.10.0...HEAD
+[Version 2.10.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.9.0...v2.10.0
 [Version 2.9.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.8.0...v2.9.0
 [Version 2.8.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.7.0...v2.8.0
 [Version 2.7.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.6.0...v2.7.0
