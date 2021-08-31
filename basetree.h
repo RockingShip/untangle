@@ -4536,119 +4536,63 @@ struct baseTree_t {
 		 */
 
 		uint32_t *pMap       = RHS->allocMap();
-		uint32_t *pStack     = RHS->allocMap();
-		uint32_t *pVersion   = RHS->allocVersion();
+		uint32_t *pSelect    = RHS->allocVersion();
 		uint32_t thisVersion = ++RHS->mapVersionNr;
-		uint32_t numStack    = 0; // top of stack
 
 		// clear version map when wraparound
 		if (thisVersion == 0) {
-			::memset(pVersion, 0, RHS->maxNodes * sizeof *pVersion);
+			::memset(pSelect, 0, RHS->maxNodes * sizeof *pSelect);
 			thisVersion = ++RHS->mapVersionNr;
 		}
 
-		for (uint32_t iKey = 0; iKey < RHS->nstart; iKey++)
-			pMap[iKey] = iKey;
+		/*
+		 * mark active
+		 */
+
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+			pSelect[RHS->roots[iRoot] & ~IBIT] = thisVersion;
+
+		pSelect[RHS->system & ~IBIT]               = thisVersion;
+
+		for (uint32_t iNode = RHS->ncount - 1; iNode >= RHS->nstart; --iNode) {
+			if (pSelect[iNode] == thisVersion) {
+				const baseNode_t *pNode = RHS->N + iNode;
+
+				pSelect[pNode->Q]         = thisVersion;
+				pSelect[pNode->T & ~IBIT] = thisVersion;
+				pSelect[pNode->F]         = thisVersion;
+			}
+		}
 
 		/*
-		 * @date 2021-06-05 18:24:37
-		 *
-		 * trace roots, one at a time.
-		 * Last root is a artificial root representing "system"
+		 * Copy selected nodes
 		 */
-		for (uint32_t iRoot = 0; iRoot <= RHS->numRoots; iRoot++) {
 
-			uint32_t R = (iRoot < RHS->numRoots) ? RHS->roots[iRoot] : RHS->system;
+		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+			pMap[iRoot] = iRoot;
 
-			numStack = 0;
-			pStack[numStack++] = R & ~IBIT;
-
-			/*
-			 * Walk the tree depth-first
-			 */
-			do {
-				// pop stack
-				uint32_t curr = pStack[--numStack];
-
-				if (curr < this->nstart)
-					continue; // endpoints have already been output
-
-				const baseNode_t *pNode = RHS->N + curr;
+		for (uint32_t iNode = RHS->nstart; iNode < RHS->ncount; iNode++) {
+			if (pSelect[iNode] == thisVersion) {
+				const baseNode_t *pNode = RHS->N + iNode;
 				const uint32_t   Q      = pNode->Q;
 				const uint32_t   Tu     = pNode->T & ~IBIT;
 				const uint32_t   Ti     = pNode->T & IBIT;
 				const uint32_t   F      = pNode->F;
 
-				// determine if already handled
-				if (pVersion[curr] != thisVersion) {
-					/*
-					 * First time visit
-					 */
-					pVersion[curr] = thisVersion;
-					pMap[curr]     = 0;
-
-					// push id so it visits again after expanding
-					pStack[numStack++] = curr;
-
-					if (Ti) {
-						if (Tu == 0) {
-							// Q?!0:F
-							pStack[numStack++] = F;
-							pStack[numStack++] = Q;
-						} else if (F == 0) {
-							// Q?!T:0
-							pStack[numStack++] = Tu;
-							pStack[numStack++] = Q;
-						} else if (F == Tu) {
-							// Q?!F:F
-							pStack[numStack++] = F;
-							pStack[numStack++] = Q;
-
-						} else {
-							// Q?!T:F
-							pStack[numStack++] = F;
-							pStack[numStack++] = Tu;
-							pStack[numStack++] = Q;
-						}
-					} else {
-						if (F == 0) {
-							// Q?T:0
-							pStack[numStack++] = Tu;
-							pStack[numStack++] = Q;
-						} else {
-							// Q?T:F
-							pStack[numStack++] = F;
-							pStack[numStack++] = Tu;
-							pStack[numStack++] = Q;
-						}
-					}
-					assert(numStack < maxNodes);
-
-				} else if (pMap[curr] == 0) {
-					/*
-					 * Second time visit
-					 */
-					pMap[curr] = this->addNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
-				}
-
-			} while (numStack > 0);
+				pMap[iNode] = this->addNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+			}
 		}
-
-		RHS->freeVersion(pVersion);
-		RHS->freeMap(pStack);
 
 		/*
-		 * write roots
-		 * Last root is a virtual root representing "system"
+		 * copy roots
 		 */
-		for (unsigned iRoot = 0; iRoot <= this->numRoots; iRoot++) {
 
-			if (iRoot < this->numRoots)
-				this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
-			else
-				this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
-		}
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
 
+		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
+
+		RHS->freeVersion(pSelect);
 		RHS->freeMap(pMap);
 	}
 
@@ -4662,6 +4606,7 @@ struct baseTree_t {
 		uint32_t *pSelect    = RHS->allocVersion();
 		uint32_t thisVersion = ++RHS->mapVersionNr;
 
+		// clear version map when wraparound
 		if (thisVersion == 0) {
 			::memset(pSelect, 0, RHS->maxNodes * sizeof *pSelect);
 			thisVersion = ++RHS->mapVersionNr;
@@ -4683,11 +4628,11 @@ struct baseTree_t {
 		}
 
 		/*
-		 * Add selected nodes
+		 * Copy selected nodes
 		 */
 
-		for (uint32_t iNode = 0; iNode < RHS->nstart; iNode++)
-			pMap[iNode] = iNode;
+		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+			pMap[iRoot] = iRoot;
 
 		for (uint32_t iNode = RHS->nstart; iNode <= (nodeId & ~IBIT); iNode++) {
 			if (pSelect[iNode] == thisVersion) {
