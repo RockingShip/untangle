@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O3") // optimize on demand
+#pragma GCC optimize ("O3") // optimize on demand
 
 /*
  * kfold.cc
@@ -10,6 +10,7 @@
  *   leaving intermediate results in `pResult`.
  * Hitting a wall at iNode=372 numNodes=20883
  * with 2.9.2: iNode=372 numNodes=1630
+ * with 2.9.3: iNode=372 numNodes=287
  * Discovered that the structure base compare is incomplete and needs additional logic for cascading dyadics.
  * Keep the original `main()` as the new code is word-in-progress.
  */
@@ -42,7 +43,7 @@
 
 #include "context.h"
 #include "basetree.h"
-#include "baseexplain.h"
+#include "database.h"
 
 /*
  * Resource context.
@@ -89,21 +90,17 @@ struct kfoldContext_t {
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
-	/// @var {baseExplain_t} Explain logic for communicative dyadics
-	baseExplain_t baseExplain;
 	/// @var {baseTree_t*} input tree
 	baseTree_t    *pInputTree;
 	/// @var {database_t} - Database store to place results
 	database_t    *pStore;
 
-	kfoldContext_t(context_t &ctx) : ctx(ctx), baseExplain(ctx) {
+	kfoldContext_t(context_t &ctx) : ctx(ctx) {
 		opt_databaseName = "untangle.db";
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 		pStore = NULL;
-
-		baseExplain.track = false; // no explainations
 	}
 
 	// metrics for folds
@@ -446,6 +443,9 @@ struct kfoldContext_t {
 //printf("../eval \"%s\" \"%s %s %s ?\" \"%s\"  # %d\n", strOld.c_str(), strQ.c_str(), strT.c_str(), strF.c_str(), strNew.c_str(), iOldNode);
 
 				// release root when no longer used
+				assert(pNodeRefCount[Q]);
+				assert(pNodeRefCount[Tu]);
+				assert(pNodeRefCount[F]);
 				--pNodeRefCount[Q];
 				if (Tu != F) --pNodeRefCount[Tu];
 				--pNodeRefCount[F];
@@ -499,6 +499,55 @@ struct kfoldContext_t {
 				qsort_r(lstFolds, numFolds, sizeof *lstFolds, comparFold, this);
 
 				while (numFolds > 0) {
+					/*
+					 * Re-apply previous keys
+					 */
+					unsigned      bestKey   = 0;
+					unsigned      bestCount = pNewTree->ncount;
+					for (unsigned iHistory  = 0; iHistory < pNewTree->posHistory; iHistory++) {
+						uint32_t key = pNewTree->history[iHistory];
+
+						pTemp->rewind();
+						importFold(pTemp, pNewTree, key);
+						unsigned cnt = pTemp->countActive();
+
+						if (cnt < bestCount) {
+							bestCount = cnt;
+							bestKey   = key;
+						}
+					}
+
+					if (bestKey) {
+						// fold
+						pTemp->rewind();
+						importFold(pTemp, pNewTree, bestKey);
+
+						// update history
+						pTemp->numHistory = 0;
+						pTemp->history[pTemp->numHistory++] = bestKey;
+						for (unsigned j = 0; j < pNewTree->posHistory; j++) {
+							if (pNewTree->history[j] != bestKey)
+								pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
+						}
+						pTemp->posHistory = pTemp->numHistory;
+						for (unsigned j = pNewTree->posHistory; j < pNewTree->numHistory; j++) {
+							if (pNewTree->history[j] != bestKey)
+								pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
+						}
+
+						// copy back
+						pNewTree->rewind();
+						pNewTree->importActive(pTemp);
+						pNewTree->posHistory = pTemp->posHistory;
+						pNewTree->numHistory = pTemp->numHistory;
+						for (unsigned j = 0; j < pTemp->numHistory; j++) {
+							pNewTree->history[j] = pTemp->history[j];
+						}
+
+						printf("%s count=%u\n", pNewTree->rootNames[bestKey].c_str(), pNewTree->ncount);
+						continue;
+					}
+
 					// update counts
 					while (numFolds > 0 && lstFolds[numFolds - 1].version == 0) {
 						fold_t *pFold = &lstFolds[numFolds - 1];
@@ -517,12 +566,31 @@ struct kfoldContext_t {
 //					printf("%d fold %s %d\n", numFolds, pNewTree->keyNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
 					pTemp->rewind();
-					importFold(pTemp, pNewTree, lstFolds[numFolds - 1].key);
+					importFold(pTemp, pNewTree, iFold);
 //					printf("count=%u\n", pTemp->countActive());
+
+					// update history
+					pTemp->numHistory = 0;
+					pTemp->history[pTemp->numHistory++] = iFold;
+					for (unsigned j = 0; j < pNewTree->posHistory; j++) {
+						if (pNewTree->history[j] != iFold)
+							pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
+					}
+					pTemp->posHistory = pTemp->numHistory;
+					for (unsigned j = pNewTree->posHistory; j < pNewTree->numHistory; j++) {
+						if (pNewTree->history[j] != iFold)
+							pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
+					}
 
 					pNewTree->rewind();
 					pNewTree->importActive(pTemp);
-					printf("%s count=%u numFold=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->countActive(), numFolds);
+					pNewTree->posHistory = pTemp->posHistory;
+					pNewTree->numHistory = pTemp->numHistory;
+					for (unsigned j = 0; j < pTemp->numHistory; j++) {
+						pNewTree->history[j] = pTemp->history[j];
+					}
+
+					printf("%s count=%u numFold=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->ncount, numFolds);
 
 					--numFolds;
 					for (unsigned i = 0; i < numFolds; i++)
@@ -879,7 +947,6 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
 	app.pStore   = &db;
-	app.baseExplain.pStore = &db;
 
 	return app.main(outputFilename, inputFilename);
 }
