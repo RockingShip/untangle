@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-08-31 21:34:40 Changed: `kfold` using `baseExplain` again.
 2021-08-31 20:25:14 Changed: `kfold` using history to rescan previous keys.
 2021-08-31 20:18:14 Fixed: Redesigned `baseTree_t::importNode()` and `baseTree_t::importActive()`.
 2021-08-31 20:13:01 Changed: `baseTree_t::saveString()` and `loadString()` in sync with `tinyTree_t`.
@@ -53,9 +54,9 @@ TODO: no sorting when read-only
 
 ## 2021-08-08 11:29:20 [Version 2.9.0]
 
-Focus on tuning the generators and creating safe datasets.
-Dataset areas `full`, `mixed` and `pure`.
-Used to create the dataset version `20210807` dataset [https://rockingship.github.io/untangle-dataset/README.html](https://rockingship.github.io/untangle-dataset/README.html)
+Focus on tuning the generators and creating safe datasets.  
+Dataset areas `full`, `mixed` and `pure`.  
+Used to create the dataset version `20210807` dataset [https://rockingship.github.io/untangle-dataset/README.html](https://rockingship.github.io/untangle-dataset/README.html)  
 
 ```
 2021-08-08 11:23:30 Changed: Split `gendepreciate` into `.cc/.h. No code change.
@@ -100,8 +101,8 @@ Used to create the dataset version `20210807` dataset [https://rockingship.githu
 
 ## 2021-07-23 20:33:36 [Version 2.8.0]
 
-Extra application/tree samples.
-Used to create the initial version `20210723` dataset [https://rockingship.github.io/untangle-dataset/README.html](https://rockingship.github.io/untangle-dataset/README.html)
+Extra application/tree samples.  
+Used to create the initial version `20210723` dataset [https://rockingship.github.io/untangle-dataset/README.html](https://rockingship.github.io/untangle-dataset/README.html)  
 
 ```
 2021-07-23 18:00:57 Fixed: Disable `tinyTree_t::compare()` assertion as it triggered a minor historic generator issue.
@@ -134,9 +135,9 @@ Import/export used for [https://github.com/RockingShip/untangle-dataset](https:/
 
 Database version "20210708".
 
-Evaluator initial state as database copy-on-write section.
-This release is the first approach towards `rewriteData[]`.
-Also introduced is the concept of safe members.
+Evaluator initial state as database copy-on-write section.  
+This release is the first approach towards `rewriteData[]`.  
+Also introduced is the concept of safe members.  
 
  - `beval` evaluate a `baseTree_t` like `eval` for `tinyTree_t`
  - `bexplain` explain how a tree is normalised during construction

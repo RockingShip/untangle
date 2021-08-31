@@ -10,7 +10,11 @@
  *   leaving intermediate results in `pResult`.
  * Hitting a wall at iNode=372 numNodes=20883
  * with 2.9.2: iNode=372 numNodes=1630
- * with 2.9.3: iNode=372 numNodes=287
+ * with 2.9.3: iNode=372 numNodes=134
+ * With ExplainNode: Hitting wall at iNode=376 numNodes=62362 (depr-5n9.db)
+                                     iNode=376 numNodes=3476 (member-5n9.db)
+ * With NormaliseNode: Hitting wall at iNode=511 numNodes=35504
+ *                                     
  * Discovered that the structure base compare is incomplete and needs additional logic for cascading dyadics.
  * Keep the original `main()` as the new code is word-in-progress.
  */
@@ -43,7 +47,7 @@
 
 #include "context.h"
 #include "basetree.h"
-#include "database.h"
+#include "baseexplain.h"
 
 /*
  * Resource context.
@@ -90,17 +94,21 @@ struct kfoldContext_t {
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
+	/// @var {baseExplain_t} Explain logic for communicative dyadics
+	baseExplain_t baseExplain;
 	/// @var {baseTree_t*} input tree
 	baseTree_t    *pInputTree;
 	/// @var {database_t} - Database store to place results
 	database_t    *pStore;
 
-	kfoldContext_t(context_t &ctx) : ctx(ctx) {
+	kfoldContext_t(context_t &ctx) : ctx(ctx), baseExplain(ctx) {
 		opt_databaseName = "untangle.db";
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 		pStore = NULL;
+
+		baseExplain.track = false; // no explainations
 	}
 
 	// metrics for folds
@@ -431,7 +439,7 @@ struct kfoldContext_t {
 				uint32_t newQ = pNewTree->importNodes(pResults, pResults->roots[Q]);
 				uint32_t newT = pNewTree->importNodes(pResults, pResults->roots[Tu] ^ Ti);
 				uint32_t newF = pNewTree->importNodes(pResults, pResults->roots[F]);
-				uint32_t newR = pNewTree->addNormaliseNode(newQ, newT, newF);
+				uint32_t newR = baseExplain.explainNormaliseNode(0, pNewTree->ncount, pNewTree, newQ, newT, newF, NULL);
 				pNewTree->roots[iOldNode] = newR;
 
 // pNewTree->roots[iOldNode] = explainNormaliseNode(0, pNewTree->ncount, pNewTree, pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F], NULL);
@@ -508,7 +516,7 @@ struct kfoldContext_t {
 						uint32_t key = pNewTree->history[iHistory];
 
 						pTemp->rewind();
-						importFold(pTemp, pNewTree, key);
+						this->importFold(pTemp, pNewTree, key);
 						unsigned cnt = pTemp->countActive();
 
 						if (cnt < bestCount) {
@@ -520,7 +528,7 @@ struct kfoldContext_t {
 					if (bestKey) {
 						// fold
 						pTemp->rewind();
-						importFold(pTemp, pNewTree, bestKey);
+						this->importFold(pTemp, pNewTree, bestKey);
 
 						// update history
 						pTemp->numHistory = 0;
@@ -553,7 +561,7 @@ struct kfoldContext_t {
 						fold_t *pFold = &lstFolds[numFolds - 1];
 
 						pTemp->rewind();
-						importFold(pTemp, pNewTree, pFold->key);
+						this->importFold(pTemp, pNewTree, pFold->key);
 						pFold->count   = pTemp->countActive();
 						pFold->version = 1;
 
@@ -566,7 +574,7 @@ struct kfoldContext_t {
 //					printf("%d fold %s %d\n", numFolds, pNewTree->keyNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
 					pTemp->rewind();
-					importFold(pTemp, pNewTree, iFold);
+					this->importFold(pTemp, pNewTree, iFold);
 //					printf("count=%u\n", pTemp->countActive());
 
 					// update history
@@ -607,7 +615,7 @@ struct kfoldContext_t {
 					for (uint32_t iFold = pNewTree->kstart; iFold < pNewTree->nstart; iFold++) {
 						if (pNewRefCount[iFold] > 0) {
 							pTemp->rewind();
-							importFold(pTemp, pNewTree, iFold);
+							this->importFold(pTemp, pNewTree, iFold);
 
 							if (pTemp->ncount < pNewTree->ncount) {
 								pNewTree->rewind();
@@ -714,8 +722,8 @@ struct kfoldContext_t {
 			const uint32_t   F      = pNode->F;
 
 
-			pMapSet[iNode] = pTree->addNormaliseNode(pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F]);
-			pMapClr[iNode] = pTree->addNormaliseNode(pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F]);
+			pMapSet[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F], NULL);
+			pMapClr[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F], NULL);
 		}
 
 		/*
@@ -725,14 +733,14 @@ struct kfoldContext_t {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
-			pTree->roots[iRoot] = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+			pTree->roots[iRoot] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
 		}
 
 		if (RHS->system) {
 			uint32_t Ru = RHS->system & ~IBIT;
 			uint32_t Ri = RHS->system & IBIT;
 
-			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+			pTree->system = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
 		}
 
 		RHS->freeMap(pMapSet);
@@ -947,6 +955,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
 	app.pStore   = &db;
+	app.baseExplain.pStore = &db;
 
 	return app.main(outputFilename, inputFilename);
 }
