@@ -364,7 +364,7 @@ struct genrestartdataContext_t : callable_t {
 						this->numRestart++;
 					}
 
-					printf("\n");
+					printf(" // %lu\n", ctx.progress);
 				} else {
 					// no, erase index entry
 					buildProgressIndex[numArgs][iPure] = 0;

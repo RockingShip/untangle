@@ -9,6 +9,10 @@ TODO: no sorting when read-only
 
 ## [Unreleased]
 
+```
+2021-09-10 22:52:50 Changed: Small fixes.
+```
+
 ## 2021-08-31 20:30:19 [Version 2.10.0]
 
 Trees/nodes are cascade aware.

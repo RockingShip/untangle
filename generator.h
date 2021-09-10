@@ -292,9 +292,9 @@ struct generator_t {
 		        (packed >> PACKED_POS_ENDPOINT) & ((1 << PACKED_WIDTH_ENDPOINT) - 1),
 		        (packed >> PACKED_POS_PLACEHOLDER) & ((1 << PACKED_WIDTH_PLACEHOLDER) - 1),
 		        (packed >> PACKED_TIPOS) & 1,
-		        (packed >> PACKED_QPOS) & PACKED_MASK,
-		        (packed >> PACKED_TPOS) & PACKED_MASK,
-		        (packed >> PACKED_FPOS) & PACKED_MASK);
+			(unsigned) ((packed >> PACKED_QPOS) & PACKED_MASK),
+			(unsigned) ((packed >> PACKED_TPOS) & PACKED_MASK),
+			(unsigned) ((packed >> PACKED_FPOS) & PACKED_MASK));
 		return name;
 	}
 
@@ -795,7 +795,7 @@ struct generator_t {
 		// push start on stack
 		stack[stackPos++] = buildTree.count - 1;
 
-		foundTree.count = TINYTREE_NSTART;
+		foundTree.clearTree();
 
 		do {
 			// pop stack

@@ -45,4 +45,7 @@ as of v2
 - 6n9-pure signature set in 2 hours
 - saving/cloning multi-root trees with nodes in tree-walk order
 - generator/runtime synced ordering for better duplicate detection
-- Heapsort to order candidate pivot keys
+- heapsort to order candidate pivot keys
+- cascades for communicative dyadics
+- signature representative is lowest of all `compare()`.
+- Treewalk placeholder/endpoint assignment

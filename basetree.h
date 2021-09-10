@@ -2191,7 +2191,7 @@ struct baseTree_t {
 					}
 				}
 			} else if (this->isNE(F)) {
-				// QLR++
+				// QLR^^
 				uint32_t LR = F; // may cascade
 				uint32_t L  = this->N[LR].Q; // may cascade
 				uint32_t R  = this->N[LR].F; // does not cascade
@@ -3050,12 +3050,14 @@ struct baseTree_t {
 		if (Q & IBIT) {
 			// "!Q?T:F" -> "Q?F:T"
 			uint32_t savT = T;
+			Q ^= IBIT;
 			T = F;
 			F = savT;
-			Q ^= IBIT;
+			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"~Q\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 		}
 		if (Q == 0) {
 			// "0?T:F" -> "F"
+			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
 			return F;
 		}
 
@@ -3066,6 +3068,7 @@ struct baseTree_t {
 			F ^= IBIT;
 			T ^= IBIT;
 			ibit ^= IBIT;
+			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"~F\",\"qtf\":[%u,%s%u,%u],\"ibit\":%s0}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F, ibit ? "~" : "");
 		}
 
 		/*
@@ -3117,6 +3120,7 @@ struct baseTree_t {
 				if (F == Q || F == 0) {
 					// SELF
 					// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
 					return Q ^ ibit;
 				} else {
 					// OR
@@ -3126,6 +3130,7 @@ struct baseTree_t {
 				if (F == Q || F == 0) {
 					// ZERO
 					// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
 					return 0 ^ ibit;
 				} else {
 					// LESS-THAN
@@ -3153,6 +3158,7 @@ struct baseTree_t {
 				if (F == Q || F == 0) {
 					// ZERO
 					// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
 					return 0 ^ ibit;
 				} else {
 					// LESS-THAN
@@ -3166,6 +3172,7 @@ struct baseTree_t {
 				if (F == Q || F == 0) {
 					// SELF
 					// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
 					return Q ^ ibit;
 				} else {
 					// OR
@@ -3180,6 +3187,7 @@ struct baseTree_t {
 				} else if (T == F) {
 					// SELF
 					// "Q?F:F" [18] -> "F"
+					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"F\",\"N\":%u}", F);
 					return F ^ ibit;
 				} else {
 					// QTF (old unified operator)
@@ -3974,6 +3982,8 @@ struct baseTree_t {
 	 */
 	uint32_t loadStringSafe(const char *pName, const char *pSkin = NULL) {
 
+		assert(pName[0]); // disallow empty name
+
 		// modify if transform is present
 		uint32_t *transformList = NULL;
 		if (pSkin && *pSkin)
@@ -4549,7 +4559,7 @@ struct baseTree_t {
 		 * mark active
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
 			pSelect[RHS->roots[iRoot] & ~IBIT] = thisVersion;
 
 		pSelect[RHS->system & ~IBIT]               = thisVersion;
@@ -4587,7 +4597,7 @@ struct baseTree_t {
 		 * copy roots
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
 			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
 
 		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
@@ -4874,11 +4884,11 @@ struct baseTree_t {
 		 * File header
 		 */
 
-		static baseTreeHeader_t header;
+		baseTreeHeader_t header;
 		memset(&header, 0, sizeof header);
 
 		// zeros for alignment
-		static uint8_t zero16[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		uint8_t zero16[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		// current file position
 		size_t         fpos       = 0;
 		// crc for nodes/roots

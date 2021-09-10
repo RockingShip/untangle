@@ -1,4 +1,4 @@
-//# pragma GCC optimize ("O3") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-30 17:20:21

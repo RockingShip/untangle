@@ -913,6 +913,8 @@ struct genrewritedataContext_t {
 		for (uint32_t F1 = 0; F1 < NSTART+0; F1++) {
 		//@formatter:on
 
+			tree.clearTree();
+			
 			// validate
 			if (Q1 != Tu1 || Q1 != F1 || Ti1) {
 				if (Q1 == 0) continue;
@@ -1134,6 +1136,7 @@ struct genrewritedataContext_t {
 
 						{
 							// copy tree
+							testTree.clearTree();
 							testTree.N[NSTART + 0] = tree.N[NSTART + 0];
 							testTree.N[NSTART + 1] = tree.N[NSTART + 1];
 							testTree.N[NSTART + 2] = tree.N[NSTART + 2];
