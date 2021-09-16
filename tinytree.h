@@ -256,7 +256,7 @@ struct tinyTree_t {
 	 * @param {boolean} layoutOnly - ignore endpoint values when `true`
 	 * @return {number} `<0` if `lhs<rhs`, `0` if `lhs==rhs` and `>0` if `lhs>rhs`
 	 */
-	int compare(unsigned lhs, const tinyTree_t *treeR, unsigned rhs, unsigned topLevelCascade = CASCADE_NONE) {
+	int compare(uint32_t lhs, const tinyTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -680,7 +680,7 @@ struct tinyTree_t {
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	inline unsigned addNode(unsigned Q, unsigned T, unsigned F) {
+	inline uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
 		// sanity checking
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
@@ -2116,7 +2116,7 @@ struct tinyTree_t {
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	unsigned addNormaliseNode(unsigned Q, unsigned T, unsigned F) {
+	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F) {
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert((Q & ~IBIT) < this->count);
@@ -2134,7 +2134,7 @@ struct tinyTree_t {
 
 		if (Q & IBIT) {
 			// "~Q?T:F" -> "Q?F:T"
-			unsigned savT = T;
+			uint32_t savT = T;
 			T = F;
 			F = savT;
 			Q ^= IBIT;
@@ -2145,7 +2145,7 @@ struct tinyTree_t {
 		}
 
 		// ibit indicates the result should be inverted
-		unsigned ibit = 0;
+		uint32_t ibit = 0;
 
 		if (F & IBIT) {
 			// "Q?T:~F" -> "~(Q?~T:F)"
@@ -2338,7 +2338,7 @@ struct tinyTree_t {
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int      numStack = 0;
-		unsigned nextNode = TINYTREE_NSTART; // next visual node
+		uint32_t nextNode = TINYTREE_NSTART; // next visual node
 		uint32_t beenWhat[TINYTREE_NEND]; // track id's of display operators.
 
 		// walk through the notation until end or until placeholder/skin separator
@@ -2356,31 +2356,31 @@ struct tinyTree_t {
 				stack[numStack++] = 0;
 				break;
 			case 'a':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[0] - 'a');
 				break;
 			case 'b':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[1] - 'a');
 				break;
 			case 'c':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[2] - 'a');
 				break;
 			case 'd':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[3] - 'a');
 				break;
 			case 'e':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[4] - 'a');
 				break;
 			case 'f':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[5] - 'a');
 				break;
 			case 'g':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[6] - 'a');
 				break;
 			case 'h':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[7] - 'a');
 				break;
 			case 'i':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[8] - 'a');
 				break;
 			case '1':
 				stack[numStack++] = beenWhat[nextNode - ('1' - '0')];
@@ -2416,8 +2416,8 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				// pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = addNormaliseNode(L, 0 ^ IBIT, R);
@@ -2432,8 +2432,8 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				//pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = addNormaliseNode(L, R ^ IBIT, 0);
@@ -2448,8 +2448,8 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				//pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = addNormaliseNode(L, R ^ IBIT, R);
@@ -2464,9 +2464,9 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				// pop operands
-				unsigned F = stack[--numStack];
-				unsigned T = stack[--numStack];
-				unsigned Q = stack[--numStack];
+				uint32_t F = stack[--numStack];
+				uint32_t T = stack[--numStack];
+				uint32_t Q = stack[--numStack];
 
 				// create operator
 				uint32_t nid = addNormaliseNode(Q, T ^ IBIT, F);
@@ -2481,8 +2481,8 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				// pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = addNormaliseNode(L, R, 0);
@@ -2497,8 +2497,8 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				//pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = addNormaliseNode(L, 0, R);
@@ -2513,9 +2513,9 @@ struct tinyTree_t {
 					return DERR_UNDERFLOW;
 
 				// pop operands
-				unsigned F = stack[--numStack];
-				unsigned T = stack[--numStack];
-				unsigned Q = stack[--numStack];
+				uint32_t F = stack[--numStack];
+				uint32_t T = stack[--numStack];
+				uint32_t Q = stack[--numStack];
 
 				// create operator
 				uint32_t nid = addNormaliseNode(Q, T, F);
@@ -2578,8 +2578,8 @@ struct tinyTree_t {
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int      numStack        = 0;
-		unsigned nextPlaceholder = TINYTREE_KSTART;
-		unsigned nextNode        = TINYTREE_NSTART; // next visual node
+		uint32_t nextPlaceholder = TINYTREE_KSTART;
+		uint32_t nextNode        = TINYTREE_NSTART; // next visual node
 		uint32_t beenWhat[TINYTREE_NEND]; // track id's of display operators.
 
 		// walk through the notation until end or until placeholder/skin separator
@@ -2590,31 +2590,31 @@ struct tinyTree_t {
 				stack[numStack++] = 0;
 				break;
 			case 'a':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[0] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[0] - 'a');
 				break;
 			case 'b':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[1] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[1] - 'a');
 				break;
 			case 'c':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[2] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[2] - 'a');
 				break;
 			case 'd':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[3] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[3] - 'a');
 				break;
 			case 'e':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[4] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[4] - 'a');
 				break;
 			case 'f':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[5] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[5] - 'a');
 				break;
 			case 'g':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[6] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[6] - 'a');
 				break;
 			case 'h':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[7] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[7] - 'a');
 				break;
 			case 'i':
-				stack[numStack++] = (unsigned) (TINYTREE_KSTART + pSkin[8] - 'a');
+				stack[numStack++] = (uint32_t) (TINYTREE_KSTART + pSkin[8] - 'a');
 				break;
 			case '1':
 				stack[numStack++] = beenWhat[nextNode - ('1' - '0')];
@@ -2648,8 +2648,8 @@ struct tinyTree_t {
 				// OR (appreciated)
 
 				// pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2665,8 +2665,8 @@ struct tinyTree_t {
 				// GT (appreciated)
 
 				//pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2682,8 +2682,8 @@ struct tinyTree_t {
 				// NE/XOR (appreciated)
 
 				//pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2699,9 +2699,9 @@ struct tinyTree_t {
 				// QnTF (appreciated)
 
 				// pop operands
-				unsigned F = stack[--numStack];
-				unsigned T = stack[--numStack];
-				unsigned Q = stack[--numStack];
+				uint32_t F = stack[--numStack];
+				uint32_t T = stack[--numStack];
+				uint32_t Q = stack[--numStack];
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2717,8 +2717,8 @@ struct tinyTree_t {
 				// AND (depreciated)
 
 				// pop operands
-				unsigned R = stack[--numStack]; // right hand side
-				unsigned L = stack[--numStack]; // left hand side
+				uint32_t R = stack[--numStack]; // right hand side
+				uint32_t L = stack[--numStack]; // left hand side
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2734,9 +2734,9 @@ struct tinyTree_t {
 				// QTF (depreciated)
 
 				// pop operands
-				unsigned F = stack[--numStack];
-				unsigned T = stack[--numStack];
-				unsigned Q = stack[--numStack];
+				uint32_t F = stack[--numStack];
+				uint32_t T = stack[--numStack];
+				uint32_t Q = stack[--numStack];
 
 				// create operator
 				uint32_t nid = this->count++;
@@ -2786,7 +2786,7 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 */
-	void saveString(unsigned id, char *pName, char *pSkin) const {
+	void saveString(uint32_t id, char *pName, char *pSkin) const {
 
 		unsigned nameLen  = 0;
 
@@ -2824,7 +2824,7 @@ struct tinyTree_t {
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		int      numStack = 0;
 
-		unsigned nextNode       = TINYTREE_NSTART;
+		uint32_t nextNode       = TINYTREE_NSTART;
 		unsigned numPlaceholder = 0;
 
 		uint32_t beenThere = (1 << 0);
@@ -2920,7 +2920,7 @@ struct tinyTree_t {
 			} else {
 				// back-reference to previous node
 
-				unsigned backref = nextNode - beenWhat[curr];
+				uint32_t backref = nextNode - beenWhat[curr];
 				assert(backref <= 9);
 				pName[nameLen++] = (char) ('0' + backref);
 			}
@@ -2950,7 +2950,7 @@ struct tinyTree_t {
 	 * @param {string} pSkin - optional Skin
 	 * @return {string} Constructed notation. static storage so no multiple calls like with `printf()`.
 	 */
-	const char *saveString(unsigned id) const {
+	const char *saveString(uint32_t id) const {
 
 		static char staticName[TINYTREE_NAMELEN + 1];
 
@@ -3088,7 +3088,7 @@ struct tinyTree_t {
 		 */
 
 		// for all operators eligible for evaluation...
-		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+		for (uint32_t i = TINYTREE_NSTART; i < count; i++) {
 			// point to the first chunk of the `"question"`
 			const __m128i *Q = (const __m128i *) v[N[i].Q].bits;
 			// point to the first chunk of the `"when-true"`
@@ -3124,7 +3124,7 @@ struct tinyTree_t {
 		typedef int v512_t __attribute__ ((vector_size (64)));
 
 		// for all operators eligible for evaluation...
-		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+		for (uint32_t i = TINYTREE_NSTART; i < count; i++) {
 			// point to the first chunk of the `"question"`
 			const v512_t *Q = (const v512_t *) v[N[i].Q].bits;
 			// point to the first chunk of the `"when-true"`
@@ -3153,7 +3153,7 @@ struct tinyTree_t {
 		 */
 
 		// for all operators eligible for evaluation...
-		for (unsigned i = TINYTREE_NSTART; i < count; i++) {
+		for (uint32_t i = TINYTREE_NSTART; i < count; i++) {
 			// point to the first chunk of the `"question"`
 			const uint64_t *Q = v[N[i].Q].bits;
 			// point to the first chunk of the `"when-true"`

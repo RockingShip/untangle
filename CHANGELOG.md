@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-09-16 16:21:13 Changed: Renamed `unsigned` to `uint32_t` in `tinytree.h`. No code change.
 2021-09-10 22:52:50 Changed: Small fixes.
 ```
 
