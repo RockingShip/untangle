@@ -126,7 +126,7 @@ struct selftestContext_t : dbtool_t {
 	 *
 	 * Test that `tinyTree_t` does level-2 normalisation
 	 */
-	void performSelfTestTreeNormaliseLevel2(void) {
+	void performSelfTestTreeNormaliseDyadic(void) {
 
 		tinyTree_t tree(ctx);
 
@@ -136,7 +136,7 @@ struct selftestContext_t : dbtool_t {
 		const char *pName = tree.saveString(tree.root);
 
 		if (::strcmp(pName, "ab+ab>^") != 0) {
-			printf("{\"error\":\"tree not level-2 normalised\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
+			printf("{\"error\":\"tree not communicative dyadic normalised\",\"where\":\"%s:%s:%d\",\"encountered\":\"%s\",\"expected\":\"%s\"}\n",
 			       __FUNCTION__, __FILE__, __LINE__, pName, "ab+ab>^");
 			exit(1);
 		}
@@ -1701,7 +1701,7 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Test that `tinyTree_t` does level-2 normalisation
 	 */
-	app.performSelfTestTreeNormaliseLevel2();
+	app.performSelfTestTreeNormaliseDyadic();
 
 	/*
 	 * Test that evaluating `tinyTree_t` is working as expected

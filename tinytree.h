@@ -258,6 +258,16 @@ struct tinyTree_t {
 	 */
 	int compare(uint32_t lhs, const tinyTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
+#if 0
+// todo: need to prepare generator first		
+		/*
+		 * @date 2021-09-16 17:41:17
+		 * Ignore cascading if disabled
+		 */
+		if (!(ctx.flags & context_t::MAGICMASK_CASCADE))
+			topLevelCascade = CASCADE_NONE;
+#endif
+			
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 
@@ -694,17 +704,19 @@ struct tinyTree_t {
 			assert(Q != F);                        // Q/F collapse
 			assert(T != F);                        // T/F collapse
 
-			if (this->isOR(Q, T, F)) {
-				assert(!this->isOR(F));
-				assert(compare(Q, this, F, CASCADE_OR) < 0);
-			}
-			if (this->isNE(Q, T, F)) {
-				assert(!this->isNE(F));
-				assert(compare(Q, this, F, CASCADE_NE) < 0);
-			}
-			if (this->isAND(Q, T, F)) {
-				assert(!this->isAND(T));
-				assert(compare(Q, this, T, CASCADE_AND) < 0);
+			if (ctx.flags & context_t::MAGICMASK_CASCADE) {
+				if (this->isOR(Q, T, F)) {
+					assert(!this->isOR(F));
+					assert(compare(Q, this, F, CASCADE_OR) < 0);
+				}
+				if (this->isNE(Q, T, F)) {
+					assert(!this->isNE(F));
+					assert(compare(Q, this, F, CASCADE_NE) < 0);
+				}
+				if (this->isAND(Q, T, F)) {
+					assert(!this->isAND(T));
+					assert(compare(Q, this, T, CASCADE_AND) < 0);
+				}
 			}
 		}
 
@@ -749,20 +761,6 @@ struct tinyTree_t {
  * @return {number} newly created nodeId
  */
 	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId) {
-		ctx.cntHash++;
-
-		{
-			assert(!(Q & IBIT));                   // Q not inverted
-			assert((T & IBIT) || !(ctx.flags & context_t::MAGICMASK_PURE));
-			assert(!(F & IBIT));                   // F not inverted
-			assert(Q != 0);                        // Q not zero
-			assert(T != 0);                        // Q?0:F -> F?!Q:0
-			assert(T != IBIT || F != 0);           // Q?!0:0 -> Q
-			assert(Q != (T & ~IBIT));              // Q/T collapse
-			assert(Q != F);                        // Q/F collapse
-			assert(T != F);                        // T/F collapse
-
-		}
 
 		// test if node already exists
 		for (unsigned nid = TINYTREE_NSTART; nid < this->count; nid++) {
@@ -2276,7 +2274,36 @@ struct tinyTree_t {
 			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
-		return this->addOrderNode(Q, T, F, this->count) ^ ibit;
+		// todo: need to prepare generator first
+		if (true || ctx.flags & context_t::MAGICMASK_CASCADE) {
+			// Extended cascading/ordering
+			return this->addOrderNode(Q, T, F, this->count) ^ ibit;
+		} else if (this->isOR(Q, T, F)) {
+			// Basic ordering, do not supply a cascading option as that is disabled 
+			if (this->compare(F, this, Q) < 0) {
+				uint32_t savQ = Q;
+				Q = F;
+				F = savQ;
+			}
+		} else if (this->isNE(Q, T, F)) {
+			// Basic ordering, do not supply a cascading option as that is disabled 
+			if (this->compare(F, this, Q) < 0) {
+				uint32_t savQ = Q;
+				Q = F;
+				T = savQ ^ IBIT;
+				F = savQ;
+			}
+		} else if (this->isAND(Q, T, F)) {
+			// Basic ordering, do not supply a cascading option as that is disabled 
+
+			if (this->compare(T, this, Q) < 0) {
+				uint32_t savQ = Q;
+				Q = T;
+				T = savQ;
+			}
+		}
+
+		return this->addNode(Q, T, F) ^ ibit;
 	}
 
 	/*
