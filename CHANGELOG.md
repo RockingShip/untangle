@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-09-17 10:32:35 Changed: Merged `tinyTree_t::addBasicNode()` and `tinyTree_t::addNode()`. 
 2021-09-16 16:26:44 Changed: Redesigned `tinyTree_t::addOrderNode()` into `tinyTree_t::cascadeQTF()`.
 2021-09-16 17:45:33 Fixed: disable/enable cascading in `tinyTree_t`.
 2021-09-16 16:21:13 Changed: Renamed `unsigned` to `uint32_t` in `tinytree.h`. No code change.

@@ -2282,7 +2282,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = treeR.addNode(L, R ^ IBIT, 0);
+								unsigned nid = treeR.addBasicNode(L, R ^ IBIT, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2297,7 +2297,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = treeR.addNode(L, 0 ^ IBIT, R);
+								unsigned nid = treeR.addBasicNode(L, 0 ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2312,7 +2312,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = treeR.addNode(L, R ^ IBIT, R);
+								unsigned nid = treeR.addBasicNode(L, R ^ IBIT, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2328,7 +2328,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = treeR.addNode(Q, T ^ IBIT, F);
+								unsigned nid = treeR.addBasicNode(Q, T ^ IBIT, F);
 
 								// push
 								stack[stackPos++]     = nid; // push
@@ -2344,7 +2344,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = treeR.addNode(L, R, 0);
+								unsigned nid = treeR.addBasicNode(L, R, 0);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references
@@ -2359,7 +2359,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned L = stack[--stackPos]; // left hand side
 
 								// create operator
-								unsigned nid = treeR.addNode(L, 0, R);
+								unsigned nid = treeR.addBasicNode(L, 0, R);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[stackPos++] = nid; // save actual index for back references
@@ -2375,7 +2375,7 @@ struct genmemberContext_t : dbtool_t {
 								unsigned Q = stack[--stackPos];
 
 								// create operator
-								unsigned nid = treeR.addNode(Q, T, F);
+								unsigned nid = treeR.addBasicNode(Q, T, F);
 
 								stack[stackPos++]     = nid; // push
 								beenThere[nextNode++] = nid; // save actual index for back references

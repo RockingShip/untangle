@@ -690,7 +690,7 @@ struct tinyTree_t {
 	 * @param {number} F
 	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
 	 */
-	inline uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
+	inline uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F) {
 
 		/*
 		 * @date 2021-09-15 22:12:26
@@ -752,47 +752,6 @@ struct tinyTree_t {
 		pNode->F = F;
 
 		return nid;
-	}
-
-	/**
- * @date 2021-08-13 13:33:13
- *
- * Add a node to tree
- *
- * If the node already exists then use that.
- * Otherwise, add a node to tree if it has the expected node ID.
- * Otherwise, Something changed since the recursion was invoked, re-analyse
- *
- * @param {number} depth - Recursion depth
- * @param {number} expectId - Recursion end condition, the node id to be added
- * @param {baseTree_t*} pTree - Tree containing nodes
- * @param {number} Q - component
- * @param {number} T - component
- * @param {number} F - component
- * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
- * @return {number} newly created nodeId
- */
-	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId) {
-
-		// test if node already exists
-		for (unsigned nid = TINYTREE_NSTART; nid < this->count; nid++) {
-			const tinyNode_t *pNode = this->N + nid;
-			if (pNode->Q == Q && pNode->T == T && pNode->F == F)
-				return nid;
-		}
-
-		// lookup
-		if (this->count != expectId) {
-			/*
-			 * @date 2021-08-11 21:59:48
-			 * if the node id is not what is expected, then something changed and needs to be re-evaluated again
-			 */
-			return addNormaliseNode(Q, T, F);
-		} else {
-			// situation is stable, create node
-			uint32_t ret = this->addNode(Q, T, F);
-			return ret;
-		}
 	}
 
 	/**
@@ -953,26 +912,26 @@ struct tinyTree_t {
 						if (cascadeQTF(Q, T, F)) {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = IBIT;
 							*F = B;
 							return cascadeQTF(Q, T, F);
 						} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							// already *T = IBIT;
 							*F = B;
 							return false; // remains OR
 						}
 					} else if (compare(A, this, C, CASCADE_OR) < 0) {
 						// A<C<B
-						*Q = addNode(A, IBIT, C);
+						*Q = addBasicNode(A, IBIT, C);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
 					} else {
 						// C<A<B
-						*Q = addNode(C, IBIT, A);
+						*Q = addBasicNode(C, IBIT, A);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
@@ -994,20 +953,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, D no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = IBIT;
 							*F = D;
 							return cascadeQTF(Q, T, F);
 					} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							// already *T = IBIT;
 							*F = D;
 							return false; // remains OR
 					}
 					} else {
 						// simple rewrite
-						*Q = addNode(AB, IBIT, C);
+						*Q = addBasicNode(AB, IBIT, C);
 						// already *T = IBIT;
 						*F = D;
 						return false; // remains OR
@@ -1024,20 +983,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = IBIT;
 							*F = B;
 							return cascadeQTF(Q, T, F);
 					} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							// already *T = IBIT;
 							*F = B;
 							return false; // remains OR
 						}
 					} else {
 						// simple rewrite
-						*Q = addNode(CD, IBIT, A);
+						*Q = addBasicNode(CD, IBIT, A);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
@@ -1051,13 +1010,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, D no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = IBIT;
 						*F = D;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = D;
 						return false; // remains OR
@@ -1071,13 +1030,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
 				} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
@@ -1122,26 +1081,26 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
 							}
 				} else if (compare(A, this, C, CASCADE_OR) < 0) {
 					// A<C<B
-					*Q = addNode(A, IBIT, C);
+					*Q = addBasicNode(A, IBIT, C);
 					// already *T = IBIT;
 					*F = B;
 					return false; // remains OR
 						} else {
 					// C<A<B
-					*Q = addNode(C, IBIT, A);
+					*Q = addBasicNode(C, IBIT, A);
 					// already *T = IBIT;
 					*F = B;
 					return false; // remains OR
@@ -1184,26 +1143,26 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, C no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = IBIT;
 						*F = C;
 						return cascadeQTF(Q, T, F);
 				} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = C;
 						return false; // remains OR
 						}
 				} else if (compare(A, this, B, CASCADE_OR) < 0) {
 					// A<B<C
-					*Q = addNode(A, IBIT, B);
+					*Q = addBasicNode(A, IBIT, B);
 					// already *T = IBIT;
 					*F = C;
 					return false; // remains OR
 					} else {
 					// B<A<C
-					*Q = addNode(B, IBIT, A);
+					*Q = addBasicNode(B, IBIT, A);
 					// already *T = IBIT;
 					*F = C;
 					return false; // remains OR
@@ -1329,20 +1288,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, D no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = D ^ IBIT;
 							*F = D;
 							return cascadeQTF(Q, T, F);
 					} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = D ^ IBIT;
 							*F = D;
 							return false; // remains NE
 					}
 					} else {
 						// simple rewrite
-						*Q = addNode(AB, C ^ IBIT, C);
+						*Q = addBasicNode(AB, C ^ IBIT, C);
 						*T = D ^ IBIT;
 						*F = D;
 						return false; // remains NE
@@ -1359,20 +1318,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B ^ IBIT;
 							*F = B;
 							return cascadeQTF(Q, T, F);
 					} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B ^ IBIT;
 							*F = B;
 							return false; // remains OR
 						}
 					} else {
 						// simple rewrite
-						*Q = addNode(CD, A ^ IBIT, A);
+						*Q = addBasicNode(CD, A ^ IBIT, A);
 						*T = B ^ IBIT;
 						*F = B;
 						return false; // remains NE
@@ -1386,13 +1345,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, D no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = D ^ IBIT;
 						*F = D;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = D ^ IBIT;
 						*F = D;
 						return false; // remains OR
@@ -1406,13 +1365,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
 				} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
 						return false; // remains OR
@@ -1457,26 +1416,26 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
 						return false; // remains NE
 					}
 				} else if (compare(A, this, C, CASCADE_NE) < 0) {
 					// A<C<B
-					*Q = addNode(A, C ^ IBIT, C);
+					*Q = addBasicNode(A, C ^ IBIT, C);
 					*T = B ^ IBIT;
 					*F = B;
 					return false; // remains NE
 						} else {
 					// C<A<B
-					*Q = addNode(C, A ^ IBIT, A);
+					*Q = addBasicNode(C, A ^ IBIT, A);
 					*T = B ^ IBIT;
 					*F = B;
 					return false; // remains NE
@@ -1519,26 +1478,26 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, C no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = C ^ IBIT;
 						*F = C;
 						return cascadeQTF(Q, T, F);
 						} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = C ^ IBIT;
 						*F = C;
 						return false; // remains NE
 						}
 				} else if (compare(A, this, B, CASCADE_NE) < 0) {
 					// A<B<C
-					*Q = addNode(A, B ^ IBIT, B);
+					*Q = addBasicNode(A, B ^ IBIT, B);
 					*T = C ^ IBIT;
 					*F = C;
 					return false; // remains NE
 					} else {
 					// B<A<C
-					*Q = addNode(B, A ^ IBIT, A);
+					*Q = addBasicNode(B, A ^ IBIT, A);
 					*T = C ^ IBIT;
 					*F = C;
 					return false; // remains NE
@@ -1638,26 +1597,26 @@ struct tinyTree_t {
 						if (cascadeQTF(Q, T, F)) {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B;
 							*F = 0;
 							return cascadeQTF(Q, T, F);
 						} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B;
 							// already *F = 0;
 							return false; // remains AND
 						}
 					} else if (compare(A, this, C, CASCADE_AND) < 0) {
 						// A<C<B
-						*Q = addNode(A, C, 0);
+						*Q = addBasicNode(A, C, 0);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
 					} else {
 						// C<A<B
-						*Q = addNode(C, A, 0);
+						*Q = addBasicNode(C, A, 0);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
@@ -1679,20 +1638,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, D no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = D;
 							*F = 0;
 							return cascadeQTF(Q, T, F);
 					} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = D;
 							// already *F = 0;
 							return false; // remains AND
 					}
 					} else {
 						// simple rewrite
-						*Q = addNode(AB, C, 0);
+						*Q = addBasicNode(AB, C, 0);
 						*T = D;
 						// already *F = 0;
 						return false; // remains AND
@@ -1709,20 +1668,20 @@ struct tinyTree_t {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
 							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B;
 							*F = 0;
 							return cascadeQTF(Q, T, F);
 						} else {
 							// append last placeholder
-							*Q = addNode(*Q, *T, *F);
+							*Q = addBasicNode(*Q, *T, *F);
 							*T = B;
 							// already *F = 0;
 							return false; // remains AND
 						}
 					} else {
 						// simple rewrite
-						*Q = addNode(CD, A, 0);
+						*Q = addBasicNode(CD, A, 0);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
@@ -1736,13 +1695,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, D no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = D;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = D;
 						// already *F = 0;
 						return false; // remains AND
@@ -1756,13 +1715,13 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
 							} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
@@ -1807,27 +1766,27 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, B no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
 					} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
 					}
 				} else if (compare(A, this, C, CASCADE_AND) < 0) {
 					// A<C<B
-					*Q = addNode(A, C, 0);
+					*Q = addBasicNode(A, C, 0);
 					*T = B;
 					// already *F = 0;
 					return false; // remains AND
 
 						} else {
 					// C<A<B
-					*Q = addNode(C, A, 0);
+					*Q = addBasicNode(C, A, 0);
 					*T = B;
 					// already *F = 0;
 					return false; // remains AND
@@ -1870,26 +1829,26 @@ struct tinyTree_t {
 					if (cascadeQTF(Q, T, F)) {
 						// *Q,*T,*F changed or folded, C no longer assumed highest
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = C;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
 				} else {
 						// append last placeholder
-						*Q = addNode(*Q, *T, *F);
+						*Q = addBasicNode(*Q, *T, *F);
 						*T = C;
 						// already *F = 0;
 						return false; // remains AND
 					}
 				} else if (compare(A, this, B, CASCADE_AND) < 0) {
 					// A<B<C
-					*Q = addNode(A, B, 0);
+					*Q = addBasicNode(A, B, 0);
 					*T = C;
 					// already *F = 0;
 					return false; // remains AND
 					} else {
 					// B<A<C
-					*Q = addNode(B, A, 0);
+					*Q = addBasicNode(B, A, 0);
 					*T = C;
 					// already *F = 0;
 					return false; // remains AND
@@ -2082,7 +2041,7 @@ struct tinyTree_t {
 		if ((ctx.flags & context_t::MAGICMASK_PURE) && !(T & IBIT)) {
 			// QTF
 			// Q?T:F -> Q?~(Q?~T:F):F)
-			T = addNode(Q, T ^ IBIT, F) ^ IBIT;
+			T = addBasicNode(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
 		// todo: need to prepare generator first
@@ -2114,7 +2073,7 @@ struct tinyTree_t {
 			}
 		}
 
-		return this->addNode(Q, T, F) ^ ibit;
+		return this->addBasicNode(Q, T, F) ^ ibit;
 	}
 
 	/*
