@@ -692,6 +692,18 @@ struct tinyTree_t {
 	 */
 	inline uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
+		/*
+		 * @date 2021-09-15 22:12:26
+		 * `cascadeQTF()` can return endpoints and marks them by `Q=F=endpoint` 
+		 */
+		if (Q == F) {
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+				assert(Q == T);
+			}
+
+			return Q;
+		}
+
 		// sanity checking
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert(!(Q & IBIT));                   // Q not inverted
@@ -775,7 +787,7 @@ struct tinyTree_t {
 			 * @date 2021-08-11 21:59:48
 			 * if the node id is not what is expected, then something changed and needs to be re-evaluated again
 			 */
-			return addOrderNode(Q, T, F, this->count);
+			return addNormaliseNode(Q, T, F);
 		} else {
 			// situation is stable, create node
 			uint32_t ret = this->addNode(Q, T, F);
@@ -811,1293 +823,1092 @@ struct tinyTree_t {
 	 * This also means that for `ab+c+', if `b` continues the cascade, the terms will all be "less than" `c`.
 	 * Would the right hand side continue, then there is no indicator of highest value in th deeper levels.
 	 *
-	 * @param {number} depth - Recursion depth
-	 * @param {number} expectId - Recursion end condition, the node id to be added
-	 * @param {baseTree_t*} pTree - Tree containing nodes
+	 * @date 2021-09-12 22:46:15
+	 * Q/T/F are assumed trivial normalised
+	 * return value might fold and return as `Q=T=F`. However,`IBIT` is never set.
+	 * return value only sensible when called for OR/NE/AND 
+	 * 
 	 * @param {number} Q - component
 	 * @param {number} T - component
 	 * @param {number} F - component
-	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
-	 * @return {number} newly created nodeId
 	 */
-	uint32_t addOrderNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId) {
+	bool cascadeQTF(uint32_t *Q, uint32_t *T, uint32_t *F) {
 
-		// OR (L?~0:R)
-		if (this->isOR(Q, T, F)) {
-			if (this->isOR(Q) && this->isOR(F)) {
-				// AB+CD++
-				uint32_t AB = Q;
-				uint32_t CD = F;
-				uint32_t A  = this->N[AB].Q;
-				uint32_t B  = this->N[AB].F;
-				uint32_t C  = this->N[CD].Q;
-				uint32_t D  = this->N[CD].F;
-
-				if (A == F) {
-					return AB;
-				} else if (B == F) {
-					return AB;
-				} else if (C == Q) {
-					return CD;
-				} else if (D == Q) {
-					return CD;
-				} else if (A == C) {
-					if (B == D) {
-						// A=C<B=D
-						return AB;
-					} else if (compare(B, this, D, CASCADE_OR) < 0) {
-						// A=C<B<D
-						Q = AB;
-						T = IBIT;
-						F = D;
-					} else {
-						// A=C<D<B
-						Q = CD;
-						T = IBIT;
-						F = B;
-					}
-				} else if (A == D) {
-					// C<A=D<B
-					Q = CD;
-					T = IBIT;
-					F = B;
-				} else if (B == C) {
-					// A<B=C<D
-					Q = AB;
-					T = IBIT;
-					F = D;
-				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
-					// A and C can react, nether will exceed B/D
-					if (this->isOR(A) || this->isOR(C)) {
-						uint32_t AC = addOrderNode(A, IBIT, C, expectId);
-						Q = AC;
-						T = IBIT;
-						F = D;
-					} else if (compare(A, this, C, CASCADE_OR) < 0) {
-						uint32_t AC = addBasicNode(A, IBIT, C, expectId);
-						Q = AC;
-						T = IBIT;
-						F = D;
-					} else {
-						uint32_t CA = addBasicNode(C, IBIT, A, expectId);
-						Q = CA;
-						T = IBIT;
-						F = B;
-					}
-					return addBasicNode(Q, T, F, expectId);
-				} else if (compare(B, this, C, CASCADE_OR) < 0) {
-					// A<B<C<D
-					if (this->isOR(C)) {
-						// C cascades and unusable for right-hand-side
-						uint32_t ABC = addOrderNode(AB, IBIT, C, expectId);
-						Q = ABC;
-						T = IBIT;
-						F = D;
-					} else {
-						uint32_t ABC = addBasicNode(AB, IBIT, C, expectId);
-						Q = ABC;
-						T = IBIT;
-						F = D;
-					}
-					return addBasicNode(Q, T, F, expectId);
-				} else if (compare(D, this, A, CASCADE_OR) < 0) {
-					// C<D<A<B
-					if (this->isOR(A)) {
-						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, IBIT, A, expectId);
-						Q = CDA;
-						T = IBIT;
-						F = B;
-					} else {
-						uint32_t CDA = addBasicNode(CD, IBIT, A, expectId);
-						Q = CDA;
-						T = IBIT;
-						F = B;
-					}
-					return addBasicNode(Q, T, F, expectId);
-				} else if (compare(B, this, D, CASCADE_OR) < 0) {
-					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					uint32_t ABC = addOrderNode(AB, IBIT, C, expectId);
-					Q = ABC;
-					T = IBIT;
-					F = D;
-					return addBasicNode(Q, T, F, expectId);
-				} else {
-					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					uint32_t ACD = addOrderNode(CD, IBIT, A, expectId);
-					Q = ACD;
-					T = IBIT;
-					F = B;
-					return addBasicNode(Q, T, F, expectId);
-				}
-
-			} else if (this->isOR(Q)) {
-				// LR+F+
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert(!this->isOR(R));
-
-				if (F == L) {
-					return LR;
-				} else if (F == R) {
-					return LR;
-				}
-
-				if (this->isOR(L)) {
-					// AB+C+F+
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
-
-					uint32_t ABC = Q; // may cascade
-					uint32_t AB  = L; // may cascade
-					uint32_t A   = this->N[AB].Q; // may cascade
-					uint32_t B   = this->N[AB].F; // does not cascade
-					uint32_t C   = R; // does not cascade
-
-					if (A == F) {
-						// A=F<B<C
-						return ABC;
-					} else if (B == F) {
-						// A<B=F<C
-						return ABC;
-					} else if (C == F) {
-						// A<B<C=F
-						return ABC;
-					} else if (compare(C, this, F, CASCADE_OR) < 0) {
-						// A<B<C<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(F, this, A, CASCADE_OR) < 0) {
-						// F<A<B<C
-						if (this->isOR(F)) {
-							// F cascades and can exceed A,B,C
-							uint32_t ABF = addOrderNode(AB, IBIT, F, expectId);
-							Q = ABF;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// F is single term
-							uint32_t FA;
-							if (this->isOR(A)) {
-								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, IBIT, A, expectId);
-							} else {
-								// A is single term
-								FA = addBasicNode(F, IBIT, A, expectId);
-							}
-							uint32_t FAB = addBasicNode(FA, IBIT, B, expectId);
-							Q = FAB;
-							T = IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else if (compare(B, this, F, CASCADE_OR) < 0) {
-						// A<B<F<C
-						// The A cascade is capped by B
-						uint32_t ABF = addBasicNode(AB, IBIT, F, expectId);
-						Q = ABF;
-						T = IBIT;
-						F = C;
-						if (this->isOR(F)) {
-							// F cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// F is single term
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else {
-						// A<F<B<C
-						if (this->isOR(A)) {
-							// A cascades and can exceed F,B,C
-							uint32_t ABF = addOrderNode(AB, IBIT, F, expectId);
-							Q = ABF;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isOR(F)) {
-							// F cascades and can exceed B,C
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId);
-							uint32_t AFB = addOrderNode(AF, IBIT, B, expectId);
-							Q = AFB;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and F are single term
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId);
-							uint32_t AFB = addBasicNode(AF, IBIT, B, expectId);
-							Q = AFB;
-							T = IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				} else {
-					// AB+F+
-					uint32_t AB = Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == F) {
-						// A=F<B
-						return AB;
-					} else if (B == F) {
-						// A<B=F
-						return AB;
-					} else if (compare(B, this, F, CASCADE_OR) < 0) {
-						// A<B<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId);
-					} else {
-						// A<F<B or F<A<B
-						if (this->isOR(A) || this->isOR(F)) {
-							// A or F cascade and F can exceed B
-							uint32_t AF = addOrderNode(A, IBIT, F, expectId);
-							Q = AF;
-							T = IBIT;
-							F = B;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, F, CASCADE_OR) < 0) {
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId);
-							Q = AF;
-							T = IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t FA = addBasicNode(F, IBIT, A, expectId);
-							Q = FA;
-							T = IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				}
-			} else if (this->isOR(F)) {
-				// QLR++
-				uint32_t LR = F; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert (!this->isOR(R));
-
-				if (Q == L) {
-					return LR;
-				} else if (Q == R) {
-					return LR;
-				}
-
-				if (this->isOR(L)) {
-					// QAB+C++
-					uint32_t ABC = F;
-					uint32_t AB  = L;
-					uint32_t A   = this->N[AB].Q;
-					uint32_t B   = this->N[AB].F;
-					uint32_t C   = R;
-
-					if (A == Q) {
-						// A=Q<B<C
-						return ABC;
-					} else if (B == Q) {
-						// A<B=Q<C
-						return ABC;
-					} else if (C == Q) {
-						// A<B<C=Q
-						return ABC;
-					} else if (compare(C, this, Q, CASCADE_OR) < 0) {
-						// A<B<C<Q
-						// natural order, sqap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(Q, this, A, CASCADE_OR) < 0) {
-						// Q<A<B<C
-						if (this->isOR(Q)) {
-							// Q cascades and can exceed A,B,C
-							uint32_t ABQ = addOrderNode(AB, IBIT, Q, expectId);
-							Q = ABQ;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// Q is single term
-							uint32_t QA;
-							if (this->isOR(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, IBIT, A, expectId);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, IBIT, A, expectId);
-							}
-
-							uint32_t QAB = addBasicNode(QA, IBIT, B, expectId);
-							Q = QAB;
-							T = IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						uint32_t ABQ = addBasicNode(AB, IBIT, Q, expectId);
-						Q = ABQ;
-						T = IBIT;
-						F = C;
-						if (this->isOR(F)) {
-							// Q cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// Q is single term
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else {
-						// A<Q<B<C
-						if (this->isOR(A)) {
-							// A cascades and can exceed Q,B,C
-							uint32_t ABQ = addOrderNode(AB, IBIT, Q, expectId);
-							Q = ABQ;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isOR(Q)) {
-							// Q cascades and can exceed B,C
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId);
-							uint32_t AQB = addOrderNode(AQ, IBIT, B, expectId);
-							Q = AQB;
-							T = IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and Q are single term
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId);
-							uint32_t AQB = addBasicNode(AQ, IBIT, B, expectId);
-							Q = AQB;
-							T = IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				} else {
-					// QAB++
-					uint32_t AB = F;
-					uint32_t A  = this->N[AB].Q;
-					uint32_t B  = this->N[AB].F;
-
-					if (A == Q) {
-						// A=Q<B
-						return AB;
-					} else if (B == Q) {
-						// A<B=Q
-						return AB;
-					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
-						// A<B<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isOR(A) || this->isOR(Q)) {
-							// A or Q cascade and Q can exceed B
-							uint32_t AQ = addOrderNode(A, IBIT, Q, expectId);
-							Q = AQ;
-							T = IBIT;
-							F = B;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, Q, CASCADE_OR) < 0) {
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId);
-							Q = AQ;
-							T = IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t QA = addBasicNode(Q, IBIT, A, expectId);
-							Q = QA;
-							T = IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				}
-			}
-
-			// final top-level order
-			if (compare(F, this, Q, CASCADE_OR) < 0) {
-				/*
-				 * Single node
-				 */
-				uint32_t tmp = Q;
-				Q = F;
-				T = IBIT;
-				F = tmp;
-			}
+		/*
+		 * Special cases folding may introduce
+		 * 
+		 * Reminder:
+		 *  [ 2] a ? ~0 : b                  "+" OR
+		 *  [ 6] a ? ~b : 0                  ">" GT
+		 *  [ 8] a ? ~b : b                  "^" NE
+		 *  [ 9] a ? ~b : c                  "!" QnTF
+		 *  [16] a ?  b : 0                  "&" AND
+		 *  [19] a ?  b : c                  "?" QTF
+		 */
+		
+		if (*Q == 0) {
+			// "0?T:F" -> "F" (fold)
+			*Q = *T = *F;
+			return true;
+		} else if (*Q == *F) {
+			// "Q=T=F" -> "F" (endpoint)
+			*Q = *T = *F;
+			return true;
+		} else if (*T == *F) {
+			// "Q?F:F" -> "F" (fold)
+			*Q = *T = *F;
+			return true;
+		} else if (*Q == *T) {
+			// "Q?Q:F" -> "Q?~0:F" (OR)
+			*T = IBIT;
+			cascadeQTF(Q, T, F);
+			return true;
+		} else if (*Q == (*T ^ IBIT)) {
+			// "Q?~Q:F" -> "Q?0:F" -> "F?~Q:0" (GT)
+			*T = *Q ^ IBIT;
+			*Q = *F;
+			*F = 0;
+			cascadeQTF(Q, T, F);
+			return true;
 		}
 
-		// NE (L?~R:R)
-		if (this->isNE(Q, T, F)) {
-			if (this->isNE(Q) && this->isNE(F)) {
-				// AB^CD^^
-				uint32_t AB = Q; // may cascade
-				uint32_t CD = F; // may cascade
+		// OR (L?~0:R)
+		if (this->isOR(*Q, *T, *F)) {
+			if (this->isOR(*Q) && this->isOR(*F)) {
+				// AB+CD++
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *F; // may cascade
 				uint32_t A  = this->N[AB].Q; // may cascade
 				uint32_t B  = this->N[AB].F; // may cascade
 				uint32_t C  = this->N[CD].Q; // does not cascade
 				uint32_t D  = this->N[CD].F; // does not cascade
 
 				if (A == CD) {
-					return B;
+					*Q = *T = *F = AB;
+					return true;
 				} else if (B == CD) {
-					return A;
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = AB;
+					return true;
 				} else if (C == AB) {
-					return D;
+					*Q = *T = *F = CD;
+					return true;
 				} else if (D == AB) {
-					return C;
-				} else if (A == C) {
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = CD;
+					return true;
+				}
+
+				if (A == C) {
 					if (B == D) {
 						// A=C<B=D
 						/*
-						 * This implies  that Q==F
-						 *
-						 * @date 2021-08-17 14:21:16
-						 * With the introduction of `explainBasicNode()` with `pFailCount != NULL`,
-						 *   used for probing alternatives.
-						 *   it is possible to add temporary nodes that are not cached
-						 *   these bypass duplicate detection
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already ben tested
 						 */
-						return 0;
+						assert(0);
+						*Q = *T = *F = AB;
+						return true;
+					} else if (compare(B, this, D, CASCADE_OR) < 0) {
+						// C=A<B<D
+						// already *Q = AB;
+						// already *T = IBIT;
+						*F = D;
+						return false; // remains OR
 					} else {
-						// A=C<B<D or A=C<D<B
-						// B and D do not cascade
-						Q = B;
-						T = D ^ IBIT;
-						F = D;
+						// A=C<D<B
+						*Q = CD;
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
 					}
 				} else if (A == D) {
-					// C<A=D<B
-					// C is capped by D(=A), therefore all < B
-					Q = C; // may cascade, keep left
-					T = B ^ IBIT;
-					F = B; // no cascade, keep right
-					return addBasicNode(Q, T, F, expectId);
+					// C<D=A<B
+					*Q = CD;
+					// already *T = IBIT;
+					*F = B;
+					return false; // remains OR
 				} else if (B == C) {
 					// A<B=C<D
-					// A is capped by B(=C), therefore all < D
-					Q = A; // may cascade, keep left
-					T = D ^ IBIT;
-					F = D; // no cascade, keep right
-					return addBasicNode(Q, T, F, expectId);
+					// already *Q = AB;
+					// already *T = IBIT;
+					*F = D;
+					return false; // remains OR
+				} else if (B == D) {
+					// A<C<D=B or C<A<B=D
+					// A and C can cascade, neither will exceed B/D
+					if (this->isOR(A) || this->isOR(C)) {
+						// cascades, merge AC, B last
+						*Q = A;
+						// already *T = IBIT;
+						*F = C;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = IBIT;
+							*F = B;
+							return cascadeQTF(Q, T, F);
+						} else {
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							// already *T = IBIT;
+							*F = B;
+							return false; // remains OR
+						}
+					} else if (compare(A, this, C, CASCADE_OR) < 0) {
+						// A<C<B
+						*Q = addNode(A, IBIT, C);
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
+					} else {
+						// C<A<B
+						*Q = addNode(C, IBIT, A);
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
+					}
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_OR) < 0) {
+					// A<B<C<D
+					if (this->isOR(C)) {
+						// C cascades and unusable for right-hand-side
+						// merge ABC, D last
+						*Q = AB;
+						// already *T = IBIT;
+						*F = C;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = IBIT;
+							*F = D;
+							return cascadeQTF(Q, T, F);
+					} else {
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							// already *T = IBIT;
+							*F = D;
+							return false; // remains OR
+					}
+					} else {
+						// simple rewrite
+						*Q = addNode(AB, IBIT, C);
+						// already *T = IBIT;
+						*F = D;
+						return false; // remains OR
+					}
+				} else if (compare(D, this, A, CASCADE_OR) < 0) {
+					// C<D<A<B
+					if (this->isOR(A)) {
+						// A cascades and unusable for right-hand-side
+						// merge CDA, B last
+						*Q = CD;
+						// already *T = IBIT;
+						*F = A;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = IBIT;
+							*F = B;
+							return cascadeQTF(Q, T, F);
+					} else {
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							// already *T = IBIT;
+							*F = B;
+							return false; // remains OR
+						}
+					} else {
+						// simple rewrite
+						*Q = addNode(CD, IBIT, A);
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
+					}
+				} else if (compare(B, this, D, CASCADE_OR) < 0) {
+					// A<C<B<D or C<A<B<D
+					// merge ABC, D last
+					// already *Q = AB;
+					// already *T = IBIT;
+					*F = C;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = IBIT;
+						*F = D;
+						return cascadeQTF(Q, T, F);
+					} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						// already *T = IBIT;
+						*F = D;
+						return false; // remains OR
+					}
+				} else {
+					// A<C<D<B or C<A<D<B
+					// merge ACD, B last
+					*Q = A;
+					// already *T = IBIT;
+					// already *F = CD;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = IBIT;
+						*F = B;
+						return cascadeQTF(Q, T, F);
+				} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
+						}
+					}
+
+			} else if (this->isOR(*Q)) {
+				// AB+C+
+				uint32_t AB = *Q; // may cascade
+					uint32_t A  = this->N[AB].Q; // may cascade
+					uint32_t B  = this->N[AB].F; // does not cascade
+				uint32_t C  = *F; // may cascade
+
+				assert(!this->isOR(B));
+				assert(!this->isOR(C));
+
+				if (C == A) {
+					// C=A<B
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					*Q = *T = *F = AB;
+					return true;
+				}
+
+				/*
+				 * 3! permutations where A<B has 3 candidates
+				 */
+				if (compare(B, this, C, CASCADE_OR) < 0) {
+					// A<B<C
+						// natural order
+					// already *Q = AB;
+					// already *T = IBIT;
+					// already *F = C;
+					return false;
+				} else if (this->isOR(A)) {
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = IBIT;
+					// already *F = C;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = IBIT;
+						*F = B;
+						return cascadeQTF(Q, T, F);
+					} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						// already *T = IBIT;
+						*F = B;
+						return false; // remains OR
+							}
+				} else if (compare(A, this, C, CASCADE_OR) < 0) {
+					// A<C<B
+					*Q = addNode(A, IBIT, C);
+					// already *T = IBIT;
+					*F = B;
+					return false; // remains OR
+						} else {
+					// C<A<B
+					*Q = addNode(C, IBIT, A);
+					// already *T = IBIT;
+					*F = B;
+					return false; // remains OR
+						}
+
+			} else if (this->isOR(*F)) {
+				// ABC++
+				uint32_t BC = *F; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].F; // does not cascade
+
+				assert (!this->isOR(A));
+				assert (!this->isOR(C));
+
+				if (A == B) {
+					// A=B<C
+					*Q = *T = *F = BC;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					*Q = *T = *F = BC;
+					return true;
+							}
+
+				/*
+				 * 3! permutations where B<C has 3 candidates
+				 */
+				if (compare(C, this, A, CASCADE_OR) < 0) {
+					// B<C<A
+					*Q = BC;
+					// already *T = IBIT;
+					*F = A;
+					return false; // remains OR
+				} else if (this->isOR(B)) {
+					// cascade, merge AB, C last
+					// already *Q = A;
+					// already *T = IBIT;
+					*F = B;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = IBIT;
+						*F = C;
+						return cascadeQTF(Q, T, F);
+				} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						// already *T = IBIT;
+						*F = C;
+						return false; // remains OR
+						}
+				} else if (compare(A, this, B, CASCADE_OR) < 0) {
+					// A<B<C
+					*Q = addNode(A, IBIT, B);
+					// already *T = IBIT;
+					*F = C;
+					return false; // remains OR
+					} else {
+					// B<A<C
+					*Q = addNode(B, IBIT, A);
+					// already *T = IBIT;
+					*F = C;
+					return false; // remains OR
+						}
+
+			} else if (compare(*F, this, *Q, CASCADE_OR) < 0) {
+				// swap
+				uint32_t savQ = *Q;
+				*Q = *F;
+				// already *T = IBIT;
+				*F = savQ;
+				return false; // remains OR
+						} else {
+				// no change
+				return false;
+			}
+		}
+
+		// NE (L?~R:R)
+		if (this->isNE(*Q, *T, *F)) {
+			if (this->isNE(*Q) && this->isNE(*F)) {
+				// AB^CD^^
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *F; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // may cascade
+				uint32_t C  = this->N[CD].Q; // does not cascade
+				uint32_t D  = this->N[CD].F; // does not cascade
+
+				if (A == CD) {
+					*Q = *T = *F = B;
+					return true;
+				} else if (B == CD) {
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = A;
+					return true;
+				} else if (C == AB) {
+					*Q = *T = *F = D;
+					return true;
+				} else if (D == AB) {
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = C;
+					return true;
+				}
+
+				if (A == C) {
+					if (B == D) {
+						// A=C<B=D
+						/*
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already been tested
+						 */
+						assert(0);
+						*Q = *T = *F = 0;
+						return true;
+					} else if (compare(B, this, D, CASCADE_OR) < 0) {
+						// C=A<B<D
+						*Q = B;
+						*T = D ^ IBIT;
+						*F = D;
+						return false; // remains NE
+					} else {
+						// A=C<D<B
+						*Q = D;
+						*T = B ^ IBIT;
+						*F = B;
+						return false; // remains NE
+					}
+				} else if (A == D) {
+					// C<D=A<B
+					*Q = C;
+					*T = B ^ IBIT;
+					*F = B;
+					return false; // remains NE
+				} else if (B == C) {
+					// A<B=C<D
+					*Q = A;
+					*T = D ^ IBIT;
+					*F = D;
+					return false; // remains NE
 				} else if (B == D) {
 					// A<C<B=D or C<A<B=D
-					// A and C can react
-					Q = A;
-					T = C ^ IBIT;
-					F = C;
 					if (this->isNE(A) || this->isNE(C)) {
-						// slow-path, expand cascade
-						return addOrderNode(Q, T, F, expectId);
+						*Q = A;
+						*T = C ^ IBIT;
+						*F = C;
+						return cascadeQTF(Q, T, F);
+					} else if (compare(A, this, C, CASCADE_NE) < 0) {
+						// A<C
+						*Q = A;
+						*T = C ^ IBIT;
+						*F = C;
+						return false; // remains NE
+					} else {
+						// C<A
+						*Q = C;
+						*T = A ^ IBIT;
+						*F = A;
+						return false; // remains NE
 					}
-				} else if (compare(B, this, C, CASCADE_NE) < 0) {
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_NE) < 0) {
 					// A<B<C<D
 					if (this->isNE(C)) {
 						// C cascades and unusable for right-hand-side
-						uint32_t ABC = addOrderNode(AB, C ^ IBIT, C, expectId);
-						Q = ABC;
-						T = D ^ IBIT;
-						F = D;
+						// merge ABC, D last
+						*Q = AB;
+						*T = C ^ IBIT;
+						*F = C;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = D ^ IBIT;
+							*F = D;
+							return cascadeQTF(Q, T, F);
 					} else {
-						uint32_t ABC = addBasicNode(AB, C ^ IBIT, C, expectId);
-						Q = ABC;
-						T = D ^ IBIT;
-						F = D;
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = D ^ IBIT;
+							*F = D;
+							return false; // remains NE
 					}
-					return addBasicNode(Q, T, F, expectId);
+					} else {
+						// simple rewrite
+						*Q = addNode(AB, C ^ IBIT, C);
+						*T = D ^ IBIT;
+						*F = D;
+						return false; // remains NE
+					}
 				} else if (compare(D, this, A, CASCADE_NE) < 0) {
 					// C<D<A<B
 					if (this->isNE(A)) {
 						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, A ^ IBIT, A, expectId);
-						Q = CDA;
-						T = B ^ IBIT;
-						F = B;
+						// merge CDA, B last
+						*Q = CD;
+						*T = A ^ IBIT;
+						*F = A;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = B ^ IBIT;
+							*F = B;
+							return cascadeQTF(Q, T, F);
 					} else {
-						uint32_t CDA = addBasicNode(CD, A ^ IBIT, A, expectId);
-						Q = CDA;
-						T = B ^ IBIT;
-						F = B;
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = B ^ IBIT;
+							*F = B;
+							return false; // remains OR
+						}
+					} else {
+						// simple rewrite
+						*Q = addNode(CD, A ^ IBIT, A);
+						*T = B ^ IBIT;
+						*F = B;
+						return false; // remains NE
 					}
-					return addBasicNode(Q, T, F, expectId);
 				} else if (compare(B, this, D, CASCADE_NE) < 0) {
 					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					uint32_t ABC = addOrderNode(AB, C ^ IBIT, C, expectId);
-					Q = ABC;
-					T = D ^ IBIT;
-					F = D;
-					return addBasicNode(Q, T, F, expectId);
-				} else {
+					// merge ABC, D last
+					// already *Q = AB;
+					*T = C ^ IBIT;
+					*F = C;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = D ^ IBIT;
+						*F = D;
+						return cascadeQTF(Q, T, F);
+					} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = D ^ IBIT;
+						*F = D;
+						return false; // remains OR
+						}
+						} else {
 					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					uint32_t ACD = addOrderNode(CD, A ^ IBIT, A, expectId);
-					Q = ACD;
-					T = B ^ IBIT;
-					F = B;
-					return addBasicNode(Q, T, F, expectId);
-				}
-
-			} else if (this->isNE(Q)) {
-				// LR^F^
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert(!this->isNE(R));
-
-				if (F == L) {
-					return R;
-				} else if (F == R) {
-					return L;
-				}
-
-				if (this->isNE(L)) {
-					// AB^C^F^
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
-
-					uint32_t AB = L; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-					uint32_t C  = R; // does not cascade
-
-					if (A == F) {
-						// A=F<B<C
-						Q = B;
-						T = C ^ IBIT;
-						F = C;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (B == F) {
-						// A<B=F<C
-						Q = A;
-						T = C ^ IBIT;
-						F = C;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (C == F) {
-						// A<B<C=F
-						return AB;
-					} else if (compare(C, this, F, CASCADE_NE) < 0) {
-						// A<B<C<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(F, this, A, CASCADE_NE) < 0) {
-						// F<A<B<C
-						if (this->isNE(F)) {
-							// F cascades and can exceed A,B,C
-							uint32_t ABF = addOrderNode(AB, F ^ IBIT, F, expectId);
-							Q = ABF;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// F is single term
-							uint32_t FA;
-							if (this->isNE(A)) {
-								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, A ^ IBIT, A, expectId);
-							} else {
-								// A is single term
-								FA = addBasicNode(F, A ^ IBIT, A, expectId);
-							}
-							uint32_t FAB = addBasicNode(FA, B ^ IBIT, B, expectId);
-							Q = FAB;
-							T = C ^ IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else if (compare(B, this, F, CASCADE_NE) < 0) {
-						// A<B<F<C
-						// The A cascade is capped by B
-						uint32_t ABF = addBasicNode(AB, F ^ IBIT, F, expectId);
-						Q = ABF;
-						T = C ^ IBIT;
-						F = C;
-						if (this->isNE(F)) {
-							// F cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// F is single term
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else {
-						// A<F<B<C
-						if (this->isNE(A)) {
-							// A cascades and can exceed F,B,C
-							uint32_t ABF = addOrderNode(AB, F ^ IBIT, F, expectId);
-							Q = ABF;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isNE(F)) {
-							// F cascades and can exceed B,C
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId);
-							uint32_t AFB = addOrderNode(AF, B ^ IBIT, B, expectId);
-							Q = AFB;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and F are single term
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId);
-							uint32_t AFB = addBasicNode(AF, B ^ IBIT, B, expectId);
-							Q = AFB;
-							T = C ^ IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
+					// merge ACD, B last
+					*Q = A;
+					// already *T = CD ^ IBIT;
+					// already *F = CD;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B ^ IBIT;
+						*F = B;
+						return cascadeQTF(Q, T, F);
 				} else {
-					// AB^F^
-					uint32_t AB = Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == F) {
-						// A=F<B
-						return B;
-					} else if (B == F) {
-						// A<B=F
-						return A;
-					} else if (compare(B, this, F, CASCADE_NE) < 0) {
-						// A<B<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId);
-					} else {
-						// A<F<B or F<A<B
-						if (this->isNE(A) || this->isNE(F)) {
-							// A or F cascade and F can exceed B
-							uint32_t AF = addOrderNode(A, F ^ IBIT, F, expectId);
-							Q = AF;
-							T = B ^ IBIT;
-							F = B;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, F, CASCADE_NE) < 0) {
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId);
-							Q = AF;
-							T = B ^ IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t FA = addBasicNode(F, A ^ IBIT, A, expectId);
-							Q = FA;
-							T = B ^ IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B ^ IBIT;
+						*F = B;
+						return false; // remains OR
 						}
 					}
-				}
-			} else if (this->isNE(F)) {
-				// QLR++
-				uint32_t LR = F; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
 
-				assert (!this->isNE(R));
-
-				if (Q == L) {
-					return R;
-				} else if (Q == R) {
-					return L;
-				}
-
-				if (this->isNE(L)) {
-					// QAB^C^^
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
-
-					uint32_t AB = L; // may cascade
+			} else if (this->isNE(*Q)) {
+				// AB^C^
+				uint32_t AB = *Q; // may cascade
 					uint32_t A  = this->N[AB].Q; // may cascade
 					uint32_t B  = this->N[AB].F; // does not cascade
-					uint32_t C  = R; // does not cascade
+				uint32_t C  = *F; // may cascade
 
-					if (A == Q) {
-						// A=Q<B<C
-						Q = B;
-						T = C ^ IBIT;
-						F = C;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (B == Q) {
-						// A<B=Q<C
-						Q = A;
-						T = C ^ IBIT;
-						F = C;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (C == Q) {
-						// A<B<C=Q
-						return AB;
-					} else if (compare(C, this, Q, CASCADE_NE) < 0) {
-						// A<B<C<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = tmp ^ IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(Q, this, A, CASCADE_NE) < 0) {
-						// Q<A<B<C
-						if (this->isNE(Q)) {
-							// Q cascades and can exceed A,B,C
-							uint32_t ABQ = addOrderNode(AB, Q ^ IBIT, Q, expectId);
-							Q = ABQ;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// Q is single term
-							uint32_t QA;
-							if (this->isNE(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A ^ IBIT, A, expectId);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, A ^ IBIT, A, expectId);
-							}
+				assert(!this->isNE(B));
+				assert(!this->isNE(C));
 
-							uint32_t QAB = addBasicNode(QA, B ^ IBIT, B, expectId);
-							Q = QAB;
-							T = C ^ IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						uint32_t ABQ = addBasicNode(AB, Q ^ IBIT, Q, expectId);
-						Q = ABQ;
-						T = C ^ IBIT;
-						F = C;
-						if (this->isNE(F)) {
-							// Q cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// Q is single term
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else {
-						// A<Q<B<C
-						if (this->isNE(A)) {
-							// A cascades and can exceed Q,B,C
-							uint32_t ABQ = addOrderNode(AB, Q ^ IBIT, Q, expectId);
-							Q = ABQ;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isNE(Q)) {
-							// Q cascades and can exceed B,C
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId);
-							uint32_t AQB = addOrderNode(AQ, B ^ IBIT, B, expectId);
-							Q = AQB;
-							T = C ^ IBIT;
-							F = C;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and Q are single term
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId);
-							uint32_t AQB = addBasicNode(AQ, B ^ IBIT, B, expectId);
-							Q = AQB;
-							T = C ^ IBIT;
-							F = C;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				} else {
-					// QAB^^
-					uint32_t AB = F; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == Q) {
-						// A=Q<B
-						return B;
-					} else if (B == Q) {
-						// A<B=Q
-						return A;
-					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
-						// A<B<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = tmp ^ IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isNE(A) || this->isNE(Q)) {
-							// A or Q cascade and Q can exceed B
-							uint32_t AQ = addOrderNode(A, Q ^ IBIT, Q, expectId);
-							Q = AQ;
-							T = B ^ IBIT;
-							F = B;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, Q, CASCADE_NE) < 0) {
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId);
-							Q = AQ;
-							T = B ^ IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t QA = addBasicNode(Q, A ^ IBIT, A, expectId);
-							Q = QA;
-							T = B ^ IBIT;
-							F = B;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
+				if (C == A) {
+					// C=A<B
+					*Q = *T = *F = B;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					*Q = *T = *F = A;
+					return true;
 				}
-			}
 
-
-			// final top-level order
-			if (compare(F, this, Q, CASCADE_NE) < 0) {
 				/*
-				 * Single node
+				 * 3! permutations where A<B has 3 candidates
 				 */
-				uint32_t tmp = Q;
-				Q = F;
-				T = tmp ^ IBIT;
-				F = tmp;
+				if (compare(B, this, *F, CASCADE_NE) < 0) {
+					// A<B<C
+						// natural order
+					// already *Q = AB;
+					// already *T = C ^ IBIT;
+					// already *F = C;
+					return false;
+				} else if (this->isNE(A)) {
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = C ^ IBIT;
+					// already *F = C;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B ^ IBIT;
+						*F = B;
+						return cascadeQTF(Q, T, F);
+					} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B ^ IBIT;
+						*F = B;
+						return false; // remains NE
+					}
+				} else if (compare(A, this, C, CASCADE_NE) < 0) {
+					// A<C<B
+					*Q = addNode(A, C ^ IBIT, C);
+					*T = B ^ IBIT;
+					*F = B;
+					return false; // remains NE
+						} else {
+					// C<A<B
+					*Q = addNode(C, A ^ IBIT, A);
+					*T = B ^ IBIT;
+					*F = B;
+					return false; // remains NE
+					}
+
+			} else if (this->isNE(*F)) {
+				// ABC^^
+				uint32_t BC = *F; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].F; // does not cascade
+
+				assert (!this->isOR(A));
+				assert (!this->isOR(C));
+
+				if (A == B) {
+					// A=B<C
+					*Q = *T = *F = C;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					*Q = *T = *F = B;
+					return true;
+							}
+
+				/*
+				 * 3! permutations where B<C has 3 candidates
+				 */
+				if (compare(C, this, A, CASCADE_OR) < 0) {
+					// B<C<A
+					*Q = BC;
+					*T = A ^ IBIT;
+					*F = A;
+					return false; // remains NE
+				} else if (this->isNE(B)) {
+					// cascade, merge AB, C last
+					// already *Q = A;
+					*T = B ^ IBIT;
+					*F = B;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = C ^ IBIT;
+						*F = C;
+						return cascadeQTF(Q, T, F);
+						} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = C ^ IBIT;
+						*F = C;
+						return false; // remains NE
+						}
+				} else if (compare(A, this, B, CASCADE_NE) < 0) {
+					// A<B<C
+					*Q = addNode(A, B ^ IBIT, B);
+					*T = C ^ IBIT;
+					*F = C;
+					return false; // remains NE
+					} else {
+					// B<A<C
+					*Q = addNode(B, A ^ IBIT, A);
+					*T = C ^ IBIT;
+					*F = C;
+					return false; // remains NE
+				}
+
+			} else if (compare(*F, this, *Q, CASCADE_NE) < 0) {
+				// swap
+				uint32_t savQ = *Q;
+				*Q = *F;
+				*T = savQ ^ IBIT;
+				*F = savQ;
+				return false; // remains NE
+						} else {
+				// no change
+				return false;
 			}
-
-			/*
-			 * @date 2021-08-23 17:40:25
-			 * Only the first terms of a cascade are known, When cascading, only the fir
-			 */
-
 		}
 
-		// AND (L?T:0)
-		if (this->isAND(Q, T, F)) {
-			if (this->isAND(Q) && this->isAND(T)) {
+		// AND (L?R:0)
+		if (this->isAND(*Q, *T, *F)) {
+			if (this->isAND(*Q) && this->isAND(*T)) {
 				// AB&CD&&
-				uint32_t AB = Q;
-				uint32_t CD = T;
-				uint32_t A  = this->N[AB].Q;
-				uint32_t B  = this->N[AB].T;
-				uint32_t C  = this->N[CD].Q;
-				uint32_t D  = this->N[CD].T;
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *T; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].T; // may cascade
+				uint32_t C  = this->N[CD].Q; // does not cascade
+				uint32_t D  = this->N[CD].T; // does not cascade
 
-				if (A == T) {
-					return AB;
-				} else if (B == T) {
-					return AB;
-				} else if (C == Q) {
-					return CD;
-				} else if (D == Q) {
-					return CD;
-				} else if (A == C) {
+				if (A == CD) {
+					*Q = *T = *F = AB;
+					return true;
+				} else if (B == CD) {
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == AB) {
+					*Q = *T = *F = CD;
+					return true;
+				} else if (D == AB) {
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = CD;
+					return true;
+				}
+
+				if (A == C) {
 					if (B == D) {
 						// A=C<B=D
-						return AB;
+						/*
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already ben tested
+						 */
+						assert(0);
+						*Q = *T = *F = AB;
+						return true;
 					} else if (compare(B, this, D, CASCADE_AND) < 0) {
-						// A=C<B<D
-						Q = AB;
-						T = D;
-						F = 0;
+						// C=A<B<D
+						// already *Q = AB;
+						*T = D;
+						// already *F = 0;
+						return false; // remains AND
 					} else {
 						// A=C<D<B
-						Q = CD;
-						T = B;
-						F = 0;
+						*Q = CD;
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 					}
 				} else if (A == D) {
-					// C<A=D<B
-					Q = CD;
-					T = B;
-					F = 0;
+					// C<D=A<B
+					*Q = CD;
+					*T = B;
+					// already *F = 0;
+					return false; // remains AND
 				} else if (B == C) {
 					// A<B=C<D
-					Q = AB;
-					T = D;
-					F = 0;
+					*Q = AB;
+					*T = D;
+					//already *F = 0;
+					return false; // remains AND
 				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
-					// A and C can react, neither will exceed B/D
+					// A<C<D=B or C<A<B=D
+					// A and C can cascade, neither will exceed B/D
 					if (this->isAND(A) || this->isAND(C)) {
-						uint32_t AC = addOrderNode(A, C, 0, expectId);
-						Q = AC;
-						T = D;
-						F = 0;
+						// cascades, merge AC, B last
+						*Q = A;
+						*T = C;
+						// already *F = 0;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = B;
+							*F = 0;
+							return cascadeQTF(Q, T, F);
+						} else {
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = B;
+							// already *F = 0;
+							return false; // remains AND
+						}
 					} else if (compare(A, this, C, CASCADE_AND) < 0) {
-						uint32_t AC = addBasicNode(A, C, 0, expectId);
-						Q = AC;
-						T = D;
-						F = 0;
+						// A<C<B
+						*Q = addNode(A, C, 0);
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 					} else {
-						uint32_t CA = addBasicNode(C, A, 0, expectId);
-						Q = CA;
-						T = B;
-						F = 0;
+						// C<A<B
+						*Q = addNode(C, A, 0);
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 					}
-					return addBasicNode(Q, T, F, expectId);
-				} else if (compare(B, this, C, CASCADE_AND) < 0) {
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_AND) < 0) {
 					// A<B<C<D
 					if (this->isAND(C)) {
 						// C cascades and unusable for right-hand-side
-						uint32_t ABC = addOrderNode(AB, C, 0, expectId);
-						Q = ABC;
-						T = D;
-						F = 0;
+						// merge ABC, D last
+						*Q = AB;
+						*T = C;
+						// already *F = 0;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = D;
+							*F = 0;
+							return cascadeQTF(Q, T, F);
 					} else {
-						uint32_t ABC = addBasicNode(AB, C, 0, expectId);
-						Q = ABC;
-						T = D;
-						F = 0;
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = D;
+							// already *F = 0;
+							return false; // remains AND
 					}
-					return addBasicNode(Q, T, F, expectId);
+					} else {
+						// simple rewrite
+						*Q = addNode(AB, C, 0);
+						*T = D;
+						// already *F = 0;
+						return false; // remains AND
+					}
 				} else if (compare(D, this, A, CASCADE_AND) < 0) {
 					// C<D<A<B
 					if (this->isAND(A)) {
 						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, A, 0, expectId);
-						Q = CDA;
-						T = B;
-						F = 0;
+						// merge CDA, B last
+						*Q = CD;
+						*T = A;
+						// already *F = 0;
+						if (cascadeQTF(Q, T, F)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNode(*Q, *T, *F);
+							*T = B;
+							*F = 0;
+							return cascadeQTF(Q, T, F);
+						} else {
+							// append last placeholder
+							*Q = addNode(*Q, *T, *F);
+							*T = B;
+							// already *F = 0;
+							return false; // remains AND
+						}
 					} else {
-						uint32_t CDA = addBasicNode(CD, A, 0, expectId);
-						Q = CDA;
-						T = B;
-						F = 0;
+						// simple rewrite
+						*Q = addNode(CD, A, 0);
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 					}
-					return addBasicNode(Q, T, F, expectId);
 				} else if (compare(B, this, D, CASCADE_AND) < 0) {
 					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					uint32_t ABC = addOrderNode(AB, C, 0, expectId);
-					Q = ABC;
-					T = D;
-					F = 0;
-					return addBasicNode(Q, T, F, expectId);
+					// merge ABC, D last
+					// already *Q = AB;
+					*T = C;
+					// already *F = 0;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = D;
+						*F = 0;
+						return cascadeQTF(Q, T, F);
+					} else {
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = D;
+						// already *F = 0;
+						return false; // remains AND
+					}
 				} else {
 					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					uint32_t ACD = addOrderNode(CD, A, 0, expectId);
-					Q = ACD;
-					T = B;
-					F = 0;
-					return addBasicNode(Q, T, F, expectId);
-				}
-
-			} else if (this->isAND(Q)) {
-				// LR&T&
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].T; // does not cascade
-
-				assert(!this->isAND(R));
-
-				if (T == L) {
-					return LR;
-				} else if (T == R) {
-					return LR;
-				}
-
-				if (this->isAND(L)) {
-					// AB&C&T&
-					// NOTE: only A may cascade, and if it does, the cascade might exceed T
-
-					uint32_t ABC = Q; // may cascade
-					uint32_t AB  = L; // may cascade
-					uint32_t A   = this->N[AB].Q; // may cascade
-					uint32_t B   = this->N[AB].T; // does not cascade
-					uint32_t C   = R; // does not cascade
-
-					if (A == T) {
-						// A=T<B<C
-						return ABC;
-					} else if (B == T) {
-						// A<B=T<C
-						return ABC;
-					} else if (C == T) {
-						// A<B<C=T
-						return ABC;
-					} else if (compare(C, this, T, CASCADE_AND) < 0) {
-						// A<B<C<T
-						// natural order
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(T, this, A, CASCADE_AND) < 0) {
-						// T<A<B<C
-						if (this->isAND(T)) {
-							// T cascades and can exceed A,B,C
-							uint32_t ABT = addOrderNode(AB, T, 0, expectId);
-							Q = ABT;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// T is single term
-							uint32_t TA;
-							if (this->isAND(A)) {
-								// A cascades and unusable for right-hand-side
-								TA = addOrderNode(T, A, 0, expectId);
+					// merge ACD, B last
+					*Q = A;
+					// already *T = CD;
+					// already *F = 0;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B;
+						*F = 0;
+						return cascadeQTF(Q, T, F);
 							} else {
-								// A is single term
-								TA = addBasicNode(T, A, 0, expectId);
-							}
-							uint32_t TAB = addBasicNode(TA, B, 0, expectId);
-							Q = TAB;
-							T = C;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 						}
-					} else if (compare(B, this, T, CASCADE_AND) < 0) {
-						// A<B<T<C
-						// The A cascade is capped by B
-						uint32_t ABT = addBasicNode(AB, T, 0, expectId);
-						Q = ABT;
-						T = C;
-						F = 0;
-						if (this->isAND(T)) {
-							// T cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// T is single term
-							return addBasicNode(Q, T, F, expectId);
 						}
-					} else {
-						// A<T<B<C
-						if (this->isAND(A)) {
-							// A cascades and can exceed T,B,C
-							uint32_t ABT = addOrderNode(AB, T, 0, expectId);
-							Q = ABT;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isAND(T)) {
-							// T cascades and can exceed B,C
-							uint32_t AT = addBasicNode(A, T, 0, expectId);
-							uint32_t ATB = addOrderNode(AT, B, 0, expectId);
-							Q = ATB;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and T are single term
-							uint32_t AT = addBasicNode(A, T, 0, expectId);
-							uint32_t ATB = addBasicNode(AT, B, 0, expectId);
-							Q = ATB;
-							T = C;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
-				} else {
-					// AB&T&
-					uint32_t AB = Q; // may cascade
+
+			} else if (this->isAND(*Q)) {
+				// AB&C&
+				uint32_t AB = *Q; // may cascade
 					uint32_t A  = this->N[AB].Q; // may cascade
 					uint32_t B  = this->N[AB].T; // does not cascade
+				uint32_t C  = *T; // does not cascade
 
-					if (A == T) {
-						// A=T<B
-						return AB;
-					} else if (B == T) {
-						// A<B=T
-						return AB;
-					} else if (compare(B, this, T, CASCADE_AND) < 0) {
-						// A<B<T
+				assert(!this->isAND(B));
+				assert(!this->isAND(C));
+
+				if (C == A) {
+					// C=A<B
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					*Q = *T = *F = AB;
+					return true;
+				}
+
+				/*
+				 * 3! permutations where A<B has 3 candidates
+				 */
+				if (compare(B, this, C, CASCADE_AND) < 0) {
+					// A<B<C
 						// natural order
-						return addBasicNode(Q, T, F, expectId);
+					// already *Q = AB;
+					// already *T = C;
+					// already *F = 0;
+					return false;
+				} else if (isAND(A)) {
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = C;
+					// already *F = 0;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B;
+						*F = 0;
+						return cascadeQTF(Q, T, F);
 					} else {
-						// A<T<B or T<A<B
-						if (this->isAND(A) || this->isAND(T)) {
-							// A or T cascade and T can exceed B
-							uint32_t AT = addOrderNode(A, T, 0, expectId);
-							Q = AT;
-							T = B;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, T, CASCADE_AND) < 0) {
-							uint32_t AT = addBasicNode(A, T, 0, expectId);
-							Q = AT;
-							T = B;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t TA = addBasicNode(T, A, 0, expectId);
-							Q = TA;
-							T = B;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						}
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = B;
+						// already *F = 0;
+						return false; // remains AND
 					}
-				}
-			} else if (this->isAND(T)) {
-				// QLR&&
-				uint32_t LR = T; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].T; // does not cascade
+				} else if (compare(A, this, C, CASCADE_AND) < 0) {
+					// A<C<B
+					*Q = addNode(A, C, 0);
+					*T = B;
+					// already *F = 0;
+					return false; // remains AND
 
-				assert (!this->isAND(R));
-
-				if (Q == L) {
-					return LR;
-				} else if (Q == R) {
-					return LR;
-				}
-
-				if (this->isAND(L)) {
-					// QAB&C&&
-					uint32_t ABC = T;
-					uint32_t AB  = L;
-					uint32_t A   = this->N[AB].Q;
-					uint32_t B   = this->N[AB].T;
-					uint32_t C   = R;
-
-					if (A == Q) {
-						// A=Q<B<C
-						return ABC;
-					} else if (B == Q) {
-						// A<B=Q<C
-						return ABC;
-					} else if (C == Q) {
-						// A<B<C=Q
-						return ABC;
-					} else if (compare(C, this, Q, CASCADE_AND) < 0) {
-						// A<B<C<Q
-						// natural order, sqap Q/T
-						uint32_t tmp = Q;
-						Q = T;
-						T = tmp;
-						F = 0;
-						return addBasicNode(Q, T, F, expectId);
-					} else if (compare(Q, this, A, CASCADE_AND) < 0) {
-						// Q<A<B<C
-						if (this->isAND(Q)) {
-							// Q cascades and can exceed A,B,C
-							uint32_t ABQ = addOrderNode(AB, Q, 0, expectId);
-							Q = ABQ;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
 						} else {
-							// Q is single term
-							uint32_t QA;
-							if (this->isAND(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A, 0, expectId);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, A, 0, expectId);
+					// C<A<B
+					*Q = addNode(C, A, 0);
+					*T = B;
+					// already *F = 0;
+					return false; // remains AND
+				}
+
+			} else if (this->isAND(*T)) {
+				// ABC&&
+				uint32_t BC = *T; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].T; // does not cascade
+
+				assert(!this->isAND(A));
+				assert(!this->isAND(C));
+
+				if (A == B) {
+					// A=B<C
+					*Q = *T = *F = BC;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					*Q = *T = *F = BC;
+					return true;
 							}
 
-							uint32_t QAB = addBasicNode(QA, B, 0, expectId);
-							Q = QAB;
-							T = C;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						uint32_t ABQ = addBasicNode(AB, Q, 0, expectId);
-						Q = ABQ;
-						T = C;
-						F = 0;
-						if (this->isAND(T)) {
-							// Q cascades and can exceed C
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// Q is single term
-							return addBasicNode(Q, T, F, expectId);
-						}
-					} else {
-						// A<Q<B<C
-						if (this->isAND(A)) {
-							// A cascades and can exceed Q,B,C
-							uint32_t ABQ = addOrderNode(AB, Q, 0, expectId);
-							Q = ABQ;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (this->isAND(Q)) {
-							// Q cascades and can exceed B,C
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId);
-							uint32_t AQB = addOrderNode(AQ, B, 0, expectId);
-							Q = AQB;
-							T = C;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else {
-							// A and Q are single term
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId);
-							uint32_t AQB = addBasicNode(AQ, B, 0, expectId);
-							Q = AQB;
-							T = C;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						}
-					}
+				/*
+				 * 3! permutations where B<C has 3 candidates
+				 */
+				if (compare(C, this, A, CASCADE_AND) < 0) {
+					// B<C<A
+					*Q = BC;
+					*T = A;
+					//already *F = 0;
+					return false; // remains AND
+				} else if (isAND(B)) {
+					// cascade, merge AB, C last
+					// already *Q = A;
+					*T = B;
+					// already *F = 0;
+					if (cascadeQTF(Q, T, F)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = C;
+						*F = 0;
+						return cascadeQTF(Q, T, F);
 				} else {
-					// QAB&&
-					uint32_t AB = T;
-					uint32_t A  = this->N[AB].Q;
-					uint32_t B  = this->N[AB].T;
-
-					if (A == Q) {
-						// A=Q<B
-						return AB;
-					} else if (B == Q) {
-						// A<B=Q
-						return AB;
-					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
-						// A<B<Q
-						// natural order, swap Q/T
-						uint32_t tmp = Q;
-						Q = T;
-						T = tmp;
-						F = 0;
-						return addBasicNode(Q, T, F, expectId);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isAND(A) || this->isAND(Q)) {
-							// A or Q cascade and Q can exceed B
-							uint32_t AQ = addOrderNode(A, Q, 0, expectId);
-							Q = AQ;
-							T = B;
-							F = 0;
-							return addOrderNode(Q, T, F, expectId);
-						} else if (compare(A, this, Q, CASCADE_AND) < 0) {
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId);
-							Q = AQ;
-							T = B;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						} else {
-							uint32_t QA = addBasicNode(Q, A, 0, expectId);
-							Q = QA;
-							T = B;
-							F = 0;
-							return addBasicNode(Q, T, F, expectId);
-						}
+						// append last placeholder
+						*Q = addNode(*Q, *T, *F);
+						*T = C;
+						// already *F = 0;
+						return false; // remains AND
 					}
+				} else if (compare(A, this, B, CASCADE_AND) < 0) {
+					// A<B<C
+					*Q = addNode(A, B, 0);
+					*T = C;
+					// already *F = 0;
+					return false; // remains AND
+					} else {
+					// B<A<C
+					*Q = addNode(B, A, 0);
+					*T = C;
+					// already *F = 0;
+					return false; // remains AND
+				}
+
+			} else if (compare(*T, this, *Q, CASCADE_AND) < 0) {
+				// swap
+				uint32_t savQ = *Q;
+				*Q = *T;
+				*T = savQ;
+				// already *F = 0;
+				return false; // remains AND
+						} else {
+				// no change
+				return false;
 				}
 			}
 
-			// final top-level order
-			if (compare(T, this, Q, CASCADE_AND) < 0) {
-				/*
-				 * Single node
-				 */
-				uint32_t tmp = Q;
-				Q = T;
-				T = tmp;
-				F = 0;
-			}
-		}
-
-		return addBasicNode(Q, T, F, expectId);
+		return false;
 	}
 
 	/**
@@ -2277,7 +2088,7 @@ struct tinyTree_t {
 		// todo: need to prepare generator first
 		if (true || ctx.flags & context_t::MAGICMASK_CASCADE) {
 			// Extended cascading/ordering
-			return this->addOrderNode(Q, T, F, this->count) ^ ibit;
+			this->cascadeQTF(&Q, &T, &F);
 		} else if (this->isOR(Q, T, F)) {
 			// Basic ordering, do not supply a cascading option as that is disabled 
 			if (this->compare(F, this, Q) < 0) {
