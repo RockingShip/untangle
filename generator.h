@@ -226,8 +226,10 @@ struct generator_t {
 	 * @param {context_t} ctx - I/O context
 	 */
 	generator_t(context_t &ctx) : ctx(ctx), buildTree(ctx), foundTree(ctx) {
+#if !defined(TINYTREE_MAXNODES_VALUE) 
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
 		assert(TINYTREE_NEND < 32 - 3);
+#endif
 
 		windowLo = 0;
 		windowHi = 0;
@@ -305,7 +307,7 @@ struct generator_t {
 	 *
 	 * @param {number} pure - zero for any operator, non-zero for `QnTF` only operator
 	 */
-	void initialiseGenerator(unsigned pure) {
+	void initialiseGenerator(unsigned pure, unsigned maxNodes) {
 		/*
 		 * Create lookup table indexed by packed notation to determine if `Q,T,F` combo is normalised
 		 * Exclude ordered dyadics.
@@ -395,9 +397,9 @@ struct generator_t {
 		 *       However, due to packing the template data chops off the unused first `NSTART` bits.
 		 *       The index to `pTOS` is the packed field.
 		 */
-		for (unsigned iStack = 0; iStack < (1 << TINYTREE_MAXNODES); iStack++) {
+		for (unsigned iStack = 0; iStack < (1U << maxNodes); iStack++) {
 			pTOS[iStack] = 0;
-			for (int j = TINYTREE_MAXNODES - 1; j >= 0; j--) {
+			for (int j = (int) maxNodes - 1; j >= 0; j--) {
 				if (iStack & (1 << j)) {
 					pTOS[iStack] = TINYTREE_NSTART + j;
 					break;
@@ -422,7 +424,7 @@ struct generator_t {
 		 */
 
 		// @formatter:off
-		for (unsigned iStack = 0; iStack < (1 << TINYTREE_MAXNODES); iStack++)
+		for (unsigned iStack = 0; iStack < (1U << maxNodes); iStack++)
 		for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++)
 		for (unsigned numEndpointLeft=0; numEndpointLeft < 4; numEndpointLeft++) { // no more than 3 endpoints per node
 		// @formatter:on
@@ -583,7 +585,7 @@ struct generator_t {
 
 		if (pure) {
 			if (numTemplateData != TEMPLATE_MAXDATA_PURE)
-				fprintf(stderr, "numTemplateData=%u\n", numTemplateData);
+				fprintf(stderr, "numTemplateDataPure=%u\n", numTemplateData);
 			assert(numTemplateData <= TEMPLATE_MAXDATA_PURE);
 		} else {
 			if (numTemplateData != TEMPLATE_MAXDATA)

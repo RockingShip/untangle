@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-09-16 16:37:17 Added: `selftest.cc:performSelfTestCascade()`.
 2021-09-16 16:36:07 Removed: `tinyTree_t:similar()`.
 2021-09-17 10:32:35 Changed: Merged `tinyTree_t::addBasicNode()` and `tinyTree_t::addNode()`. 
 2021-09-16 16:26:44 Changed: Redesigned `tinyTree_t::addOrderNode()` into `tinyTree_t::cascadeQTF()`.

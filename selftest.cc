@@ -26,6 +26,12 @@
  *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ * @date 2021-09-16 12:17:15
+ * `selftest::performSelfTestCascade()` needs 21 nodes
+ */
+#define TINYTREE_MAXNODES_VALUE 21
+
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -423,7 +429,7 @@ struct selftestContext_t : dbtool_t {
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
 
 		// create templates
-		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
+		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, numNode);
 
 		/*
 		 * Pass 1, slice dataset into single entries
@@ -519,6 +525,163 @@ struct selftestContext_t : dbtool_t {
 			       __FUNCTION__, __FILE__, __LINE__, pExpectedName, "abc!de!f2!");
 			exit(1);
 		}
+	}
+
+	/**
+	 * @date 2021-09-15 00:33:35
+	 *
+	 * Test that cascades are ordered
+	 * It has been visually verified that all 122 exit conditions of `tinyTree_t::cascadeQTF()` have been reached.
+	 */
+	void performSelfTestCascade(void) {
+
+		// enable cascading
+		unsigned savFlags = ctx.flags;
+		ctx.flags |= context_t::MAGICMASK_CASCADE;
+
+		unsigned numPassed = 0;
+		tinyTree_t tree(ctx);
+
+		uint32_t KSTART = tinyTree_t::TINYTREE_KSTART;
+		uint32_t NSTART = tinyTree_t::TINYTREE_NSTART;
+		assert(NSTART-KSTART >= 8);
+		
+		unsigned maxNode = 0;
+		
+		tree.loadStringSafe("ab+cd++");
+		
+		/*
+		 * @date 2021-09-16 01:56:39
+		 * Worst case ordering result in 21-node trees.
+		 */
+		/*
+		 * Test OR
+		 */
+		// @formatter:off
+		for (uint32_t f = KSTART; f < KSTART + 5; f++)
+		for (uint32_t e = KSTART; e < KSTART + 5; e++)
+		for (uint32_t d = KSTART; d < KSTART + 5; d++)
+		for (uint32_t c = KSTART; c < KSTART + 5; c++)
+		for (uint32_t b = KSTART; b < KSTART + 5; b++)
+		for (uint32_t a = KSTART; a < KSTART + 5; a++)
+		for (unsigned iRound = 0; iRound < 4; iRound++)
+		for (unsigned iCascade = 0; iCascade < 3; iCascade++) {
+		// @formatter:on
+			// prepare for new use
+			tree.clearTree();
+
+			// construct cascade
+			if (iRound == 0) {
+				// AB+CD++EF++
+				tree.N[NSTART + 0].Q = a; 
+				tree.N[NSTART + 0].F = b;
+				tree.N[NSTART + 1].Q = c;
+				tree.N[NSTART + 1].F = d;
+				tree.N[NSTART + 2].Q = (NSTART + 0);
+				tree.N[NSTART + 2].F = (NSTART + 1);
+				tree.N[NSTART + 3].Q = e;
+				tree.N[NSTART + 3].F = f;
+				tree.N[NSTART + 4].Q = (NSTART + 2);
+				tree.N[NSTART + 4].F = (NSTART + 3);
+			} else if (iRound == 1) {
+				// AB+CD+EF+++
+				tree.N[NSTART + 0].Q = a;
+				tree.N[NSTART + 0].F = b;
+				tree.N[NSTART + 1].Q = c;
+				tree.N[NSTART + 1].F = d;
+				tree.N[NSTART + 2].Q = e;
+				tree.N[NSTART + 2].F = f;
+				tree.N[NSTART + 3].Q = (NSTART + 1);
+				tree.N[NSTART + 3].F = (NSTART + 2);
+				tree.N[NSTART + 4].Q = (NSTART + 0);
+				tree.N[NSTART + 4].F = (NSTART + 3);
+			} else if (iRound == 2) {
+				// AB+C+DE+F++
+				tree.N[NSTART + 0].Q = a;
+				tree.N[NSTART + 0].F = b;
+				tree.N[NSTART + 1].Q = (NSTART + 0);
+				tree.N[NSTART + 1].F = c;
+				tree.N[NSTART + 2].Q = d;
+				tree.N[NSTART + 2].F = e;
+				tree.N[NSTART + 3].Q = (NSTART + 2);
+				tree.N[NSTART + 3].F = f;
+				tree.N[NSTART + 4].Q = (NSTART + 1);
+				tree.N[NSTART + 4].F = (NSTART + 3);
+			} else if (iRound == 3) {
+				// ABC++DEF+++
+				tree.N[NSTART + 0].Q = b;
+				tree.N[NSTART + 0].F = c;
+				tree.N[NSTART + 1].Q = a;
+				tree.N[NSTART + 1].F = (NSTART + 0);
+				tree.N[NSTART + 2].Q = e;
+				tree.N[NSTART + 2].F = f;
+				tree.N[NSTART + 3].Q = d;
+				tree.N[NSTART + 3].F = (NSTART + 2);
+				tree.N[NSTART + 4].Q = (NSTART + 1);
+				tree.N[NSTART + 4].F = (NSTART + 3);
+			}
+			tree.root  = NSTART + 4;
+			tree.count = tree.root + 1;
+
+			// apply type of cascade
+			for (uint32_t iNode = NSTART; iNode < tree.count; iNode++) {
+				tinyNode_t *pNode = tree.N + iNode;
+				if (iCascade == 0) {
+					// OR
+					pNode->T = IBIT;
+				} else if (iCascade == 1) {
+					// NE
+					pNode->T = pNode->F ^ IBIT;
+				} else {
+					// AND
+					pNode->T = pNode->F;
+					pNode->F = 0;
+				}
+			}
+
+			// save name
+			char rawName[tinyTree_t::TINYTREE_NAMELEN + 1];
+			tree.saveString(tree.root, rawName, NULL);
+
+			// save footprint
+			uint32_t expectRoot = tree.root;
+			footprint_t *pExpect = pEvalFwd; // use pEvalFwd with tid=0 
+			tree.eval(pExpect);
+
+			// reload with cascades enabled
+			tree.loadStringSafe(rawName);
+
+			// save name
+			char safeName[tinyTree_t::TINYTREE_NAMELEN + 1];
+			tree.saveString(tree.root, safeName, NULL);
+
+			// save footprint
+			uint32_t encounteredRoot = tree.root;
+			footprint_t *pEncountered = pEvalRev; // use pEvalRev with tid=0 (which is identical to pExpect)
+			tree.eval(pEncountered);
+
+			if (0) {
+				// simple tracking
+				if (tree.count > maxNode)
+					maxNode = tree.count;
+				printf("%s\t%s\t%d\n", rawName, safeName, maxNode);
+			}
+
+
+			// compare
+			if (!pExpect[expectRoot].equals(pEncountered[encounteredRoot])) {
+				printf("{\"error\":\"cascade folding failed\",\"where\":\"%s:%s:%d\"}\n",
+				       __FUNCTION__, __FILE__, __LINE__);
+				exit(1);
+			}
+			numPassed++;
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+
+		// restore flags
+		ctx.flags = savFlags;
 	}
 
 	/**
@@ -1167,10 +1330,11 @@ struct selftestContext_t : dbtool_t {
 		generator.windowHi = 0;
 		ctx.setupSpeed(16119595);
 
-		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
-		generator.clearGenerator();
 		unsigned numNodes     = 4;
 		unsigned numEndpoints = numNodes * 2 + 1;
+		
+		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, numNodes);
+		generator.clearGenerator();
 		generator.generateTrees(numNodes, numEndpoints, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeCompare));
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -1333,6 +1497,12 @@ struct selftestContext_t : dbtool_t {
 	void createMetrics(void) {
 
 		/*
+		 * @date 2021-09-17 10:51:33
+		 * These metrics are for signatures which are <= 5
+		 */
+		unsigned maxNodes = 5;
+		
+		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
 		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlot; pRound++) {
@@ -1361,7 +1531,7 @@ struct selftestContext_t : dbtool_t {
 
 			// prepare generator
 			ctx.flags = pRound->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE); // let flags take effect
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, maxNodes); // let flags take effect
 
 			// prepare I/O context
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
@@ -1881,8 +2051,15 @@ int main(int argc, char *argv[]) {
 	 */
 	app.performSelfTestSkin();
 
+	/**
+	 * @date 2021-09-15 00:30:39
+	 *
+	 * Test that cascades are ordered
+	 */
+	app.performSelfTestCascade();
+
 	/*
-	 * Test that forward/reverse transform complement each other.
+	 * Test that forward/reverse transform complement each other
 	 */
 	app.performSelfTestTransform();
 

@@ -936,7 +936,7 @@ struct gensignatureContext_t : dbtool_t {
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE);
+			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, tinyTree_t::TINYTREE_MAXNODES);
 			generator.clearGenerator();
 			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&gensignatureContext_t::foundTreeSignature));
 		}

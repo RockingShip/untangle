@@ -104,11 +104,19 @@ struct tinyTree_t {
 		/*
 		 * @date 2021-08-30 15:21:45
 		 * With ordered cascading nodes many get orphaned
-		 * Raising `TINYTREE_MAXNODES` effets the maximum name length,
+		 * Raising `TINYTREE_MAXNODES` effects the maximum name length,
 		 * However, the database has a dedicated and shorter length.
 		 */
+#if defined(TINYTREE_MAXNODES_VALUE)		
+		/*
+		 * @date 2021-09-16 01:05:40
+		 * `selftest::performSelfTestCascade()` needs 21 nodes
+		 */
+		TINYTREE_MAXNODES = TINYTREE_MAXNODES_VALUE,
+#else
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = 9,
+		TINYTREE_MAXNODES = 7,
+#endif
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
 		TINYTREE_KSTART = 1,
@@ -534,10 +542,10 @@ struct tinyTree_t {
 	 *
 	 * Simple(fast) hash table lookup for nodes
 	 *
-	 * @param {number} Q
-	 * @param {number} T
-	 * @param {number} F
-	 * @return {number} index into the tree pointing to a node with identical functionality. May have `IBIT` set to indicate that the result is inverted.
+	 * @param {number} Q - component
+	 * @param {number} T - component
+	 * @param {number} F - component
+	 * @return {number} newly created nodeId
 	 */
 	inline uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F) {
 
