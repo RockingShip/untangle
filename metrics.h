@@ -350,6 +350,68 @@ const metricsImprint_t *getMetricsImprint(unsigned numSlot, unsigned pure, unsig
 }
 
 /**
+ * @date 2021-09-20 18:34:11
+ *
+ * Metrics describing generator loop overhead
+ *
+ * Primarily used for generator restart/windowing
+ */
+
+struct metricsRestart_t {
+	/*
+	 * Key
+	 */
+
+	/// @var {number} - MAXSLOTS
+	unsigned numSlot;
+	/// @var {number} - `numNode`
+	unsigned numNode;
+	/// @var {number} - `pure` mode
+	unsigned pure;
+	/// @var {number} - `cascade` mode
+	unsigned cascade;
+
+	/// @var {number} - starting offset in `restartdata[]`
+	uint32_t sectionOffset;
+};
+
+// Need to explicitly include the generated data
+extern const uint64_t         __attribute__ ((weak)) restartData[];
+extern const metricsRestart_t __attribute__ ((weak)) restartIndex[];
+
+/*
+ * @date 2021-09-20 01:26:59
+ * 
+ * Get metrics for restarting
+ *
+ * @param {number} maxSlots - Number of slots (call with MAXSLOTS)
+ * @param {number} numNode - signature size in number of nodes
+ * @param {number} pure - `--pure`
+ * @param {number} cascade - `--cascade`
+ * @return {metricsProgress_t} Reference to match or NULL if not found
+ */
+const metricsRestart_t *getMetricsRestart(unsigned numSlot, unsigned numNode, unsigned pure, unsigned cascade) {
+	// ensure boolean values
+	if (pure)
+		pure = 1;
+	if (cascade)
+		cascade = 1;
+
+	// test if data available
+	if (restartIndex == NULL)
+		return NULL;
+	
+	// walk through list
+	for (const metricsRestart_t *pMetrics = restartIndex; pMetrics->numSlot; pMetrics++) {
+		// test if found
+		if (pMetrics->numSlot == numSlot && pMetrics->numNode == numNode && pMetrics->pure == pure && pMetrics->cascade == cascade)
+			return pMetrics; // found
+	}
+	// not found
+	return NULL;
+}
+
+/**
  * @date 2020-03-20 00:42:42
  *
  * Metrics describing generator.

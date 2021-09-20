@@ -55,6 +55,10 @@
  * NOTE: due to new packed layout, `TINYTREE_MAXNODE` is now set to max 8.
  * However, 8 nodes requires 4930223 template entries. 7 nodes has 2181293.
  * Don't be wasteful, 7n9 spans a massively large space.
+ * 
+ * @date 2021-09-20 19:05:41
+ * 
+ * The generator is sensitive to context_t::MAGICMASK_PURE and context_t::MAGICMASK_CASCADE
  */
 
 /*
@@ -162,8 +166,8 @@ struct generator_t {
 		PACKED_COMPARE = 0x40, // needs run-time compare
 
 		/// @constant {number} - size of `pTemplateData[]`
-		TEMPLATE_MAXDATA      = 32367761,
-		TEMPLATE_MAXDATA_PURE = 17229285,
+		TEMPLATE_MAXDATA      = 5321417,
+		TEMPLATE_MAXDATA_PURE = 2855957,
 
 		/// @constant {number} - convenience
 		TINYTREE_KSTART   = tinyTree_t::TINYTREE_KSTART,
@@ -307,12 +311,18 @@ struct generator_t {
 	 *
 	 * @param {number} pure - zero for any operator, non-zero for `QnTF` only operator
 	 */
-	void initialiseGenerator(unsigned pure, unsigned maxNodes) {
+	void initialiseGenerator(void) {
 		/*
 		 * Create lookup table indexed by packed notation to determine if `Q,T,F` combo is normalised
 		 * Exclude ordered dyadics.
 		 */
 
+		/*
+		 * filter nodes baded on `--pure` settings.
+		 * NOTE: `--cascade` is handled in `tinyTree_t::compare()`.
+		 */
+		unsigned pure = ctx.flags & context_t::MAGICMASK_PURE;
+		
 		// @formatter:off
 		for (unsigned Ti = 0; Ti < 2; Ti++)
 		for (unsigned F = 0; F < (1 << PACKED_WIDTH); F++)
@@ -397,9 +407,9 @@ struct generator_t {
 		 *       However, due to packing the template data chops off the unused first `NSTART` bits.
 		 *       The index to `pTOS` is the packed field.
 		 */
-		for (unsigned iStack = 0; iStack < (1U << maxNodes); iStack++) {
+		for (unsigned iStack = 0; iStack < (1U << TINYTREE_MAXNODES); iStack++) {
 			pTOS[iStack] = 0;
-			for (int j = (int) maxNodes - 1; j >= 0; j--) {
+			for (int j = (int) TINYTREE_MAXNODES - 1; j >= 0; j--) {
 				if (iStack & (1 << j)) {
 					pTOS[iStack] = TINYTREE_NSTART + j;
 					break;
@@ -424,7 +434,7 @@ struct generator_t {
 		 */
 
 		// @formatter:off
-		for (unsigned iStack = 0; iStack < (1U << maxNodes); iStack++)
+		for (unsigned iStack = 0; iStack < (1U << TINYTREE_MAXNODES); iStack++)
 		for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++)
 		for (unsigned numEndpointLeft=0; numEndpointLeft < 4; numEndpointLeft++) { // no more than 3 endpoints per node
 		// @formatter:on

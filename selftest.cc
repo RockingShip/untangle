@@ -415,6 +415,8 @@ struct selftestContext_t : dbtool_t {
 	  * Then test gathered collection matches a windowless invocation
 	  */
 	void performSelfTestWindow(void) {
+		uint32_t savFlags = ctx.flags;
+		
 		// allocate resources
 		selftestWindowResults = (char **) ctx.myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
 
@@ -429,7 +431,7 @@ struct selftestContext_t : dbtool_t {
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
 
 		// create templates
-		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, numNode);
+		generator.initialiseGenerator();
 
 		/*
 		 * Pass 1, slice dataset into single entries
@@ -438,9 +440,13 @@ struct selftestContext_t : dbtool_t {
 		for (uint64_t windowLo = 0; windowLo < pMetrics->numProgress; windowLo++) {
 			// apply settings
 			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
+			
+			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE, ctx.flags & context_t::MAGICMASK_CASCADE);
+			assert(pRestart);
+			
 			generator.windowLo     = windowLo;
 			generator.windowHi     = windowLo + 1;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
+			generator.pRestartData = restartData + pRestart->sectionOffset;
 			ctx.progressHi         = pMetrics->numProgress;
 			ctx.progress           = 0;
 			ctx.tick               = 0;
@@ -460,9 +466,13 @@ struct selftestContext_t : dbtool_t {
 		{
 			// apply settings
 			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
+
+			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE, ctx.flags & context_t::MAGICMASK_CASCADE);
+			assert(pRestart);
+
 			generator.windowLo     = 0;
 			generator.windowHi     = 0;
-			generator.pRestartData = restartData + restartIndex[pMetrics->numNode][pMetrics->pure];
+			generator.pRestartData = restartData + pRestart->sectionOffset;
 			ctx.progressHi         = pMetrics->numProgress;
 			ctx.progress           = 0;
 			ctx.tick               = 0;
@@ -480,6 +490,8 @@ struct selftestContext_t : dbtool_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
+
+		ctx.flags = savFlags;
 	}
 
 	/**
@@ -1333,7 +1345,7 @@ struct selftestContext_t : dbtool_t {
 		unsigned numNodes     = 4;
 		unsigned numEndpoints = numNodes * 2 + 1;
 		
-		generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, numNodes);
+		generator.initialiseGenerator();
 		generator.clearGenerator();
 		generator.generateTrees(numNodes, numEndpoints, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeCompare));
 
@@ -1497,12 +1509,6 @@ struct selftestContext_t : dbtool_t {
 	void createMetrics(void) {
 
 		/*
-		 * @date 2021-09-17 10:51:33
-		 * These metrics are for signatures which are <= 5
-		 */
-		unsigned maxNodes = 5;
-		
-		/*
 		 * Scan metrics for setting that require metrics to be collected
 		 */
 		for (const metricsImprint_t *pRound = metricsImprint; pRound->numSlot; pRound++) {
@@ -1531,7 +1537,7 @@ struct selftestContext_t : dbtool_t {
 
 			// prepare generator
 			ctx.flags = pRound->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, maxNodes); // let flags take effect
+			generator.initialiseGenerator(); // let flags take effect
 
 			// prepare I/O context
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);

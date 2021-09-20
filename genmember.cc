@@ -653,7 +653,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (app.opt_windowLo || app.opt_windowHi) {
-		if (app.arg_numNodes > tinyTree_t::TINYTREE_MAXNODES || restartIndex[app.arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0] == 0) {
+		// is restart data present?
+		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, app.arg_numNodes, (ctx.flags & context_t::MAGICMASK_PURE), (ctx.flags & context_t::MAGICMASK_CASCADE));
+		if (pRestart == NULL) {
 			fprintf(stderr, "No restart data for --window\n");
 			exit(1);
 		}

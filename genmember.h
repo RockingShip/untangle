@@ -206,8 +206,11 @@
 #include "dbtool.h"
 #include "generator.h"
 #include "metrics.h"
-#include "restartdata.h"
 #include "tinytree.h"
+
+// Need generator to allow ranges
+#include "restartdata.h"
+
 
 /**
  * @date 2020-03-14 11:10:15
@@ -1722,12 +1725,14 @@ struct genmemberContext_t : dbtool_t {
 		generator.windowLo = this->opt_windowLo;
 		generator.windowHi = this->opt_windowHi;
 
-		// apply restart data for > `4n9`
-		unsigned ofs = 0;
-		if (this->arg_numNodes > 4 && this->arg_numNodes < tinyTree_t::TINYTREE_MAXNODES)
-			ofs = restartIndex[this->arg_numNodes][(ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0];
-		if (ofs)
-			generator.pRestartData = restartData + ofs;
+		// setup restart data
+		{
+			// walk through list
+			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, arg_numNodes, (ctx.flags & context_t::MAGICMASK_PURE), (ctx.flags & context_t::MAGICMASK_CASCADE));
+			// point to first entry if section present
+			if (pRestart->sectionOffset)
+				generator.pRestartData = restartData + pRestart->sectionOffset;
+		}
 
 		// reset progress
 		if (generator.windowHi) {
@@ -1755,7 +1760,7 @@ struct genmemberContext_t : dbtool_t {
 		} else {
 			unsigned endpointsLeft = arg_numNodes * 2 + 1;
 
-			generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, tinyTree_t::TINYTREE_MAXNODES);
+			generator.initialiseGenerator();
 			generator.clearGenerator();
 			generator.generateTrees(arg_numNodes, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genmemberContext_t::foundTreeMember));
 		}

@@ -313,35 +313,38 @@ struct genrestartdataContext_t : callable_t {
 		printf("#ifndef _RESTARTDATA_H\n");
 		printf("#define _RESTARTDATA_H\n");
 		printf("\n");
-		printf("#include <stdint.h>\n");
+		printf("#include <metrics.h>\n");
 		printf("\n");
 
-		uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES + 1][2];
+		// make static so it is initially zero
+		static uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES + 1][2][2];
 
 		printf("const uint64_t restartData[] = { 0,\n\n");
 		this->numRestart = 1; // skip first zero
 
 		// @formatter:off
 		for (unsigned numArgs = 0; numArgs <= tinyTree_t::TINYTREE_MAXNODES; numArgs++)
-		for (int iPure = 1; iPure >= 0; iPure--) {
+		for (int iPure = 1; iPure >= 0; iPure--)
+		for (unsigned iCascade = 0; iCascade < 2; iCascade++)  {
 		// @formatter:on
 
 			// mark section not in use
-			buildProgressIndex[numArgs][iPure] = 0;
+			buildProgressIndex[numArgs][iPure][iCascade] = 0;
 
 			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, iPure, numArgs);
 			if (pMetrics) {
 				if (pMetrics->noauto & 1)
 					continue; // skip automated handling
 
-				buildProgressIndex[numArgs][iPure] = this->numRestart;
+				buildProgressIndex[numArgs][iPure][iCascade] = this->numRestart;
 
 				// output section header
 				printf("// %u: numNode=%u pure=%u \n", this->numRestart, numArgs, iPure);
 
 				// apply settings
 				ctx.flags = iPure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
-				generator.initialiseGenerator(ctx.flags & context_t::MAGICMASK_PURE, tinyTree_t::TINYTREE_MAXNODES);
+				ctx.flags = iCascade ? ctx.flags | context_t::MAGICMASK_CASCADE : ctx.flags & ~context_t::MAGICMASK_CASCADE;
+				generator.initialiseGenerator();
 
 				ctx.setupSpeed(pMetrics->numProgress);
 				ctx.tick = 0;
@@ -353,7 +356,7 @@ struct genrestartdataContext_t : callable_t {
 				generator.generateTrees(numArgs, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&genrestartdataContext_t::foundTreePrintTab));
 
 				// was there any output
-				if (buildProgressIndex[numArgs][iPure] != this->numRestart) {
+				if (buildProgressIndex[numArgs][iPure][iCascade] != this->numRestart) {
 					// yes, output section delimiter
 					printf(" 0xffffffffffffffffLL,");
 					this->numRestart++;
@@ -367,7 +370,7 @@ struct genrestartdataContext_t : callable_t {
 					printf(" // %lu\n", ctx.progress);
 				} else {
 					// no, erase index entry
-					buildProgressIndex[numArgs][iPure] = 0;
+					buildProgressIndex[numArgs][iPure][iCascade] = 0;
 				}
 
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -385,12 +388,18 @@ struct genrestartdataContext_t : callable_t {
 		 * Output index
 		 */
 
-		printf("const uint32_t restartIndex[%u][2] = {\n", tinyTree_t::TINYTREE_MAXNODES + 1);
+		printf("const metricsRestart_t restartIndex[] = {\n");
 
-		for (unsigned numNode = 0; numNode <= tinyTree_t::TINYTREE_MAXNODES; numNode++) {
-			printf("\t{ %8d, %8d },\n", buildProgressIndex[numNode][0], buildProgressIndex[numNode][1]);
+		// @formatter:off
+		for (unsigned numNode = 0; numNode <= tinyTree_t::TINYTREE_MAXNODES; numNode++)
+		for (int iPure = 1; iPure >= 0; iPure--)
+		for (unsigned iCascade = 0; iCascade < 2; iCascade++) {
+		// @formatter:on
+			if (buildProgressIndex[numNode][iPure][iCascade])
+				printf("{%u, %u, %u, %u, %u},\n", MAXSLOTS, numNode, iPure, iCascade, buildProgressIndex[numNode][iPure][iCascade]);
 		}
 
+		printf("{0},\n");
 		printf("};\n\n");
 		printf("#endif\n");
 

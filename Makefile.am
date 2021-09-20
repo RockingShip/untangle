@@ -7,7 +7,7 @@ MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
 MOSTLYCLEANFILES =
 CLEANFILES =
-BUILT_SOURCES = genrestartdata rewritedata.c
+BUILT_SOURCES = genrestartdata rewritedata.h
 
 noinst_PROGRAMS =
 bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4)
@@ -23,7 +23,7 @@ EXTRA_PART1 =
 restartdata.h : genrestartdata.cc
 	@echo "#"
 	@echo "# If you are not developing when this happens, most likely timestamps are incorrect"
-	@echo "# Instead of waiting 60 minutes:"
+	@echo "# Instead of waiting 120 minutes:"
 	@echo "# - Restore pre-calculated version of \"restartdata.h\"'"
 	@echo "# - Perform \"touch restartdata.h\""
 	@echo "#"
@@ -39,12 +39,10 @@ eval_SOURCES = eval.cc
 # @date 2020-04-18 20:46:40
 genhint_SOURCES = genhint.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genhint_LDADD = $(LDADD) $(AM_LDADD)
-genhint.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-30 17:19:24
 genmember_SOURCES = genmember.cc genmember.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 genmember_LDADD = $(LDADD) $(AM_LDADD)
-genmember.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-18 18:04:50
 genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h datadef.h generator.h metrics.h
@@ -52,12 +50,10 @@ genrestartdata_SOURCES = genrestartdata.cc tinytree.h context.h datadef.h genera
 # @date 2020-03-14 11:09:15
 gensignature_SOURCES = gensignature.cc gensignature.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 gensignature_LDADD = $(LDADD) $(AM_LDADD)
-gensignature.$(OBJEXT) : restartdata.h
 
 # @date 2020-05-02 23:02:57
 genswap_SOURCES = genswap.cc genswap.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genswap_LDADD = $(LDADD) $(AM_LDADD)
-genswap.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-11 21:53:16
 gentransform_SOURCES = gentransform.cc gentransform.h database.h datadef.h context.h tinytree.h
@@ -70,7 +66,6 @@ selftest_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2020-04-07 16:25:18
 slookup_SOURCES = slookup.cc tinytree.h context.h datadef.h database.h
 slookup_LDADD = $(LDADD) $(AM_LDADD)
-slookup.$(OBJEXT) : restartdata.h
 
 # @date 2020-03-13 12:56:11
 tlookup_SOURCES = tlookup.cc database.h datadef.h context.h tinytree.h
@@ -199,9 +194,7 @@ genimport_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-06-10 11:39:02
 genrewritedata_SOURCES = genrewritedata.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
 genrewritedata_LDADD = $(LDADD) $(AM_LDADD)
-genrewritedata.$(OBJEXT) : restartdata.h
 
 # @date 2021-06-10 11:39:02
 validaterewrite_SOURCES = validaterewrite.cc rewritedata.h basetree.h context.h rewritedata.c
 validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
-validaterewrite.$(OBJEXT) : restartdata.h
