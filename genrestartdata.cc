@@ -317,13 +317,13 @@ struct genrestartdataContext_t : callable_t {
 		printf("\n");
 
 		// make static so it is initially zero
-		static uint32_t buildProgressIndex[tinyTree_t::TINYTREE_MAXNODES + 1][2][2];
+		static uint32_t buildProgressIndex[generator_t::GENERATOR_MAXNODES + 1][2][2];
 
 		printf("const uint64_t restartData[] = { 0,\n\n");
 		this->numRestart = 1; // skip first zero
 
 		// @formatter:off
-		for (unsigned numArgs = 0; numArgs <= tinyTree_t::TINYTREE_MAXNODES; numArgs++)
+		for (unsigned numArgs = 0; numArgs <= generator_t::GENERATOR_MAXNODES; numArgs++)
 		for (int iPure = 1; iPure >= 0; iPure--)
 		for (unsigned iCascade = 0; iCascade < 2; iCascade++)  {
 		// @formatter:on
@@ -391,7 +391,7 @@ struct genrestartdataContext_t : callable_t {
 		printf("const metricsRestart_t restartIndex[] = {\n");
 
 		// @formatter:off
-		for (unsigned numNode = 0; numNode <= tinyTree_t::TINYTREE_MAXNODES; numNode++)
+		for (unsigned numNode = 0; numNode <= generator_t::GENERATOR_MAXNODES; numNode++)
 		for (int iPure = 1; iPure >= 0; iPure--)
 		for (unsigned iCascade = 0; iCascade < 2; iCascade++) {
 		// @formatter:on

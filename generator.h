@@ -169,11 +169,17 @@ struct generator_t {
 		TEMPLATE_MAXDATA      = 5321417,
 		TEMPLATE_MAXDATA_PURE = 2855957,
 
+		/*
+		 * @date 2021-09-20 18:54:29
+		 * Maximum tree size created by generator.
+		 * Forked from TINYTREE_MAXNODES as that can now be too large to handle because of cascading
+		 */
+
 		/// @constant {number} - convenience
-		TINYTREE_KSTART   = tinyTree_t::TINYTREE_KSTART,
-		TINYTREE_NSTART   = tinyTree_t::TINYTREE_NSTART,
-		TINYTREE_NEND     = tinyTree_t::TINYTREE_NEND,
-		TINYTREE_MAXNODES = tinyTree_t::TINYTREE_MAXNODES,
+		GENERATOR_KSTART   = tinyTree_t::TINYTREE_KSTART,
+		GENERATOR_NSTART   = tinyTree_t::TINYTREE_NSTART,
+		GENERATOR_MAXNODES = 7,
+		GENERATOR_NEND     = GENERATOR_NSTART + GENERATOR_MAXNODES,
 	};
 
 	/// @var {context_t} I/O context
@@ -189,7 +195,7 @@ struct generator_t {
 	uint32_t iVersion;
 
 	/// @var {uint32_t[]} array of packed unified operators
-	uint32_t packedN[TINYTREE_NEND];
+	uint32_t packedN[GENERATOR_NEND];
 
 	/// @var {uint8_t[]} array indexed by packed `QTnF` to indicate what type of operator
 	uint8_t *pIsType;
@@ -213,7 +219,7 @@ struct generator_t {
 	uint32_t *pTemplateData;
 
 	/// @var {number[7][10][10]} starting offset in `templateData[]`. `templateIndex[SECTION][numNode][numPlaceholder]`
-	uint32_t templateIndex[1 << TINYTREE_MAXNODES][MAXSLOTS + 1][4];
+	uint32_t templateIndex[1 << GENERATOR_MAXNODES][MAXSLOTS + 1][4];
 
 	/// @var {tintTree_t} Tree under construction`
 	tinyTree_t buildTree;
@@ -230,22 +236,20 @@ struct generator_t {
 	 * @param {context_t} ctx - I/O context
 	 */
 	generator_t(context_t &ctx) : ctx(ctx), buildTree(ctx), foundTree(ctx) {
-#if !defined(TINYTREE_MAXNODES_VALUE) 
 		// Assert that the highest available node fits into a 5 bit value. `2^5` = 32. Last 3 are reserved for template wildcards
-		assert(TINYTREE_NEND < 32 - 3);
-#endif
+		assert(GENERATOR_NEND < 32 - 3);
 
 		windowLo = 0;
 		windowHi = 0;
 		pRestartData = NULL;
 		ctx.tick = 0;
-		restartTabDepth = TINYTREE_NSTART + 2; // for `7n9` +3 is a better choice. But `7n9-pure` still has 70177 restart tabs.
+		restartTabDepth = GENERATOR_NSTART + 2; // for `7n9` +3 is a better choice. But `7n9-pure` still has 70177 restart tabs.
 
 		::memset(templateIndex, 0, sizeof(templateIndex));
 
 		// allocate structures
 		pIsType = (uint8_t *) ctx.myAlloc("generatorTree_t::pIsType", 1 << PACKED_SIZE, sizeof(*this->pIsType));
-		pTOS = (uint8_t *) ctx.myAlloc("generatorTree_t::pTOS", 1 << TINYTREE_MAXNODES, sizeof(*this->pTOS));
+		pTOS = (uint8_t *) ctx.myAlloc("generatorTree_t::pTOS", 1 << GENERATOR_MAXNODES, sizeof(*this->pTOS));
 		pCacheQTF = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheQTF", 1 << PACKED_SIZE, sizeof(*this->pCacheQTF));
 		pCacheVersion = (uint32_t *) ctx.myAlloc("generatorTree_t::pCacheVersion", 1 << PACKED_SIZE, sizeof(*this->pCacheVersion));
 		pTemplateData = (uint32_t *) ctx.myAlloc("generatorTree_t::pTemplateData", TEMPLATE_MAXDATA, sizeof(*pTemplateData));
@@ -385,15 +389,15 @@ struct generator_t {
 			 * Runtime only needs to call `compare()` if both operands are references
 			 */
 			if (pIsType[ix] & PACKED_OR) {
-				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
+				if (Q >= GENERATOR_NSTART && F >= GENERATOR_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 			}
 			if (pIsType[ix] & PACKED_NE) {
-				if (Q >= TINYTREE_NSTART && F >= TINYTREE_NSTART)
+				if (Q >= GENERATOR_NSTART && F >= GENERATOR_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 			}
 			if (pIsType[ix] & PACKED_AND) {
-				if (Q >= TINYTREE_NSTART && Tu >= TINYTREE_NSTART)
+				if (Q >= GENERATOR_NSTART && Tu >= GENERATOR_NSTART)
 					pIsType[ix] |= PACKED_COMPARE;
 			}
 		}
@@ -407,11 +411,11 @@ struct generator_t {
 		 *       However, due to packing the template data chops off the unused first `NSTART` bits.
 		 *       The index to `pTOS` is the packed field.
 		 */
-		for (unsigned iStack = 0; iStack < (1U << TINYTREE_MAXNODES); iStack++) {
+		for (unsigned iStack = 0; iStack < (1 << GENERATOR_MAXNODES); iStack++) {
 			pTOS[iStack] = 0;
-			for (int j = (int) TINYTREE_MAXNODES - 1; j >= 0; j--) {
+			for (int j = GENERATOR_MAXNODES - 1; j >= 0; j--) {
 				if (iStack & (1 << j)) {
-					pTOS[iStack] = TINYTREE_NSTART + j;
+					pTOS[iStack] = GENERATOR_NSTART + j;
 					break;
 				}
 			}
@@ -431,10 +435,22 @@ struct generator_t {
 		 *
 		 * NOTE: `stack` is a bitmap of nodeID's.
 		 *       However, due to packing the template data chops off the unused first `NSTART` bits.
+		 *       
+		 * @date 2021-09-06 10:48:22
+		 * 
+		 * With ordered cascading, nodes many get orphaned.
+		 * `TINYTREE_MAXNODES` has been nearly doubled to accommodate the orphans
+		 * The generator is orphan free, limit maxnodes or `PACKED_WIDTH_STACK` will overflow 
+		 * 
+		 * @date 2021-09-11 00:17:15
+		 * Cascades 
+		 * generator is hardcoded to `TINYTREE_MAXNODES=6` to lower `progressHi` and `TEMPLATE_MAXDATA`.
+		 * assuming `--pure --cascade` that all extended structures are within `6n9-pure` space
+		 * There should be an assert somewhere guarding this
 		 */
 
 		// @formatter:off
-		for (unsigned iStack = 0; iStack < (1U << TINYTREE_MAXNODES); iStack++)
+		for (unsigned iStack = 0; iStack < (1U << GENERATOR_MAXNODES); iStack++)
 		for (unsigned numPlaceholder=0; numPlaceholder < (MAXSLOTS + 1); numPlaceholder++)
 		for (unsigned numEndpointLeft=0; numEndpointLeft < 4; numEndpointLeft++) { // no more than 3 endpoints per node
 		// @formatter:on
@@ -446,7 +462,7 @@ struct generator_t {
 			 * @date 2021-08-29 19:19:47
 			 * Get the current node ID
 			 */
-			unsigned nodeId = (pTOS[iStack]) ? pTOS[iStack] + 1 : TINYTREE_NSTART;
+			unsigned nodeId = (pTOS[iStack]) ? pTOS[iStack] + 1 : GENERATOR_NSTART;
 
 			/*
 			 * Iterate through all possible `Q,T,F` possibilities
@@ -469,7 +485,7 @@ struct generator_t {
 				// NOTE: endpoints include zero. Placeholders are never zero.
 				unsigned newPlaceholder = numPlaceholder; // new `numPlaceholder`
 				unsigned newEndpoint = 0; // decrement!! of `numEndpoint`
-				unsigned newStack = iStack << TINYTREE_NSTART; // new `stack`
+				unsigned newStack = iStack << GENERATOR_NSTART; // new `stack`
 
 				/*
 				 * create packed notation
@@ -483,26 +499,26 @@ struct generator_t {
 				 * First components if F,T,Q order because the node with highest id is TOS
 				 */
 
-				if (pTOS[newStack >> TINYTREE_NSTART] && F == pTOS[newStack >> TINYTREE_NSTART]) {
+				if (pTOS[newStack >> GENERATOR_NSTART] && F == pTOS[newStack >> GENERATOR_NSTART]) {
 					// pop stack entry
 					newStack &= ~(1 << F);
-				} else if (F >= TINYTREE_NSTART) {
+				} else if (F >= GENERATOR_NSTART) {
 					// back-reference counts as endpoint
 					newEndpoint++;
 				}
 
-				if (pTOS[newStack >> TINYTREE_NSTART] && Tu == pTOS[newStack >> TINYTREE_NSTART]) {
+				if (pTOS[newStack >> GENERATOR_NSTART] && Tu == pTOS[newStack >> GENERATOR_NSTART]) {
 					// pop stack entry
 					newStack &= ~(1 << Tu);
-				} else if (Tu >= TINYTREE_NSTART) {
+				} else if (Tu >= GENERATOR_NSTART) {
 					// back-reference counts as endpoint
 					newEndpoint++;
 				}
 
-				if (pTOS[newStack >> TINYTREE_NSTART] && Q == pTOS[newStack >> TINYTREE_NSTART]) {
+				if (pTOS[newStack >> GENERATOR_NSTART] && Q == pTOS[newStack >> GENERATOR_NSTART]) {
 					// pop stack entry
 					newStack &= ~(1 << Q);
-				} else if (Q >= TINYTREE_NSTART) {
+				} else if (Q >= GENERATOR_NSTART) {
 					// back-reference counts as endpoint
 					newEndpoint++;
 				}
@@ -511,12 +527,12 @@ struct generator_t {
 				 * Then endpoints in Q,T,F order because that is walking order
 				 */
 
-				if (Q >= TINYTREE_NSTART) {
+				if (Q >= GENERATOR_NSTART) {
 					// component
-				} else if (Q > TINYTREE_KSTART + newPlaceholder && Q < TINYTREE_NSTART) {
+				} else if (Q > GENERATOR_KSTART + newPlaceholder && Q < GENERATOR_NSTART) {
 					// placeholder not created yet
 					continue;
-				} else if (Q == TINYTREE_KSTART + newPlaceholder) {
+				} else if (Q == GENERATOR_KSTART + newPlaceholder) {
 					// bump placeholder if using for the first time
 					newPlaceholder++;
 					newEndpoint++;
@@ -527,12 +543,12 @@ struct generator_t {
 					newEndpoint++;
 				}
 
-				if (Tu >= TINYTREE_NSTART) {
+				if (Tu >= GENERATOR_NSTART) {
 					// component
-				} else if (Tu > TINYTREE_KSTART + newPlaceholder && Tu < TINYTREE_NSTART) {
+				} else if (Tu > GENERATOR_KSTART + newPlaceholder && Tu < GENERATOR_NSTART) {
 					// placeholder not created yet
 					continue;
-				} else if (Tu == TINYTREE_KSTART + newPlaceholder) {
+				} else if (Tu == GENERATOR_KSTART + newPlaceholder) {
 					// bump placeholder if using for the first time
 					newPlaceholder++;
 					newEndpoint++;
@@ -543,12 +559,12 @@ struct generator_t {
 					newEndpoint++;
 				}
 
-				if (F >= TINYTREE_NSTART) {
+				if (F >= GENERATOR_NSTART) {
 					// component
-				} else if (F > TINYTREE_KSTART + newPlaceholder && F < TINYTREE_NSTART) {
+				} else if (F > GENERATOR_KSTART + newPlaceholder && F < GENERATOR_NSTART) {
 					// placeholder not created yet
 					continue;
-				} else if (F == TINYTREE_KSTART + newPlaceholder) {
+				} else if (F == GENERATOR_KSTART + newPlaceholder) {
 					// bump placeholder if using for the first time
 					newPlaceholder++;
 					newEndpoint++;
@@ -569,7 +585,7 @@ struct generator_t {
 				 * Push new node-id on stack and prepare for packed format
 				 */
 				newStack |= 1 << nodeId;
-				newStack >>= TINYTREE_NSTART;
+				newStack >>= GENERATOR_NSTART;
 
 				assert(!(Q & ~PACKED_MASK));
 				assert(!(Tu & ~PACKED_MASK));
@@ -627,7 +643,7 @@ struct generator_t {
 
 		// add/push packed node
 		unsigned nid = buildTree.count;
-		assert(nid < TINYTREE_NEND); // overflow
+		assert(nid < GENERATOR_NEND); // overflow
 		assert((nid & ~PACKED_MASK) == 0); // may not overflow packed field
 
 		// add to packed nodes
@@ -776,7 +792,7 @@ struct generator_t {
 			return;
 
 		// test that tree is within limits
-		assert(buildTree.count >= TINYTREE_NSTART && buildTree.count <= TINYTREE_NEND);
+		assert(buildTree.count >= GENERATOR_NSTART && buildTree.count <= GENERATOR_NEND);
 
 		// test if tree is within progress range
 		// NOTE: first tree has `progress==0`
@@ -794,14 +810,14 @@ struct generator_t {
 		unsigned nameLen = 0;
 
 		// counters
-		unsigned nextNode = TINYTREE_NSTART;
-		unsigned nextPlaceholder = TINYTREE_KSTART;
+		unsigned nextNode = GENERATOR_NSTART;
+		unsigned nextPlaceholder = GENERATOR_KSTART;
 		unsigned numEndpoint = 0;
 		unsigned numBackRef = 0;
 
 		// nodes already processed
 		uint32_t beenThere = (1 << 0); // don't let zero count as endpoint
-		uint32_t beenWhat[TINYTREE_NEND];
+		uint32_t beenWhat[GENERATOR_NEND];
 		beenWhat[0] = 0;
 
 		// push start on stack
@@ -813,7 +829,7 @@ struct generator_t {
 			// pop stack
 			unsigned curr = stack[--stackPos];
 
-			if (curr < TINYTREE_NSTART) {
+			if (curr < GENERATOR_NSTART) {
 				/*
 				 * Endpoint
 				 */
@@ -823,7 +839,7 @@ struct generator_t {
 					beenThere |= (1 << curr);
 					beenWhat[curr] = nextPlaceholder++;
 				}
-				name[nameLen++] = (char) ('a' + beenWhat[curr] - TINYTREE_KSTART);
+				name[nameLen++] = (char) ('a' + beenWhat[curr] - GENERATOR_KSTART);
 				numEndpoint++;
 
 			} else {
@@ -854,11 +870,11 @@ struct generator_t {
 					stack[stackPos++] = curr;
 
 					// push non-zero endpoints
-					if (F >= TINYTREE_KSTART)
+					if (F >= GENERATOR_KSTART)
 						stack[stackPos++] = F;
-					if (Tu != F && Tu >= TINYTREE_KSTART)
+					if (Tu != F && Tu >= GENERATOR_KSTART)
 						stack[stackPos++] = Tu;
-					if (Q >= TINYTREE_KSTART)
+					if (Q >= GENERATOR_KSTART)
 						stack[stackPos++] = Q;
 
 					// done, flag first-time done
@@ -943,7 +959,7 @@ struct generator_t {
 		/*
 		 * invoke the callback
 		 */
-		(*cbObject.*cbMember)(foundTree, name, nextPlaceholder - TINYTREE_KSTART, numEndpoint, numBackRef);
+		(*cbObject.*cbMember)(foundTree, name, nextPlaceholder - GENERATOR_KSTART, numEndpoint, numBackRef);
 
 	}
 
@@ -987,7 +1003,7 @@ struct generator_t {
 	void /*__attribute__((optimize("O0")))*/ generateTrees(unsigned nodesLeft, unsigned endpointsLeft, unsigned numPlaceholder, unsigned stack, callable_t *cbObject, generateTreeCallback_t cbMember) {
 
 		assert(numPlaceholder <= MAXSLOTS);
-		assert(endpointsLeft <= TINYTREE_MAXNODES * 2 + 1);
+		assert(endpointsLeft <= GENERATOR_MAXNODES * 2 + 1);
 
 		/*
 		 * Test progress end-condition
@@ -1058,7 +1074,7 @@ struct generator_t {
 
 				if (nodesLeft > 1) {
 					this->generateTrees(nodesLeft - 1, endpointsLeft - newEndpoint, newPlaceholder, newStack, cbObject, cbMember);
-				} else if (endpointsLeft == newEndpoint && newStack == (1U << (R - TINYTREE_NSTART))) {
+				} else if (endpointsLeft == newEndpoint && newStack == (1U << (R - GENERATOR_NSTART))) {
 					// all endpoints populated and stack only current pushed node
 					this->callFoundTree(cbObject, cbMember);
 					// bump counter after processing
