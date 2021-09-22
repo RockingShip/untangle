@@ -266,15 +266,12 @@ struct tinyTree_t {
 	 */
 	int compare(uint32_t lhs, const tinyTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
 
-#if 0
-// todo: need to prepare generator first		
 		/*
 		 * @date 2021-09-16 17:41:17
 		 * Ignore cascading if disabled
 		 */
 		if (!(ctx.flags & context_t::MAGICMASK_CASCADE))
 			topLevelCascade = CASCADE_NONE;
-#endif
 			
 		uint32_t stackL[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
 		uint32_t stackR[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -1901,8 +1898,7 @@ struct tinyTree_t {
 			T = addBasicNode(Q, T ^ IBIT, F) ^ IBIT;
 		}
 
-		// todo: need to prepare generator first
-		if (true || ctx.flags & context_t::MAGICMASK_CASCADE) {
+		if (ctx.flags & context_t::MAGICMASK_CASCADE) {
 			// Extended cascading/ordering
 			this->cascadeQTF(&Q, &T, &F);
 		} else if (this->isOR(Q, T, F)) {

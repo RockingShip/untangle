@@ -411,6 +411,17 @@ struct gensignatureContext_t : dbtool_t {
 			return true;
 
 		/*
+		 * @date 2021-09-22 15:22:35
+		 * Generator also creates patterns used by detectors.
+		 * Is structure what is says it is?
+		 */
+		treeR.loadStringSafe(pNameR);
+		if (strcmp(treeR.saveString(treeR.root), pNameR) != 0) {
+			// can also indicate folding because of `--pure` or `--cascade`
+			return true;
+		}
+		
+		/*
 		 * Lookup/add data store.
 		 * Consider signature groups `unsafe` (no members yet)
 		 */
@@ -903,12 +914,12 @@ struct gensignatureContext_t : dbtool_t {
 		generator.windowLo = this->opt_windowLo;
 		generator.windowHi = this->opt_windowHi;
 
-		// setup restart data
-		{
+		// setup restart data, only for 5n9+
+		if (arg_numNodes > 4) {
 			// walk through list
-			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, arg_numNodes, (ctx.flags & context_t::MAGICMASK_PURE), (ctx.flags & context_t::MAGICMASK_CASCADE));
+			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 			// point to first entry if section present
-			if (pRestart->sectionOffset)
+			if (pRestart && pRestart->sectionOffset)
 				generator.pRestartData = restartData + pRestart->sectionOffset;
 		}
 
@@ -916,7 +927,7 @@ struct gensignatureContext_t : dbtool_t {
 		if (generator.windowHi) {
 			ctx.setupSpeed(generator.windowHi);
 		} else {
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, arg_numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		}
 		ctx.tick = 0;

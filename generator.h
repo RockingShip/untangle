@@ -706,24 +706,20 @@ struct generator_t {
 		 * With the renewed cascade,only left-hand-side may cascade
 		 */
 		if (pIsType[qtf] & (PACKED_OR|PACKED_NE|PACKED_AND)) {
-			// reject unordered or right-hand-side cascades
-			if (pIsType[qtf] & PACKED_OR) {
-				if (buildTree.isOR(pNode->F))
-					return 0;
-				if (buildTree.isOR(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->F, tinyTree_t::CASCADE_OR) >= 0)
-					return 0;
-			}
-			if (pIsType[qtf] & PACKED_NE) {
-				if (buildTree.isNE(pNode->F))
-					return 0;
-				if (buildTree.isNE(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->F, tinyTree_t::CASCADE_NE) >= 0)
-					return 0;
-			}
-			if (pIsType[qtf] & PACKED_AND) {
-				if (buildTree.isAND(pNode->T))
-					return 0;
-				if (buildTree.isNE(pNode->Q) && buildTree.compare(pNode->Q, &buildTree, pNode->T, tinyTree_t::CASCADE_AND) >= 0)
-					return 0;
+			if (ctx.flags & context_t::MAGICMASK_CASCADE) {
+				// reject unordered or right-hand-side cascades
+				if (pIsType[qtf] & PACKED_OR) {
+					if (buildTree.isOR(pNode->F))
+						return 0;
+				}
+				if (pIsType[qtf] & PACKED_NE) {
+					if (buildTree.isNE(pNode->F))
+						return 0;
+				}
+				if (pIsType[qtf] & PACKED_AND) {
+					if (buildTree.isAND(pNode->T))
+						return 0;
+				}
 			}
 		}
 

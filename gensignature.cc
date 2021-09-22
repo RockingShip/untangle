@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-03-14 11:09:15
@@ -302,6 +302,7 @@ int main(int argc, char *argv[]) {
 		enum {
 			// long-only opts
 			LO_AINF    = 0,
+			LO_CASCADE,
 			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
@@ -317,6 +318,7 @@ int main(int argc, char *argv[]) {
 			LO_MAXSIGNATURE,
 			LO_MIXED,
 			LO_NOAINF,
+			LO_NOCASCADE,
 			LO_NOGENERATE,
 			LO_NOPARANOID,
 			LO_NOPURE,
@@ -342,6 +344,7 @@ int main(int argc, char *argv[]) {
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
 			{"ainf",               0, 0, LO_AINF},
+			{"cascade",            0, 0, LO_CASCADE},
 			{"debug",              1, 0, LO_DEBUG},
 			{"force",              0, 0, LO_FORCE},
 			{"generate",           0, 0, LO_GENERATE},
@@ -358,6 +361,7 @@ int main(int argc, char *argv[]) {
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
 			{"mixed",              2, 0, LO_MIXED},
 			{"no-ainf",            0, 0, LO_NOAINF},
+			{"no-cascade",         0, 0, LO_NOCASCADE},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
@@ -403,6 +407,9 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
+		case LO_CASCADE:
+			ctx.flags |= context_t::MAGICMASK_CASCADE;
+			break;
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 			break;
@@ -455,6 +462,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_NOAINF:
 			ctx.flags &= ~context_t::MAGICMASK_AINF;
+			break;
+		case LO_NOCASCADE:
+			ctx.flags &= ~context_t::MAGICMASK_CASCADE;
 			break;
 		case LO_NOGENERATE:
 			app.opt_generate = 0;
@@ -602,7 +612,7 @@ int main(int argc, char *argv[]) {
 	 * `--task` post-processing
 	 */
 	if (app.opt_taskId || app.opt_taskLast) {
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 		if (!pMetrics)
 			ctx.fatal("no preset for --task\n");
 
@@ -624,7 +634,7 @@ int main(int argc, char *argv[]) {
 
 	if (app.opt_windowLo || app.opt_windowHi) {
 		// is restart data present?
-		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, app.arg_numNodes, (ctx.flags & context_t::MAGICMASK_PURE), (ctx.flags & context_t::MAGICMASK_CASCADE));
+		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, app.arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 		if (pRestart == NULL) {
 			fprintf(stderr, "No restart data for --window\n");
 			exit(1);

@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2020-04-21 23:30:30
@@ -383,8 +383,6 @@ struct selftestContext_t : dbtool_t {
 			ctx.tick = 0;
 		}
 
-		assert(ctx.progress < 2000000);
-
 		// assert entry is present
 		if (selftestWindowResults[ctx.progress] == NULL) {
 			printf("{\"error\":\"missing\",\"where\":\"%s:%s:%d\",\"expected\":\"%s\",\"progress\":%lu}\n",
@@ -420,13 +418,17 @@ struct selftestContext_t : dbtool_t {
 		// allocate resources
 		selftestWindowResults = (char **) ctx.myAlloc("genrestartdataContext_t::selftestResults", 2000000, sizeof(*selftestWindowResults));
 
-		// set generator into `3n9-pure` mode
+		// set generator into `3n9` mode
 		ctx.flags &= ~context_t::MAGICMASK_PURE;
-		unsigned numNode = 3;
+		ctx.flags &= ~context_t::MAGICMASK_CASCADE;
+		const unsigned numNode = 3;
 
 		// find metrics for setting
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, numNode);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE);
 		assert(pMetrics);
+
+		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE);
+		assert(pRestart);
 
 		unsigned endpointsLeft = pMetrics->numNode * 2 + 1;
 
@@ -441,9 +443,6 @@ struct selftestContext_t : dbtool_t {
 			// apply settings
 			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 			
-			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE, ctx.flags & context_t::MAGICMASK_CASCADE);
-			assert(pRestart);
-			
 			generator.windowLo     = windowLo;
 			generator.windowHi     = windowLo + 1;
 			generator.pRestartData = restartData + pRestart->sectionOffset;
@@ -453,7 +452,6 @@ struct selftestContext_t : dbtool_t {
 
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowCreate));
-			generator.pRestartData = NULL;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -467,9 +465,6 @@ struct selftestContext_t : dbtool_t {
 			// apply settings
 			ctx.flags              = pMetrics->pure ? ctx.flags | context_t::MAGICMASK_PURE : ctx.flags & ~context_t::MAGICMASK_PURE;
 
-			const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, numNode, ctx.flags & context_t::MAGICMASK_PURE, ctx.flags & context_t::MAGICMASK_CASCADE);
-			assert(pRestart);
-
 			generator.windowLo     = 0;
 			generator.windowHi     = 0;
 			generator.pRestartData = restartData + pRestart->sectionOffset;
@@ -479,7 +474,6 @@ struct selftestContext_t : dbtool_t {
 
 			generator.clearGenerator();
 			generator.generateTrees(pMetrics->numNode, endpointsLeft, 0, 0, this, static_cast<generator_t::generateTreeCallback_t>(&selftestContext_t::foundTreeWindowVerify));
-			generator.pRestartData = NULL;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
@@ -491,6 +485,7 @@ struct selftestContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] %s() passed\n", ctx.timeAsString(), __FUNCTION__);
 
+		generator.pRestartData = NULL;
 		ctx.flags = savFlags;
 	}
 
@@ -1522,7 +1517,7 @@ struct selftestContext_t : dbtool_t {
 			pStore->imprintIndexSize = ctx.nextPrime(pRound->numImprint * (METRICS_DEFAULT_RATIO / 10.0));
 
 			// find metrics for setting
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->pure, pRound->numNode);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, pRound->numNode, pRound->pure);
 			assert(pMetrics);
 			const metricsInterleave_t *pInterleave = getMetricsInterleave(MAXSLOTS, pRound->interleave);
 			assert(pInterleave);

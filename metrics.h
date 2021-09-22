@@ -354,7 +354,8 @@ const metricsImprint_t *getMetricsImprint(unsigned numSlot, unsigned pure, unsig
  *
  * Metrics describing generator loop overhead
  *
- * Primarily used for generator restart/windowing
+ * Primarily used for generator restart/windowing. 
+ * Provided by `genrestartdata` and stored in `restartdata.h`.
  */
 
 struct metricsRestart_t {
@@ -368,8 +369,6 @@ struct metricsRestart_t {
 	unsigned numNode;
 	/// @var {number} - `pure` mode
 	unsigned pure;
-	/// @var {number} - `cascade` mode
-	unsigned cascade;
 
 	/// @var {number} - starting offset in `restartdata[]`
 	uint32_t sectionOffset;
@@ -390,12 +389,10 @@ extern const metricsRestart_t __attribute__ ((weak)) restartIndex[];
  * @param {number} cascade - `--cascade`
  * @return {metricsProgress_t} Reference to match or NULL if not found
  */
-const metricsRestart_t *getMetricsRestart(unsigned numSlot, unsigned numNode, unsigned pure, unsigned cascade) {
+const metricsRestart_t *getMetricsRestart(unsigned numSlot, unsigned numNode, unsigned pure) {
 	// ensure boolean values
 	if (pure)
 		pure = 1;
-	if (cascade)
-		cascade = 1;
 
 	// test if data available
 	if (restartIndex == NULL)
@@ -404,7 +401,7 @@ const metricsRestart_t *getMetricsRestart(unsigned numSlot, unsigned numNode, un
 	// walk through list
 	for (const metricsRestart_t *pMetrics = restartIndex; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlot == numSlot && pMetrics->numNode == numNode && pMetrics->pure == pure && pMetrics->cascade == cascade)
+		if (pMetrics->numSlot == numSlot && pMetrics->numNode == numNode && pMetrics->pure == pure)
 			return pMetrics; // found
 	}
 	// not found
@@ -426,10 +423,10 @@ struct metricsGenerator_t {
 
 	/// @var {number} - Valid when match MAXSLOTS
 	unsigned numSlot;
-	/// @var {number} - `pure` mode
-	unsigned pure;
 	/// @var {number} - Valid when match `numNode` (higher values implies more signatures)
 	unsigned numNode;
+	/// @var {number} - `pure` mode
+	unsigned pure;
 
 	/*
 	 * non-Key
@@ -478,23 +475,21 @@ struct metricsGenerator_t {
  *   NOTE: pure-v2 are signatures with pure components and mixed-toplevel
  */
 static const metricsGenerator_t metricsGenerator[] = {
-	{9, 1, 0, 0,             3,         3,        171, 225, 0,       3,        0, 0, 0},
+	{9, 0, 1, 0,             3,         3,        171, 225, 0,       3,        0, 0, 0},
 	{9, 0, 0, 0,             3,         3,        171, 225, 5,       3,        0, 0, 0},
 	{9, 1, 1, 4,             5,         7,        2,   6,   5,       7,        0, 0, 0},
-	{9, 0, 1, 6,             7,         9,        2,   6,   5,       9,        0, 0, 0},
-	{9, 1, 2, 172,           155,       49,       7,   14,  11,      108,      0, 0, 0},
-	{9, 0, 2, 470,           425,       110,      7,   14,  44,      284,      0, 0, 0},
-	{9, 1, 3, 18302,         15221,     1311,     35,  47,  171,     6937,     0, 0, 0},
-	{9, 0, 3, 94668,         79835,     5666,     35,  47,  3327,    32246,    0, 0, 0},
-	{9, 1, 4, 3633110,       2777493,   193171,   191, 225, 12647,   833486,   0, 0, 0},
-	{9, 0, 4, 36021312,      28304991,  791647,   191, 225, 555494,  6570607,  0, 0, 0},
-	// for 5n9-pure: numCandidate takes about 15 minutes. numSignature takes about 8 hours.
-	{9, 1, 5, 1151247557,    809357847, 10233318, 0,   0,   1483834, 31827424, 0, 0, 2}, // NOTE: this is the extension to 4n9
-	{9, 1, 5, 869974747,     809357847, 15490349, 0,   0,   0,       0,        0, 0, 2}, // NOTE: this is full 5n9-pure (placed second and hidden)
-	// below only intended for members
-	{9, 0, 5, 22050961113,   0,         0,        0,   0,   900252,  7506360,  0, 0, 2}, // NOTE: this is the extension to 4n9
-	{9, 1, 6, 386458230448,  0,         0,        0,   0,   1483845, 31827834, 0, 0, 2}, // numProgress takes about 60 minutes
-	{9, 0, 6, 1556055783374, 0,         0,        0,   0,   0,       0,        0, 0, 3}, // from historic metrics
+	{9, 1, 0, 6,             7,         9,        2,   6,   5,       9,        0, 0, 0},
+	{9, 2, 1, 180,           155,       49,       7,   14,  11,      108,      0, 0, 0},
+	{9, 2, 0, 484,           425,       110,      7,   14,  44,      284,      0, 0, 0},
+	{9, 3, 1, 19350,         15221,     1311,     35,  47,  171,     6937,     0, 0, 0},
+	{9, 3, 0, 97696,         79835,     5666,     35,  47,  3327,    32246,    0, 0, 0},
+	{9, 4, 1, 3849342,       2777493,   193171,   191, 225, 12647,   833486,   0, 0, 0},
+	{9, 4, 0, 37144912,      28304991,  791647,   191, 225, 555494,  6570607,  0, 0, 0},
+	{9, 5, 1, 1220219415,    809357847, 10233318, 0,   0,   1483834, 31827424, 0, 0, 2}, // NOTE: this is the extension to 4n9
+	// below intended for members
+	{9, 5, 0, 22715579984,   0,         0,        0,   0,   900252,  7506360,  0, 0, 2}, // NOTE: this is the extension to 4n9
+	{9, 6, 1, 561428696882,  0,         0,        0,   0,   1483845, 31827834, 0, 0, 2}, // numProgress takes about 60 minutes
+	{9, 6, 0, 1556055783374, 0,         0,        0,   0,   0,       0,        0, 0, 3}, // from historic metrics
 	//
 	{0}
 };
@@ -509,7 +504,7 @@ static const metricsGenerator_t metricsGenerator[] = {
  * @param {number} numNode - signature size in number of nodes
  * @return {metricsImprint_t} Reference to match or NULL if not found
  */
-const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned pure, unsigned numNode) {
+const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned numNode, unsigned pure) {
 	// pure is 0/1
 	if (pure)
 		pure = 1;
@@ -517,7 +512,7 @@ const metricsGenerator_t *getMetricsGenerator(unsigned numSlot, unsigned pure, u
 	// walk through list
 	for (const metricsGenerator_t *pMetrics = metricsGenerator; pMetrics->numSlot; pMetrics++) {
 		// test if found
-		if (pMetrics->numSlot == numSlot && pMetrics->pure == pure && pMetrics->numNode == numNode)
+		if (pMetrics->numSlot == numSlot && pMetrics->numNode == numNode && pMetrics->pure == pure)
 			return pMetrics; // found
 	}
 	// not found

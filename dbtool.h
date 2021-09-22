@@ -191,7 +191,7 @@ struct dbtool_t : callable_t {
 			store.maxSignature = db.numSignature;
 		} else if (autoSize) {
 			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 			if (!pMetrics || !pMetrics->numSignature)
 				ctx.fatal("no preset for --maxsignature\n");
 
@@ -258,7 +258,7 @@ struct dbtool_t : callable_t {
 			store.maxSwap = db.numSwap;
 		} else if (autoSize) {
 			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 			if (!pMetrics || !pMetrics->numSwap)
 				ctx.fatal("no preset for --maxswap\n");
 
@@ -325,7 +325,7 @@ struct dbtool_t : callable_t {
 			store.maxHint = db.numHint;
 		} else if (autoSize) {
 			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 			if (!pMetrics || !pMetrics->numHint)
 				ctx.fatal("no preset for --maxhint\n");
 
@@ -503,7 +503,7 @@ struct dbtool_t : callable_t {
 			store.maxPair = db.numPair;
 		} else if (autoSize) {
 			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 			if (!pMetrics || !pMetrics->numPair)
 				ctx.fatal("no preset for --maxpair\n");
 
@@ -570,7 +570,7 @@ struct dbtool_t : callable_t {
 			store.maxMember = db.numMember;
 		} else if (autoSize) {
 			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, numNodes);
+			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 			if (!pMetrics || !pMetrics->numMember)
 				ctx.fatal("no preset for --maxmember\n");
 

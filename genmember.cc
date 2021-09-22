@@ -632,7 +632,7 @@ int main(int argc, char *argv[]) {
 	 * `--task` post-processing
 	 */
 	if (app.opt_taskId || app.opt_taskLast) {
-		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, ctx.flags & context_t::MAGICMASK_PURE, app.arg_numNodes);
+		const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, app.arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 		if (!pMetrics)
 			ctx.fatal("no preset for --task\n");
 
@@ -654,7 +654,7 @@ int main(int argc, char *argv[]) {
 
 	if (app.opt_windowLo || app.opt_windowHi) {
 		// is restart data present?
-		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, app.arg_numNodes, (ctx.flags & context_t::MAGICMASK_PURE), (ctx.flags & context_t::MAGICMASK_CASCADE));
+		const metricsRestart_t *pRestart = getMetricsRestart(MAXSLOTS, app.arg_numNodes, ctx.flags & context_t::MAGICMASK_PURE);
 		if (pRestart == NULL) {
 			fprintf(stderr, "No restart data for --window\n");
 			exit(1);
