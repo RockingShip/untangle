@@ -1276,27 +1276,17 @@ struct genmemberContext_t : dbtool_t {
 		if (!(pMemberL->flags & member_t::MEMMASK_DEPR) && (pMemberR->flags & member_t::MEMMASK_DEPR))
 			return -1;
 
-		/*
-		 * compare scores
-		 */
-
-		unsigned scoreL = tinyTree_t::calcScoreName(pMemberL->name);
-		unsigned scoreR = tinyTree_t::calcScoreName(pMemberR->name);
-
-		cmp = (int)scoreL - (int)scoreR;
-		if (cmp)
-			return cmp;
-
-		/*
-		 * Compare trees
-		 */
-
 		// load trees
 		tinyTree_t treeL(*pApp);
 		tinyTree_t treeR(*pApp);
 
 		treeL.loadStringFast(pMemberL->name);
 		treeR.loadStringFast(pMemberR->name);
+
+		// order by size first because (smaller) components must be located first 
+		cmp = (int)treeL.count - (int)treeR.count;
+		if (cmp)
+			return cmp;
 
 		cmp = treeL.compare(treeL.root, &treeR, treeR.root);
 		return cmp;
