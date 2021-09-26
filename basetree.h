@@ -1021,8 +1021,6 @@ struct baseTree_t {
 			}
 		}
 
-		ctx.cntHash++;
-
 		// lookup
 		uint32_t ix = lookupNode(Q, T, F);
 		if (this->nodeIndex[ix] == 0) {
@@ -1160,8 +1158,6 @@ struct baseTree_t {
 	 * @return {number} newly created nodeId
 	 */
 	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId, unsigned *pFailCount, unsigned depth) {
-		ctx.cntHash++;
-
 		if (pFailCount == NULL) {
 			assert(!(Q & IBIT));                   // Q not inverted
 			assert((T & IBIT) || !(ctx.flags & context_t::MAGICMASK_PURE));

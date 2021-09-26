@@ -465,6 +465,14 @@ struct context_t {
 			::strcat(pBuffer, "AINF");
 			flags &= ~MAGICMASK_AINF;
 		}
+		if (flags & MAGICMASK_CASCADE) {
+			::strcat(pBuffer, "CASCADE");
+			flags &= ~MAGICMASK_CASCADE;
+		}
+		if (flags & MAGICMASK_REWRITE) {
+			::strcat(pBuffer, "REWRITE");
+			flags &= ~MAGICMASK_REWRITE;
+		}
 
 		return pBuffer;
 	}

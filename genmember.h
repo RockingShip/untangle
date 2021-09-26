@@ -1863,7 +1863,7 @@ struct genmemberContext_t : dbtool_t {
 		assert(pStore->numMember >= 1);
 		qsort_r(pStore->members + 1, pStore->numMember - 1, sizeof(*pStore->members), comparMember, this);
 
-		// lower lastMember, skipping all the deleted
+		// lower lastMember, skipping all the deleted/depreciated
 		while (pStore->numMember > 1 && pStore->members[pStore->numMember - 1].sid == 0)
 			--pStore->numMember;
 
@@ -1913,6 +1913,21 @@ struct genmemberContext_t : dbtool_t {
 
 			// safe member must remain safe
 			assert(!wasSafe || isSafe);
+			/*
+			 * @date 2021-09-23 01:37:27
+			 * Probable cause:
+			 * members are re-evaluated (`findHeadTail()`) and linked to their signature.
+			 * single-member signatures that triggered a normalise are removed
+			 * Removing the only safe member of a signature means that the last applied modification filters too much.
+			 * solve by chosing a different representative.
+			 * this can happen with `gendepreciate` re-applying `findHeadTail()`
+			 * `gendepreciate` --cascade needed if the source is --cascade
+			 * ## is not allowed to be   
+			 * ab+cd++ rejected (right-hand-side) rule1
+			 * a+ab++ folded to "ab+". This creates orphan nodes,
+			 * tinyTree has an integrated evaluator with 9! parallel transforms (skins).
+			 * Every additional node doubles the storage. (Database_t::numEvaluator)
+			 */
 
 			/*
 			 * member should be unsafe

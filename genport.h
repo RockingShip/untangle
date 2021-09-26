@@ -752,8 +752,15 @@ struct genportContext_t : dbtool_t {
 			bool ok = appMember.findHeadTail(pMember, tree);
 			if (!ok && (pMember->flags & member_t::MEMMASK_SAFE))
 				ctx.fatal("\n{\"error\":\"failed to reconstruct member\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
-			if (pMember->flags != savFlags)
+			if (pMember->flags != savFlags) {
 				ctx.fatal("\n{\"error\":\"flags changed after member reconstruction\",\"where\":\"%s:%s:%d\",\"name\":\"%s\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, pName, pMember->flags, savFlags);
+				/*
+				 * @date 2021-09-23 19:04:37
+				 * Possible cause: `findHeadTail()` fails to match signatures because flags change tree creating behaviour.
+				 * This might happen when mixing `--cascade` with `gensignature` and `genmember`.
+				 * Workaround: try manually adding/removing `"cascade"` to/from `flags` in json. 
+				 */
+			}
 
 			ctx.progress++;
 		}
