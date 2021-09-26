@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-09-26 10:33:11 Version 2.10.1
 2021-09-26 10:25:29 Changed: Lost+Found.
 2021-09-26 10:21:57 Fixed: Changed: Sort members on tree size plus name.
 2021-09-26 10:19:50 Added: `genmember --cascade`.
