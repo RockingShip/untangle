@@ -230,6 +230,7 @@ int main(int argc, char *argv[]) {
 		enum {
 			// long-only opts
 			LO_BURST = 1,
+			LO_CASCADE,
 			LO_DEBUG,
 			LO_FORCE,
 			LO_GENERATE,
@@ -265,6 +266,7 @@ int main(int argc, char *argv[]) {
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
 			{"burst",              1, 0, LO_BURST},
+			{"cascade",            0, 0, LO_CASCADE},
 			{"debug",              1, 0, LO_DEBUG},
 			{"force",              0, 0, LO_FORCE},
 			{"generate",           0, 0, LO_GENERATE},
@@ -323,6 +325,9 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case LO_BURST:
 			app.opt_burst = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_CASCADE:
+			ctx.flags |= context_t::MAGICMASK_CASCADE;
 			break;
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);

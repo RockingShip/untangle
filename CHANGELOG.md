@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-09-26 10:01:28 Added: `gendepreciate --cascade`.
 2021-09-22 14:33:42 Fixed: Get metrics working.
 2021-09-20 21:35:35 Added: `generator_t::GENERATOR_MAXNODES`.
 2021-09-20 20:03:25 Added: `getMetricsRestart()`.
