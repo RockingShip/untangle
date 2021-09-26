@@ -848,6 +848,7 @@ int main(int argc, char *argv[]) {
 		 * Existing signatures may not change.
 		 * That is, signatures are grouped by tree size, so is this run adds signatures with the same size as existing then...
 		 * This happens when extending 4n9 with toplevel mixed.
+		 * only sids change, tids remain unchanged
 		 */
 		bool changed = false;
 		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
@@ -865,18 +866,17 @@ int main(int argc, char *argv[]) {
 			 * Allocate and find initial mapping
 			 */
 			uint32_t *pNewSid = (uint32_t *) ctx.myAlloc("pNewSid", store.maxSignature, sizeof(*pNewSid));
-			uint32_t *pNewTid = (uint32_t *) ctx.myAlloc("pNewTid", store.maxSignature, sizeof(*pNewTid));
 
 			for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
 				uint32_t ix = store.lookupSignature(db.signatures[iSid].name);
 				pNewSid[iSid] = store.signatureIndex[ix];
-				pNewTid[iSid] = 0;
 
 				if (pNewSid[iSid] == 0) {
 					// this run changed an old signature name, perform imprint lookup
 					tinyTree_t tree(ctx);
 					tree.loadStringFast(db.signatures[iSid].name);
-					store.lookupImprintAssociative(&tree, store.fwdEvaluator, store.revEvaluator, &pNewSid[iSid], &pNewTid[iSid]);
+					unsigned tid;
+					store.lookupImprintAssociative(&tree, store.fwdEvaluator, store.revEvaluator, &pNewSid[iSid], &tid);
 				}
 				// this run changed
 				assert(pNewSid[iSid] != 0);
@@ -890,7 +890,6 @@ int main(int argc, char *argv[]) {
 
 				assert(pMember->sid < db.numSignature);
 
-				pMember->tid = pNewTid[pMember->sid]; // tid first because of array index
 				pMember->sid = pNewSid[pMember->sid];
 			}
 
