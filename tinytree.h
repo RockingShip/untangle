@@ -489,40 +489,32 @@ struct tinyTree_t {
 			/*
 			 * Push Q/T/F components for deeper processing
 			 * Test if result is cached
+			 * 
+			 * @date 2021-09-24 13:49:08
+			 * Caching will break for "abc!bd^2^a!" and "abc!b1^c1d!!";
+			 * caching will swallow the RHS "1",
+			 * so when L points to "d", R does not point to "1" but 0 (belonging to CASCADE_SYNC)
 			 */
 			if (pNodeL->F != 0 && (pNodeL->T & ~IBIT) != pNodeL->F) {
-				L = pNodeL->F;
-				R = pNodeR->F;
-				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
-					stackL[numStackL++] = thisCascade;
-					stackL[numStackL++] = L;
-					stackR[numStackR++] = thisCascade;
-					stackR[numStackR++] = R;
-				}
+				stackL[numStackL++] = thisCascade;
+				stackL[numStackL++] = pNodeL->F;
+				stackR[numStackR++] = thisCascade;
+				stackR[numStackR++] = pNodeR->F;
 			}
 
 			if ((pNodeL->T & ~IBIT) != 0) {
-				L = pNodeL->T & ~IBIT;
-				R = pNodeR->T & ~IBIT;
-				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
-					stackL[numStackL++] = thisCascade;
-					stackL[numStackL++] = L;
-					stackR[numStackR++] = thisCascade;
-					stackR[numStackR++] = R;
-				}
+				stackL[numStackL++] = thisCascade;
+				stackL[numStackL++] = pNodeL->T & ~IBIT;
+				stackR[numStackR++] = thisCascade;
+				stackR[numStackR++] = pNodeR->T & ~IBIT;
 			}
 
 			{
-				L = pNodeL->Q;
-				R = pNodeR->Q;
-				if (!(beenThereL & (1 << L)) || !(beenThereR & (1 << R)) || beenWhatL[L] != R || beenWhatR[R] != L) {
-					stackL[numStackL++] = thisCascade;
-					stackL[numStackL++] = L;
-					stackR[numStackR++] = thisCascade;
-					stackR[numStackR++] = R;
-				}
+				stackL[numStackL++] = thisCascade;
+				stackL[numStackL++] = pNodeL->Q;
+				stackR[numStackR++] = thisCascade;
+				stackR[numStackR++] = pNodeR->Q;
 			}
-
 		} while (numStackL > 0 && numStackR > 0);
 
 		/*

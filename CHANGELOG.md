@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-09-26 10:04:31 Fixed: `tinyTree_t::compare()` caching breaks cascade end condition.
 2021-09-26 10:02:24 Fixed: Removed generator cascade optimisation.
 2021-09-26 10:01:28 Added: `gendepreciate --cascade`.
 2021-09-22 14:33:42 Fixed: Get metrics working.
