@@ -423,7 +423,7 @@ int main(int argc, char *argv[]) {
 			app.opt_altgen++; // EXPERIMENTAL!
 			break;
 		case LO_CASCADE:
-			app.opt_cascade++;
+			ctx.flags |= context_t::MAGICMASK_CASCADE;
 			break;
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);

@@ -242,8 +242,6 @@ struct genmemberContext_t : dbtool_t {
 	const char *arg_outputDatabase;
 	/// @var {number} --altgen, Alternative generator for 7n9 space (EXPERIMENTAL!)
 	unsigned   opt_altgen;
-	/// @var {number} --cascade, Apply cascading dyadic normalisation
-	unsigned   opt_cascade;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -310,7 +308,6 @@ struct genmemberContext_t : dbtool_t {
 		arg_numNodes       = 0;
 		arg_outputDatabase = NULL;
 		opt_altgen         = 0;
-		opt_cascade        = 0;
 		opt_force          = 0;
 		opt_generate       = 1;
 		opt_taskId         = 0;
@@ -460,6 +457,10 @@ struct genmemberContext_t : dbtool_t {
 					tree2.loadStringSafe(name); // reload to normalise
 					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
+					
+					// rewrites are not allowed to make candidates grow
+					if ((ctx.flags & context_t::MAGICMASK_CASCADE) && (unsigned) (tinyTree_t::calcScoreName(name) >> 8) >= (unsigned) (treeR.count - tinyTree_t::TINYTREE_NSTART))
+						return false;
 				}
 
 				Qmid = pStore->memberIndex[ix];
@@ -489,6 +490,10 @@ struct genmemberContext_t : dbtool_t {
 					tree2.loadStringSafe(name); // reload to normalise
 					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
+
+					// rewrites are not allowed to make candidates grow
+					if ((ctx.flags & context_t::MAGICMASK_CASCADE) && (unsigned) (tinyTree_t::calcScoreName(name) >> 8) >= (unsigned) (treeR.count - tinyTree_t::TINYTREE_NSTART))
+						return false;
 				}
 
 				Tmid = pStore->memberIndex[ix];
@@ -518,6 +523,10 @@ struct genmemberContext_t : dbtool_t {
 					tree2.loadStringSafe(name); // reload to normalise
 					tree2.saveString(tree2.root, name, NULL); // save again
 					ix = pStore->lookupMember(name);
+
+					// rewrites are not allowed to make candidates grow
+					if ((ctx.flags & context_t::MAGICMASK_CASCADE) && (unsigned) (tinyTree_t::calcScoreName(name) >> 8) >= (unsigned) (treeR.count - tinyTree_t::TINYTREE_NSTART))
+						return false;
 				}
 
 
@@ -698,6 +707,10 @@ struct genmemberContext_t : dbtool_t {
 					tree2.saveString(tree2.root, name, NULL); // save again
 
 					ix = pStore->lookupMember(name);
+
+					// rewrites are not allowed to make candidates grow
+					if ((ctx.flags & context_t::MAGICMASK_CASCADE) && (unsigned) (tinyTree_t::calcScoreName(name) >> 8) >= (unsigned) (treeR.count - tinyTree_t::TINYTREE_NSTART))
+						return false;
 				}
 				unsigned midHead = pStore->memberIndex[ix];
 
