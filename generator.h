@@ -704,23 +704,11 @@ struct generator_t {
 		 *
 		 * @date 2021-08-29 16:58:09
 		 * With the renewed cascade,only left-hand-side may cascade
+		 * 
+		 * @date 2021-09-22 23:50:28
+		 * Generator needs to be generic, do not test cascading as this is unfit for optimisation
 		 */
 		if (pIsType[qtf] & (PACKED_OR|PACKED_NE|PACKED_AND)) {
-			if (ctx.flags & context_t::MAGICMASK_CASCADE) {
-				// reject unordered or right-hand-side cascades
-				if (pIsType[qtf] & PACKED_OR) {
-					if (buildTree.isOR(pNode->F))
-						return 0;
-				}
-				if (pIsType[qtf] & PACKED_NE) {
-					if (buildTree.isNE(pNode->F))
-						return 0;
-				}
-				if (pIsType[qtf] & PACKED_AND) {
-					if (buildTree.isAND(pNode->T))
-						return 0;
-				}
-			}
 		}
 
 		// fixate

@@ -105,7 +105,7 @@ struct tinyTree_t {
 		 * @date 2021-08-30 15:21:45
 		 * With ordered cascading nodes many get orphaned
 		 * Raising `TINYTREE_MAXNODES` effects the maximum name length,
-		 * However, the database has a dedicated and shorter length.
+		 * All nodes greater than GENERATOR_MAXNODES are needed for cascade expansions.
 		 */
 #if defined(TINYTREE_MAXNODES_VALUE)		
 		/*
@@ -115,7 +115,7 @@ struct tinyTree_t {
 		TINYTREE_MAXNODES = TINYTREE_MAXNODES_VALUE,
 #else
 		/// @constant {number} - Number of nodes. Twice MAXSLOTS because of `QnTF` expansion
-		TINYTREE_MAXNODES = 7,
+		TINYTREE_MAXNODES = 13,
 #endif
 
 		/// @constant {number} - Starting index in tree of first variable/endpoint
@@ -464,13 +464,15 @@ struct tinyTree_t {
 			 */
 			unsigned thisCascade = CASCADE_NONE;
 
-			if (pNodeL->T & IBIT) {
-				if (pNodeL->T == IBIT)
-					thisCascade = CASCADE_OR; // OR
-				else if ((pNodeL->T ^ IBIT) == pNodeL->F)
-					thisCascade = CASCADE_NE; // NE
-			} else if (pNodeL->F == 0) {
-				thisCascade = CASCADE_AND; // AND
+			if (ctx.flags & context_t::MAGICMASK_CASCADE) {
+				if (pNodeL->T & IBIT) {
+					if (pNodeL->T == IBIT)
+						thisCascade = CASCADE_OR; // OR
+					else if ((pNodeL->T ^ IBIT) == pNodeL->F)
+						thisCascade = CASCADE_NE; // NE
+				} else if (pNodeL->F == 0) {
+					thisCascade = CASCADE_AND; // AND
+				}
 			}
 
 			/*
@@ -1080,7 +1082,7 @@ struct tinyTree_t {
 						assert(0);
 						*Q = *T = *F = 0;
 						return true;
-					} else if (compare(B, this, D, CASCADE_OR) < 0) {
+					} else if (compare(B, this, D, CASCADE_NE) < 0) {
 						// C=A<B<D
 						*Q = B;
 						*T = D ^ IBIT;
@@ -1181,7 +1183,7 @@ struct tinyTree_t {
 							*Q = addBasicNode(*Q, *T, *F);
 							*T = B ^ IBIT;
 							*F = B;
-							return false; // remains OR
+							return false; // remains NE
 						}
 					} else {
 						// simple rewrite
@@ -1208,7 +1210,7 @@ struct tinyTree_t {
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = D ^ IBIT;
 						*F = D;
-						return false; // remains OR
+						return false; // remains NE
 						}
 						} else {
 					// A<C<D<B or C<A<D<B
@@ -1228,7 +1230,7 @@ struct tinyTree_t {
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
-						return false; // remains OR
+						return false; // remains NE
 						}
 					}
 
@@ -1302,8 +1304,8 @@ struct tinyTree_t {
 				uint32_t B  = this->N[BC].Q; // may cascade
 				uint32_t C  = this->N[BC].F; // does not cascade
 
-				assert (!this->isOR(A));
-				assert (!this->isOR(C));
+				assert (!this->isNE(A));
+				assert (!this->isNE(C));
 
 				if (A == B) {
 					// A=B<C
@@ -1318,7 +1320,7 @@ struct tinyTree_t {
 				/*
 				 * 3! permutations where B<C has 3 candidates
 				 */
-				if (compare(C, this, A, CASCADE_OR) < 0) {
+				if (compare(C, this, A, CASCADE_NE) < 0) {
 					// B<C<A
 					*Q = BC;
 					*T = A ^ IBIT;
