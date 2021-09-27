@@ -652,7 +652,7 @@ struct tinyTree_t {
 		 *  [16] a ?  b : 0                  "&" AND
 		 *  [19] a ?  b : c                  "?" QTF
 		 */
-		
+
 		if (*Q == 0) {
 			// "0?T:F" -> "F" (fold)
 			*Q = *T = *F;
@@ -805,13 +805,13 @@ struct tinyTree_t {
 							*T = IBIT;
 							*F = D;
 							return cascadeQTF(Q, T, F);
-					} else {
+						} else {
 							// append last placeholder
 							*Q = addBasicNode(*Q, *T, *F);
 							// already *T = IBIT;
 							*F = D;
 							return false; // remains OR
-					}
+						}
 					} else {
 						// simple rewrite
 						*Q = addBasicNode(AB, IBIT, C);
@@ -835,7 +835,7 @@ struct tinyTree_t {
 							*T = IBIT;
 							*F = B;
 							return cascadeQTF(Q, T, F);
-					} else {
+						} else {
 							// append last placeholder
 							*Q = addBasicNode(*Q, *T, *F);
 							// already *T = IBIT;
@@ -882,20 +882,20 @@ struct tinyTree_t {
 						*T = IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
-				} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
-						}
 					}
+				}
 
 			} else if (this->isOR(*Q)) {
 				// AB+C+
 				uint32_t AB = *Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // does not cascade
 				uint32_t C  = *F; // may cascade
 
 				assert(!this->isOR(B));
@@ -916,7 +916,7 @@ struct tinyTree_t {
 				 */
 				if (compare(B, this, C, CASCADE_OR) < 0) {
 					// A<B<C
-						// natural order
+					// natural order
 					// already *Q = AB;
 					// already *T = IBIT;
 					// already *F = C;
@@ -939,20 +939,20 @@ struct tinyTree_t {
 						// already *T = IBIT;
 						*F = B;
 						return false; // remains OR
-							}
+					}
 				} else if (compare(A, this, C, CASCADE_OR) < 0) {
 					// A<C<B
 					*Q = addBasicNode(A, IBIT, C);
 					// already *T = IBIT;
 					*F = B;
 					return false; // remains OR
-						} else {
+				} else {
 					// C<A<B
 					*Q = addBasicNode(C, IBIT, A);
 					// already *T = IBIT;
 					*F = B;
 					return false; // remains OR
-						}
+				}
 
 			} else if (this->isOR(*F)) {
 				// ABC++
@@ -972,7 +972,7 @@ struct tinyTree_t {
 					// B<C=A
 					*Q = *T = *F = BC;
 					return true;
-							}
+				}
 
 				/*
 				 * 3! permutations where B<C has 3 candidates
@@ -995,26 +995,26 @@ struct tinyTree_t {
 						*T = IBIT;
 						*F = C;
 						return cascadeQTF(Q, T, F);
-				} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						// already *T = IBIT;
 						*F = C;
 						return false; // remains OR
-						}
+					}
 				} else if (compare(A, this, B, CASCADE_OR) < 0) {
 					// A<B<C
 					*Q = addBasicNode(A, IBIT, B);
 					// already *T = IBIT;
 					*F = C;
 					return false; // remains OR
-					} else {
+				} else {
 					// B<A<C
 					*Q = addBasicNode(B, IBIT, A);
 					// already *T = IBIT;
 					*F = C;
 					return false; // remains OR
-						}
+				}
 
 			} else if (compare(*F, this, *Q, CASCADE_OR) < 0) {
 				// swap
@@ -1023,7 +1023,7 @@ struct tinyTree_t {
 				// already *T = IBIT;
 				*F = savQ;
 				return false; // remains OR
-						} else {
+			} else {
 				// no change
 				return false;
 			}
@@ -1140,13 +1140,13 @@ struct tinyTree_t {
 							*T = D ^ IBIT;
 							*F = D;
 							return cascadeQTF(Q, T, F);
-					} else {
+						} else {
 							// append last placeholder
 							*Q = addBasicNode(*Q, *T, *F);
 							*T = D ^ IBIT;
 							*F = D;
 							return false; // remains NE
-					}
+						}
 					} else {
 						// simple rewrite
 						*Q = addBasicNode(AB, C ^ IBIT, C);
@@ -1170,7 +1170,7 @@ struct tinyTree_t {
 							*T = B ^ IBIT;
 							*F = B;
 							return cascadeQTF(Q, T, F);
-					} else {
+						} else {
 							// append last placeholder
 							*Q = addBasicNode(*Q, *T, *F);
 							*T = B ^ IBIT;
@@ -1203,8 +1203,8 @@ struct tinyTree_t {
 						*T = D ^ IBIT;
 						*F = D;
 						return false; // remains NE
-						}
-						} else {
+					}
+				} else {
 					// A<C<D<B or C<A<D<B
 					// merge ACD, B last
 					*Q = A;
@@ -1217,20 +1217,20 @@ struct tinyTree_t {
 						*T = B ^ IBIT;
 						*F = B;
 						return cascadeQTF(Q, T, F);
-				} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = B ^ IBIT;
 						*F = B;
 						return false; // remains NE
-						}
 					}
+				}
 
 			} else if (this->isNE(*Q)) {
 				// AB^C^
 				uint32_t AB = *Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // does not cascade
 				uint32_t C  = *F; // may cascade
 
 				assert(!this->isNE(B));
@@ -1251,7 +1251,7 @@ struct tinyTree_t {
 				 */
 				if (compare(B, this, *F, CASCADE_NE) < 0) {
 					// A<B<C
-						// natural order
+					// natural order
 					// already *Q = AB;
 					// already *T = C ^ IBIT;
 					// already *F = C;
@@ -1281,13 +1281,13 @@ struct tinyTree_t {
 					*T = B ^ IBIT;
 					*F = B;
 					return false; // remains NE
-						} else {
+				} else {
 					// C<A<B
 					*Q = addBasicNode(C, A ^ IBIT, A);
 					*T = B ^ IBIT;
 					*F = B;
 					return false; // remains NE
-					}
+				}
 
 			} else if (this->isNE(*F)) {
 				// ABC^^
@@ -1307,7 +1307,7 @@ struct tinyTree_t {
 					// B<C=A
 					*Q = *T = *F = B;
 					return true;
-							}
+				}
 
 				/*
 				 * 3! permutations where B<C has 3 candidates
@@ -1330,20 +1330,20 @@ struct tinyTree_t {
 						*T = C ^ IBIT;
 						*F = C;
 						return cascadeQTF(Q, T, F);
-						} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = C ^ IBIT;
 						*F = C;
 						return false; // remains NE
-						}
+					}
 				} else if (compare(A, this, B, CASCADE_NE) < 0) {
 					// A<B<C
 					*Q = addBasicNode(A, B ^ IBIT, B);
 					*T = C ^ IBIT;
 					*F = C;
 					return false; // remains NE
-					} else {
+				} else {
 					// B<A<C
 					*Q = addBasicNode(B, A ^ IBIT, A);
 					*T = C ^ IBIT;
@@ -1358,7 +1358,7 @@ struct tinyTree_t {
 				*T = savQ ^ IBIT;
 				*F = savQ;
 				return false; // remains NE
-						} else {
+			} else {
 				// no change
 				return false;
 			}
@@ -1490,13 +1490,13 @@ struct tinyTree_t {
 							*T = D;
 							*F = 0;
 							return cascadeQTF(Q, T, F);
-					} else {
+						} else {
 							// append last placeholder
 							*Q = addBasicNode(*Q, *T, *F);
 							*T = D;
 							// already *F = 0;
 							return false; // remains AND
-					}
+						}
 					} else {
 						// simple rewrite
 						*Q = addBasicNode(AB, C, 0);
@@ -1567,20 +1567,20 @@ struct tinyTree_t {
 						*T = B;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
-							} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = B;
 						// already *F = 0;
 						return false; // remains AND
-						}
-						}
+					}
+				}
 
 			} else if (this->isAND(*Q)) {
 				// AB&C&
 				uint32_t AB = *Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].T; // does not cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].T; // does not cascade
 				uint32_t C  = *T; // does not cascade
 
 				assert(!this->isAND(B));
@@ -1601,7 +1601,7 @@ struct tinyTree_t {
 				 */
 				if (compare(B, this, C, CASCADE_AND) < 0) {
 					// A<B<C
-						// natural order
+					// natural order
 					// already *Q = AB;
 					// already *T = C;
 					// already *F = 0;
@@ -1632,7 +1632,7 @@ struct tinyTree_t {
 					// already *F = 0;
 					return false; // remains AND
 
-						} else {
+				} else {
 					// C<A<B
 					*Q = addBasicNode(C, A, 0);
 					*T = B;
@@ -1658,7 +1658,7 @@ struct tinyTree_t {
 					// B<C=A
 					*Q = *T = *F = BC;
 					return true;
-							}
+				}
 
 				/*
 				 * 3! permutations where B<C has 3 candidates
@@ -1681,7 +1681,7 @@ struct tinyTree_t {
 						*T = C;
 						*F = 0;
 						return cascadeQTF(Q, T, F);
-				} else {
+					} else {
 						// append last placeholder
 						*Q = addBasicNode(*Q, *T, *F);
 						*T = C;
@@ -1694,7 +1694,7 @@ struct tinyTree_t {
 					*T = C;
 					// already *F = 0;
 					return false; // remains AND
-					} else {
+				} else {
 					// B<A<C
 					*Q = addBasicNode(B, A, 0);
 					*T = C;
@@ -1709,11 +1709,11 @@ struct tinyTree_t {
 				*T = savQ;
 				// already *F = 0;
 				return false; // remains AND
-						} else {
+			} else {
 				// no change
 				return false;
-				}
 			}
+		}
 
 		return false;
 	}
