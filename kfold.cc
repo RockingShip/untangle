@@ -89,7 +89,9 @@ struct kfoldContext_t {
 	/// @var {string} name of database
 	const char *opt_databaseName;
 	/// @var {number} header flags
-	uint32_t opt_flags;
+	uint32_t opt_flagsSet;
+	/// @var {number} header flags
+	uint32_t opt_flagsClr;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
@@ -104,7 +106,8 @@ struct kfoldContext_t {
 
 	kfoldContext_t(context_t &ctx) : ctx(ctx), baseExplain(ctx) {
 		opt_databaseName = "untangle.db";
-		opt_flags   = 0;
+		opt_flagsSet     = 0;
+		opt_flagsClr     = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 		pStore = NULL;
@@ -181,9 +184,9 @@ struct kfoldContext_t {
 		/*
 		 * Create new tree
 		 */
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, opt_flags);
-		baseTree_t *pResults = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, opt_flags);
-		baseTree_t *pTemp    = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, opt_flags);
+		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		baseTree_t *pResults = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		baseTree_t *pTemp    = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
 
 		/*
 		 * Setup key/root names
@@ -662,7 +665,7 @@ struct kfoldContext_t {
 		 * Copy result to new tree without extended roots
 		 */
 		delete pTemp;
-		pTemp = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
+		pTemp = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
 		pTemp->keyNames  = pOldTree->keyNames;
 		pTemp->rootNames = pOldTree->rootNames;
 		pTemp->importActive(pNewTree);
@@ -767,12 +770,12 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", ctx.flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", ctx.flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", ctx.flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", ctx.flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", ctx.flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", ctx.flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -872,28 +875,36 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case LO_PARANOID:
-			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_NOPARANOID:
-			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr |= ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_PURE:
-			app.opt_flags |= ctx.MAGICMASK_PURE;
+			app.opt_flagsSet |= ctx.MAGICMASK_PURE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PURE;
 			break;
 		case LO_NOPURE:
-			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsClr |= ctx.MAGICMASK_PURE;
 			break;
 		case LO_REWRITE:
-			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_NOREWRITE:
-			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr |= ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_CASCADE:
-			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_CASCADE;
 			break;
 		case LO_NOCASCADE:
-			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr |= ctx.MAGICMASK_CASCADE;
 			break;
 //			case LO_SHRINK:
 //				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
@@ -950,12 +961,17 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	db.open(app.opt_databaseName);
+	app.pStore = &db;
+
+	// set flags
+	ctx.flags = db.creationFlags;
+	ctx.flags |= app.opt_flagsSet;
+	ctx.flags &= ~app.opt_flagsClr;
 
 	// display system flags when database was created
-	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
+	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags));
 
-	app.pStore   = &db;
 	app.baseExplain.pStore = &db;
 
 	return app.main(outputFilename, inputFilename);
