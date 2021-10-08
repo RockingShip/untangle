@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-10-08 15:25:13 Removed: `bexplain` functionality now `beval --debug=4`.
 2021-10-08 14:20:03 Changed: Default flags inherited from database.
 2021-10-07 23:20:32 Added: `rewriteTree_t` skeleton.
 2021-09-27 21:24:33 Fixed: Spacing.

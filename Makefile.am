@@ -165,15 +165,11 @@ ksystem_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for baseTree optimisations
 ##
 
-PROGRAMS_PART4 = beval bexplain gendepreciate genexport genimport genrewritedata validaterewrite
+PROGRAMS_PART4 = beval gendepreciate genexport genimport genrewritedata validaterewrite
 EXTRA_PART4 =
 
 rewritedata.c : genrewritedata.cc
 	./genrewritedata > rewritedata.c
-
-# @date 2021-07-11 19:07:21
-bexplain_SOURCES = bexplain.cc baseexplain.h basetree.h context.h
-bexplain_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-08 10:19:45
 beval_SOURCES = beval.cc basetree.h context.h rewritetree.h

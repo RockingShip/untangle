@@ -47,7 +47,6 @@
 
 #include "context.h"
 #include "basetree.h"
-#include "baseexplain.h"
 #include "rewritetree.h"
 
 /*
@@ -97,22 +96,16 @@ struct kfoldContext_t {
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
-	/// @var {baseExplain_t} Explain logic for communicative dyadics
-	baseExplain_t baseExplain;
-	/// @var {baseTree_t*} input tree
-	baseTree_t    *pInputTree;
 	/// @var {database_t} - Database store to place results
 	database_t    *pStore;
 
-	kfoldContext_t(context_t &ctx) : ctx(ctx), baseExplain(ctx) {
+	kfoldContext_t(context_t &ctx) : ctx(ctx) {
 		opt_databaseName = "untangle.db";
 		opt_flagsSet     = 0;
 		opt_flagsClr     = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
 		pStore = NULL;
-
-		baseExplain.track = false; // no explainations
 	}
 
 	// metrics for folds
@@ -184,9 +177,9 @@ struct kfoldContext_t {
 		/*
 		 * Create new tree
 		 */
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		baseTree_t *pResults = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		baseTree_t *pTemp    = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pNewTree = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pResults = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pTemp    = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
 
 		/*
 		 * Setup key/root names
@@ -443,7 +436,7 @@ struct kfoldContext_t {
 				uint32_t newQ = pNewTree->importNodes(pResults, pResults->roots[Q]);
 				uint32_t newT = pNewTree->importNodes(pResults, pResults->roots[Tu] ^ Ti);
 				uint32_t newF = pNewTree->importNodes(pResults, pResults->roots[F]);
-				uint32_t newR = baseExplain.explainNormaliseNode(0, pNewTree->ncount, pNewTree, newQ, newT, newF, NULL);
+				uint32_t newR = pNewTree->addNormaliseNode(newQ, newT, newF);
 				pNewTree->roots[iOldNode] = newR;
 
 // pNewTree->roots[iOldNode] = explainNormaliseNode(0, pNewTree->ncount, pNewTree, pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F], NULL);
@@ -665,7 +658,7 @@ struct kfoldContext_t {
 		 * Copy result to new tree without extended roots
 		 */
 		delete pTemp;
-		pTemp = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
+		pTemp = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
 		pTemp->keyNames  = pOldTree->keyNames;
 		pTemp->rootNames = pOldTree->rootNames;
 		pTemp->importActive(pNewTree);
@@ -697,7 +690,7 @@ struct kfoldContext_t {
 	 * @date 2021-08-19 20:38:41
 	 * Local copy of `baseTree_t::importFold()` that uses `baseExplain_t`.
 	 */
-	void importFold(baseTree_t *pTree, baseTree_t *RHS, uint32_t iFold) {
+	void importFold(rewriteTree_t *pTree, rewriteTree_t *RHS, uint32_t iFold) {
 
 		uint32_t *pMapSet = RHS->allocMap();
 		uint32_t *pMapClr = RHS->allocMap();
@@ -726,8 +719,8 @@ struct kfoldContext_t {
 			const uint32_t   F      = pNode->F;
 
 
-			pMapSet[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F], NULL);
-			pMapClr[iNode] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F], NULL);
+			pMapSet[iNode] = pTree->addNormaliseNode(pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F]);
+			pMapClr[iNode] = pTree->addNormaliseNode(pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F]);
 		}
 
 		/*
@@ -737,14 +730,14 @@ struct kfoldContext_t {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
-			pTree->roots[iRoot] = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
+			pTree->roots[iRoot] = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
 		if (RHS->system) {
 			uint32_t Ru = RHS->system & ~IBIT;
 			uint32_t Ri = RHS->system & IBIT;
 
-			pTree->system = baseExplain.explainNormaliseNode(0, pTree->ncount, pTree, iFold, pMapSet[Ru], pMapClr[Ru], NULL) ^ Ri;
+			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
 		RHS->freeMap(pMapSet);
@@ -971,8 +964,6 @@ int main(int argc, char *argv[]) {
 	// display system flags when database was created
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags));
-
-	app.baseExplain.pStore = &db;
 
 	return app.main(outputFilename, inputFilename);
 }

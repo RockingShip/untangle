@@ -1100,7 +1100,7 @@ struct tinyTree_t {
 					*F = D;
 					return false; // remains NE
 				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
+					// A<C<D=B or C<A<B=D
 					if (this->isNE(A) || this->isNE(C)) {
 						*Q = A;
 						*T = C ^ IBIT;
@@ -1631,7 +1631,6 @@ struct tinyTree_t {
 					*T = B;
 					// already *F = 0;
 					return false; // remains AND
-
 				} else {
 					// C<A<B
 					*Q = addBasicNode(C, A, 0);
