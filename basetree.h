@@ -223,7 +223,7 @@ struct baseTree_t {
 	 */
 	baseTree_t(const baseTree_t &rhs);
 	baseTree_t &operator=(const baseTree_t &rhs);
-\
+
 	/*
 	 * Create an empty tree, placeholder for reading from file
 	 */
@@ -964,7 +964,7 @@ struct baseTree_t {
 	/*
 	 * @date 2021-05-13 00:30:42
 	 *
-	 * lookup/create a basic (normalised) node.
+	 * lookup/create a restriction-free, unmodified node
 	 */
 	inline uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
 
@@ -1157,10 +1157,10 @@ struct baseTree_t {
 	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
 	 * @return {number} newly created nodeId
 	 */
-	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId, unsigned *pFailCount, unsigned depth) {
+	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount, unsigned depth) {
 		if (pFailCount == NULL) {
 			assert(!(Q & IBIT));                   // Q not inverted
-			assert((T & IBIT) || !(ctx.flags & context_t::MAGICMASK_PURE));
+			assert((T & IBIT) || !(this->flags & context_t::MAGICMASK_PURE));
 			assert(!(F & IBIT));                   // F not inverted
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0
@@ -1170,16 +1170,28 @@ struct baseTree_t {
 			assert(T != F);                        // T/F collapse
 
 			if (this->isOR(Q, T, F)) {
-				assert(!this->isOR(F));
-				assert(compare(Q,this, F, CASCADE_OR) < 0);
+				if (this->flags & ctx.MAGICMASK_CASCADE) {
+					assert(!this->isOR(F));
+					assert(compare(Q,this, F, CASCADE_OR) < 0);
+				} else {
+					assert(compare(Q, this, F, CASCADE_NONE) < 0);
+				}
 			}
 			if (this->isNE(Q, T, F)) {
-				assert(!this->isNE(F));
-				assert(compare(Q,this, F, CASCADE_NE) < 0);
+				if (this->flags & ctx.MAGICMASK_CASCADE) {
+					assert(!this->isNE(F));
+					assert(compare(Q,this, F, CASCADE_NE) < 0);
+				} else {
+					assert(compare(Q, this, F, CASCADE_OR) < 0);
+				}
 			}
 			if (this->isAND(Q, T, F)) {
-				assert(!this->isAND(T));
-				assert(compare(Q,this, T, CASCADE_AND) < 0);
+				if (this->flags & ctx.MAGICMASK_CASCADE) {
+					assert(!this->isAND(T));
+					assert(compare(Q,this, T, CASCADE_AND) < 0);
+				} else {
+					assert(compare(Q, this, T, CASCADE_OR) < 0);
+				}
 			}
 		}
 
@@ -1187,19 +1199,8 @@ struct baseTree_t {
 		uint32_t ix = this->lookupNode(Q, T, F);
 		if (this->nodeIndex[ix] != 0) {
 			// node already exists
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, this->nodeIndex[ix]);
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, this->nodeIndex[ix]);
 			return this->nodeIndex[ix];
-		} else if (this->ncount != expectId) {
-			/*
-			 * @date 2021-08-11 21:59:48
-			 * if the node id is not what is expected, then something changed and needs to be re-evaluated again
-			 */
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\n");
-			/*
-			 * @date 2021-08-24 20:46:27
-			 * todo: change to `addRewriteNode()` when it's available
-			 */
-			return addOrderNode(Q, T, F, this->ncount, pFailCount, depth + 1);
 		} else if (pFailCount != NULL) {
 			/*
 			 * Simulate the creation of a new node.
@@ -1215,7 +1216,7 @@ struct baseTree_t {
 		} else {
 			// situation is stable, create node
 			uint32_t ret = this->addNode(Q, T, F);
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"new\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, ret);
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"new\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, ret);
 			return ret;
 		}
 	}
@@ -1257,1766 +1258,1176 @@ struct baseTree_t {
 	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
 	 * @return {number} newly created nodeId
 	 */
-	uint32_t addOrderNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t expectId, unsigned *pFailCount, unsigned depth) {
-
-		/*
-		 * @date 2021-08-18 21:57:02
-		 *
-		 * When called recursive, it is certain that one or more of Q/T/F are return values of `orderedNode()`
-		 * With folding (especially NE) the combo can be non-normalised, so re-apply level-1/2 normalisation
-		 */
-
-		if (Q == 0) {
-			// "0?T:F" -> "F"
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
-			return F;
-		}
-
-		{
-			bool changed = false;
-			if (T & IBIT) {
-
-				if (T == IBIT) {
-					if (F == Q || F == 0) {
-						// SELF
-						// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-						return Q;
-					} else {
-						// OR
-						// "Q?!0:F" [2]
-					}
-				} else if ((T & ~IBIT) == Q) {
-					if (F == Q || F == 0) {
-						// ZERO
-						// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-						return 0;
-					} else {
-						// LESS-THAN
-						// "Q?!Q:F" [5] -> "F?!Q:F" -> "F?!Q:0"
-						Q       = F;
-						F       = 0;
-						changed = true;
-					}
-				} else {
-					if (F == 0) {
-						// GREATER-THAN
-						// "Q?!T:Q" [7] -> "Q?!T:0" [6]
-					} else if (F == Q) {
-						// GREATER-THAN
-						// "Q?!T:Q" [7] -> "Q?!T:0" [6]
-						F       = 0;
-						changed = true;
-					} else if ((T & ~IBIT) == F) {
-						// NOT-EQUAL
-						// "Q?!F:F" [8]
-					} else {
-						// QnTF (new unified operator)
-						// "Q?!T:F" [9]
-					}
-				}
-
-			} else {
-
-				if (T == 0) {
-					if (F == Q || F == 0) {
-						// ZERO
-						// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-						return 0;
-					} else {
-						// LESS-THAN
-						// "Q?0:F" [12] -> "F?!Q:0" [6]
-						T       = Q ^ IBIT;
-						Q       = F;
-						F       = 0;
-						changed = true;
-					}
-
-				} else if (T == Q) {
-					if (F == Q || F == 0) {
-						// SELF
-						// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-						return Q;
-					} else {
-						// OR
-						// "Q?Q:F" [15] -> "Q?!0:F" [2]
-						T       = 0 ^ IBIT;
-						changed = true;
-					}
-				} else {
-					if (F == 0) {
-						// AND
-						// "Q?T:Q" [17] -> "Q?T:0" [16]
-					} else if (F == Q) {
-						// AND
-						// "Q?T:Q" [17] -> "Q?T:0" [16]
-						F       = 0;
-						changed = true;
-					} else if (T == F) {
-						// SELF
-						// "Q?F:F" [18] -> "F"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"F\",\"N\":%u}", F);
-						return F;
-					} else {
-						// QTF (old unified operator)
-						// "Q?T:F" [19]
-					}
-				}
-			}
-
-			if (changed && (ctx.opt_debug & context_t::DEBUGMASK_ORDERED)) {
-				printf(",   \"level2\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-			}
-		}
+	bool cascadeQTF(uint32_t *Q, uint32_t *T, uint32_t *F, unsigned *pFailCount, unsigned depth) {
 
 		// OR (L?~0:R)
-		if (this->isOR(Q, T, F)) {
-			if (this->isOR(Q) && this->isOR(F)) {
+		if (this->isOR(*Q, *T, *F)) {
+			if (this->isOR(*Q) && this->isOR(*F)) {
 				// AB+CD++
-				uint32_t AB = Q;
-				uint32_t CD = F;
-				uint32_t A  = this->N[AB].Q;
-				uint32_t B  = this->N[AB].F;
-				uint32_t C  = this->N[CD].Q;
-				uint32_t D  = this->N[CD].F;
-
-				if (A == F) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=F\",\"N\":%u}}", A, B, C, D, AB);
-					return AB;
-				} else if (B == F) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=F\",\"N\":%u}}", A, B, C, D, AB);
-					return AB;
-				} else if (C == Q) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=Q\",\"N\":%u}}", A, B, C, D, CD);
-					return CD;
-				} else if (D == Q) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"D=Q\",\"N\":%u}}", A, B, C, D, CD);
-					return CD;
-				} else if (A == C) {
-					if (B == D) {
-						// A=C<B=D
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
-						return AB;
-					} else if (compare(B, this, D, CASCADE_OR) < 0) {
-						// A=C<B<D
-						Q = AB;
-						T = IBIT;
-						F = D;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					} else {
-						// A=C<D<B
-						Q = CD;
-						T = IBIT;
-						F = B;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					}
-				} else if (A == D) {
-					// C<A=D<B
-					Q = CD;
-					T = IBIT;
-					F = B;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-				} else if (B == C) {
-					// A<B=C<D
-					Q = AB;
-					T = IBIT;
-					F = D;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
-					// A and C can react, nether will exceed B/D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\"", A, B, C, D);
-					if (this->isOR(A) || this->isOR(C)) {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":\n");
-						uint32_t AC = addOrderNode(A, IBIT, C, expectId, pFailCount, depth + 1);
-						Q = AC;
-						T = IBIT;
-						F = D;
-					} else if (compare(A, this, C, CASCADE_OR) < 0) {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":");
-						uint32_t AC = addBasicNode(A, IBIT, C, expectId, pFailCount, depth);
-						Q = AC;
-						T = IBIT;
-						F = D;
-					} else {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ca+\":");
-						uint32_t CA = addBasicNode(C, IBIT, A, expectId, pFailCount, depth);
-						Q = CA;
-						T = IBIT;
-						F = B;
-					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(B, this, C, CASCADE_OR) < 0) {
-					// A<B<C<D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
-					if (this->isOR(C)) {
-						// C cascades and unusable for right-hand-side
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab+c+\":\n");
-						uint32_t ABC = addOrderNode(AB, IBIT, C, expectId, pFailCount, depth + 1);
-						Q = ABC;
-						T = IBIT;
-						F = D;
-					} else {
-						uint32_t ABC = addBasicNode(AB, IBIT, C, expectId, pFailCount, depth);
-						Q = ABC;
-						T = IBIT;
-						F = D;
-					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(D, this, A, CASCADE_OR) < 0) {
-					// C<D<A<B
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd+a+\":\n", A, B, C, D);
-					if (this->isOR(A)) {
-						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, IBIT, A, expectId, pFailCount, depth + 1);
-						Q = CDA;
-						T = IBIT;
-						F = B;
-					} else {
-						uint32_t CDA = addBasicNode(CD, IBIT, A, expectId, pFailCount, depth);
-						Q = CDA;
-						T = IBIT;
-						F = B;
-					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(B, this, D, CASCADE_OR) < 0) {
-					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab+c+\":\n", A, B, C, D);
-					uint32_t ABC = addOrderNode(AB, IBIT, C, expectId, pFailCount, depth + 1);
-					Q = ABC;
-					T = IBIT;
-					F = D;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else {
-					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\",\"cd+a+\":\n", A, B, C, D);
-					uint32_t ACD = addOrderNode(CD, IBIT, A, expectId, pFailCount, depth + 1);
-					Q = ACD;
-					T = IBIT;
-					F = B;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				}
-
-			} else if (this->isOR(Q)) {
-				// LR+F+
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert(!this->isOR(R));
-
-				if (F == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"F=L\",\"N\":%u}}", L, R, LR);
-					return LR;
-				} else if (F == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"F=R\",\"N\":%u}}", L, R, LR);
-					return LR;
-				}
-
-				if (this->isOR(L)) {
-					// AB+C+F+
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
-
-					uint32_t ABC = Q; // may cascade
-					uint32_t AB  = L; // may cascade
-					uint32_t A   = this->N[AB].Q; // may cascade
-					uint32_t B   = this->N[AB].F; // does not cascade
-					uint32_t C   = R; // does not cascade
-
-					if (A == F) {
-						// A=F<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (B == F) {
-						// A<B=F<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (C == F) {
-						// A<B<C=F
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (compare(C, this, F, CASCADE_OR) < 0) {
-						// A<B<C<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(F, this, A, CASCADE_OR) < 0) {
-						// F<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"F<A<B<C\"", A, B, C);
-						if (this->isOR(F)) {
-							// F cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab+f+\":\n");
-							uint32_t ABF = addOrderNode(AB, IBIT, F, expectId, pFailCount, depth + 1);
-							Q = ABF;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// F is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa+\":");
-							uint32_t FA;
-							if (this->isOR(A)) {
-								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, IBIT, A, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								FA = addBasicNode(F, IBIT, A, expectId, pFailCount, depth);
-							}
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa+b+\":");
-							uint32_t FAB = addBasicNode(FA, IBIT, B, expectId, pFailCount, depth);
-							Q = FAB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, F, CASCADE_OR) < 0) {
-						// A<B<F<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<F<C\",\"ab+f+\":", A, B, C);
-						uint32_t ABF = addBasicNode(AB, IBIT, F, expectId, pFailCount, depth);
-						Q = ABF;
-						T = IBIT;
-						F = C;
-						if (this->isOR(F)) {
-							// F cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// F is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else {
-						// A<F<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\"", A, B, C);
-						if (this->isOR(A)) {
-							// A cascades and can exceed F,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab+f+\":\n");
-							uint32_t ABF = addOrderNode(AB, IBIT, F, expectId, pFailCount, depth + 1);
-							Q = ABF;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isOR(F)) {
-							// F cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af+\":");
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"af+b+\":\n");
-							uint32_t AFB = addOrderNode(AF, IBIT, B, expectId, pFailCount, depth + 1);
-							Q = AFB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and F are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af+\":");
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af+b+\":");
-							uint32_t AFB = addBasicNode(AF, IBIT, B, expectId, pFailCount, depth);
-							Q = AFB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				} else {
-					// AB+F+
-					uint32_t AB = Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == F) {
-						// A=F<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (B == F) {
-						// A<B=F
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (compare(B, this, F, CASCADE_OR) < 0) {
-						// A<B<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<F<B or F<A<B
-						if (this->isOR(A) || this->isOR(F)) {
-							// A or F cascade and F can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af+\":\n", A, B);
-							uint32_t AF = addOrderNode(A, IBIT, F, expectId, pFailCount, depth + 1);
-							Q = AF;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, F, CASCADE_OR) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af+\":", A, B);
-							uint32_t AF = addBasicNode(A, IBIT, F, expectId, pFailCount, depth);
-							Q = AF;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"F<A<B\",\"fa+\":", A, B);
-							uint32_t FA = addBasicNode(F, IBIT, A, expectId, pFailCount, depth);
-							Q = FA;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				}
-			} else if (this->isOR(F)) {
-				// QLR++
-				uint32_t LR = F; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert (!this->isOR(R));
-
-				if (Q == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"Q=L\",\"N\":%u}}", L, R, F);
-					return LR;
-				} else if (Q == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"Q=R\",\"N\":%u}}", L, R, F);
-					return LR;
-				}
-
-				if (this->isOR(L)) {
-					// QAB+C++
-					uint32_t ABC = F;
-					uint32_t AB  = L;
-					uint32_t A   = this->N[AB].Q;
-					uint32_t B   = this->N[AB].F;
-					uint32_t C   = R;
-
-					if (A == Q) {
-						// A=Q<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (B == Q) {
-						// A<B=Q<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (C == Q) {
-						// A<B<C=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (compare(C, this, Q, CASCADE_OR) < 0) {
-						// A<B<C<Q
-						// natural order, sqap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(Q, this, A, CASCADE_OR) < 0) {
-						// Q<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
-						if (this->isOR(Q)) {
-							// Q cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab+q+\":\n");
-							uint32_t ABQ = addOrderNode(AB, IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa+\":");
-							uint32_t QA;
-							if (this->isOR(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, IBIT, A, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, IBIT, A, expectId, pFailCount, depth);
-							}
-
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa+b+\":");
-							uint32_t QAB = addBasicNode(QA, IBIT, B, expectId, pFailCount, depth);
-							Q = QAB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab+q+\":", A, B, C);
-						uint32_t ABQ = addBasicNode(AB, IBIT, Q, expectId, pFailCount, depth);
-						Q = ABQ;
-						T = IBIT;
-						F = C;
-						if (this->isOR(F)) {
-							// Q cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else {
-						// A<Q<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\"", A, B, C);
-						if (this->isOR(A)) {
-							// A cascades and can exceed Q,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab+q+\":\n");
-							uint32_t ABQ = addOrderNode(AB, IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isOR(Q)) {
-							// Q cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq+\":");
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq+b+\":\n");
-							uint32_t AQB = addOrderNode(AQ, IBIT, B, expectId, pFailCount, depth + 1);
-							Q = AQB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and Q are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq+\":");
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq+b+\":\n");
-							uint32_t AQB = addBasicNode(AQ, IBIT, B, expectId, pFailCount, depth);
-							Q = AQB;
-							T = IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				} else {
-					// QAB++
-					uint32_t AB = F;
-					uint32_t A  = this->N[AB].Q;
-					uint32_t B  = this->N[AB].F;
-
-					if (A == Q) {
-						// A=Q<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A=Q<B\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (B == Q) {
-						// A<B=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (compare(B, this, Q, CASCADE_OR) < 0) {
-						// A<B<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = IBIT;
-						F = tmp;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<B<Q\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isOR(A) || this->isOR(Q)) {
-							// A or Q cascade and Q can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq+\":\n", A, B);
-							uint32_t AQ = addOrderNode(A, IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = AQ;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, Q, CASCADE_OR) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq+\":", A, B);
-							uint32_t AQ = addBasicNode(A, IBIT, Q, expectId, pFailCount, depth);
-							Q = AQ;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"Q<A<B\",\"qa+\":", A, B);
-							uint32_t QA = addBasicNode(Q, IBIT, A, expectId, pFailCount, depth);
-							Q = QA;
-							T = IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				}
-			}
-
-			// final top-level order
-			if (compare(F, this, Q, CASCADE_OR) < 0) {
-				/*
-				 * Single node
-				 */
-				uint32_t tmp = Q;
-				Q = F;
-				T = IBIT;
-				F = tmp;
-				if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-			}
-		}
-
-		// NE (L?~R:R)
-		if (this->isNE(Q, T, F)) {
-			if (this->isNE(Q) && this->isNE(F)) {
-				// AB^CD^^
-				uint32_t AB = Q; // may cascade
-				uint32_t CD = F; // may cascade
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *F; // may cascade
 				uint32_t A  = this->N[AB].Q; // may cascade
 				uint32_t B  = this->N[AB].F; // may cascade
 				uint32_t C  = this->N[CD].Q; // does not cascade
 				uint32_t D  = this->N[CD].F; // does not cascade
 
 				if (A == CD) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, B);
-					return B;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, AB);
+					*Q = *T = *F = AB;
+					return true;
 				} else if (B == CD) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, A);
-					return A;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, AB);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = AB;
+					return true;
 				} else if (C == AB) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=C\",\"N\":%u}}", A, B, C, D, D);
-					return D;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=AB\",\"N\":%u}}", A, B, C, D, CD);
+					*Q = *T = *F = CD;
+					return true;
 				} else if (D == AB) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"AB=D\",\"N\":%u}}", A, B, C, D, C);
-					return C;
-				} else if (A == C) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"D=AB\",\"N\":%u}}", A, B, C, D, CD);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = CD;
+					return true;
+				}
+
+				if (A == C) {
 					if (B == D) {
 						// A=C<B=D
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, *Q);
 						/*
-						 * This implies  that Q==F
-						 *
-						 * @date 2021-08-17 14:21:16
-						 * With the introduction of `explainBasicNode()` with `pFailCount != NULL`,
-						 *   used for probing alternatives.
-						 *   it is possible to add temporary nodes that are not cached
-						 *   these bypass duplicate detection
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already been tested
 						 */
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, 0);
-						return 0;
+						assert(0);
+						*Q = *T = *F = AB;
+					} else if (compare(B, this, D, CASCADE_OR) < 0) {
+						// C=A<B<D
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=A<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+						// already *Q = AB;
+						// already *T = IBIT;
+						*F = D;
 					} else {
-						// A=C<B<D or A=C<D<B
-						// B and D do not cascade
-						Q = B;
-						T = D ^ IBIT;
-						F = D;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						// A=C<D<B
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+						*Q = CD;
+						// already *T = IBIT;
+						*F = B;
 					}
+					return true;
 				} else if (A == D) {
-					// C<A=D<B
-					// C is capped by D(=A), therefore all < B
-					Q = C; // may cascade, keep left
-					T = B ^ IBIT;
-					F = B; // no cascade, keep right
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					// C<D=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D=A<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = CD;
+					// already *T = IBIT;
+					*F = B;
+					return true;
 				} else if (B == C) {
 					// A<B=C<D
-					// A is capped by B(=C), therefore all < D
-					Q = A; // may cascade, keep left
-					T = D ^ IBIT;
-					F = D; // no cascade, keep right
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					// already *Q = AB;
+					// already *T = IBIT;
+					*F = D;
+					return true;
 				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
-					// A and C can react
-					Q = A;
-					T = C ^ IBIT;
-					F = C;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					if (this->isNE(A) || this->isNE(C)) {
-						// slow-path, expand cascade
-						return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
+					// A<C<D=B or C<A<B=D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D=B\"", A, B, C, D);
+					// A and C can cascade, neither will exceed B/D
+					if (this->isOR(A) || this->isOR(C)) {
+						// cascades, merge AC, B last
+						*Q = A;
+						// already *T = IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac+\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = IBIT;
+							*F = B;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac+b+\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							// already *T = IBIT;
+							*F = B;
+						}
+					} else if (compare(A, this, C, CASCADE_OR) < 0) {
+						// A<C<B
+						*Q = addNormaliseNode(A, IBIT, C, pFailCount, depth);
+						// already *T = IBIT;
+						*F = B;
+					} else {
+						// C<A<B
+						*Q = addNormaliseNode(C, IBIT, A, pFailCount, depth);
+						// already *T = IBIT;
+						*F = B;
 					}
-				} else if (compare(B, this, C, CASCADE_NE) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_OR) < 0) {
 					// A<B<C<D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
-					if (this->isNE(C)) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D\"", A, B, C, D);
+					if (this->isOR(C)) {
 						// C cascades and unusable for right-hand-side
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab^c^\":\n");
-						uint32_t ABC = addOrderNode(AB, C ^ IBIT, C, expectId, pFailCount, depth + 1);
-						Q = ABC;
-						T = D ^ IBIT;
-						F = D;
+						// merge ABC, D last
+						*Q = AB;
+						// already *T = IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+c+\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = IBIT;
+							*F = D;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+c+d+\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							// already *T = IBIT;
+							*F = D;
+						}
 					} else {
-						uint32_t ABC = addBasicNode(AB, C ^ IBIT, C, expectId, pFailCount, depth);
-						Q = ABC;
-						T = D ^ IBIT;
-						F = D;
+						// simple rewrite
+						*Q = addNormaliseNode(AB, IBIT, C, pFailCount, depth);
+						// already *T = IBIT;
+						*F = D;
 					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(D, this, A, CASCADE_NE) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(D, this, A, CASCADE_OR) < 0) {
 					// C<D<A<B
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd^a^\":\n", A, B, C, D);
-					if (this->isNE(A)) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\"", A, B, C, D);
+					if (this->isOR(A)) {
 						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, A ^ IBIT, A, expectId, pFailCount, depth + 1);
-						Q = CDA;
-						T = B ^ IBIT;
-						F = B;
+						// merge CDA, B last
+						*Q = CD;
+						// already *T = IBIT;
+						*F = A;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd+a+\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = IBIT;
+							*F = B;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd+a+b+\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							// already *T = IBIT;
+							*F = B;
+						}
 					} else {
-						uint32_t CDA = addBasicNode(CD, A ^ IBIT, A, expectId, pFailCount, depth);
-						Q = CDA;
-						T = B ^ IBIT;
-						F = B;
+						// simple rewrite
+						*Q = addNormaliseNode(CD, IBIT, A, pFailCount, depth);
+						// already *T = IBIT;
+						*F = B;
 					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(B, this, D, CASCADE_NE) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(B, this, D, CASCADE_OR) < 0) {
 					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab^c^\":\n", A, B, C, D);
-					uint32_t ABC = addOrderNode(AB, C ^ IBIT, C, expectId, pFailCount, depth + 1);
-					Q = ABC;
-					T = D ^ IBIT;
-					F = D;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
+					// merge ABC, D last
+					// already *Q = AB;
+					// already *T = IBIT;
+					*F = C;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+c+\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = IBIT;
+						*F = D;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+c+d+\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						// already *T = IBIT;
+						*F = D;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				} else {
 					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\",\"cd^a^\":\n", A, B, C, D);
-					uint32_t ACD = addOrderNode(CD, A ^ IBIT, A, expectId, pFailCount, depth + 1);
-					Q = ACD;
-					T = B ^ IBIT;
-					F = B;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				}
-
-			} else if (this->isNE(Q)) {
-				// LR^F^
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert(!this->isNE(R));
-
-				if (F == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F=L\",\"N\":%u}}", L, R, R);
-					return R;
-				} else if (F == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F=R\",\"N\":%u}}", L, R, L);
-					return L;
-				}
-
-				if (this->isNE(L)) {
-					// AB^C^F^
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
-
-					uint32_t AB = L; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-					uint32_t C  = R; // does not cascade
-
-					if (A == F) {
-						// A=F<B<C
-						Q = B;
-						T = C ^ IBIT;
-						F = C;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=F<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (B == F) {
-						// A<B=F<C
-						Q = A;
-						T = C ^ IBIT;
-						F = C;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=F<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (C == F) {
-						// A<B<C=F
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=F\",\"N\":%u}}", A, B, C, AB);
-						return AB;
-					} else if (compare(C, this, F, CASCADE_NE) < 0) {
-						// A<B<C<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(F, this, A, CASCADE_NE) < 0) {
-						// F<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"F<A<B<C\"", A, B, C);
-						if (this->isNE(F)) {
-							// F cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab^f^\":\n");
-							uint32_t ABF = addOrderNode(AB, F ^ IBIT, F, expectId, pFailCount, depth + 1);
-							Q = ABF;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// F is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa^\":");
-							uint32_t FA;
-							if (this->isNE(A)) {
-								// A cascades and unusable for right-hand-side
-								FA = addOrderNode(F, A ^ IBIT, A, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								FA = addBasicNode(F, A ^ IBIT, A, expectId, pFailCount, depth);
-							}
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa^b^\":");
-							uint32_t FAB = addBasicNode(FA, B ^ IBIT, B, expectId, pFailCount, depth);
-							Q = FAB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, F, CASCADE_NE) < 0) {
-						// A<B<F<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<F<C\",\"ab^f^\":", A, B, C);
-						uint32_t ABF = addBasicNode(AB, F ^ IBIT, F, expectId, pFailCount, depth);
-						Q = ABF;
-						T = C ^ IBIT;
-						F = C;
-						if (this->isNE(F)) {
-							// F cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// F is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\"", A, B, C, D);
+					// merge ACD, B last
+					*Q = A;
+					// already *T = IBIT;
+					// already *F = CD;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd++\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = IBIT;
+						*F = B;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd++b+\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
 					} else {
-						// A<F<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<F<B<C\"", A, B, C);
-						if (this->isNE(A)) {
-							// A cascades and can exceed F,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab^f^\":\n");
-							uint32_t ABF = addOrderNode(AB, F ^ IBIT, F, expectId, pFailCount, depth + 1);
-							Q = ABF;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isNE(F)) {
-							// F cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af^\":");
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"af^b^\":\n");
-							uint32_t AFB = addOrderNode(AF, B ^ IBIT, B, expectId, pFailCount, depth + 1);
-							Q = AFB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and F are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af^\":");
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af^b^\":");
-							uint32_t AFB = addBasicNode(AF, B ^ IBIT, B, expectId, pFailCount, depth);
-							Q = AFB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						// already *T = IBIT;
+						*F = B;
 					}
-				} else {
-					// AB^F^
-					uint32_t AB = Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == F) {
-						// A=F<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A=F<B\",\"N\":%u}}", A, B, B);
-						return B;
-					} else if (B == F) {
-						// A<B=F
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=F\",\"N\":%u}}", A, B, A);
-						return A;
-					} else if (compare(B, this, F, CASCADE_NE) < 0) {
-						// A<B<F
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<F<B or F<A<B
-						if (this->isNE(A) || this->isNE(F)) {
-							// A or F cascade and F can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af^\":\n", A, B);
-							uint32_t AF = addOrderNode(A, F ^ IBIT, F, expectId, pFailCount, depth + 1);
-							Q = AF;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, F, CASCADE_NE) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<F<B\",\"af^\":", A, B);
-							uint32_t AF = addBasicNode(A, F ^ IBIT, F, expectId, pFailCount, depth);
-							Q = AF;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F<A<B\",\"fa^\":", A, B);
-							uint32_t FA = addBasicNode(F, A ^ IBIT, A, expectId, pFailCount, depth);
-							Q = FA;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				}
-			} else if (this->isNE(F)) {
-				// QLR^^
-				uint32_t LR = F; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].F; // does not cascade
-
-				assert (!this->isNE(R));
-
-				if (Q == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=L\",\"N\":%u}}", L, R, R);
-					return R;
-				} else if (Q == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q=R\",\"N\":%u}}", L, R, L);
-					return L;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				}
 
-				if (this->isNE(L)) {
-					// QAB^C^^
-					// NOTE: only A may cascade, and if it does, the cascade might exceed F
+			} else if (this->isOR(*Q)) {
+				// AB+C+
+				uint32_t AB = *Q; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // does not cascade
+				uint32_t C  = *F; // may cascade
 
-					uint32_t AB = L; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-					uint32_t C  = R; // does not cascade
+				assert(!this->isOR(B));
+				assert(!this->isOR(C));
 
-					if (A == Q) {
-						// A=Q<B<C
-						Q = B;
-						T = C ^ IBIT;
-						F = C;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (B == Q) {
-						// A<B=Q<C
-						Q = A;
-						T = C ^ IBIT;
-						F = C;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (C == Q) {
-						// A<B<C=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, AB);
-						return AB;
-					} else if (compare(C, this, Q, CASCADE_NE) < 0) {
-						// A<B<C<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = tmp ^ IBIT;
-						F = tmp;
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(Q, this, A, CASCADE_NE) < 0) {
-						// Q<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
-						if (this->isNE(Q)) {
-							// Q cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab^q^\":\n");
-							uint32_t ABQ = addOrderNode(AB, Q ^ IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa^\":");
-							uint32_t QA;
-							if (this->isNE(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A ^ IBIT, A, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, A ^ IBIT, A, expectId, pFailCount, depth);
-							}
-
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa^b^\":");
-							uint32_t QAB = addBasicNode(QA, B ^ IBIT, B, expectId, pFailCount, depth);
-							Q = QAB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab^q^\":", A, B, C);
-						uint32_t ABQ = addBasicNode(AB, Q ^ IBIT, Q, expectId, pFailCount, depth);
-						Q = ABQ;
-						T = C ^ IBIT;
-						F = C;
-						if (this->isNE(F)) {
-							// Q cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else {
-						// A<Q<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\"", A, B, C);
-						if (this->isNE(A)) {
-							// A cascades and can exceed Q,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab^q^\":\n");
-							uint32_t ABQ = addOrderNode(AB, Q ^ IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isNE(Q)) {
-							// Q cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq^\":");
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq^b^\":\n");
-							uint32_t AQB = addOrderNode(AQ, B ^ IBIT, B, expectId, pFailCount, depth + 1);
-							Q = AQB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and Q are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq^\":");
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq^b^\":\n");
-							uint32_t AQB = addBasicNode(AQ, B ^ IBIT, B, expectId, pFailCount, depth);
-							Q = AQB;
-							T = C ^ IBIT;
-							F = C;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				} else {
-					// QAB^^
-					uint32_t AB = F; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].F; // does not cascade
-
-					if (A == Q) {
-						// A=Q<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A=Q<B\",\"N\":%u}}", A, B, B);
-						return B;
-					} else if (B == Q) {
-						// A<B=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, A);
-						return A;
-					} else if (compare(B, this, Q, CASCADE_NE) < 0) {
-						// A<B<Q
-						// natural order, swap Q/F
-						uint32_t tmp = Q;
-						Q = F;
-						T = tmp ^ IBIT;
-						F = tmp;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<B<Q\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isNE(A) || this->isNE(Q)) {
-							// A or Q cascade and Q can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq^\":\n", A, B);
-							uint32_t AQ = addOrderNode(A, Q ^ IBIT, Q, expectId, pFailCount, depth + 1);
-							Q = AQ;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, Q, CASCADE_NE) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq^\":", A, B);
-							uint32_t AQ = addBasicNode(A, Q ^ IBIT, Q, expectId, pFailCount, depth);
-							Q = AQ;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"Q<A<B\",\"qa^\":", A, B);
-							uint32_t QA = addBasicNode(Q, A ^ IBIT, A, expectId, pFailCount, depth);
-							Q = QA;
-							T = B ^ IBIT;
-							F = B;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
+				if (C == A) {
+					// C=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"C=A<B\",\"N\":%u}}", A, B, C, AB);
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=C\",\"N\":%u}}", A, B, C, AB);
+					*Q = *T = *F = AB;
+					return true;
 				}
-			}
 
-
-			// final top-level order
-			if (compare(F, this, Q, CASCADE_NE) < 0) {
 				/*
-				 * Single node
+				 * 3! permutations where A<B has 3 candidates
 				 */
-				uint32_t tmp = Q;
-				Q = F;
-				T = tmp ^ IBIT;
-				F = tmp;
-				if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", Q, F, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				if (compare(B, this, *F, CASCADE_OR) < 0) {
+					// A<B<C
+					// natural order
+					// already *Q = AB;
+					// already *T = IBIT;
+					// already *F = C;
+					return false;
+				} else if (this->isOR(A)) {
+					// A<C<B or C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\"", A, B, C);
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = IBIT;
+					// already *F = C;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac+\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = IBIT;
+						*F = B;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac+b+\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						// already *T = IBIT;
+						*F = B;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, C, CASCADE_OR) < 0) {
+					// A<C<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\"}", A, B, C);
+					*Q = addNormaliseNode(A, IBIT, C, pFailCount, depth);
+					// already *T = IBIT;
+					*F = B;
+					return true;
+				} else {
+					// C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"C<A<B\"}", A, B, C);
+					*Q = addNormaliseNode(C, IBIT, A, pFailCount, depth);
+					// already *T = IBIT;
+					*F = B;
+					return true;
+				}
+
+			} else if (this->isOR(*F)) {
+				// ABC++
+				uint32_t BC = *F; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].F; // does not cascade
+
+				assert (!this->isOR(A));
+				assert (!this->isOR(C));
+
+				if (A == B) {
+					// A=B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A=B<C\",\"N\":%u}}", A, B, C, BC);
+					*Q = *T = *F = BC;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"B<C=A\",\"N\":%u}}", A, B, C, BC);
+					*Q = *T = *F = BC;
+					return true;
+				}
+
+				/*
+				 * 3! permutations where B<C has 3 candidates
+				 */
+				if (compare(C, this, A, CASCADE_OR) < 0) {
+					// B<C<A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"B<C<A\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = BC;
+					// already *T = IBIT;
+					*F = A;
+					return true;
+				} else if (this->isOR(B)) {
+					// A<Q<B or Q<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\"", A, B, C);
+					// cascade, merge AB, C last
+					// already *Q = A;
+					// already *T = IBIT;
+					*F = B;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab+c+\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						// already *T = IBIT;
+						*F = C;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, B, CASCADE_OR) < 0) {
+					// A<B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(A, IBIT, B, pFailCount, depth);
+					// already *T = IBIT;
+					*F = C;
+					return true;
+				} else {
+					// B<A<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u,%u],\"order\":\"B<A<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(B, IBIT, A, pFailCount, depth);
+					// already *T = IBIT;
+					*F = C;
+					return true;
+				}
+
+			} else if (compare(*F, this, *Q, CASCADE_OR) < 0) {
+				// swap
+				if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"or\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", *Q, *F, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+				uint32_t savQ = *Q;
+				*Q = *F;
+				// already *T = IBIT;
+				*F = savQ;
+				return true;
+			} else {
+				// no change
+				return false;
 			}
+		}
 
-			/*
-			 * @date 2021-08-23 17:40:25
-			 * Only the first terms of a cascade are known, When cascading, only the fir
-			 */
+		// NE (L?~R:R)
+		if (this->isNE(*Q, *T, *F)) {
+			if (this->isNE(*Q) && this->isNE(*F)) {
+				// AB^CD^^
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *F; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // may cascade
+				uint32_t C  = this->N[CD].Q; // does not cascade
+				uint32_t D  = this->N[CD].F; // does not cascade
 
+				if (A == CD) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, B);
+					*Q = *T = *F = B;
+					return true;
+				} else if (B == CD) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, A);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = A;
+					return true;
+				} else if (C == AB) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=AB\",\"N\":%u}}", A, B, C, D, D);
+					*Q = *T = *F = D;
+					return true;
+				} else if (D == AB) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"D=AB\",\"N\":%u}}", A, B, C, D, C);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = C;
+					return true;
+				}
+
+				if (A == C) {
+					if (B == D) {
+						// A=C<B=D
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, 0);
+						/*
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already been tested
+						 */
+						assert(0);
+						*Q = *T = *F = 0;
+					} else if (compare(B, this, D, CASCADE_NE) < 0) {
+						// C=A<B<D
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=A<B<D\",\"N\":%u}}", A, B, C, D, 0);
+						*Q = B;
+						*T = D ^ IBIT;
+						*F = D;
+					} else {
+						// A=C<D<B
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+						*Q = D;
+						*T = B ^ IBIT;
+						*F = B;
+					}
+					return true;
+				} else if (A == D) {
+					// C<D=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D=A<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = C;
+					*T = B ^ IBIT;
+					*F = B;
+					return true;
+				} else if (B == C) {
+					// A<B=C<D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = A;
+					*T = D ^ IBIT;
+					*F = D;
+					return true;
+				} else if (B == D) {
+					// A<C<D=B or C<A<B=D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D=B\"", A, B, C, D);
+					// A and C can cascade, neither will exceed B/D
+					if (this->isNE(A) || this->isNE(C)) {
+						*Q = A;
+						*T = C ^ IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd^a^b^\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else if (compare(A, this, C, CASCADE_NE) < 0) {
+						// A<C
+						*Q = A;
+						*T = C ^ IBIT;
+						*F = C;
+					} else {
+						// C<A
+						*Q = C;
+						*T = A ^ IBIT;
+						*F = A;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_NE) < 0) {
+					// A<B<C<D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D\"", A, B, C, D);
+					if (this->isNE(C)) {
+						// C cascades and unusable for right-hand-side
+						// merge ABC, D last
+						*Q = AB;
+						*T = C ^ IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^c^\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							// todo: found testdata 'abcdefgh^^^^^^^ijklmnopq^^^^^^^^^'
+							// assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = D ^ IBIT;
+							*F = D;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^c^d^\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = D ^ IBIT;
+							*F = D;
+						}
+					} else {
+						// simple rewrite
+						*Q = addNormaliseNode(AB, C ^ IBIT, C, pFailCount, depth);
+						*T = D ^ IBIT;
+						*F = D;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(D, this, A, CASCADE_NE) < 0) {
+					// C<D<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\"", A, B, C, D);
+					if (this->isNE(A)) {
+						// A cascades and unusable for right-hand-side
+						// merge CDA, B last
+						*Q = CD;
+						*T = A ^ IBIT;
+						*F = A;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd^a^\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B ^ IBIT;
+							*F = B;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd^a^b^\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B ^ IBIT;
+							*F = B;
+						}
+					} else {
+						// simple rewrite
+						*Q = addNormaliseNode(CD, A ^ IBIT, A, pFailCount, depth);
+						*T = B ^ IBIT;
+						*F = B;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(B, this, D, CASCADE_NE) < 0) {
+					// A<C<B<D or C<A<B<D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
+					// A and C can react and exceed B, D is definitely last
+					// merge ABC, D last
+					// already *Q = AB;
+					*T = C ^ IBIT;
+					*F = C;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^c^\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = D ^ IBIT;
+						*F = D;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^c^d^\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = D ^ IBIT;
+						*F = D;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else {
+					// A<C<D<B or C<A<D<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\"", A, B, C, D);
+					// merge ACD, B last
+					*Q = A;
+					// already *T = CD ^ IBIT;
+					// already *F = CD;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd^^\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B ^ IBIT;
+						*F = B;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd^^b^\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B ^ IBIT;
+						*F = B;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				}
+
+			} else if (this->isNE(*Q)) {
+				// AB^C^
+				uint32_t AB = *Q; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].F; // does not cascade
+				uint32_t C  = *F; // may cascade
+
+				assert(!this->isNE(B));
+				assert(!this->isNE(C));
+
+				if (C == A) {
+					// C=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"C=A<B\",\"N\":%u}}", A, B, C, B);
+					*Q = *T = *F = B;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=C\",\"N\":%u}}", A, B, C, A);
+					*Q = *T = *F = A;
+					return true;
+				}
+
+				/*
+				 * 3! permutations where A<B has 3 candidates
+				 */
+				if (compare(B, this, *F, CASCADE_NE) < 0) {
+					// A<B<C
+					// natural order
+					// already *Q = AB;
+					// already *T = C ^ IBIT;
+					// already *F = C;
+					return false;
+				} else if (this->isNE(A)) {
+					// A<C<B or C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\"", A, B, C);
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = C ^ IBIT;
+					// already *F = C;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac^\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B ^ IBIT;
+						*F = B;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac^b^\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B ^ IBIT;
+						*F = B;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, C, CASCADE_NE) < 0) {
+					// A<C<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\"", A, B, C);
+					*Q = addNormaliseNode(A, C ^ IBIT, C, pFailCount, depth);
+					*T = B ^ IBIT;
+					*F = B;
+					return true;
+				} else {
+					// C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"C<A<B\"", A, B, C);
+					*Q = addNormaliseNode(C, A ^ IBIT, A, pFailCount, depth);
+					*T = B ^ IBIT;
+					*F = B;
+					return true;
+				}
+
+			} else if (this->isNE(*F)) {
+				// ABC^^
+				uint32_t BC = *F; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].F; // does not cascade
+
+				assert (!this->isNE(A));
+				assert (!this->isNE(C));
+
+				if (A == B) {
+					// A=B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A=B<C\",\"N\":%u}}", A, B, C, C);
+					*Q = *T = *F = C;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"B<C=A\",\"N\":%u}}", A, B, C, B);
+					*Q = *T = *F = B;
+					return true;
+				}
+
+				/*
+				 * 3! permutations where B<C has 3 candidates
+				 */
+				if (compare(C, this, A, CASCADE_NE) < 0) {
+					// B<C<A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"B<C<A\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = BC;
+					*T = A ^ IBIT;
+					*F = A;
+					return true;
+				} else if (this->isNE(B)) {
+					// A<Q<B or Q<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\"", A, B, C);
+					// cascade, merge AB, C last
+					// already *Q = A;
+					*T = B ^ IBIT;
+					*F = B;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = C ^ IBIT;
+						*F = C;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab^c^\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = C ^ IBIT;
+						*F = C;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, B, CASCADE_NE) < 0) {
+					// A<B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(A, B ^ IBIT, B, pFailCount, depth);
+					*T = C ^ IBIT;
+					*F = C;
+					return true;
+				} else {
+					// B<A<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u,%u],\"order\":\"B<A<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(B, A ^ IBIT, A, pFailCount, depth);
+					*T = C ^ IBIT;
+					*F = C;
+					return true;
+				}
+
+			} else if (compare(*F, this, *Q, CASCADE_NE) < 0) {
+				// swap
+				if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"ne\":{\"slot\":[%u,%u],\"order\":\"F<Q\",\"qtf\":[%u,%s%u,%u]}", *Q, *F, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+				uint32_t savQ = *Q;
+				*Q = *F;
+				*T = savQ ^ IBIT;
+				*F = savQ;
+				return true;
+			} else {
+				// no change
+				return false;
+			}
 		}
 
 		// AND (L?T:0)
-		if (this->isAND(Q, T, F)) {
-			if (this->isAND(Q) && this->isAND(T)) {
+		if (this->isAND(*Q, *T, *F)) {
+			if (this->isAND(*Q) && this->isAND(*T)) {
 				// AB&CD&&
-				uint32_t AB = Q;
-				uint32_t CD = T;
-				uint32_t A  = this->N[AB].Q;
-				uint32_t B  = this->N[AB].T;
-				uint32_t C  = this->N[CD].Q;
-				uint32_t D  = this->N[CD].T;
+				uint32_t AB = *Q; // may cascade
+				uint32_t CD = *T; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].T; // may cascade
+				uint32_t C  = this->N[CD].Q; // does not cascade
+				uint32_t D  = this->N[CD].T; // does not cascade
 
-				if (A == T) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=T\",\"N\":%u}}", A, B, C, D, AB);
-					return AB;
-				} else if (B == T) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=T\",\"N\":%u}}", A, B, C, D, AB);
-					return AB;
-				} else if (C == Q) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=Q\",\"N\":%u}}", A, B, C, D, CD);
-					return CD;
-				} else if (D == Q) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"D=Q\",\"N\":%u}}", A, B, C, D, CD);
-					return CD;
-				} else if (A == C) {
+				if (A == CD) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=CD\",\"N\":%u}}", A, B, C, D, AB);
+					*Q = *T = *F = AB;
+					return true;
+				} else if (B == CD) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"B=CD\",\"N\":%u}}", A, B, C, D, AB);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * CD cascades which implies that B also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == AB) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=AB\",\"N\":%u}}", A, B, C, D, CD);
+					*Q = *T = *F = CD;
+					return true;
+				} else if (D == AB) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"D=AB\",\"N\":%u}}", A, B, C, D, CD);
+					/*
+					 * @date 2021-09-16 15:57:46
+					 * AB cascades which implies that D also cascades, which is not allowed
+					 */
+					assert(0);
+					*Q = *T = *F = CD;
+					return true;
+				}
+
+				if (A == C) {
 					if (B == D) {
 						// A=C<B=D
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, Q);
-						return AB;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B=D\",\"N\":%u}}", A, B, C, D, *Q);
+						/*
+						 * @date 2021-09-16 00:21:52
+						 * This implies that `Q==F` which has already been tested
+						 */
+						assert(0);
+						*Q = *T = *F = AB;
 					} else if (compare(B, this, D, CASCADE_AND) < 0) {
-						// A=C<B<D
-						Q = AB;
-						T = D;
-						F = 0;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						// C=A<B<D
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C=A<B<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+						// already *Q = AB;
+						*T = D;
+						// already *F = 0;
 					} else {
 						// A=C<D<B
-						Q = CD;
-						T = B;
-						F = 0;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A=C<D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+						*Q = CD;
+						*T = B;
+						// already *F = 0;
 					}
+					return true;
 				} else if (A == D) {
-					// C<A=D<B
-					Q = CD;
-					T = B;
-					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					// C<D=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<A=D<B\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*T = B;
+					// already *F = 0;
+					return true;
 				} else if (B == C) {
 					// A<B=C<D
-					Q = AB;
-					T = D;
-					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B=C<D\",\"qtf\":[%u,%s%u,%u]}", A, B, C, D, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = AB;
+					*T = D;
+					//already *F = 0;
+					return true;
 				} else if (B == D) {
-					// A<C<B=D or C<A<B=D
-					// A and C can react, nether will exceed B/D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B=D\"", A, B, C, D);
+					// A<C<D=B or C<A<B=D
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D=B\"", A, B, C, D);
+					// A and C can cascade, neither will exceed B/D
 					if (this->isAND(A) || this->isAND(C)) {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":\n");
-						uint32_t AC = addOrderNode(A, C, 0, expectId, pFailCount, depth + 1);
-						Q = AC;
-						T = D;
-						F = 0;
+						// cascades, merge AC, B last
+						*Q = A;
+						*T = C;
+						// already *F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac&\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B;
+							*F = 0;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac&b&\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B;
+							// already *F = 0;
+						}
 					} else if (compare(A, this, C, CASCADE_AND) < 0) {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ac+\":");
-						uint32_t AC = addBasicNode(A, C, 0, expectId, pFailCount, depth);
-						Q = AC;
-						T = D;
-						F = 0;
+						// A<C<B
+						*Q = addNormaliseNode(A, C, 0, pFailCount, depth);
+						*T = B;
+						// already *F = 0;
 					} else {
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ca+\":");
-						uint32_t CA = addBasicNode(C, A, 0, expectId, pFailCount, depth);
-						Q = CA;
-						T = B;
-						F = 0;
+						// C<A<B
+						*Q = addNormaliseNode(C, A, 0, pFailCount, depth);
+						*T = B;
+						// already *F = 0;
 					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				} else if (compare(B, this, C, CASCADE_AND) < 0) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				}
+
+				/*
+				 * 4! permutations where A<B and C<D has 6 candidates
+				 */
+				if (compare(B, this, C, CASCADE_AND) < 0) {
 					// A<B<C<D
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<B<C<D\"", A, B, C, D);
 					if (this->isAND(C)) {
 						// C cascades and unusable for right-hand-side
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab&c&\":\n");
-						uint32_t ABC = addOrderNode(AB, C, 0, expectId, pFailCount, depth + 1);
-						Q = ABC;
-						T = D;
-						F = 0;
+						// merge ABC, D last
+						*Q = AB;
+						*T = C;
+						// already *F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&c&\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, D no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = D;
+							*F = 0;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&c&d&\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = D;
+							// already *F = 0;
+						}
 					} else {
-						uint32_t ABC = addBasicNode(AB, C, 0, expectId, pFailCount, depth);
-						Q = ABC;
-						T = D;
-						F = 0;
+						// simple rewrite
+						*Q = addNormaliseNode(AB, C, 0, pFailCount, depth);
+						*T = D;
+						// already *F = 0;
 					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				} else if (compare(D, this, A, CASCADE_AND) < 0) {
 					// C<D<A<B
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\",\"cd&a&\":\n", A, B, C, D);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"C<D<A<B\"", A, B, C, D);
 					if (this->isAND(A)) {
 						// A cascades and unusable for right-hand-side
-						uint32_t CDA = addOrderNode(CD, A, 0, expectId, pFailCount, depth + 1);
-						Q = CDA;
-						T = B;
-						F = 0;
+						// merge CDA, B last
+						*Q = CD;
+						*T = A;
+						// already *F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd&a&\":\n");
+						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+							// *Q,*T,*F changed or folded, B no longer assumed highest
+							// append last placeholder
+							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B;
+							*F = 0;
+							if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"cd&a&b&\":\n");
+							cascadeQTF(Q, T, F, pFailCount, depth);
+						} else {
+							// append last placeholder
+							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+							*T = B;
+							// already *F = 0;
+						}
 					} else {
-						uint32_t CDA = addBasicNode(CD, A, 0, expectId, pFailCount, depth);
-						Q = CDA;
-						T = B;
-						F = 0;
+						// simple rewrite
+						*Q = addNormaliseNode(CD, A, 0, pFailCount, depth);
+						*T = B;
+						// already *F = 0;
 					}
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				} else if (compare(B, this, D, CASCADE_AND) < 0) {
 					// A<C<B<D or C<A<B<D
-					// A and C can react and exceed B, D is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\",\"ab&c&\":\n", A, B, C, D);
-					uint32_t ABC = addOrderNode(AB, C, 0, expectId, pFailCount, depth + 1);
-					Q = ABC;
-					T = D;
-					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<B<D\"", A, B, C, D);
+					// merge ABC, D last
+					// already *Q = AB;
+					*T = C;
+					// already *F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&c&\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, D no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = D;
+						*F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&c&d&\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = D;
+						// already *F = 0;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				} else {
 					// A<C<D<B or C<A<D<B
-					// A and C can react and exceed D, B is definitely last
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\",\"cd&a&\":\n", A, B, C, D);
-					uint32_t ACD = addOrderNode(CD, A, 0, expectId, pFailCount, depth + 1);
-					Q = ACD;
-					T = B;
-					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-					return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-				}
-
-			} else if (this->isAND(Q)) {
-				// LR&T&
-				uint32_t LR = Q; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].T; // does not cascade
-
-				assert(!this->isAND(R));
-
-				if (T == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"T=L\",\"N\":%u}}", L, R, LR);
-					return LR;
-				} else if (T == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"T=R\",\"N\":%u}}", L, R, LR);
-					return LR;
-				}
-
-				if (this->isAND(L)) {
-					// AB&C&T&
-					// NOTE: only A may cascade, and if it does, the cascade might exceed T
-
-					uint32_t ABC = Q; // may cascade
-					uint32_t AB  = L; // may cascade
-					uint32_t A   = this->N[AB].Q; // may cascade
-					uint32_t B   = this->N[AB].T; // does not cascade
-					uint32_t C   = R; // does not cascade
-
-					if (A == T) {
-						// A=T<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A=T<B<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (B == T) {
-						// A<B=T<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=T<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (C == T) {
-						// A<B<C=T
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=T\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (compare(C, this, T, CASCADE_AND) < 0) {
-						// A<B<C<T
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(T, this, A, CASCADE_AND) < 0) {
-						// T<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"T<A<B<C\"", A, B, C);
-						if (this->isAND(T)) {
-							// T cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab&f&\":\n");
-							uint32_t ABT = addOrderNode(AB, T, 0, expectId, pFailCount, depth + 1);
-							Q = ABT;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// T is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa&\":");
-							uint32_t TA;
-							if (this->isAND(A)) {
-								// A cascades and unusable for right-hand-side
-								TA = addOrderNode(T, A, 0, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								TA = addBasicNode(T, A, 0, expectId, pFailCount, depth);
-							}
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"fa&b&\":");
-							uint32_t TAB = addBasicNode(TA, B, 0, expectId, pFailCount, depth);
-							Q = TAB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, T, CASCADE_AND) < 0) {
-						// A<B<T<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<T<C\",\"ab&f&\":", A, B, C);
-						uint32_t ABT = addBasicNode(AB, T, 0, expectId, pFailCount, depth);
-						Q = ABT;
-						T = C;
-						F = 0;
-						if (this->isAND(T)) {
-							// T cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// T is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u,%u],\"order\":\"A<C<D<B\"", A, B, C, D);
+					// merge ACD, B last
+					*Q = A;
+					// already *T = CD;
+					// already *F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd&&\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B;
+						*F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"acd&&b&\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
 					} else {
-						// A<T<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<T<B<C\"", A, B, C);
-						if (this->isAND(A)) {
-							// A cascades and can exceed T,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab&f&\":\n");
-							uint32_t ABT = addOrderNode(AB, T, 0, expectId, pFailCount, depth + 1);
-							Q = ABT;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isAND(T)) {
-							// T cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af&\":");
-							uint32_t AT = addBasicNode(A, T, 0, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"af&b&\":\n");
-							uint32_t ATB = addOrderNode(AT, B, 0, expectId, pFailCount, depth + 1);
-							Q = ATB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and T are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af&\":");
-							uint32_t AT = addBasicNode(A, T, 0, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"af&b&\":");
-							uint32_t ATB = addBasicNode(AT, B, 0, expectId, pFailCount, depth);
-							Q = ATB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B;
+						// already *F = 0;
 					}
-				} else {
-					// AB&T&
-					uint32_t AB = Q; // may cascade
-					uint32_t A  = this->N[AB].Q; // may cascade
-					uint32_t B  = this->N[AB].T; // does not cascade
-
-					if (A == T) {
-						// A=T<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=T\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (B == T) {
-						// A<B=T
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=T\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (compare(B, this, T, CASCADE_AND) < 0) {
-						// A<B<T
-						// natural order
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<T<B or T<A<B
-						if (this->isAND(A) || this->isAND(T)) {
-							// A or T cascade and T can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<T<B\",\"af&\":\n", A, B);
-							uint32_t AT = addOrderNode(A, T, 0, expectId, pFailCount, depth + 1);
-							Q = AT;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, T, CASCADE_AND) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<T<B\",\"af&\":", A, B);
-							uint32_t AT = addBasicNode(A, T, 0, expectId, pFailCount, depth);
-							Q = AT;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"T<A<B\",\"fa&\":", A, B);
-							uint32_t TA = addBasicNode(T, A, 0, expectId, pFailCount, depth);
-							Q = TA;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				}
-			} else if (this->isAND(T)) {
-				// QLR&&
-				uint32_t LR = T; // may cascade
-				uint32_t L  = this->N[LR].Q; // may cascade
-				uint32_t R  = this->N[LR].T; // does not cascade
-
-				assert (!this->isAND(R));
-
-				if (Q == L) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"Q=L\",\"N\":%u}}", L, R, T);
-					return LR;
-				} else if (Q == R) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"Q=R\",\"N\":%u}}", L, R, T);
-					return LR;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
 				}
 
-				if (this->isAND(L)) {
-					// QAB&C&&
-					uint32_t ABC = T;
-					uint32_t AB  = L;
-					uint32_t A   = this->N[AB].Q;
-					uint32_t B   = this->N[AB].T;
-					uint32_t C   = R;
+			} else if (this->isAND(*Q)) {
+				// AB&C&
+				uint32_t AB = *Q; // may cascade
+				uint32_t A  = this->N[AB].Q; // may cascade
+				uint32_t B  = this->N[AB].T; // does not cascade
+				uint32_t C  = *T; // does not cascade
 
-					if (A == Q) {
-						// A=Q<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A=Q<B<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (B == Q) {
-						// A<B=Q<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=Q<C\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (C == Q) {
-						// A<B<C=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C=Q\",\"N\":%u}}", A, B, C, ABC);
-						return ABC;
-					} else if (compare(C, this, Q, CASCADE_AND) < 0) {
-						// A<B<C<Q
-						// natural order, sqap Q/T
-						uint32_t tmp = Q;
-						Q = T;
-						T = tmp;
-						F = 0;
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else if (compare(Q, this, A, CASCADE_AND) < 0) {
-						// Q<A<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"Q<A<B<C\"", A, B, C);
-						if (this->isAND(Q)) {
-							// Q cascades and can exceed A,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"ab&q&\":\n");
-							uint32_t ABQ = addOrderNode(AB, Q, 0, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa&\":");
-							uint32_t QA;
-							if (this->isAND(A)) {
-								// A cascades and unusable for right-hand-side
-								QA = addOrderNode(Q, A, 0, expectId, pFailCount, depth + 1);
-							} else {
-								// A is single term
-								QA = addBasicNode(Q, A, 0, expectId, pFailCount, depth);
-							}
+				assert(!this->isAND(B));
+				assert(!this->isAND(C));
 
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qa&b&\":");
-							uint32_t QAB = addBasicNode(QA, B, 0, expectId, pFailCount, depth);
-							Q = QAB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
-						// A<B<Q<C
-						// The A cascade is capped by B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<Q<C\",\"ab&q&\":", A, B, C);
-						uint32_t ABQ = addBasicNode(AB, Q, 0, expectId, pFailCount, depth);
-						Q = ABQ;
-						T = C;
-						F = 0;
-						if (this->isAND(T)) {
-							// Q cascades and can exceed C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// Q is single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					} else {
-						// A<Q<B<C
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<Q<B<C\"", A, B, C);
-						if (this->isAND(A)) {
-							// A cascades and can exceed Q,B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf("\"ab&q&\":\n");
-							uint32_t ABQ = addOrderNode(AB, Q, 0, expectId, pFailCount, depth + 1);
-							Q = ABQ;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (this->isAND(Q)) {
-							// Q cascades and can exceed B,C
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq&\":");
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq&b&\":\n");
-							uint32_t AQB = addOrderNode(AQ, B, 0, expectId, pFailCount, depth + 1);
-							Q = AQB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else {
-							// A and Q are single term
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq&\":");
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId, pFailCount, depth);
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"aq&b&\":\n");
-							uint32_t AQB = addBasicNode(AQ, B, 0, expectId, pFailCount, depth);
-							Q = AQB;
-							T = C;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
-				} else {
-					// QAB&&
-					uint32_t AB = T;
-					uint32_t A  = this->N[AB].Q;
-					uint32_t B  = this->N[AB].T;
-
-					if (A == Q) {
-						// A=Q<B
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A=Q<B\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (B == Q) {
-						// A<B=Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B=Q\",\"N\":%u}}", A, B, AB);
-						return AB;
-					} else if (compare(B, this, Q, CASCADE_AND) < 0) {
-						// A<B<Q
-						// natural order, swap Q/T
-						uint32_t tmp = Q;
-						Q = T;
-						T = tmp;
-						F = 0;
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<B<Q\",\"qtf\":[%u,%s%u,%u]}", A, B, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-						return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-					} else {
-						// A<Q<B or Q<A<B
-						if (this->isAND(A) || this->isAND(Q)) {
-							// A or Q cascade and Q can exceed B
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq&\":\n", A, B);
-							uint32_t AQ = addOrderNode(A, Q, 0, expectId, pFailCount, depth + 1);
-							Q = AQ;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addOrderNode(Q, T, F, expectId, pFailCount, depth + 1);
-						} else if (compare(A, this, Q, CASCADE_AND) < 0) {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"A<Q<B\",\"aq&\":", A, B);
-							uint32_t AQ = addBasicNode(A, Q, 0, expectId, pFailCount, depth);
-							Q = AQ;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						} else {
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"Q<A<B\",\"qa&\":", A, B);
-							uint32_t QA = addBasicNode(Q, A, 0, expectId, pFailCount, depth);
-							Q = QA;
-							T = B;
-							F = 0;
-							if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-							return addBasicNode(Q, T, F, expectId, pFailCount, depth);
-						}
-					}
+				if (C == A) {
+					// C=A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"C=A<B\",\"N\":%u}}", A, B, C, AB);
+					*Q = *T = *F = AB;
+					return true;
+				} else if (C == B) {
+					// A<B=C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B=C\",\"N\":%u}}", A, B, C, AB);
+					*Q = *T = *F = AB;
+					return true;
 				}
-			}
 
-			// final top-level order
-			if (compare(T, this, Q, CASCADE_AND) < 0) {
 				/*
-				 * Single node
+				 * 3! permutations where A<B has 3 candidates
 				 */
-				uint32_t tmp = Q;
-				Q = T;
-				T = tmp;
-				F = 0;
-				if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"T<Q\",\"qtf\":[%u,%s%u,%u]}", Q, T, Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
-			}
-		}
-
-		/*
-		 * @date 2021-08-18 21:57:02
-		 *
-		 * When called recursive, it is certain that one or more of Q/T/F are return values of `orderedNode()`
-		 * With folding (especially NE) the combo can be non-normalised, so re-apply level-1/2 normalisation
-		 */
-
-		if (Q == 0) {
-			// "0?T:F" -> "F"
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
-			return F;
-		}
-
-		{
-			bool changed = false;
-			if (T & IBIT) {
-
-				if (T == IBIT) {
-					if (F == Q || F == 0) {
-						// SELF
-						// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-						return Q;
+				if (compare(B, this, C, CASCADE_AND) < 0) {
+					// A<B<C
+					// natural order
+					// already *Q = AB;
+					// already *T = C;
+					// already *F = 0;
+					return false;
+				} else if (this->isAND(A)) {
+					// A<C<B or C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\"", A, B, C);
+					// cascade, merge AC, B last
+					*Q = A;
+					// already *T = C;
+					// already *F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac&\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, B no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B;
+						*F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ac&b&\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
 					} else {
-						// OR
-						// "Q?!0:F" [2]
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = B;
+						// already *F = 0;
 					}
-				} else if ((T & ~IBIT) == Q) {
-					if (F == Q || F == 0) {
-						// ZERO
-						// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-						return 0;
-					} else {
-						// LESS-THAN
-						// "Q?!Q:F" [5] -> "F?!Q:F" -> "F?!Q:0"
-						Q       = F;
-						F       = 0;
-						changed = true;
-					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, C, CASCADE_AND) < 0) {
+					// A<C<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<C<B\",\"af&\":", A, B, C);
+					*Q = addNormaliseNode(A, C, 0, pFailCount, depth);
+					*T = B;
+					// already *F = 0;
+					return true;
 				} else {
-					if (F == 0) {
-						// GREATER-THAN
-						// "Q?!T:Q" [7] -> "Q?!T:0" [6]
-					} else if (F == Q) {
-						// GREATER-THAN
-						// "Q?!T:Q" [7] -> "Q?!T:0" [6]
-						F       = 0;
-						changed = true;
-					} else if ((T & ~IBIT) == F) {
-						// NOT-EQUAL
-						// "Q?!F:F" [8]
-					} else {
-						// QnTF (new unified operator)
-						// "Q?!T:F" [9]
-					}
+					// C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"T<A<B\",\"fa&\":", A, B, C);
+					*Q = addNormaliseNode(C, A, 0, pFailCount, depth);
+					*T = B;
+					// already *F = 0;
+					return true;
 				}
 
+			} else if (this->isAND(*T)) {
+				// ABC&&
+				uint32_t BC = *T; // may cascade
+				uint32_t A  = *Q; // does not cascade
+				uint32_t B  = this->N[BC].Q; // may cascade
+				uint32_t C  = this->N[BC].T; // does not cascade
+
+				assert(!this->isAND(A));
+				assert(!this->isAND(C));
+
+				if (A == B) {
+					// A=B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A=B<C\",\"N\":%u}}", A, B, C, BC);
+					*Q = *T = *F = BC;
+					return true;
+				} else if (A == C) {
+					// B<C=A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"B<C=A\",\"N\":%u}}", A, B, C, BC);
+					*Q = *T = *F = BC;
+					return true;
+				}
+
+				/*
+						 * 3! permutations where B<C has 3 candidates
+						 */
+				if (compare(C, this, A, CASCADE_AND) < 0) {
+					// B<C<A
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"B<C<A\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = BC;
+					*T = A;
+					//already *F = 0;
+					return true;
+				} else if (this->isAND(B)) {
+					// A<C<B or C<A<B
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\"", A, B, C);
+					// cascade, merge AB, C last
+					// already *Q = A;
+					*T = B;
+					// already *F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&\":\n");
+					if (cascadeQTF(Q, T, F, pFailCount, depth)) {
+						// *Q,*T,*F changed or folded, C no longer assumed highest
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = C;
+						*F = 0;
+						if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"ab&c&\":\n");
+						cascadeQTF(Q, T, F, pFailCount, depth);
+					} else {
+						// append last placeholder
+						*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
+						*T = C;
+						// already *F = 0;
+					}
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",\"qtf\":[%u,%s%u,%u]}", *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					return true;
+				} else if (compare(A, this, B, CASCADE_AND) < 0) {
+					// A<B<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"A<B<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(A, B, 0, pFailCount, depth);
+					*T = C;
+					// already *F = 0;
+					return true;
+				} else {
+					// B<A<C
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u,%u],\"order\":\"B<A<C\",\"qtf\":[%u,%s%u,%u]}", A, B, C, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+					*Q = addNormaliseNode(B, A, 0, pFailCount, depth);
+					*T = C;
+					// already *F = 0;
+					return true;
+				}
+
+			} else if (compare(*T, this, *Q, CASCADE_AND) < 0) {
+				// swap
+				if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"and\":{\"slot\":[%u,%u],\"order\":\"T<Q\",\"qtf\":[%u,%s%u,%u]}", *Q, *T, *Q, (*T & IBIT) ? "~" : "", (*T & ~IBIT), *F);
+				uint32_t savQ = *Q;
+				*Q = *T;
+				*T = savQ;
+				// already *F = 0;
+				return true;
 			} else {
-
-				if (T == 0) {
-					if (F == Q || F == 0) {
-						// ZERO
-						// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-						return 0;
-					} else {
-						// LESS-THAN
-						// "Q?0:F" [12] -> "F?!Q:0" [6]
-						T       = Q ^ IBIT;
-						Q       = F;
-						F       = 0;
-						changed = true;
-					}
-
-				} else if (T == Q) {
-					if (F == Q || F == 0) {
-						// SELF
-						// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-						return Q;
-					} else {
-						// OR
-						// "Q?Q:F" [15] -> "Q?!0:F" [2]
-						T       = 0 ^ IBIT;
-						changed = true;
-					}
-				} else {
-					if (F == 0) {
-						// AND
-						// "Q?T:Q" [17] -> "Q?T:0" [16]
-					} else if (F == Q) {
-						// AND
-						// "Q?T:Q" [17] -> "Q?T:0" [16]
-						F       = 0;
-						changed = true;
-					} else if (T == F) {
-						// SELF
-						// "Q?F:F" [18] -> "F"
-						if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"F\",\"N\":%u}", F);
-						return F;
-					} else {
-						// QTF (old unified operator)
-						// "Q?T:F" [19]
-					}
-				}
-			}
-
-			if (changed && (ctx.opt_debug & context_t::DEBUGMASK_ORDERED)) {
-				printf(",   \"level2\":{\"Q\":%u,\"T\":%s%u,\"F\":%u}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				// no change
+				return false;
 			}
 		}
 
-		return addBasicNode(Q, T, F, expectId, pFailCount, depth);
+		// unchanged
+		return false;
 	}
 
 	/**
@@ -3051,7 +2462,7 @@ struct baseTree_t {
 	virtual bool rewriteQTF(uint32_t *Q, uint32_t *T, uint32_t *F, unsigned *pFailCount, unsigned depth) {
 		return false;
 	}
-	
+
 	/*
 	 * @date  2021-05-12 18:08:34
 	 *
@@ -3062,11 +2473,21 @@ struct baseTree_t {
 	 * The workers of this function: invert no longer exists!! remove all the code and logic related.
 	 * Level 3 rewrites make `lookupNode()` lose it's meaning
 	 */
-	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F) {
+	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount = NULL, unsigned depth = 0) {
+
+		depth++;
+		assert(depth < 20);
 
 		assert ((Q & ~IBIT) < this->ncount);
 		assert ((T & ~IBIT) < this->ncount);
 		assert ((F & ~IBIT) < this->ncount);
+
+		/*
+		 * Test for endpoint
+		 */
+
+		if (T == F)
+			return F;
 
 		/*
 		 * Level 1 normalisation: invert propagation
@@ -3082,22 +2503,20 @@ struct baseTree_t {
 			Q ^= IBIT;
 			T = F;
 			F = savT;
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"~Q\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~Q\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 		}
 		if (Q == 0) {
 			// "0?T:F" -> "F"
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"F\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"Q=0\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
 			return F;
 		}
-
-		uint32_t ibit = 0;
 
 		if (F & IBIT) {
 			// "Q?T:!F" -> "!(Q?!T:F)"
 			F ^= IBIT;
 			T ^= IBIT;
-			ibit ^= IBIT;
-			if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level1\":\"~F\",\"qtf\":[%u,%s%u,%u],\"ibit\":%s0}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F, ibit ? "~" : "");
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~F\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			return addNormaliseNode(Q, T, F, pFailCount, depth) ^ IBIT;
 		}
 
 		/*
@@ -3132,110 +2551,117 @@ struct baseTree_t {
  		 *
 		 */
 
-		if (this->flags & ctx.MAGICMASK_REWRITE) {
-
-			// perform a lookup
-			uint32_t ret = addRewriteNode(Q, T, F);
-
-			// if lookup triggered a rewrite, return what was found
-			if (ret != IBIT)
-				return ret ^ ibit;
-
-			// else continue assuming combo is level-2 normalised
-
-		} else if (T & IBIT) {
+		if (T & IBIT) {
 
 			if (T == IBIT) {
-				if (F == Q || F == 0) {
-					// SELF
-					// "Q?!0:Q" [1] -> "Q?!0:0" [0] -> Q
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-					return Q ^ ibit;
+				if (Q == F) {
+					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a!\",\"N\":%u}", Q);
+					return Q;
+				} else if (F == 0) {
+					// [ 0] a ? !0 : 0  ->  a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00!\",\"N\":%u}", Q);
+					return Q;
 				} else {
-					// OR
-					// "Q?!0:F" [2]
+					// [ 2] a ? !0 : b  -> "+" OR
 				}
-			} else if ((T & ~IBIT) == Q) {
-				if (F == Q || F == 0) {
-					// ZERO
-					// "Q?!Q:Q" [4] -> "Q?!Q:0" [3] -> "0"
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-					return 0 ^ ibit;
+			} else if ((T ^ IBIT) == Q) {
+				if (Q == F) {
+					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa!\",\"N\":%u}", 0);
+					return 0;
+				} else if (F == 0) {
+					// [ 3] a ? !a : 0  ->  0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0!\",\"N\":%u}", 0);
+					return 0;
 				} else {
-					// LESS-THAN
-					// "Q?!Q:F" [5] -> "F?!Q:F" -> "F?!Q:0"
+					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
 					Q = F;
 					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
 			} else {
-				if (F == Q || F == 0) {
-					// GREATER-THAN
-					// "Q?!T:Q" [7] -> "Q?!T:0" [6]
+				if (Q == F) {
+					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 					F = 0;
-				} else if ((T & ~IBIT) == F) {
-					// NOT-EQUAL
-					// "Q?!F:F" [8]
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else {
-					// QnTF (new unified operator)
-					// "Q?!T:F" [9]
+					// [ 6] a ? !b : 0  -> ">" greater-than
+					// [ 8] a ? !b : b  -> "^" not-equal
+					// [ 9] a ? !b : c  -> "!" QnTF
 				}
 			}
 
 		} else {
 
 			if (T == 0) {
-				if (F == Q || F == 0) {
-					// ZERO
-					// "Q?0:Q" [11] -> "Q?0:0" [10] -> "0"
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"0\",\"N\":%u}", 0);
-					return 0 ^ ibit;
+				if (Q == F) {
+					// [11] a ?  0 : a -> 0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a?\",\"N\":%u}", 0);
+					return 0;
+				} else if (F == 0) {
+					// [10] a ?  0 : 0 -> 0
+					assert(0); // already tested
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00?\",\"N\":%u}", 0);
+					return 0;
 				} else {
-					// LESS-THAN
-					// "Q?0:F" [12] -> "F?!Q:0" [6]
+					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
 					T = Q ^ IBIT;
 					Q = F;
 					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0b?!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
-
-			} else if (T == Q) {
-				if (F == Q || F == 0) {
-					// SELF
-					// "Q?Q:Q" [14] -> Q?Q:0" [13] -> "Q"
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"Q\",\"N\":%u}", Q);
-					return Q ^ ibit;
+			} else if (Q == T) {
+				if (Q == F) {
+					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+					assert(0); // already tested
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa?\",\"N\":%u}", Q);
+					return Q;
+				} else if (F == 0) {
+					// [13] a ?  a : 0 -> a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0?\",\"N\":%u}", Q);
+					return Q;
 				} else {
-					// OR
-					// "Q?Q:F" [15] -> "Q?!0:F" [2]
-					T = 0 ^ IBIT;
+					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+					T = IBIT;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
 			} else {
-				if (F == Q || F == 0) {
-					// AND
-					// "Q?T:Q" [17] -> "Q?T:0" [16]
+				if (Q == F) {
+					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 					F = 0;
-				} else if (T == F) {
-					// SELF
-					// "Q?F:F" [18] -> "F"
-					if (ctx.opt_debug & context_t::DEBUGMASK_ORDERED) printf(",   \"level2\":\"F\",\"N\":%u}", F);
-					return F ^ ibit;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else {
-					// QTF (old unified operator)
-					// "Q?T:F" [19]
+					// [16] a ?  b : 0             "&" and
+					// [18] a ?  b : b -> b        ALREADY TESTED		
+					// [19] a ?  b : c             "?" QTF
 				}
 			}
 		}
 
 		/*
+		 * Lookup if QTF combo already exists before performing expensive cascading and rewrites
+		 */
+
+		uint32_t ix = this->lookupNode(Q, T, F);
+		if (this->nodeIndex[ix] != 0) {
+			// node already exists
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, this->nodeIndex[ix]);
+			return this->nodeIndex[ix];
+		}
+
+		/*
 		 * Rewrite QTF into QTnF
 		 */
+
 		if (this->flags & ctx.MAGICMASK_PURE) {
 			/*
 			 * rewrite  "a ? b : c" into "a? !(a ? !b : c) : c"
 			 * ./eval "abc?" "aabc!c!"
 			 */
 			if (!(T & IBIT)) {
-				// Q?T:F -> Q?!(Q?!T:F):F)
-				T = addNormaliseNode(Q, T ^ IBIT, F) ^ IBIT;
+				// Q?T:F -> Q?!(Q?!T:F):F
+				T = addNormaliseNode(Q, T ^ IBIT, F, pFailCount, depth) ^ IBIT;
 			}
 #if 0
 			/*
@@ -3254,12 +2680,66 @@ struct baseTree_t {
 #endif
 		}
 
+		bool somethingChanged = false;
 
 		/*
-		 * Level 3 normalisation: cascade OR/NE/AND
+		 * Cascading
 		 */
 
-		return this->addOrderNode(Q, T, F, this->ncount, NULL, 0) ^ ibit;
+		if (this->flags & ctx.MAGICMASK_CASCADE) {
+			somethingChanged |= this->cascadeQTF(&Q, &T, &F, pFailCount, depth);
+			if (T == F)
+				return F; // collapse
+		} else {
+			if (this->isOR(Q, T, F)) {
+				if (compare(Q, this, F) > 0) {
+					uint32_t savQ = Q;
+					Q = F;
+					T = IBIT;
+					F = savQ;
+				}
+			}
+			if (this->isNE(Q, T, F)) {
+				if (compare(Q, this, F) > 0) {
+					uint32_t savQ = Q;
+					Q = F;
+					T = savQ ^ IBIT;
+					F = savQ;
+				}
+			}
+			if (this->isAND(Q, T, F)) {
+				if (compare(Q, this, T) > 0) {
+					uint32_t savQ = Q;
+					Q = T;
+					T = savQ;
+					F = 0;
+				}
+			}
+
+		}
+
+		/*
+		 * Database driven rewriting
+		 */
+
+		if (this->flags & ctx.MAGICMASK_REWRITE) {
+			somethingChanged |= this->rewriteQTF(&Q, &T, &F, pFailCount, depth);
+			if (T == F)
+				return F; // collapse
+		}
+
+		/*
+		 * recurse is something changed
+		 */
+
+		if (somethingChanged)
+			return addNormaliseNode(Q, T, F, pFailCount, depth);
+
+		/*
+		 * add tree
+		 */
+
+		return addBasicNode(Q, T, F, NULL, 0);
 	}
 
 	/*
@@ -3847,7 +3327,7 @@ struct baseTree_t {
 			case '1': case '2': case '3': case '4':
 			case '5': case '6': case '7': case '8':
 			case '9':
-			// @formatter:on
+				// @formatter:on
 				// back-link
 				pPattern++;
 				break;
@@ -3860,7 +3340,7 @@ struct baseTree_t {
 			case 'q': case 'r': case 's': case 't':
 			case 'u': case 'v': case 'w': case 'x':
 			case 'y': case 'z':
-			// @formatter:on
+				// @formatter:on
 			{
 				// endpoint
 				int v = (*pPattern - 'a');
@@ -3880,7 +3360,7 @@ struct baseTree_t {
 			case 'Q': case 'R': case 'S': case 'T':
 			case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
-			// @formatter:on
+				// @formatter:on
 			{
 				// prefix
 				int v = 0;
@@ -4042,7 +3522,7 @@ struct baseTree_t {
 			case '1': case '2': case '3': case '4':
 			case '5': case '6': case '7': case '8':
 			case '9':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Push back-reference
@@ -4067,7 +3547,7 @@ struct baseTree_t {
 			case 'q': case 'r': case 's': case 't':
 			case 'u': case 'v': case 'w': case 'x':
 			case 'y': case 'z':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Push endpoint
@@ -4095,7 +3575,7 @@ struct baseTree_t {
 			case 'Q': case 'R': case 'S': case 'T':
 			case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Prefix
@@ -4293,7 +3773,7 @@ struct baseTree_t {
 			case '1': case '2': case '3': case '4':
 			case '5': case '6': case '7': case '8':
 			case '9':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Push back-reference
@@ -4318,7 +3798,7 @@ struct baseTree_t {
 			case 'q': case 'r': case 's': case 't':
 			case 'u': case 'v': case 'w': case 'x':
 			case 'y': case 'z':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Push endpoint
@@ -4346,7 +3826,7 @@ struct baseTree_t {
 			case 'Q': case 'R': case 'S': case 'T':
 			case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
-			// @formatter:on
+				// @formatter:on
 			{
 				/*
 				 * Prefix
