@@ -2739,7 +2739,10 @@ struct baseTree_t {
 		 * add tree
 		 */
 
-		return addBasicNode(Q, T, F, NULL, 0);
+		uint32_t retId = addBasicNode(Q, T, F, NULL, 0);
+		
+		if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf("\n");
+		return retId;
 	}
 
 	/*
