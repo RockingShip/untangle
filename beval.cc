@@ -434,7 +434,7 @@ void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <pattern> ...\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
-		fprintf(stderr, "\t   --extend\n");
+		fprintf(stderr, "\t   --explain\n");
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t-n --normalise  Display pattern as: normalised/transform\n");
 		fprintf(stderr, "\t-t --numtests=<seconds> [default=%d]\n", app.opt_dataSize);
@@ -469,7 +469,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP     = 1, LO_DEBUG, LO_FORCE, LO_MAXNODE, LO_SEED, LO_TIMER,
+			LO_HELP     = 1, LO_DEBUG, LO_EXPLAIN, LO_FORCE, LO_MAXNODE, LO_SEED, LO_TIMER,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_DATASIZE = 't', LO_NORMALISE = 'n', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -479,6 +479,7 @@ int main(int argc, char *argv[]) {
 			{"database",    1, 0, LO_DATABASE},
 			{"datasize",    1, 0, LO_DATASIZE},
 			{"debug",       1, 0, LO_DEBUG},
+			{"explain",     0, 0, LO_EXPLAIN},
 			{"force",       0, 0, LO_FORCE},
 			{"help",        0, 0, LO_HELP},
 			{"maxnode",     1, 0, LO_MAXNODE},
@@ -534,6 +535,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
+			break;
+		case LO_EXPLAIN:
+			ctx.opt_debug |= context_t::DEBUGMASK_EXPLAIN;
 			break;
 		case LO_FORCE:
 			app.opt_force++;
