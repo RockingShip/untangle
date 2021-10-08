@@ -154,7 +154,7 @@ kextract_SOURCES = kextract.cc basetree.h context.h
 kextract_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-05 23:43:44
-kfold_SOURCES = kfold.cc basetree.h context.h
+kfold_SOURCES = kfold.cc basetree.h context.h rewritetree.h
 kfold_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-05 13:58:33
@@ -176,7 +176,7 @@ bexplain_SOURCES = bexplain.cc baseexplain.h basetree.h context.h
 bexplain_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-08 10:19:45
-beval_SOURCES = beval.cc basetree.h context.h
+beval_SOURCES = beval.cc basetree.h context.h rewritetree.h
 beval_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-27 15:50:25

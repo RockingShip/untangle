@@ -33,6 +33,7 @@
 #include "context.h"
 #include "basetree.h"
 #include "database.h"
+#include "rewritetree.h"
 
 /*
  * Resource context.
@@ -86,6 +87,9 @@ struct bevalContext_t {
 	/// @global {number} --seed=n, Random seed to generate evaluator test pattern
 	unsigned opt_seed;
 
+	/// @var {database_t} - Database store to place results
+	database_t *pStore;
+
 	bevalContext_t() {
 		opt_databaseName = "untangle.db";
 		opt_dataSize     = QUADPERFOOTPRINT; // compatible with `footprint_t::QUADPERFOOTPRINT`
@@ -94,6 +98,7 @@ struct bevalContext_t {
 		opt_maxNode      = DEFAULT_MAXNODE;
 		opt_normalise    = 0;
 		opt_seed         = 0x20210609;
+		pStore           = NULL;
 	}
 
 	/**
@@ -173,7 +178,7 @@ struct bevalContext_t {
 	 *
 	 * Create/load tree based on arguments
 	 */
-	baseTree_t *main(unsigned numArgs, char *inputArgs[]) {
+	rewriteTree_t *main(unsigned numArgs, char *inputArgs[]) {
 
 		/*
 		 * Determine number of keys
@@ -198,7 +203,7 @@ struct bevalContext_t {
 		uint32_t estart = ostart + numArgs;
 		uint32_t nstart = estart;
 
-		baseTree_t *pTree = new baseTree_t(ctx, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, opt_flags);
+		rewriteTree_t *pTree = new rewriteTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, opt_flags);
 
 		/*
 		 * Setup key/root names
@@ -266,7 +271,7 @@ struct bevalContext_t {
 	 *
 	 * What `eval` does
 	 */
-	int main(baseTree_t *pTree) {
+	int main(rewriteTree_t *pTree) {
 		/*
 		 * Record footprints for each node to maintain the results to compare trees
 		 * Each bit is an independent test.
@@ -622,12 +627,13 @@ int main(int argc, char *argv[]) {
 	database_t db(ctx);
 
 	db.open(app.opt_databaseName);
-
+	app.pStore = &db;
+	
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
 
-	baseTree_t *pTree = app.main(argc - optind, argv + optind);
+	rewriteTree_t *pTree = app.main(argc - optind, argv + optind);
 
 	return app.main(pTree);
 }

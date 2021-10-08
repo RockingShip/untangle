@@ -48,6 +48,7 @@
 #include "context.h"
 #include "basetree.h"
 #include "baseexplain.h"
+#include "rewritetree.h"
 
 /*
  * Resource context.

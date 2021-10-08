@@ -376,7 +376,7 @@ struct baseTree_t {
 	/*
 	 * Release system resources
 	 */
-	~baseTree_t() {
+	virtual ~baseTree_t() {
 		// release allocations if not mmapped
 		if (allocFlags & ALLOCMASK_NODES)
 			ctx.myFree("baseTree_t::N", this->N);
@@ -3019,6 +3019,39 @@ struct baseTree_t {
 		return addBasicNode(Q, T, F, expectId, pFailCount, depth);
 	}
 
+	/**
+	 * @date 2021-10-08 00:00:19
+	 *
+	 * Apply structural rewriting.
+	 * Lookup with index template "abc!def!ghi!!"
+	 * Multiple results are all dry-run for their score.
+	 * The winner is used as construction template.
+	 * If a structural rewrite or collapse occurs,
+	 *   the Q/T/F arguments hold the values for the final top-level node.
+	 * Rewriting can create orphans and larger trees.
+	 * 
+	 * WARNING: A side-effect of the dry-run is that it will break the assertion `nodeId >= ncount`. 
+	 * 
+	 * return:
+	 * Q/T/F are the `addBasicNode()` arguments.
+	 * Collapse are returned as: `Q=T=F=id`. This can be tested with `if (T == F) {}`.
+	 * returns true if Q/T/F changed.
+	 * 
+	 * WARNING: Always use the returned Q/T/F, even when function returns false.
+	 * 
+	 * Implementation in `rewritetree.h`.
+	 * 
+	 * @param {number*} Q - writable reference to `Q`
+	 * @param {number*} T - writable reference to `T`
+	 * @param {number*} F - writable reference to `F`
+	 * @param {unsigned*} pFailCount - `non-null`: dry-run and increment on each missing node. `null`: apply changes, 
+	 * @param {number} depth - Recursion depth
+	 * @return {number} `true` if a rewrite was triggered
+	 */
+	virtual bool rewriteQTF(uint32_t *Q, uint32_t *T, uint32_t *F, unsigned *pFailCount, unsigned depth) {
+		return false;
+	}
+	
 	/*
 	 * @date  2021-05-12 18:08:34
 	 *

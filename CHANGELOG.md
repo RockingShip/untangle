@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-10-07 23:20:32 Added: `rewriteTree_t` skeleton.
 2021-09-27 21:24:33 Fixed: Spacing.
 2021-09-26 10:33:11 Version 2.10.1
 2021-09-26 10:25:29 Changed: Lost+Found.
