@@ -1182,7 +1182,7 @@ struct baseTree_t {
 					assert(!this->isNE(F));
 					assert(compare(Q,this, F, CASCADE_NE) < 0);
 				} else {
-					assert(compare(Q, this, F, CASCADE_OR) < 0);
+					assert(compare(Q, this, F, CASCADE_NONE) < 0);
 				}
 			}
 			if (this->isAND(Q, T, F)) {
@@ -1190,7 +1190,7 @@ struct baseTree_t {
 					assert(!this->isAND(T));
 					assert(compare(Q,this, T, CASCADE_AND) < 0);
 				} else {
-					assert(compare(Q, this, T, CASCADE_OR) < 0);
+					assert(compare(Q, this, T, CASCADE_NONE) < 0);
 				}
 			}
 		}
@@ -1225,9 +1225,9 @@ struct baseTree_t {
 	 * @date 2021-08-13 13:44:17
 	 *
 	 * Apply communicative dyadics ordering on a low level.
-	 * Cascades are left-hand-size only
+	 * Cascades are left-hand-side only
 	 *   left+right made code highly complex
-	 *   right-hand-side was open-range
+	 *   right-hand-side was open-ranged and triggering recursion
 	 * with LHS, all the cascaded left hand terms are less than the right hand term
 	 * drawback, reduced detector range.
 	 *

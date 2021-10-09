@@ -12,6 +12,7 @@ TODO: no sorting when read-only
 Fully integrated `--cascade` which also disables right-hand-side nesting.
 
 ```
+2021-10-09 22:20:23 Fixed: Processing collapse in `rewriteTree_t::rewriteString()`.
 2021-10-08 22:06:42 Added: `beval --explain` as convienience for `beval --debug=4`.
 2021-10-08 22:04:00 Changed: Implemented `rewriteTree_t::rewriteQTF()`, slightly buggy.
 2021-10-08 15:43:54 Replaced `baseTree_t::addOrderNode()` with `tinyTree_t::cascadeQTF()`.

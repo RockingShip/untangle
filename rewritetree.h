@@ -506,6 +506,9 @@ struct rewriteTree_t : baseTree_t {
 	 * eg. "aab^cd^!" is passed and tested against member "abcd^!" which goes sour when `b` is "cd^".
 	 * As a lightweight hack, expand `explainOrderedNode()` that it also soes some basic folding
 	 *
+	 * @date 2021-10-09 21:45:33
+	 * Stricter/simpler version as names lack transform  
+	 * 
 	 * @param {string} name - structure name
 	 * @param {string} skin - structure skin
 	 * @param {number[]} slots - structure run-time slots
@@ -605,13 +608,13 @@ struct rewriteTree_t : baseTree_t {
 					nid = L; // propagate failed
 				else if (R >= this->ncount)
 					nid = R; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(L, R ^ IBIT, 0, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = L;
 					*tlT = R ^ IBIT;
 					*tlF = 0;
+					return;
 				}
 
 				stack[stackPos++]     = nid; // push
@@ -633,13 +636,13 @@ struct rewriteTree_t : baseTree_t {
 					nid = L; // propagate failed
 				else if (R >= this->ncount)
 					nid = R; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(L, IBIT, R, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = L;
 					*tlT = IBIT;
 					*tlF = R;
+					return;
 				}
 
 				stack[stackPos++]     = nid; // push
@@ -661,13 +664,13 @@ struct rewriteTree_t : baseTree_t {
 					nid = L; // propagate failed
 				else if (R >= this->ncount)
 					nid = R; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(L, R ^ IBIT, R, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = L;
 					*tlT = R ^ IBIT;
 					*tlF = R;
+					return;
 				}
 
 				stack[stackPos++]     = nid; // push
@@ -692,13 +695,13 @@ struct rewriteTree_t : baseTree_t {
 					nid = T; // propagate failed
 				else if (F >= this->ncount)
 					nid = F; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(Q, T ^ IBIT, F, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = Q;
 					*tlT = T ^ IBIT;
 					*tlF = F;
+					return;
 				}
 
 				// push
@@ -721,13 +724,13 @@ struct rewriteTree_t : baseTree_t {
 					nid = L; // propagate failed
 				else if (R >= this->ncount)
 					nid = R; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(L, R, 0, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = L;
 					*tlT = R;
 					*tlF = 0;
+					return;
 				}
 
 				stack[stackPos++]     = nid; // push
@@ -752,44 +755,31 @@ struct rewriteTree_t : baseTree_t {
 					nid = T; // propagate failed
 				else if (F >= this->ncount)
 					nid = F; // propagate failed
-				else if (stackPos > 0)
+				else if (pCh[1] != 0)
 					nid = this->addNormaliseNode(Q, T, F, pFailCount, depth);
 				else {
-					nid = 0;
 					*tlQ = Q;
 					*tlT = T;
 					*tlF = F;
+					return;
 				}
 
 				stack[stackPos++]     = nid; // push
 				beenThere[nextNode++] = nid; // save actual index for back references
 				break;
 			}
-			case '~': {
-				// NOT
-				if (stackPos < 1)
-					assert(!"DERR_UNDERFLOW");
-
-				// invert top-of-stack
-				stack[stackPos - 1] ^= IBIT;
-				break;
-			}
-
-			case '/':
-				// separator between placeholder/skin
-				while (pCh[1])
-					pCh++;
-				break;
-			case ' ':
-				// skip spaces
-				break;
 			default:
 				assert(!"DERR_UNDERFLOW");
 			}
 		}
 
-		if (stackPos != 1)
-			assert(!"DERR_STACKNOTEMPTY");
+		/*
+		 * Name is an endpoint
+		 */
+		assert(stackPos == 1);
+		assert(name[1] == 0);
+		
+		*tlQ = *tlT = *tlF = stack[--stackPos];
 	}
 
 };
