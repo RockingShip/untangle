@@ -1,4 +1,4 @@
-// #pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * genrewritedata.cc

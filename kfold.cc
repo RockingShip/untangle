@@ -648,7 +648,7 @@ struct kfoldContext_t {
 		for (uint32_t iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
 			uint32_t R = pOldTree->roots[iRoot];
 
-			pNewTree->roots[iRoot] = pNewTree->roots[R & ~IBIT] ^ (R & IBIT);
+			pNewTree->roots[iRoot] = pNewTree->importNodes(pResults, pResults->roots[R & ~IBIT]) ^ (R & IBIT);
 		}
 
 		// and system

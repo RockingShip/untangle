@@ -390,7 +390,7 @@ struct validateContext_t {
 				json_array_append_new(jList, json_string_nocheck("system"));
 			} else {
 				for (uint32_t iRoot = kstart; iRoot < estart; iRoot++) {
-					if ((tree.roots[iRoot] & ~IBIT) >= tree.nstart)
+					if (tree.roots[iRoot] != iRoot)
 						json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
 				}
 			}
@@ -543,13 +543,12 @@ struct validateContext_t {
 			 * Compare the results for the provides
 			 */
 			for (uint32_t iRoot = kstart; iRoot < nstart; iRoot++) {
-
 				uint32_t R = tree.roots[iRoot];
 
 				if (R == iRoot)
 					continue; // skip unused root
 
-				// test for undefined
+				// test for undefined. Initial value `pEval[]` is 0x5a5a5a5a.
 				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Root loads undefined"));
