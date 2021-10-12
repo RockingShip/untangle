@@ -9,7 +9,14 @@ TODO: no sorting when read-only
 
 ## [Unreleased]
 
+## 2021-10-12 20:18:09 [Version 2.11.0]
+
 Fully integrated `--cascade` which also disables right-hand-side nesting.
+With focus on `rewriteQTF()` as engine powering SID->QTF conversion.
+Two programs supporting rewriting are currently `beval` and `kfold`.
+
+TODO: `rewriteData[]` as static data for `rewriteQTF()`.
+TODO: Caching `baseTree_t::compare()` calls.
 
 ```
 2021-10-11 22:31:11 Fixed: Root entries output `kfold`.
@@ -446,7 +453,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.10.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.11.0...HEAD
+[Version 2.11.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.10.0...v2.11.0
 [Version 2.10.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.9.0...v2.10.0
 [Version 2.9.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.8.0...v2.9.0
 [Version 2.8.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.7.0...v2.8.0

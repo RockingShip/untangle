@@ -1805,7 +1805,7 @@ struct baseTree_t {
 						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
-							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
+							// assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet @date 2021-10-11 found it deep within "kfold des.dat". 
 							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
 							*T = B ^ IBIT;
 							*F = B;
@@ -2476,7 +2476,7 @@ struct baseTree_t {
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount = NULL, unsigned depth = 0) {
 
 		depth++;
-		assert(depth < 20);
+		assert(depth < 240);
 
 		assert ((Q & ~IBIT) < this->ncount);
 		assert ((T & ~IBIT) < this->ncount);
