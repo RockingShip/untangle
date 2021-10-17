@@ -204,7 +204,6 @@ int main(int argc, char *argv[]) {
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
-			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_SAVEINDEX,
@@ -234,7 +233,6 @@ int main(int argc, char *argv[]) {
 			{"no-paranoid",   0, 0, LO_NOPARANOID},
 			{"no-pure",       0, 0, LO_NOPURE},
 			{"no-saveindex",  0, 0, LO_NOSAVEINDEX},
-			{"no-unsafe",     0, 0, LO_NOUNSAFE},
 			{"quiet",         2, 0, LO_QUIET},
 			{"saveindex",     0, 0, LO_SAVEINDEX},
 			{"sid",           1, 0, LO_SID},
@@ -300,9 +298,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
-			break;
-		case LO_NOUNSAFE:
-			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
 			break;
 		case LO_PARANOID:
 			ctx.flags |= context_t::MAGICMASK_PARANOID;

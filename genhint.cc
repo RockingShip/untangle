@@ -665,7 +665,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --task=<id>,<last>         Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                     Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>          Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --[no-]unsafe              Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --verbose                  Say more\n");
 	}
 }
@@ -702,7 +701,6 @@ int main(int argc, char *argv[]) {
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
-			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_SAVEINDEX,
@@ -710,7 +708,6 @@ int main(int argc, char *argv[]) {
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
-			LO_UNSAFE,
 			// short opts
 			LO_HELP    = 'h',
 			LO_QUIET   = 'q',
@@ -734,14 +731,12 @@ int main(int argc, char *argv[]) {
 			{"no-paranoid",   0, 0, LO_NOPARANOID},
 			{"no-pure",       0, 0, LO_NOPURE},
 			{"no-saveindex",  0, 0, LO_NOSAVEINDEX},
-			{"no-unsafe",     0, 0, LO_NOUNSAFE},
 			{"quiet",         2, 0, LO_QUIET},
 			{"saveindex",     0, 0, LO_SAVEINDEX},
 			{"sid",           1, 0, LO_SID},
 			{"task",          1, 0, LO_TASK},
 			{"text",          2, 0, LO_TEXT},
 			{"timer",         1, 0, LO_TIMER},
-			{"unsafe",        0, 0, LO_UNSAFE},
 			{"verbose",       2, 0, LO_VERBOSE},
 			//
 			{NULL,            0, 0, 0}
@@ -806,9 +801,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
-			break;
-		case LO_NOUNSAFE:
-			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
 			break;
 		case LO_PARANOID:
 			ctx.flags |= context_t::MAGICMASK_PARANOID;
@@ -888,9 +880,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_TIMER:
 			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-			break;
-		case LO_UNSAFE:
-			ctx.flags |= context_t::MAGICMASK_UNSAFE;
 			break;
 		case LO_VERBOSE:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;

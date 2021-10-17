@@ -237,11 +237,6 @@ struct genportContext_t : dbtool_t {
 				fprintf(f, ",");
 			fprintf(f, "\"pure\"");
 		}
-		if (pStore->creationFlags & context_t::MAGICMASK_UNSAFE) {
-			if (cnt++)
-				fprintf(f, ",");
-			fprintf(f, "\"unsafe\"");
-		}
 		if (pStore->creationFlags & context_t::MAGICMASK_AINF) {
 			if (cnt++)
 				fprintf(f, ",");
@@ -289,8 +284,6 @@ struct genportContext_t : dbtool_t {
 				mask |= context_t::MAGICMASK_PARANOID;
 			else if (strcmp(pFlag, "pure") == 0)
 				mask |= context_t::MAGICMASK_PURE;
-			else if (strcmp(pFlag, "unsafe") == 0)
-				mask |= context_t::MAGICMASK_UNSAFE;
 			else if (strcmp(pFlag, "ainf") == 0)
 				mask |= context_t::MAGICMASK_AINF;
 			else if (strcmp(pFlag, "cascade") == 0)

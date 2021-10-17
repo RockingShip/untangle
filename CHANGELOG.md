@@ -9,14 +9,18 @@ TODO: no sorting when read-only
 
 ## [Unreleased]
 
+```
+2021-10-17 18:58:32 Removed `gensignature --unsafe` (use `--listunsafe`).
+```
+
 ## 2021-10-12 20:18:09 [Version 2.11.0]
 
-Fully integrated `--cascade` which also disables right-hand-side nesting.
-With focus on `rewriteQTF()` as engine powering SID->QTF conversion.
-Two programs supporting rewriting are currently `beval` and `kfold`.
+Fully integrated `--cascade` which also disables right-hand-side nesting.  
+With focus on `rewriteQTF()` as engine powering SID->QTF conversion.  
+Two programs supporting rewriting are currently `beval` and `kfold`.  
 
-TODO: `rewriteData[]` as static data for `rewriteQTF()`.
-TODO: Caching `baseTree_t::compare()` calls.
+TODO: `rewriteData[]` as static data for `rewriteQTF()`.  
+TODO: Caching `baseTree_t::compare()` calls.  
 
 ```
 2021-10-11 22:31:11 Fixed: Root entries output `kfold`.

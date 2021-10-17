@@ -87,14 +87,12 @@ struct context_t {
 		// @formatter:off
 		MAGICFLAG_PARANOID      = 0,    // Force extra asserts
 		MAGICFLAG_PURE          = 1,    // Force `QTF->QnTF` rewriting, smaller collection of candidates
-		MAGICFLAG_UNSAFE        = 2,    // Imprints for empty/unsafe groups, imprint index tuned for a subset of signatures
 		MAGICFLAG_AINF          = 3,    // add-if-not-found, signatures/imprints contain false duplicates
 		MAGICFLAG_CASCADE       = 4,    // Enable level-3 normalisation: cascaded OR/NE/AND
 		MAGICFLAG_REWRITE       = 5,    // Enable level-4 normalisation: Database lookup/rewrite
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
-		MAGICMASK_UNSAFE        = 1 << MAGICFLAG_UNSAFE,
 		MAGICMASK_AINF          = 1 << MAGICFLAG_AINF,
 		MAGICMASK_CASCADE       = 1 << MAGICFLAG_CASCADE,
 		MAGICMASK_REWRITE       = 1 << MAGICFLAG_REWRITE,
@@ -203,11 +201,10 @@ struct context_t {
 	 * Display creation flags
 	 */
 	void logFlags(uint32_t flags) {
-		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s%s%s%s\n", timeAsString(),
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s%s%s\n", timeAsString(),
 			flags,
 			(flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
 			(flags & context_t::MAGICMASK_PURE) ? " PURE" : "",
-			(flags & context_t::MAGICMASK_UNSAFE) ? " UNSAFE" : "",
 			(flags & context_t::MAGICMASK_AINF) ? " AINF" : "",
 			(flags & context_t::MAGICMASK_CASCADE) ? " CASCADE" : "",
 			(flags & context_t::MAGICMASK_REWRITE) ? " REWRITE" : ""
@@ -452,12 +449,6 @@ struct context_t {
 		if (flags & MAGICMASK_PURE) {
 			::strcat(pBuffer, "PURE");
 			flags &= ~MAGICMASK_PURE;
-			if (flags)
-				::strcat(pBuffer, "|");
-		}
-		if (flags & MAGICMASK_UNSAFE) {
-			::strcat(pBuffer, "UNSAFE");
-			flags &= ~MAGICMASK_UNSAFE;
 			if (flags)
 				::strcat(pBuffer, "|");
 		}

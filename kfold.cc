@@ -14,6 +14,7 @@
  * With ExplainNode: Hitting wall at iNode=376 numNodes=62362 (depr-5n9.db)
                                      iNode=376 numNodes=3476 (member-5n9.db)
  * With NormaliseNode: Hitting wall at iNode=511 numNodes=35504
+ * With 2.11.0: iNode=927 numNodes=46170 (untangle-4n9-full)
  *                                     
  * Discovered that the structure base compare is incomplete and needs additional logic for cascading dyadics.
  * Keep the original `main()` as the new code is word-in-progress.

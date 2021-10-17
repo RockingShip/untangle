@@ -1295,7 +1295,7 @@ struct genmemberContext_t : dbtool_t {
 	/**
 	 * @date 2020-04-02 21:52:34
 	 */
-	void rebuildImprints(unsigned unsafeOnly) {
+	void rebuildImprints(void) {
 		// clear signature and imprint index
 		::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 
@@ -1305,12 +1305,8 @@ struct genmemberContext_t : dbtool_t {
 		// skip reserved entry
 		pStore->numImprint = 1;
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
-			if (unsafeOnly)
-				fprintf(stderr, "[%s] Rebuilding imprints for empty/unsafe signatures\n", ctx.timeAsString());
-			else
-				fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
-		}
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
 
 		/*
 		 * Create imprints for signature groups
@@ -1371,7 +1367,7 @@ struct genmemberContext_t : dbtool_t {
 			 * Add to imprint index, either all or empty/unsafe only
 			 */
 
-			if (!unsafeOnly || !(pSignature->flags & signature_t::SIGMASK_SAFE)) {
+			{
 				// avoid `"storage full"`. Give warning later
 				if (pStore->maxImprint - pStore->numImprint <= pStore->interleave && opt_sidHi == 0 && this->opt_truncate) {
 					// break now, display text later/ Leave progress untouched

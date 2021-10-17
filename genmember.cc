@@ -287,7 +287,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
-		fprintf(stderr, "\t   --[no-]unsafe                   Reindex imprints based on empty/unsafe signature groups [default=%s]\n", (ctx.flags & context_t::MAGICMASK_UNSAFE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-v --truncate                      Truncate on database overflow\n");
 		fprintf(stderr, "\t-v --verbose                       Say more\n");
 		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
@@ -333,7 +332,6 @@ int main(int argc, char *argv[]) {
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
-			LO_NOUNSAFE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
@@ -345,7 +343,6 @@ int main(int argc, char *argv[]) {
 			LO_TEXT,
 			LO_TIMER,
 			LO_TRUNCATE,
-			LO_UNSAFE,
 			LO_WINDOW,
 			// short opts
 			LO_HELP    = 'h',
@@ -375,7 +372,6 @@ int main(int argc, char *argv[]) {
 			{"no-paranoid",        0, 0, LO_NOPARANOID},
 			{"no-pure",            0, 0, LO_NOPURE},
 			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
-			{"no-unsafe",          0, 0, LO_NOUNSAFE},
 			{"paranoid",           0, 0, LO_PARANOID},
 			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
@@ -388,7 +384,6 @@ int main(int argc, char *argv[]) {
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
 			{"truncate",           0, 0, LO_TRUNCATE},
-			{"unsafe",             0, 0, LO_UNSAFE},
 			{"verbose",            2, 0, LO_VERBOSE},
 			{"window",             1, 0, LO_WINDOW},
 			//
@@ -478,9 +473,6 @@ int main(int argc, char *argv[]) {
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
 			break;
-		case LO_NOUNSAFE:
-			ctx.flags &= ~context_t::MAGICMASK_UNSAFE;
-			break;
 		case LO_PARANOID:
 			ctx.flags |= context_t::MAGICMASK_PARANOID;
 			break;
@@ -566,9 +558,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_TRUNCATE:
 			app.opt_truncate = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_truncate + 1;
-			break;
-		case LO_UNSAFE:
-			ctx.flags |= context_t::MAGICMASK_UNSAFE;
 			break;
 		case LO_VERBOSE:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
@@ -746,9 +735,6 @@ int main(int argc, char *argv[]) {
 		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINT;
 	if (!db.imprintIndexSize)
 		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINTINDEX;
-	// `--unsafe` requires rebuilding of imprints
-	if (ctx.flags & context_t::MAGICMASK_UNSAFE)
-		app.rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
 	// will require local copy of signatures
 	app.rebuildSections |= database_t::ALLOCMASK_SIGNATURE;
 
@@ -822,16 +808,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 		// rebuild imprints
-		if (!(ctx.flags & context_t::MAGICMASK_UNSAFE)) {
-			// regular rebuild
-			app.rebuildImprints(0);
-		} else if (store.numHint > 1) {
-			// rebuild unsafe with hints
-			app.rebuildImprintsWithHints();
-		} else {
-			// rebuild unsage with sid bounds
-			app.rebuildImprints(ctx.flags & context_t::MAGICMASK_UNSAFE);
-		}
+		app.rebuildImprints();
 		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 	}
 	if (app.rebuildSections)
