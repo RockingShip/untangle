@@ -16,7 +16,7 @@ bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_
 ## This section for dataset creation utilities
 ##
 
-PROGRAMS_PART1 = eval genhint genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
+PROGRAMS_PART1 = eval genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
 EXTRA_PART1 =
 
 # genrestartdata is slow and output is small, include in distribution
@@ -35,10 +35,6 @@ AM_CXXFLAGS =  -Wall -Werror -funroll-loops -finline -msse4
 
 # @date 2020-03-06 16:56:25
 eval_SOURCES = eval.cc
-
-# @date 2020-04-18 20:46:40
-genhint_SOURCES = genhint.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
-genhint_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2020-03-30 17:19:24
 genmember_SOURCES = genmember.cc genmember.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h

@@ -10,7 +10,8 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
-2021-10-17 18:58:32 Removed `gensignature --unsafe` (use `--listunsafe`).
+2021-10-17 19:36:24 Removed: `hint` section (too complex as optimisation).
+2021-10-17 18:58:32 Removed: `gensignature --unsafe` (use `--listunsafe`).
 ```
 
 ## 2021-10-12 20:18:09 [Version 2.11.0]

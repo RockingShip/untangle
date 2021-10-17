@@ -100,7 +100,7 @@ struct fileHeader_t {
 	uint32_t magic_maxSlots;
 	uint32_t magic_sizeofSignature;
 	uint32_t magic_sizeofSwap;
-	uint32_t magic_sizeofHint;
+	uint32_t magic_sizeofUnused;
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofPair;
 	uint32_t magic_sizeofMember;
@@ -120,8 +120,8 @@ struct fileHeader_t {
 	uint32_t signatureIndexSize;
 	uint32_t numSwap;
 	uint32_t swapIndexSize;
-	uint32_t numHint;
-	uint32_t hintIndexSize;
+	uint32_t numUnused; // unused
+	uint32_t unusedIndexSize; // unused
 	uint32_t numImprint;
 	uint32_t imprintIndexSize;
 	uint32_t numPair;
@@ -149,8 +149,8 @@ struct fileHeader_t {
 	uint64_t offSignatureIndex;
 	uint64_t offSwaps;
 	uint64_t offSwapIndex;
-	uint64_t offHints;
-	uint64_t offHintIndex;
+	uint64_t offUnused; // unused
+	uint64_t offUnusedIndex; // unused
 	uint64_t offImprints;
 	uint64_t offImprintIndex;
 	uint64_t offpairs;
@@ -187,8 +187,8 @@ struct database_t {
 		ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCFLAG_SWAP,
 		ALLOCFLAG_SWAPINDEX,
-		ALLOCFLAG_HINT,
-		ALLOCFLAG_HINTINDEX,
+		ALLOCFLAG_UNUSED, // unused
+		ALLOCFLAG_UNUSEDINDEX, // unused
 		ALLOCFLAG_IMPRINT,
 		ALLOCFLAG_IMPRINTINDEX,
 		ALLOCFLAG_PAIR,
@@ -203,8 +203,8 @@ struct database_t {
 		ALLOCMASK_SIGNATUREINDEX     = 1 << ALLOCFLAG_SIGNATUREINDEX,
 		ALLOCMASK_SWAP               = 1 << ALLOCFLAG_SWAP,
 		ALLOCMASK_SWAPINDEX          = 1 << ALLOCFLAG_SWAPINDEX,
-		ALLOCMASK_HINT               = 1 << ALLOCFLAG_HINT,
-		ALLOCMASK_HINTINDEX          = 1 << ALLOCFLAG_HINTINDEX,
+		ALLOCMASK_UNUSED             = 1 << ALLOCFLAG_UNUSED,
+		ALLOCMASK_UNUSEDINDEX        = 1 << ALLOCFLAG_UNUSEDINDEX,
 		ALLOCMASK_IMPRINT            = 1 << ALLOCFLAG_IMPRINT,
 		ALLOCMASK_IMPRINTINDEX       = 1 << ALLOCFLAG_IMPRINTINDEX,
 		ALLOCMASK_PAIR               = 1 << ALLOCFLAG_PAIR,
@@ -251,12 +251,6 @@ struct database_t {
 	swap_t             *swaps;                      // swap collection
 	uint32_t           swapIndexSize;               // index size (must be prime)
 	uint32_t           *swapIndex;                  // index
-	// hint store
-	uint32_t           numHint;                     // number of hints
-	uint32_t           maxHint;                     // maximum size of collection
-	hint_t             *hints;                      // hint collection
-	uint32_t           hintIndexSize;               // index size (must be prime)
-	uint32_t           *hintIndex;                  // index
 	// imprint store
 	uint32_t           interleave;                  // imprint interleave factor (display value)
 	uint32_t           interleaveStep;              // imprint interleave factor (interleave distance)
@@ -322,13 +316,6 @@ struct database_t {
 		swapIndexSize = 0;
 		swapIndex     = NULL;
 
-		// hint store
-		numHint       = 0;
-		maxHint       = 0;
-		hints         = NULL;
-		hintIndexSize = 0;
-		hintIndex     = NULL;
-
 		// imprint store
 		interleave       = 1;
 		interleaveStep   = 1;
@@ -388,10 +375,6 @@ struct database_t {
 			ctx.myFree("database_t::swaps", swaps);
 		if (allocFlags & ALLOCMASK_SWAPINDEX)
 			ctx.myFree("database_t::swapIndex", swapIndex);
-		if (allocFlags & ALLOCMASK_HINT)
-			ctx.myFree("database_t::hints", hints);
-		if (allocFlags & ALLOCMASK_HINTINDEX)
-			ctx.myFree("database_t::hintIndex", hintIndex);
 		if (allocFlags & ALLOCMASK_IMPRINT)
 			ctx.myFree("database_t::imprints", imprints);
 		if (allocFlags & ALLOCMASK_IMPRINTINDEX)
@@ -570,26 +553,6 @@ struct database_t {
 			}
 		}
 
-		// hint store
-		if (inheritSections & (ALLOCMASK_HINT | ALLOCMASK_HINTINDEX)) {
-			if (pFrom->numHint == 0)
-				ctx.fatal("\n{\"error\":\"Missing hint section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
-					  __FUNCTION__, __FILE__, __LINE__, pName);
-
-			if (inheritSections & ALLOCMASK_HINT) {
-				assert(!(allocFlags & ALLOCMASK_HINT));
-				this->maxHint = pFrom->maxHint;
-				this->numHint = pFrom->numHint;
-				this->hints   = pFrom->hints;
-			}
-
-			if (inheritSections & ALLOCMASK_HINTINDEX) {
-				assert(!(allocFlags & ALLOCMASK_HINTINDEX));
-				this->hintIndexSize = pFrom->hintIndexSize;
-				this->hintIndex     = pFrom->hintIndex;
-			}
-		}
-
 		// imprint store
 		if (inheritSections & (ALLOCMASK_IMPRINT | ALLOCMASK_IMPRINTINDEX)) {
 			if (pFrom->numImprint == 0)
@@ -695,12 +658,6 @@ struct database_t {
 		if (swapIndexSize && !(excludeSections & ALLOCMASK_SWAPINDEX))
 			memUsage += swapIndexSize * sizeof(*swapIndex);
 
-		// hint store
-		if (maxHint && !(excludeSections & ALLOCMASK_HINT))
-			memUsage += maxHint * sizeof(*hints); // increase with 5%
-		if (hintIndexSize && !(excludeSections & ALLOCMASK_HINTINDEX))
-			memUsage += hintIndexSize * sizeof(*hintIndex);
-
 		// imprint store
 		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT))
 			memUsage += maxImprint * sizeof(*imprints); // increase with 5%
@@ -782,20 +739,6 @@ struct database_t {
 			allocFlags |= ALLOCMASK_SWAPINDEX;
 		}
 
-		// hint store
-		if (maxHint && !(excludeSections & ALLOCMASK_HINT)) {
-			// increase with 5%
-			maxHint = maxHint;
-			numHint = 1; // do not start at 1
-			hints   = (hint_t *) ctx.myAlloc("database_t::hints", maxHint, sizeof(*hints));
-			allocFlags |= ALLOCMASK_HINT;
-		}
-		if (hintIndexSize && !(excludeSections & ALLOCMASK_HINTINDEX)) {
-			assert(ctx.isPrime(hintIndexSize));
-			hintIndex = (uint32_t *) ctx.myAlloc("database_t::hintIndex", hintIndexSize, sizeof(*hintIndex));
-			allocFlags |= ALLOCMASK_HINTINDEX;
-		}
-
 		// imprint store
 		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT)) {
 			assert(interleave && interleaveStep);
@@ -846,7 +789,6 @@ struct database_t {
 		 */
 		assert(this->signatureIndexSize - this->maxSignature / 100 >= this->maxSignature);
 		assert(this->swapIndexSize - this->maxSwap / 100 >= this->maxSwap);
-		assert(this->hintIndexSize - this->maxHint / 100 >= this->maxHint);
 		assert(this->imprintIndexSize - this->maxImprint / 100 >= this->maxImprint);
 		assert(this->pairIndexSize - this->maxPair / 100 >= this->maxPair);
 		assert(this->memberIndexSize - this->maxMember / 100 >= this->maxMember);
@@ -925,8 +867,6 @@ struct database_t {
 			ctx.fatal("\n{\"error\":\"db magic_sizeofSignature\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSignature, (unsigned) sizeof(signature_t));
 		if (fileHeader.magic_sizeofSwap != sizeof(swap_t) && fileHeader.numSwap > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofSwap\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSwap, (unsigned) sizeof(swap_t));
-		if (fileHeader.magic_sizeofHint != sizeof(hint_t) && fileHeader.numHint > 0)
-			ctx.fatal("\n{\"error\":\"db magic_sizeofHint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofHint, (unsigned) sizeof(hint_t));
 		if (fileHeader.magic_sizeofImprint != sizeof(imprint_t) && fileHeader.numImprint > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofImprint\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofImprint, (unsigned) sizeof(imprint_t));
 		if (fileHeader.magic_sizeofPair != sizeof(pair_t) && fileHeader.numPair > 0)
@@ -971,13 +911,6 @@ struct database_t {
 		swaps         = (swap_t *) (rawDatabase + fileHeader.offSwaps);
 		swapIndexSize = fileHeader.swapIndexSize;
 		swapIndex     = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
-
-		// hint
-		maxHint       = fileHeader.numHint;
-		numHint       = fileHeader.numHint;
-		hints         = (hint_t *) (rawDatabase + fileHeader.offHints);
-		hintIndexSize = fileHeader.hintIndexSize;
-		hintIndex     = (uint32_t *) (rawDatabase + fileHeader.offHintIndex);
 
 		// imprints
 		interleave       = fileHeader.interleave;
@@ -1055,8 +988,6 @@ struct database_t {
 		ctx.progressHi += align32(sizeof(*this->signatureIndex) * this->signatureIndexSize);
 		ctx.progressHi += align32(sizeof(*this->swaps) * this->numSwap);
 		ctx.progressHi += align32(sizeof(*this->swapIndex) * this->swapIndexSize);
-		ctx.progressHi += align32(sizeof(*this->hints) * this->numHint);
-		ctx.progressHi += align32(sizeof(*this->hintIndex) * this->hintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->imprints) * this->numImprint);
 		ctx.progressHi += align32(sizeof(*this->imprintIndex) * this->imprintIndexSize);
 		ctx.progressHi += align32(sizeof(*this->pairs) * this->numPair);
@@ -1177,27 +1108,6 @@ struct database_t {
 		}
 
 		/*
-		 * write hints
-		 */
-		if (this->numHint) {
-			// first entry must be zero
-			hint_t zero;
-			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->hints, &zero, sizeof(zero)) == 0);
-
-			// collection
-			fileHeader.numHint  = this->numHint;
-			fileHeader.offHints = flen;
-			flen += writeData(outf, this->hints, sizeof(*this->hints) * this->numHint, fileName, "hint");
-			if (this->hintIndexSize) {
-				// Index
-				fileHeader.hintIndexSize = this->hintIndexSize;
-				fileHeader.offHintIndex  = flen;
-				flen += writeData(outf, this->hintIndex, sizeof(*this->hintIndex) * this->hintIndexSize, fileName, "hintIndex");
-			}
-		}
-
-		/*
 		 * write imprints
 		 */
 		if (this->numImprint) {
@@ -1275,10 +1185,10 @@ struct database_t {
 		fileHeader.magic_maxSlots        = MAXSLOTS;
 		fileHeader.magic_sizeofSignature = sizeof(signature_t);
 		fileHeader.magic_sizeofSwap      = sizeof(swap_t);
-		fileHeader.magic_sizeofHint      = sizeof(hint_t);
-		fileHeader.magic_sizeofImprint = sizeof(imprint_t);
-		fileHeader.magic_sizeofPair    = sizeof(pair_t);
-		fileHeader.magic_sizeofMember  = sizeof(member_t);
+		fileHeader.magic_sizeofUnused    = 0;
+		fileHeader.magic_sizeofImprint   = sizeof(imprint_t);
+		fileHeader.magic_sizeofPair      = sizeof(pair_t);
+		fileHeader.magic_sizeofMember    = sizeof(member_t);
 		fileHeader.offEnd                = flen;
 
 		// rewrite header
@@ -1726,71 +1636,6 @@ struct database_t {
 		::memcpy(&this->swaps[swapId], pSwap, sizeof(*pSwap));
 
 		return swapId;
-	}
-
-	/*
-	 * Hint store
-	 */
-
-	/**
-	 * @date 2020-04-19 20:52:11
-	 *
-	 * Perform hint lookup
-	 *
-	 * Lookup key in index using a hash array with overflow.
-	 * Returns the offset within the index.
-	 * If contents of index is 0, then not found, otherwise it the index where to find the hint.
-	 *
-	 * @param v {hint_t} v - key value
-	 * @return {number} offset into index
-	 */
-	inline unsigned lookupHint(const hint_t *pHint) {
-		ctx.cntHash++;
-
-		// calculate starting position
-		unsigned crc32 = 0;
-
-		for (unsigned j = 0; j < hint_t::MAXENTRY; j++)
-			crc32 = __builtin_ia32_crc32si(crc32, pHint->numStored[j]);
-
-		unsigned ix   = crc32 % hintIndexSize;
-		unsigned bump = ix;
-		if (bump == 0)
-			bump = hintIndexSize - 1; // may never be zero
-		if (bump > 2147000041)
-			bump = 2147000041; // may never exceed last 32bit prime
-
-		for (;;) {
-			ctx.cntCompare++;
-			if (this->hintIndex[ix] == 0)
-				return ix; // "not-found"
-
-			if (this->hints[this->hintIndex[ix]].equals(*pHint))
-				return ix; // "found"
-
-			// overflow, jump to next entry
-			// if `ix` and `bump` are both 31 bit values, then the addition will never overflow
-			ix += bump;
-			if (ix >= hintIndexSize)
-				ix -= hintIndexSize;
-		}
-	}
-
-	/**
- 	 * Add a new hint to the dataset
- 	 *
-	 * @param v {hint_t} v - key value
-	 * @return {number} hintId
-	 */
-	inline unsigned addHint(hint_t *pHint) {
-		unsigned hintId = this->numHint++;
-
-		if (this->numHint > this->maxHint)
-			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxHint\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxHint);
-
-		::memcpy(&this->hints[hintId], pHint, sizeof(*pHint));
-
-		return hintId;
 	}
 
 	/*
@@ -2274,8 +2119,6 @@ struct database_t {
 			numProgress += this->numSignature;
 		if (sections & ALLOCMASK_SWAPINDEX)
 			numProgress += this->numSwap;
-		if (sections & ALLOCMASK_HINTINDEX)
-			numProgress += this->numHint;
 		if (sections & ALLOCMASK_IMPRINTINDEX)
 			numProgress += this->numImprint;
 		if (sections & ALLOCMASK_PAIRINDEX)
@@ -2362,48 +2205,6 @@ struct database_t {
 				unsigned ix = this->lookupSwap(pSwap);
 				assert(this->swapIndex[ix] == 0);
 				this->swapIndex[ix] = iSwap;
-
-				ctx.progress++;
-			}
-		}
-
-		/*
-		 * Hints
-		 */
-
-		if (sections & ALLOCMASK_HINTINDEX) {
-			// clear
-			::memset(this->hintIndex, 0, this->hintIndexSize * sizeof(*this->hintIndex));
-
-			// rebuild
-			for (unsigned iHint = 1; iHint < this->numHint; iHint++) {
-				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					int perSecond = ctx.updateSpeed();
-
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
-							ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
-							(double) ctx.cntCompare / ctx.cntHash);
-					}
-
-					ctx.tick = 0;
-				}
-
-				const hint_t *pHint = this->hints + iHint;
-
-				unsigned ix = this->lookupHint(pHint);
-				assert(this->hintIndex[ix] == 0);
-				this->hintIndex[ix] = iHint;
 
 				ctx.progress++;
 			}
@@ -2585,18 +2386,6 @@ struct database_t {
 			if (sections)
 				::strcat(pBuffer, "|");
 		}
-		if (sections & ALLOCMASK_HINT) {
-			::strcat(pBuffer, "hint");
-			sections &= ~ALLOCMASK_HINT;
-			if (sections)
-				::strcat(pBuffer, "|");
-		}
-		if (sections & ALLOCMASK_HINTINDEX) {
-			::strcat(pBuffer, "hintIndex");
-			sections &= ~ALLOCMASK_HINTINDEX;
-			if (sections)
-				::strcat(pBuffer, "|");
-		}
 		if (sections & ALLOCMASK_IMPRINT) {
 			::strcat(pBuffer, "imprint");
 			sections &= ~ALLOCMASK_IMPRINT;
@@ -2758,8 +2547,6 @@ struct database_t {
 		json_object_set_new_nocheck(jResult, "signatureIndexSize", json_integer(this->signatureIndexSize));
 		json_object_set_new_nocheck(jResult, "numSwap", json_integer(this->numSwap));
 		json_object_set_new_nocheck(jResult, "swapIndexSize", json_integer(this->swapIndexSize));
-		json_object_set_new_nocheck(jResult, "numHint", json_integer(this->numHint));
-		json_object_set_new_nocheck(jResult, "hintIndexSize", json_integer(this->hintIndexSize));
 		json_object_set_new_nocheck(jResult, "interleave", json_integer(this->interleave));
 		json_object_set_new_nocheck(jResult, "numImprint", json_integer(this->numImprint));
 		json_object_set_new_nocheck(jResult, "imprintIndexSize", json_integer(this->imprintIndexSize));

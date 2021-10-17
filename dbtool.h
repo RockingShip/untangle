@@ -125,7 +125,6 @@ struct dbtool_t : callable_t {
 				  database_t::ALLOCMASK_EVALUATOR |
 				  database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
 				  database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX |
-				  database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_HINTINDEX |
 				  database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
 				  database_t::ALLOCMASK_PAIR | database_t::ALLOCMASK_PAIRINDEX |
 				  database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX;
@@ -309,73 +308,6 @@ struct dbtool_t : callable_t {
 			} else if (this->copyOnWrite) {
 				// inherit when section fits and copy-on-write
 				inheritSections |= database_t::ALLOCMASK_SWAPINDEX;
-			}
-		}
-
-		/*
-		 * hint
-		 */
-
-		// data
-		if (this->opt_maxHint) {
-			// user specified
-			store.maxHint = ctx.raisePercent(this->opt_maxHint, 5);
-		} else if (inheritSections & database_t::ALLOCMASK_HINT) {
-			// inherited. pass-though
-			store.maxHint = db.numHint;
-		} else if (autoSize) {
-			// resize using metrics
-			const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
-			if (!pMetrics || !pMetrics->numHint)
-				ctx.fatal("no preset for --maxhint\n");
-
-			// give metrics a margin of error
-			store.maxHint = ctx.raisePercent(pMetrics->numHint, 5);
-		} else if (db.numHint) {
-			// non-empty. pass-though
-			store.maxHint = db.numHint;
-		} else {
-			// empty. create minimal sized section
-			store.maxHint = 1;
-		}
-
-		if (store.maxHint > db.numHint) {
-			// disable inherit when section wants to grow
-			inheritSections &= ~database_t::ALLOCMASK_HINT;
-		} else if (this->copyOnWrite) {
-			// inherit when section fits and copy-on-write
-			inheritSections |= database_t::ALLOCMASK_HINT;
-		}
-
-		// index
-		if (!store.maxHint) {
-			// no data to index
-			store.hintIndexSize = 0;
-		} else {
-			if (this->opt_hintIndexSize) {
-				// user specified
-				store.hintIndexSize = ctx.nextPrime(this->opt_hintIndexSize);
-			} else if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
-				// inherited. pass-though
-				store.hintIndexSize = db.hintIndexSize;
-			} else if (autoSize) {
-				// auto-resize
-				store.hintIndexSize = ctx.nextPrime(store.maxHint * this->opt_ratio);
-			} else if (db.hintIndexSize) {
-				// non-empty. pass-though
-				store.hintIndexSize = db.hintIndexSize;
-			} else {
-				// empty. create minimal sized section
-				store.hintIndexSize = 1;
-			}
-
-			if (store.hintIndexSize != db.hintIndexSize) {
-				// source section is missing or unusable
-				rebuildSections |= database_t::ALLOCMASK_HINTINDEX;
-				inheritSections &= ~rebuildSections;
-			} else if (this->copyOnWrite) {
-				// inherit when section fits and copy-on-write
-				inheritSections |= database_t::ALLOCMASK_HINTINDEX;
 			}
 		}
 
@@ -628,16 +560,14 @@ struct dbtool_t : callable_t {
 		inheritSections &= ~rebuildSections;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
-			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  maxHint=%u hintIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u maxMember=%u memberIndexSize=%u\n",
-				ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.maxHint, store.hintIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize);
+			fprintf(stderr, "[%s] Store create: maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u maxMember=%u memberIndexSize=%u\n",
+				ctx.timeAsString(), store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize);
 
 		// output data must be large enough to fit input data
 		if (store.maxSignature < db.numSignature)
 			ctx.fatal("--maxsignature=%u needs to be at least %u\n", store.maxSignature, db.numSignature);
 		if (store.maxSwap < db.numSwap)
 			ctx.fatal("--maxswap=%u needs to be at least %u\n", store.maxSwap, db.numSwap);
-		if (store.maxHint < db.numHint)
-			ctx.fatal("--maxhint=%u needs to be at least %u\n", store.maxHint, db.numHint);
 		if (store.maxPair < db.numPair)
 			ctx.fatal("--maxpair=%u needs to be at least %u\n", store.maxPair, db.numPair);
 		if (store.maxMember < db.numMember)
@@ -827,64 +757,6 @@ struct dbtool_t : callable_t {
 				assert(store.allocFlags & database_t::ALLOCMASK_SWAPINDEX);
 				store.swapIndexSize = db.swapIndexSize;
 				::memcpy(store.swapIndex, db.swapIndex, store.swapIndexSize * sizeof(*store.swapIndex));
-			}
-		}
-
-		/*
-		 * hints
-		 */
-
-		if (!store.maxHint) {
-			// set signatures to null but keep index intact for (empty) lookups
-			store.hints = NULL;
-		} else {
-			if (inheritSections & database_t::ALLOCMASK_HINT) {
-				// inherited. pass-though
-				assert(!(store.allocFlags & database_t::ALLOCMASK_HINT));
-				store.hints = db.hints;
-				store.numHint = db.numHint;
-			} else if (!db.numHint) {
-				// input empty
-				assert(store.allocFlags & database_t::ALLOCMASK_HINT);
-				store.numHint = 1;
-			} else if (store.maxHint <= db.numHint && copyOnWrite) {
-				// small enough to use copy-on-write
-				assert(!(store.allocFlags & database_t::ALLOCMASK_HINT));
-				store.hints = db.hints;
-				store.numHint = db.numHint;
-			} else if (!(rebuildSections & database_t::ALLOCMASK_HINT)) {
-				fprintf(stderr, "[%s] Copying hint section\n", ctx.timeAsString());
-
-				assert(store.maxHint >= db.numHint);
-				assert(store.allocFlags & database_t::ALLOCMASK_HINT);
-				store.numHint = db.numHint;
-				::memcpy(store.hints, db.hints, store.numHint * sizeof(*store.hints));
-			}
-
-			if (inheritSections & database_t::ALLOCMASK_HINTINDEX) {
-				// inherited. pass-though
-				assert(!(store.allocFlags & database_t::ALLOCMASK_HINTINDEX));
-				store.hintIndexSize = db.hintIndexSize;
-				store.hintIndex = db.hintIndex;
-			} else if (rebuildSections & database_t::ALLOCMASK_HINTINDEX) {
-				// post-processing
-				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-			} else if (!db.hintIndexSize) {
-				// was missing
-				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-				::memset(store.hintIndex, 0, store.hintIndexSize * sizeof(*store.hintIndex));
-			} else if (copyOnWrite) {
-				// copy-on-write
-				assert(store.hintIndexSize == db.hintIndexSize);
-				assert(!(store.allocFlags & database_t::ALLOCMASK_HINTINDEX));
-				store.hintIndex = db.hintIndex;
-				store.hintIndexSize = db.hintIndexSize;
-			} else {
-				// copy
-				assert(store.hintIndexSize == db.hintIndexSize);
-				assert(store.allocFlags & database_t::ALLOCMASK_HINTINDEX);
-				store.hintIndexSize = db.hintIndexSize;
-				::memcpy(store.hintIndex, db.hintIndex, store.hintIndexSize * sizeof(*store.hintIndex));
 			}
 		}
 

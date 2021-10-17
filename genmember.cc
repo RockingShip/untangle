@@ -800,7 +800,7 @@ int main(int argc, char *argv[]) {
 
 	// todo: move this to `populateDatabaseSections()`
 	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_HINT | database_t::ALLOCMASK_MEMBER)) == 0);
+	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_MEMBER)) == 0);
 
 	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
 		store.numSignature = db.numSignature;
@@ -959,7 +959,6 @@ int main(int argc, char *argv[]) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize      = 0;
 			store.imprintIndexSize   = 0;
 			store.numImprint         = 0;
 			store.interleave         = 0;

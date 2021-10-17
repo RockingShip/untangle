@@ -814,7 +814,6 @@ int main(int argc, char *argv[]) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			store.signatureIndexSize = 0;
-			store.hintIndexSize      = 0;
 			store.imprintIndexSize   = 0;
 			store.numImprint         = 0;
 			store.interleave         = 0;

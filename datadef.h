@@ -212,45 +212,6 @@ struct signature_t {
 };
 
 /*
- * @date 2020-04-19 21:03:08
- *
- * Interleave/Imprint hints.
- * Stores the number of imprints per signature for each interleave setting.
- * The ordering of `numStored[]` is identical to that of `metricsInterleave[]`
- *
- * Imprint metrics are non-linear and difficult to predict.
- * Hints are used to determine optimal `--interleave` settings for (primarily) `genhint`.
- */
-struct hint_t {
-
-	enum {
-		/// @constant {number} Maximum number of entries
-		MAXENTRY = MAXSLOTS * 2,
-	};
-
-	uint32_t numStored[MAXENTRY];
-
-	/**
-	 * @date 2020-04-19 22:28:43
-	 *
-	 * Compare two hints and determine if both are same
-	 *
-	 * @param {hint_t} rhs - right hand side of comparison
-	 * @return {boolean} `true` if same, `false` if different
-	 */
-	inline bool equals(const struct hint_t &rhs) const {
-
-		for (unsigned j = 0; j < MAXENTRY; j++) {
-			if (this->numStored[j] != rhs.numStored[j])
-				return false;
-		}
-
-		return true;
-	}
-
-};
-
-/*
  * @date 2020-05-04 13:14:11
  *
  * Swap instructions for level-5 normalisation.
@@ -270,7 +231,7 @@ struct swap_t {
 	 *
 	 * Compare two swaps and determine if both are same
 	 *
-	 * @param {hint_t} rhs - right hand side of comparison
+	 * @param {swap_t} rhs - right hand side of comparison
 	 * @return {boolean} `true` if same, `false` if different
 	 */
 	inline bool equals(const struct swap_t &rhs) const {
