@@ -364,4 +364,34 @@ struct member_t {
 	char name[signature_t::SIGNATURENAMELENGTH + 1];
 };
 
+/*
+ * @date 2021-10-17 21:50:15
+ *
+ * Patterns
+ *
+ * Contains sid/tid values for slot based patterns
+ */
+
+// NOTE: 33173240 entries [0.3G data + 0.2G index, ratio=1.5]
+struct __attribute__((__packed__)) patternFirst_t {
+        unsigned sidQ     :20; // key - sidQ
+	unsigned sidTj    : 1; // key - actually sidTi but with LSB (`j` and not `i` to accentuate LSB instead of MSB)
+	unsigned sidTu    :20; // key - sidT
+	unsigned tidTQ    :19; // key - add T to reassembly slots (row)
+        // total 60 bits (8 bytes)
+};
+
+// NOTE: 1175043464 entries [17.8G data + 7.1G index, ratio=1.5]
+struct __attribute__((__packed__)) patternSecond_t {
+	unsigned idFirst  :25; // key - reference to `patternFirst_t`
+	unsigned tidFQ    :19; // key - add F to reassembly slots (row)
+	unsigned sidF     :20; // key - id of sidF
+        // 64bit align
+	unsigned tidQR    :19; // data - extract R from reassembly slots (col)
+	unsigned sidRj    : 1; // data - actually sidRi but with LSB
+	unsigned sidRu    :20; // data - sidR
+	unsigned flags    : 4; // data
+        // total 108 bits (14 bytes)
+};
+
 #endif

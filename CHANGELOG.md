@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-17 21:57:31 Added: `patternFirst_t`/`patternSecond_t` to database (preserving database version).
 2021-10-17 19:36:24 Removed: `hint` section (too complex as optimisation).
 2021-10-17 18:58:32 Removed: `gensignature --unsafe` (use `--listunsafe`).
 ```
