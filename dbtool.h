@@ -73,6 +73,10 @@ struct dbtool_t : callable_t {
 	unsigned opt_maxMember;
 	/// @var {number} Maximum number of id pairs to be stored database
 	unsigned opt_maxPair;
+	/// @var {number} Maximum number of first stage patterns stored database
+	unsigned opt_maxPatternFirst;
+	/// @var {number} Maximum number of second stage patterns stored database
+	unsigned opt_maxPatternSecond;
 	/// @var {number} Maximum number of signatures to be stored database
 	unsigned opt_maxSignature;
 	/// @var {number} Maximum number of swaps to be stored database
@@ -81,6 +85,10 @@ struct dbtool_t : callable_t {
 	unsigned opt_memberIndexSize;
 	/// @var {number} index/data ratio
 	double   opt_ratio;
+	/// @var {number} size of first stage pattern index WARNING: must be prime
+	unsigned opt_patternFirstIndexSize;
+	/// @var {number} size of second stage pattern index WARNING: must be prime
+	unsigned opt_patternSecondIndexSize;
 	/// @var {number} size of pair index WARNING: must be prime
 	unsigned opt_pairIndexSize;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
@@ -104,21 +112,25 @@ struct dbtool_t : callable_t {
 	 */
 	dbtool_t(context_t &ctx) : ctx(ctx) {
 		// arguments and options
-		opt_imprintIndexSize   = 0;
-		opt_hintIndexSize      = 0;
-		opt_interleave         = 0;
-		opt_maxHint            = 0;
-		opt_maxImprint         = 0;
-		opt_maxMember          = 0;
-		opt_maxPair            = 0;
-		opt_maxSignature       = 0;
-		opt_maxSwap            = 0;
-		opt_memberIndexSize    = 0;
-		opt_ratio              = METRICS_DEFAULT_RATIO / 10.0;
-		opt_pairIndexSize      = 0;
-		opt_saveIndex          = 1;
-		opt_signatureIndexSize = 0;
-		opt_swapIndexSize      = 0;
+		opt_imprintIndexSize       = 0;
+		opt_hintIndexSize          = 0;
+		opt_interleave             = 0;
+		opt_maxHint                = 0;
+		opt_maxImprint             = 0;
+		opt_maxMember              = 0;
+		opt_maxPair                = 0;
+		opt_maxPatternFirst        = 0;
+		opt_maxPatternSecond       = 0;
+		opt_maxSignature           = 0;
+		opt_maxSwap                = 0;
+		opt_memberIndexSize        = 0;
+		opt_patternFirstIndexSize  = 0;
+		opt_patternSecondIndexSize = 0;
+		opt_ratio                  = METRICS_DEFAULT_RATIO / 10.0;
+		opt_pairIndexSize          = 0;
+		opt_saveIndex              = 1;
+		opt_signatureIndexSize     = 0;
+		opt_swapIndexSize          = 0;
 
 		copyOnWrite = 0;
 		inheritSections = database_t::ALLOCMASK_TRANSFORM |
@@ -132,6 +144,505 @@ struct dbtool_t : callable_t {
 		rebuildSections = 0;
 	}
 
+	/*
+	 * @date 2021-10-18 19:35:36
+	 * 
+	 * Prepare sections.
+	 * Update sizes (for growing) when requested and ensure indices are present.
+	 */
+	void __attribute__((optimize("O0"))) prepareSections(database_t &store, unsigned numNodes, unsigned sections) {
+		unsigned allocSections = 0;
+
+		/*
+		 * signature
+		 */
+
+		if (sections & database_t::ALLOCMASK_SIGNATURE) {
+			uint32_t    origMax   = store.maxSignature;
+
+			if (this->opt_maxSignature) {
+				// user specified
+				store.maxSignature = this->opt_maxSignature;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numSignature)
+					ctx.fatal("no preset for --maxsignature\n");
+
+				// give metrics a margin of error
+				store.maxSignature = pMetrics->numSignature;
+			}
+
+			if (store.maxSignature < store.numSignature) {
+				fprintf(stderr, "raising --maxsignature to %u\n", store.numSignature);
+				store.maxSignature = store.numSignature;
+			}
+
+			// give some breathing space
+			store.maxSignature = ctx.raisePercent(store.maxSignature, 5);
+			assert(store.maxSignature != 0);
+
+			if (origMax == 0 || store.maxSignature > origMax) {
+				allocSections |= database_t::ALLOCMASK_SIGNATURE;
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_SIGNATUREINDEX) {
+			uint32_t origSize = store.signatureIndexSize;
+
+			if (this->opt_signatureIndexSize) {
+				// user specified
+				store.signatureIndexSize = ctx.nextPrime(this->opt_signatureIndexSize);
+			} else {
+				// resize using metrics
+				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+			}
+
+			assert(store.signatureIndexSize != 0);
+
+			if (store.signatureIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+			}
+		}
+
+		/*
+		 * swap
+		 */
+
+		if (sections & database_t::ALLOCMASK_SWAP) {
+			uint32_t origMax   = store.maxSwap;
+
+			if (this->opt_maxSwap) {
+				// user specified
+				store.maxSwap = this->opt_maxSwap;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numSwap)
+					ctx.fatal("no preset for --maxswap\n");
+
+				// give metrics a margin of error
+				store.maxSwap = pMetrics->numSwap;
+			}
+
+			if (store.maxSwap < store.numSwap) {
+				fprintf(stderr, "raising --maxswap to %u\n", store.numSwap);
+				store.maxSwap = store.numSwap;
+			}
+
+			// give some breathing space
+			store.maxSwap = ctx.raisePercent(store.maxSwap, 5);
+			assert(store.maxSwap != 0);
+
+			if (origMax == 0 || store.maxSwap > origMax) {
+				allocSections |= database_t::ALLOCMASK_SWAP;
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_SWAPINDEX) {
+			uint32_t origSize = store.swapIndexSize;
+
+			if (this->opt_swapIndexSize) {
+				// user specified
+				store.swapIndexSize = ctx.nextPrime(this->opt_swapIndexSize);
+			} else {
+				// resize using metrics
+				store.swapIndexSize = ctx.nextPrime(store.maxSwap * this->opt_ratio);
+			}
+
+			assert(store.swapIndexSize != 0);
+
+			if (store.swapIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_SWAPINDEX;
+			}
+		}
+
+		/*
+		 * imprint
+		 */
+
+		if (sections & database_t::ALLOCMASK_IMPRINT) {
+			uint32_t  origInterleave = store.maxImprint;
+			uint32_t  origMax        = store.maxImprint;
+
+			// interleave is not a section but a setting
+			if (this->opt_interleave) {
+				// user specified
+				store.interleave = this->opt_interleave;
+			} else if (store.interleave == 0) {
+				// set interleave on first time
+				store.interleave = METRICS_DEFAULT_INTERLEAVE;
+			}
+
+			const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);
+			if (!pMetrics || !pMetrics->numStored || !pMetrics->interleaveStep)
+				ctx.fatal("no preset for --interleave\n");
+
+			store.interleave     = pMetrics->numStored;
+			store.interleaveStep = pMetrics->interleaveStep;
+
+			// rebuild without reallocating section when interleave changes
+			if (store.interleave != origInterleave) {
+				store.numImprint = 0;
+			}
+				
+			if (this->opt_maxImprint) {
+				// user specified
+				store.maxImprint = this->opt_maxImprint;
+			} else {
+				// resize using metrics
+				const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
+				if (!pMetrics || !pMetrics->numImprint)
+					ctx.fatal("no preset for --maximprint\n");
+
+				// give metrics a margin of error
+				store.maxImprint = pMetrics->numImprint;
+			}
+
+			if (store.maxImprint < store.numImprint) {
+				fprintf(stderr, "raising --maximprint to %u\n", store.numImprint);
+				store.maxImprint = store.numImprint;
+			}
+
+			// give some breathing space
+			store.maxImprint = ctx.raisePercent(store.maxImprint, 5);
+			assert(store.maxImprint != 0);
+
+			if (origMax == 0 || store.maxImprint > origMax) {
+				allocSections |= database_t::ALLOCMASK_IMPRINT;
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_IMPRINTINDEX) {
+			uint32_t origSize = store.imprintIndexSize;
+
+			if (this->opt_imprintIndexSize) {
+				// user specified
+				store.imprintIndexSize = ctx.nextPrime(this->opt_imprintIndexSize);
+			} else {
+				// resize using metrics
+				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+			}
+
+			assert(store.imprintIndexSize != 0);
+
+			if (store.imprintIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+			}
+		}
+
+		/*
+		 * sid/tid pairs
+		 */
+
+		if (sections & database_t::ALLOCMASK_PAIR) {
+			uint32_t origMax   = store.maxPair;
+			pair_t   *origData = store.pairs;
+
+			if (this->opt_maxPair) {
+				// user specified
+				store.maxPair = this->opt_maxPair;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numPair)
+					ctx.fatal("no preset for --maxpair\n");
+
+				// give metrics a margin of error
+				store.maxPair = pMetrics->numPair;
+			}
+
+			if (store.maxPair < store.numPair) {
+				fprintf(stderr, "raising --maxpair to %u\n", store.numPair);
+				store.maxPair = store.numPair;
+			}
+
+			// give some breathing space
+			store.maxPair = ctx.raisePercent(store.maxPair, 5);
+			assert(store.maxPair != 0);
+
+			// grow
+			if (origMax == 0) {
+				allocSections |= database_t::ALLOCMASK_PAIR;
+				store.numPair = 0;
+			} else if (store.maxPair > origMax) {
+				store.allocateSections(database_t::ALLOCMASK_PAIR);
+
+				if (store.numPair > 0) {
+					// expand
+					memcpy(store.pairs, origData, store.numPair * sizeof *store.pairs);
+				}
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_PAIRINDEX) {
+			uint32_t origSize = store.pairIndexSize;
+
+			if (this->opt_pairIndexSize) {
+				// user specified
+				store.pairIndexSize = ctx.nextPrime(this->opt_pairIndexSize);
+			} else {
+				// resize using metrics
+				store.pairIndexSize = ctx.nextPrime(store.maxPair * this->opt_ratio);
+			}
+
+			assert(store.pairIndexSize != 0);
+
+			if (store.pairIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_PAIRINDEX;
+			}
+		}
+
+		/*
+		 * member
+		 */
+
+		if (sections & database_t::ALLOCMASK_MEMBER) {
+			uint32_t origMax   = store.maxMember;
+			member_t *origData = store.members;
+
+			if (this->opt_maxMember) {
+				// user specified
+				store.maxMember = this->opt_maxMember;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numMember)
+					ctx.fatal("no preset for --maxmember\n");
+
+				// give metrics a margin of error
+				store.maxMember = pMetrics->numMember;
+			}
+
+			if (store.maxMember < store.numMember) {
+				fprintf(stderr, "raising --maxmember to %u\n", store.numMember);
+				store.maxMember = store.numMember;
+			}
+
+			// give some breathing space
+			store.maxMember = ctx.raisePercent(store.maxMember, 5);
+			assert(store.maxMember != 0);
+
+			// grow
+			if (origMax == 0) {
+				allocSections |= database_t::ALLOCMASK_MEMBER;
+				store.numMember = 0;
+			} else if (store.maxMember > origMax) {
+				store.allocateSections(database_t::ALLOCMASK_MEMBER);
+
+				if (store.numMember > 0) {
+					// expand
+					memcpy(store.members, origData, store.numMember * sizeof *store.members);
+				}
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_MEMBERINDEX) {
+			uint32_t origSize = store.memberIndexSize;
+
+			if (this->opt_memberIndexSize) {
+				// user specified
+				store.memberIndexSize = ctx.nextPrime(this->opt_memberIndexSize);
+			} else {
+				// resize using metrics
+				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+			}
+
+			assert(store.memberIndexSize != 0);
+
+			if (store.memberIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_MEMBERINDEX;
+			}
+		}
+
+		/*
+		 * patternFirst
+		 */
+
+		if (sections & database_t::ALLOCMASK_PATTERNFIRST) {
+			uint32_t       origMax   = store.maxPatternFirst;
+			patternFirst_t *origData = store.patternsFirst;
+
+			if (this->opt_maxPatternFirst) {
+				// user specified
+				store.maxPatternFirst = this->opt_maxPatternFirst;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numPatternFirst)
+					ctx.fatal("no preset for --maxfirst\n");
+
+				// give metrics a margin of error
+				store.maxPatternFirst = pMetrics->numPatternFirst;
+			}
+
+			if (store.maxPatternFirst < store.numPatternFirst) {
+				fprintf(stderr, "raising --maxfirst to %u\n", store.numPatternFirst);
+				store.maxPatternFirst = store.numPatternFirst;
+			}
+
+			// give some breathing space
+			store.maxPatternFirst = ctx.raisePercent(store.maxPatternFirst, 5);
+			assert(store.maxPatternFirst != 0);
+
+			// grow
+			if (origMax == 0) {
+				allocSections |= database_t::ALLOCMASK_PATTERNFIRST;
+				store.numPatternFirst = 0;
+			} else if (store.maxPatternFirst > origMax) {
+				store.allocateSections(database_t::ALLOCMASK_PATTERNFIRST);
+
+				if (store.numPatternFirst > 0) {
+					// expand
+					memcpy(store.patternsFirst, origData, store.numPatternFirst * sizeof *store.patternsFirst);
+				}
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_PATTERNFIRSTINDEX) {
+			uint32_t origSize = store.patternFirstIndexSize;
+
+			if (this->opt_patternFirstIndexSize) {
+				// user specified
+				store.patternFirstIndexSize = ctx.nextPrime(this->opt_patternFirstIndexSize);
+			} else {
+				// resize using metrics
+				store.patternFirstIndexSize = ctx.nextPrime(store.maxPatternFirst * this->opt_ratio);
+			}
+
+			assert(store.patternFirstIndexSize != 0);
+
+			if (store.patternFirstIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
+			}
+		}
+
+		/*
+		 * patternSecond
+		 */
+
+		if (sections & database_t::ALLOCMASK_PATTERNSECOND) {
+			uint32_t       origMax   = store.maxPatternSecond;
+			patternSecond_t *origData = store.patternsSecond;
+
+			if (this->opt_maxPatternSecond) {
+				// user specified
+				store.maxPatternSecond = this->opt_maxPatternSecond;
+			} else {
+				// resize using metrics
+				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
+				if (!pMetrics || !pMetrics->numPatternSecond)
+					ctx.fatal("no preset for --maxsecond\n");
+
+				// give metrics a margin of error
+				store.maxPatternSecond = pMetrics->numPatternSecond;
+			}
+
+			if (store.maxPatternSecond < store.numPatternSecond) {
+				fprintf(stderr, "raising --maxsecond to %u\n", store.numPatternSecond);
+				store.maxPatternSecond = store.numPatternSecond;
+			}
+
+			// give some breathing space
+			store.maxPatternSecond = ctx.raisePercent(store.maxPatternSecond, 5);
+			assert(store.maxPatternSecond != 0);
+
+			// grow
+			if (origMax == 0) {
+				allocSections |= database_t::ALLOCMASK_PATTERNSECOND;
+				store.numPatternSecond = 0;
+			} else if (store.maxPatternSecond > origMax) {
+				store.allocateSections(database_t::ALLOCMASK_PATTERNSECOND);
+
+				if (store.numPatternSecond > 0) {
+					// expand
+					memcpy(store.patternsSecond, origData, store.numPatternSecond * sizeof *store.patternsSecond);
+				}
+			}
+		}
+
+		if (sections & database_t::ALLOCMASK_PATTERNSECONDINDEX) {
+			uint32_t origSize = store.patternSecondIndexSize;
+
+			if (this->opt_patternSecondIndexSize) {
+				// user specified
+				store.patternSecondIndexSize = ctx.nextPrime(this->opt_patternSecondIndexSize);
+			} else {
+				// resize using metrics
+				store.patternSecondIndexSize = ctx.nextPrime(store.maxPatternSecond * this->opt_ratio);
+			}
+
+			assert(store.patternSecondIndexSize != 0);
+
+			if (store.patternSecondIndexSize != origSize) {
+				allocSections |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
+			}
+		}
+
+		/*
+		 * Allocate/expand sections
+		 */
+		store.allocateSections(allocSections);
+
+		/*
+		 * Initial entries
+		 */
+		if (store.numSignature == 0) {
+			// clear first/reserved entry
+			memset(store.signatures, 0, sizeof *store.signatures);
+			store.numSignature = 1;
+		}
+		if (store.numSwap == 0) {
+			// clear first/reserved entry
+			memset(store.swaps, 0, sizeof *store.swaps);
+			store.numSwap = 1;
+		}
+		if (store.numImprint == 0) {
+			// clear first/reserved entry
+			memset(store.imprints, 0, sizeof *store.imprints);
+			store.numImprint = 1;
+		}
+		if (store.numPair == 0) {
+			// clear first/reserved entry
+			memset(store.pairs, 0, sizeof *store.pairs);
+			store.numPair = 1;
+		}
+		if (store.numMember == 0) {
+			// clear first/reserved entry
+			memset(store.members, 0, sizeof *store.members);
+			store.numMember = 1;
+		}
+		if (store.numPatternFirst == 0) {
+			// clear first/reserved entry
+			memset(store.patternsFirst, 0, sizeof *store.patternsFirst);
+			store.numPatternFirst = 1;
+		}
+		if (store.numPatternSecond == 0) {
+			// clear second/reserved entry
+			memset(store.patternsSecond, 0, sizeof *store.patternsSecond);
+			store.numPatternSecond = 1;
+		}
+
+		/*
+		 * Reconstruct indices
+		 */
+
+		// imprints are both data and index.
+		if ((allocSections & database_t::ALLOCMASK_IMPRINT) && store.numSignature > 1 && store.numImprint <= 1) {
+			// reconstruct imprints based on signatures
+			store.rebuildImprint();
+			allocSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		}
+
+		if (allocSections) {
+			store.rebuildIndices(allocSections);
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
+			fprintf(stderr, "[%s] Storage: interleave=%u  maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u  maxMember=%u memberIndexSize=%u  maxPatternFirst=%u patternFirstIndexSize=%u  maxPatternSecond=%u patternSecondIndexSize=%u\n",
+				ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize, store.maxPatternFirst, store.patternFirstIndexSize, store.maxPatternSecond, store.patternSecondIndexSize);
+	}
+	
 	/**
 	 * @date 2020-04-25 00:05:32
 	 *

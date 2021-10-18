@@ -100,7 +100,7 @@ struct fileHeader_t {
 	uint32_t magic_maxSlots;
 	uint32_t magic_sizeofSignature;
 	uint32_t magic_sizeofSwap;
-	uint32_t magic_sizeofUnused;
+	uint32_t magic_sizeofUnused;     // unused
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofPair;
 	uint32_t magic_sizeofMember;
@@ -108,20 +108,20 @@ struct fileHeader_t {
 	uint32_t magic_sizeofPatternSecond;
 	uint32_t magic_sizeofGrow;
 
-	// Associative index interleaving
+	// Associative index interleaving (for Imprints)
 	uint32_t interleave;
 	uint32_t interleaveStep;
 
 	// section sizes
 	uint32_t numTransform;          // for both fwd/rev
 	uint32_t transformIndexSize;    // for both fwd/rev
-	uint32_t numEvaluator;          // for both fwd/rev
+	uint32_t numEvaluator;          // for both fwd/rev. Evaluator has no index.
 	uint32_t numSignature;
 	uint32_t signatureIndexSize;
 	uint32_t numSwap;
 	uint32_t swapIndexSize;
-	uint32_t numUnused; // unused
-	uint32_t unusedIndexSize; // unused
+	uint32_t numUnused;             // unused
+	uint32_t unusedIndexSize;       // unused
 	uint32_t numImprint;
 	uint32_t imprintIndexSize;
 	uint32_t numPair;
@@ -149,8 +149,8 @@ struct fileHeader_t {
 	uint64_t offSignatureIndex;
 	uint64_t offSwaps;
 	uint64_t offSwapIndex;
-	uint64_t offUnused; // unused
-	uint64_t offUnusedIndex; // unused
+	uint64_t offUnused;             // unused
+	uint64_t offUnusedIndex;        // unused
 	uint64_t offImprints;
 	uint64_t offImprintIndex;
 	uint64_t offpairs;
@@ -907,7 +907,7 @@ struct database_t {
 		/*
 		 * @date 2021-07-23 22:49:21
 		 * Index really needs to be larger than number of records
-		 * index must be larger than maximum + 1%. Write such that no integer overflow occurs
+		 * index must be larger than maximum + 1%. Formulate such to avoid integer overflow occurs
 		 */
 		assert(this->signatureIndexSize - this->maxSignature / 100 >= this->maxSignature);
 		assert(this->swapIndexSize - this->maxSwap / 100 >= this->maxSwap);
@@ -1078,6 +1078,155 @@ struct database_t {
 	};
 
 	/**
+	 * @date 2021-10-18 20:48:45
+	 *
+	 * (re-allocate) sections to enable growth
+	 * NOTE: changed sections are zeroed, previous contents is injected
+	 *
+	 * @param {number} sections - set of sections to process
+	 */
+	void allocateSections(unsigned sections) {
+		// transform store
+		if (maxTransform && (sections & ALLOCMASK_TRANSFORM)) {
+			assert(maxTransform == MAXTRANSFORM);
+			fwdTransformData      = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
+			revTransformData      = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
+			fwdTransformNames     = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", maxTransform, sizeof(*this->fwdTransformNames));
+			revTransformNames     = (transformName_t *) ctx.myAlloc("database_t::revTransformNames", maxTransform, sizeof(*this->revTransformNames));
+			revTransformIds       = (uint32_t *) ctx.myAlloc("database_t::revTransformIds", maxTransform, sizeof(*this->revTransformIds));
+			fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
+			revTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::revTransformNameIndex", transformIndexSize, sizeof(*revTransformNameIndex));
+			allocFlags |= ALLOCMASK_TRANSFORM;
+		}
+
+		// evaluator store [COPY-ON-WRITE]
+		if (maxEvaluator && (sections & ALLOCMASK_EVALUATOR)) {
+			assert(maxTransform == MAXTRANSFORM);
+			assert(maxEvaluator == tinyTree_t::TINYTREE_NEND * maxTransform);
+			fwdEvaluator = (footprint_t *) ctx.myAlloc("database_t::fwdEvaluator", maxEvaluator, sizeof(*this->fwdEvaluator));
+			revEvaluator = (footprint_t *) ctx.myAlloc("database_t::revEvaluator", maxEvaluator, sizeof(*this->revEvaluator));
+		}
+
+		// signature store
+		if (sections & ALLOCMASK_SIGNATURE) {
+			assert(maxSignature && numSignature <= maxSignature);
+			signature_t *origData = signatures;
+			signatures = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
+			allocFlags |= ALLOCMASK_SIGNATURE;
+			if (numSignature > 0)
+				memcpy(signatures, origData, numSignature * sizeof(*signatures));
+		}
+		if (signatureIndexSize && (sections & ALLOCMASK_SIGNATUREINDEX)) {
+			assert(ctx.isPrime(signatureIndexSize));
+			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
+			allocFlags |= ALLOCMASK_SIGNATUREINDEX;
+		}
+
+		// swap store
+		if (sections & ALLOCMASK_SWAP) {
+			assert(maxSwap && numSwap <= maxSwap);
+			swap_t *origData = swaps;
+			swaps = (swap_t *) ctx.myAlloc("database_t::swaps", maxSwap, sizeof(*swaps));
+			allocFlags |= ALLOCMASK_SWAP;
+			if (numSwap > 0)
+				memcpy(swaps, origData, numSwap * sizeof(*swaps));
+		}
+		if (swapIndexSize && (sections & ALLOCMASK_SWAPINDEX)) {
+			assert(ctx.isPrime(swapIndexSize));
+			swapIndex = (uint32_t *) ctx.myAlloc("database_t::swapIndex", swapIndexSize, sizeof(*swapIndex));
+			allocFlags |= ALLOCMASK_SWAPINDEX;
+		}
+
+		// imprint store
+		if (sections & ALLOCMASK_IMPRINT) {
+			assert(maxImprint && numImprint <= maxImprint);
+			imprint_t *origData = imprints;
+			imprints = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
+			allocFlags |= ALLOCMASK_IMPRINT;
+			if (numImprint > 0)
+				memcpy(imprints, origData, numImprint * sizeof(*imprints));
+		}
+		if (imprintIndexSize && (sections & ALLOCMASK_IMPRINTINDEX)) {
+			assert(ctx.isPrime(imprintIndexSize));
+			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
+			allocFlags |= ALLOCMASK_IMPRINTINDEX;
+		}
+
+		// sid/tid store
+		if (sections & ALLOCMASK_PAIR) {
+			assert(maxPair && numPair < maxPair);
+			pair_t *origData = pairs;
+			pairs = (pair_t *) ctx.myAlloc("database_t::pairs", maxPair, sizeof(*pairs));
+			allocFlags |= ALLOCMASK_PAIR;
+			if (numPair > 0)
+				memcpy(pairs, origData, numPair * sizeof(*pairs));
+		}
+		if (pairIndexSize && (sections & ALLOCMASK_PAIRINDEX)) {
+			assert(ctx.isPrime(pairIndexSize));
+			pairIndex = (uint32_t *) ctx.myAlloc("database_t::pairIndex", pairIndexSize, sizeof(*pairIndex));
+			allocFlags |= ALLOCMASK_PAIRINDEX;
+		}
+
+		// member store
+		if (sections & ALLOCMASK_MEMBER) {
+			assert(maxMember && numMember <= maxMember);
+			member_t *origData = members;
+			members = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
+			allocFlags |= ALLOCMASK_MEMBER;
+			if (numMember > 0)
+				memcpy(members, origData, numMember * sizeof(*members));
+		}
+		if (memberIndexSize && (sections & ALLOCMASK_MEMBERINDEX)) {
+			assert(ctx.isPrime(memberIndexSize));
+			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
+			allocFlags |= ALLOCMASK_MEMBERINDEX;
+		}
+
+		// patternFirst store
+		if (sections & ALLOCMASK_PATTERNFIRST) {
+			assert(maxPatternFirst && numPatternFirst <= maxPatternFirst);
+			patternFirst_t *origData = patternsFirst;
+			patternsFirst = (patternFirst_t *) ctx.myAlloc("database_t::patternsFirst", maxPatternFirst, sizeof(*patternsFirst));
+			allocFlags |= ALLOCMASK_PATTERNFIRST;
+			if (numPatternFirst > 0)
+				memcpy(patternsFirst, origData, numPatternFirst * sizeof(*patternsFirst));
+		}
+		if (patternFirstIndexSize && (sections & ALLOCMASK_PATTERNFIRSTINDEX)) {
+			assert(ctx.isPrime(patternFirstIndexSize));
+			patternFirstIndex = (uint32_t *) ctx.myAlloc("database_t::patternFirstIndex", patternFirstIndexSize, sizeof(*patternFirstIndex));
+			allocFlags |= ALLOCMASK_PATTERNFIRSTINDEX;
+		}
+
+		// patternSecond store
+		if (sections & ALLOCMASK_PATTERNSECOND) {
+			assert(maxPatternSecond && numPatternSecond <= maxPatternSecond);
+			patternSecond_t *origData = patternsSecond;
+			patternsSecond = (patternSecond_t *) ctx.myAlloc("database_t::patternsSecond", maxPatternSecond, sizeof(*patternsSecond));
+			allocFlags |= ALLOCMASK_PATTERNSECOND;
+			if (numPatternSecond > 0)
+				memcpy(patternsSecond, origData, numPatternSecond * sizeof(*patternsSecond));
+		}
+		if (patternSecondIndexSize && (sections & ALLOCMASK_PATTERNSECONDINDEX)) {
+			assert(ctx.isPrime(patternSecondIndexSize));
+			patternSecondIndex = (uint32_t *) ctx.myAlloc("database_t::patternSecondIndex", patternSecondIndexSize, sizeof(*patternSecondIndex));
+			allocFlags |= ALLOCMASK_PATTERNSECONDINDEX;
+		}
+
+		/*
+		 * @date 2021-07-23 22:49:21
+		 * Index really needs to be larger than number of records
+		 * index must be larger than maximum + 1%. Formulate such to avoid integer overflow occurs
+		 */
+		assert(this->signatureIndexSize - this->maxSignature / 100 >= this->maxSignature);
+		assert(this->swapIndexSize - this->maxSwap / 100 >= this->maxSwap);
+		assert(this->imprintIndexSize - this->maxImprint / 100 >= this->maxImprint);
+		assert(this->pairIndexSize - this->maxPair / 100 >= this->maxPair);
+		assert(this->memberIndexSize - this->maxMember / 100 >= this->maxMember);
+		assert(this->patternFirstIndexSize - this->maxPatternFirst / 100 >= this->maxPatternFirst);
+		assert(this->patternSecondIndexSize - this->maxPatternSecond / 100 >= this->maxPatternSecond);
+	}
+
+	/**
 	 * @date 2020-04-16 20:41:47
 	 *
 	 * Raise size to next 32 byte alignment
@@ -1108,7 +1257,7 @@ struct database_t {
 		::memset(&fileHeader, 0, sizeof(fileHeader));
 
 		/*
-		 * Evaluators are copy-on-write and need to be re-created (sanitised) before writing
+		 * Evaluators are dirty and need to be re-created (sanitised) before writing
 		 */
 		if (this->numEvaluator)
 			initialiseEvaluators();
@@ -1275,6 +1424,10 @@ struct database_t {
 				fileHeader.offImprintIndex  = flen;
 				flen += writeData(outf, this->imprintIndex, sizeof(*this->imprintIndex) * this->imprintIndexSize, fileName, "imprintIndex");
 			}
+		} else {
+			// interleave only when imprints present
+			fileHeader.interleave     = 0;
+			fileHeader.interleaveStep = 0;
 		}
 
 		/*
@@ -2466,6 +2619,86 @@ struct database_t {
 		return (uint32_t) (pPatternSecond - this->patternsSecond);
 	}
 
+	/*
+	 * @date 2021-10-18 22:07:12
+	 *
+	 * Rebuild imprints and recreate imprint index.
+	 */
+	void rebuildImprint(void) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
+
+		// erase first entry
+		memset(this->imprints, 0, sizeof(*this->imprints));
+		this->numImprint = 1;
+		
+		// clear imprint index
+		memset(this->imprintIndex, 0, this->imprintIndexSize * sizeof(*this->imprintIndex));
+
+		if (this->numSignature <= 1)
+			return; //nothing to do
+
+		/*
+		 * Create imprints for signature groups
+		 */
+
+		tinyTree_t tree(ctx);
+
+		// reset ticker
+		ctx.setupSpeed(this->numSignature);
+		ctx.tick = 0;
+
+		// create imprints for signature groups
+		ctx.progress++; // skip reserved
+		for (unsigned iSid = 1; iSid < this->numSignature; iSid++) {
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				int perSecond = ctx.updateSpeed();
+
+				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) | hash=%.3f",
+						ctx.timeAsString(), ctx.progress, perSecond,
+						this->numImprint, this->numImprint * 100.0 / this->maxImprint,
+						(double) ctx.cntCompare / ctx.cntHash);
+				} else {
+					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+					int etaH = eta / 3600;
+					eta %= 3600;
+					int etaM = eta / 60;
+					eta %= 60;
+					int etaS = eta;
+
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) | hash=%.3f",
+						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+						this->numImprint, this->numImprint * 100.0 / this->maxImprint,
+						(double) ctx.cntCompare / ctx.cntHash);
+				}
+
+				ctx.tick = 0;
+			}
+
+			const signature_t *pSignature = this->signatures + iSid;
+
+			// load signature
+			tree.loadStringFast(pSignature->name);
+
+			// add imprint
+			unsigned ret = this->addImprintAssociative(&tree, this->fwdEvaluator, this->revEvaluator, iSid);
+			assert(ret == 0);
+
+			ctx.progress++;
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Imprints built. numImprint=%u(%.0f%%) | hash=%.3f\n",
+				ctx.timeAsString(),
+				this->numImprint, this->numImprint * 100.0 / this->maxImprint,
+				(double) ctx.cntCompare / ctx.cntHash);
+	}
+	
 	/**
 	 * @date 2020-04-20 23:03:50
 	 *
