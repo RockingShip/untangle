@@ -92,7 +92,7 @@ struct dbtool_t : callable_t {
 	/// @var {number} size of pair index WARNING: must be prime
 	unsigned opt_pairIndexSize;
 	/// @var {number} save level-1 indices (hintIndex, signatureIndex, ImprintIndex) and level-2 index (imprints)
-	unsigned   opt_saveIndex;
+	unsigned opt_saveIndex;
 	/// @var {number} size of signature index WARNING: must be prime
 	unsigned opt_signatureIndexSize;
 	/// @var {number} size of swap index WARNING: must be prime
@@ -152,7 +152,21 @@ struct dbtool_t : callable_t {
 	 */
 	void __attribute__((optimize("O0"))) prepareSections(database_t &store, unsigned numNodes, unsigned sections) {
 		unsigned allocSections = 0;
+		unsigned rebuildSections = 0;
 
+		/*
+		 * Changing ratio invalidates all indices
+		 */
+		if ((int)(this->opt_ratio * 10 + 0.5) != dbtool_t::METRICS_DEFAULT_RATIO) {
+			rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX |
+					   database_t::ALLOCMASK_SWAPINDEX |
+					   database_t::ALLOCMASK_IMPRINTINDEX |
+					   database_t::ALLOCMASK_PAIRINDEX |
+					   database_t::ALLOCMASK_MEMBERINDEX |
+					   database_t::ALLOCMASK_PATTERNFIRSTINDEX |
+					   database_t::ALLOCMASK_PATTERNSECONDINDEX;
+		}
+				
 		/*
 		 * signature
 		 */
@@ -180,9 +194,9 @@ struct dbtool_t : callable_t {
 
 			// give some breathing space
 			store.maxSignature = ctx.raisePercent(store.maxSignature, 5);
-			assert(store.maxSignature != 0);
+			assert(store.maxSignature > 0);
 
-			if (origMax == 0 || store.maxSignature > origMax) {
+			if (store.maxSignature > origMax) {
 				allocSections |= database_t::ALLOCMASK_SIGNATURE;
 			}
 		}
@@ -198,10 +212,13 @@ struct dbtool_t : callable_t {
 				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
 			}
 
-			assert(store.signatureIndexSize != 0);
+			assert(store.signatureIndexSize > 0);
 
-			if (store.signatureIndexSize != origSize) {
+			if (store.signatureIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+			}
+			if (store.signatureIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
 			}
 		}
 
@@ -232,9 +249,9 @@ struct dbtool_t : callable_t {
 
 			// give some breathing space
 			store.maxSwap = ctx.raisePercent(store.maxSwap, 5);
-			assert(store.maxSwap != 0);
+			assert(store.maxSwap > 0);
 
-			if (origMax == 0 || store.maxSwap > origMax) {
+			if (store.maxSwap > origMax) {
 				allocSections |= database_t::ALLOCMASK_SWAP;
 			}
 		}
@@ -250,10 +267,13 @@ struct dbtool_t : callable_t {
 				store.swapIndexSize = ctx.nextPrime(store.maxSwap * this->opt_ratio);
 			}
 
-			assert(store.swapIndexSize != 0);
+			assert(store.swapIndexSize > 0);
 
-			if (store.swapIndexSize != origSize) {
+			if (store.swapIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_SWAPINDEX;
+			}
+			if (store.swapIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_SWAPINDEX;
 			}
 		}
 
@@ -281,9 +301,9 @@ struct dbtool_t : callable_t {
 			store.interleave     = pMetrics->numStored;
 			store.interleaveStep = pMetrics->interleaveStep;
 
-			// rebuild without reallocating section when interleave changes
+			// changing interleave invalidates imprints
 			if (store.interleave != origInterleave) {
-				store.numImprint = 0;
+				rebuildSections |= database_t::ALLOCMASK_IMPRINT;
 			}
 				
 			if (this->opt_maxImprint) {
@@ -306,9 +326,9 @@ struct dbtool_t : callable_t {
 
 			// give some breathing space
 			store.maxImprint = ctx.raisePercent(store.maxImprint, 5);
-			assert(store.maxImprint != 0);
+			assert(store.maxImprint > 0);
 
-			if (origMax == 0 || store.maxImprint > origMax) {
+			if (store.maxImprint > origMax) {
 				allocSections |= database_t::ALLOCMASK_IMPRINT;
 			}
 		}
@@ -324,10 +344,13 @@ struct dbtool_t : callable_t {
 				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
 			}
 
-			assert(store.imprintIndexSize != 0);
+			assert(store.imprintIndexSize > 0);
 
-			if (store.imprintIndexSize != origSize) {
+			if (store.imprintIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+			}
+			if (store.imprintIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
 			}
 		}
 
@@ -337,7 +360,6 @@ struct dbtool_t : callable_t {
 
 		if (sections & database_t::ALLOCMASK_PAIR) {
 			uint32_t origMax   = store.maxPair;
-			pair_t   *origData = store.pairs;
 
 			if (this->opt_maxPair) {
 				// user specified
@@ -359,19 +381,10 @@ struct dbtool_t : callable_t {
 
 			// give some breathing space
 			store.maxPair = ctx.raisePercent(store.maxPair, 5);
-			assert(store.maxPair != 0);
+			assert(store.maxPair > 0);
 
-			// grow
-			if (origMax == 0) {
+			if (store.maxPair > origMax) {
 				allocSections |= database_t::ALLOCMASK_PAIR;
-				store.numPair = 0;
-			} else if (store.maxPair > origMax) {
-				store.allocateSections(database_t::ALLOCMASK_PAIR);
-
-				if (store.numPair > 0) {
-					// expand
-					memcpy(store.pairs, origData, store.numPair * sizeof *store.pairs);
-				}
 			}
 		}
 
@@ -386,10 +399,13 @@ struct dbtool_t : callable_t {
 				store.pairIndexSize = ctx.nextPrime(store.maxPair * this->opt_ratio);
 			}
 
-			assert(store.pairIndexSize != 0);
+			assert(store.pairIndexSize > 0);
 
-			if (store.pairIndexSize != origSize) {
+			if (store.pairIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_PAIRINDEX;
+			}
+			if (store.pairIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_PAIRINDEX;
 			}
 		}
 
@@ -399,7 +415,6 @@ struct dbtool_t : callable_t {
 
 		if (sections & database_t::ALLOCMASK_MEMBER) {
 			uint32_t origMax   = store.maxMember;
-			member_t *origData = store.members;
 
 			if (this->opt_maxMember) {
 				// user specified
@@ -421,19 +436,10 @@ struct dbtool_t : callable_t {
 
 			// give some breathing space
 			store.maxMember = ctx.raisePercent(store.maxMember, 5);
-			assert(store.maxMember != 0);
+			assert(store.maxMember > 0);
 
-			// grow
-			if (origMax == 0) {
+			if (store.maxMember > origMax) {
 				allocSections |= database_t::ALLOCMASK_MEMBER;
-				store.numMember = 0;
-			} else if (store.maxMember > origMax) {
-				store.allocateSections(database_t::ALLOCMASK_MEMBER);
-
-				if (store.numMember > 0) {
-					// expand
-					memcpy(store.members, origData, store.numMember * sizeof *store.members);
-				}
 			}
 		}
 
@@ -448,10 +454,13 @@ struct dbtool_t : callable_t {
 				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
 			}
 
-			assert(store.memberIndexSize != 0);
+			assert(store.memberIndexSize > 0);
 
-			if (store.memberIndexSize != origSize) {
+			if (store.memberIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_MEMBERINDEX;
+			}
+			if (store.memberIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
 			}
 		}
 
@@ -460,8 +469,7 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (sections & database_t::ALLOCMASK_PATTERNFIRST) {
-			uint32_t       origMax   = store.maxPatternFirst;
-			patternFirst_t *origData = store.patternsFirst;
+			uint32_t origMax   = store.maxPatternFirst;
 
 			if (this->opt_maxPatternFirst) {
 				// user specified
@@ -470,32 +478,23 @@ struct dbtool_t : callable_t {
 				// resize using metrics
 				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 				if (!pMetrics || !pMetrics->numPatternFirst)
-					ctx.fatal("no preset for --maxfirst\n");
+					ctx.fatal("no preset for --maxpatternfirst\n");
 
 				// give metrics a margin of error
 				store.maxPatternFirst = pMetrics->numPatternFirst;
 			}
 
 			if (store.maxPatternFirst < store.numPatternFirst) {
-				fprintf(stderr, "raising --maxfirst to %u\n", store.numPatternFirst);
+				fprintf(stderr, "raising --maxpatternfirst to %u\n", store.numPatternFirst);
 				store.maxPatternFirst = store.numPatternFirst;
 			}
 
 			// give some breathing space
 			store.maxPatternFirst = ctx.raisePercent(store.maxPatternFirst, 5);
-			assert(store.maxPatternFirst != 0);
+			assert(store.maxPatternFirst > 0);
 
-			// grow
-			if (origMax == 0) {
+			if (store.maxPatternFirst > origMax) {
 				allocSections |= database_t::ALLOCMASK_PATTERNFIRST;
-				store.numPatternFirst = 0;
-			} else if (store.maxPatternFirst > origMax) {
-				store.allocateSections(database_t::ALLOCMASK_PATTERNFIRST);
-
-				if (store.numPatternFirst > 0) {
-					// expand
-					memcpy(store.patternsFirst, origData, store.numPatternFirst * sizeof *store.patternsFirst);
-				}
 			}
 		}
 
@@ -510,10 +509,13 @@ struct dbtool_t : callable_t {
 				store.patternFirstIndexSize = ctx.nextPrime(store.maxPatternFirst * this->opt_ratio);
 			}
 
-			assert(store.patternFirstIndexSize != 0);
+			assert(store.patternFirstIndexSize > 0);
 
-			if (store.patternFirstIndexSize != origSize) {
+			if (store.patternFirstIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
+			}
+			if (store.patternFirstIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
 			}
 		}
 
@@ -522,8 +524,7 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (sections & database_t::ALLOCMASK_PATTERNSECOND) {
-			uint32_t       origMax   = store.maxPatternSecond;
-			patternSecond_t *origData = store.patternsSecond;
+			uint32_t origMax   = store.maxPatternSecond;
 
 			if (this->opt_maxPatternSecond) {
 				// user specified
@@ -532,32 +533,23 @@ struct dbtool_t : callable_t {
 				// resize using metrics
 				const metricsGenerator_t *pMetrics = getMetricsGenerator(MAXSLOTS, numNodes, ctx.flags & ctx.MAGICMASK_PURE);
 				if (!pMetrics || !pMetrics->numPatternSecond)
-					ctx.fatal("no preset for --maxsecond\n");
+					ctx.fatal("no preset for --maxpatternsecond\n");
 
 				// give metrics a margin of error
 				store.maxPatternSecond = pMetrics->numPatternSecond;
 			}
 
 			if (store.maxPatternSecond < store.numPatternSecond) {
-				fprintf(stderr, "raising --maxsecond to %u\n", store.numPatternSecond);
+				fprintf(stderr, "raising --maxpatternsecond to %u\n", store.numPatternSecond);
 				store.maxPatternSecond = store.numPatternSecond;
 			}
 
 			// give some breathing space
 			store.maxPatternSecond = ctx.raisePercent(store.maxPatternSecond, 5);
-			assert(store.maxPatternSecond != 0);
+			assert(store.maxPatternSecond > 0);
 
-			// grow
-			if (origMax == 0) {
+			if (store.maxPatternSecond > origMax) {
 				allocSections |= database_t::ALLOCMASK_PATTERNSECOND;
-				store.numPatternSecond = 0;
-			} else if (store.maxPatternSecond > origMax) {
-				store.allocateSections(database_t::ALLOCMASK_PATTERNSECOND);
-
-				if (store.numPatternSecond > 0) {
-					// expand
-					memcpy(store.patternsSecond, origData, store.numPatternSecond * sizeof *store.patternsSecond);
-				}
 			}
 		}
 
@@ -572,10 +564,13 @@ struct dbtool_t : callable_t {
 				store.patternSecondIndexSize = ctx.nextPrime(store.maxPatternSecond * this->opt_ratio);
 			}
 
-			assert(store.patternSecondIndexSize != 0);
+			assert(store.patternSecondIndexSize > 0);
 
-			if (store.patternSecondIndexSize != origSize) {
+			if (store.patternSecondIndexSize > origSize) {
 				allocSections |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
+			}
+			if (store.patternSecondIndexSize != origSize) {
+				rebuildSections |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
 			}
 		}
 
@@ -587,37 +582,37 @@ struct dbtool_t : callable_t {
 		/*
 		 * Initial entries
 		 */
-		if (store.numSignature == 0) {
+		if ((sections & database_t::ALLOCMASK_SIGNATURE) && store.numSignature == 0) {
 			// clear first/reserved entry
 			memset(store.signatures, 0, sizeof *store.signatures);
 			store.numSignature = 1;
 		}
-		if (store.numSwap == 0) {
+		if ((sections & database_t::ALLOCMASK_SWAP) && store.numSwap == 0) {
 			// clear first/reserved entry
 			memset(store.swaps, 0, sizeof *store.swaps);
 			store.numSwap = 1;
 		}
-		if (store.numImprint == 0) {
+		if ((sections & database_t::ALLOCMASK_IMPRINT) && store.numImprint == 0) {
 			// clear first/reserved entry
 			memset(store.imprints, 0, sizeof *store.imprints);
 			store.numImprint = 1;
 		}
-		if (store.numPair == 0) {
+		if ((sections & database_t::ALLOCMASK_PAIR) && store.numPair == 0) {
 			// clear first/reserved entry
 			memset(store.pairs, 0, sizeof *store.pairs);
 			store.numPair = 1;
 		}
-		if (store.numMember == 0) {
+		if ((sections & database_t::ALLOCMASK_MEMBER) && store.numMember == 0) {
 			// clear first/reserved entry
 			memset(store.members, 0, sizeof *store.members);
 			store.numMember = 1;
 		}
-		if (store.numPatternFirst == 0) {
+		if ((sections & database_t::ALLOCMASK_PATTERNFIRST) && store.numPatternFirst == 0) {
 			// clear first/reserved entry
 			memset(store.patternsFirst, 0, sizeof *store.patternsFirst);
 			store.numPatternFirst = 1;
 		}
-		if (store.numPatternSecond == 0) {
+		if ((sections & database_t::ALLOCMASK_PATTERNSECOND) && store.numPatternSecond == 0) {
 			// clear second/reserved entry
 			memset(store.patternsSecond, 0, sizeof *store.patternsSecond);
 			store.numPatternSecond = 1;
@@ -627,14 +622,14 @@ struct dbtool_t : callable_t {
 		 * Reconstruct indices
 		 */
 
-		// imprints are both data and index.
-		if ((allocSections & database_t::ALLOCMASK_IMPRINT) && store.numSignature > 1 && store.numImprint <= 1) {
+		// imprints are auto-generated from signatures
+		if (rebuildSections & database_t::ALLOCMASK_IMPRINT) {
 			// reconstruct imprints based on signatures
 			store.rebuildImprint();
-			allocSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+			rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
 		}
 
-		if (allocSections) {
+		if (rebuildSections) {
 			store.rebuildIndices(allocSections);
 		}
 
@@ -642,7 +637,7 @@ struct dbtool_t : callable_t {
 			fprintf(stderr, "[%s] Storage: interleave=%u  maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u  maxMember=%u memberIndexSize=%u  maxPatternFirst=%u patternFirstIndexSize=%u  maxPatternSecond=%u patternSecondIndexSize=%u\n",
 				ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize, store.maxPatternFirst, store.patternFirstIndexSize, store.maxPatternSecond, store.patternSecondIndexSize);
 	}
-	
+
 	/**
 	 * @date 2020-04-25 00:05:32
 	 *

@@ -1837,6 +1837,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupSignature(const char *name) {
+		assert(this->numSignature);
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -1931,6 +1932,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupSwap(const swap_t *pSwap) {
+		assert(this->numSwap);
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -1996,7 +1998,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupImprint(const footprint_t &v) const {
-
+		assert(this->numImprint);
 		ctx.cntHash++;
 
 		// starting position
@@ -2322,6 +2324,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupPair(uint32_t id, uint32_t tid) {
+		assert(this->numPair);
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -2387,6 +2390,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupMember(const char *name) {
+		assert(this->numMember);
 		ctx.cntHash++;
 
 		// calculate starting position
@@ -2458,6 +2462,7 @@ struct database_t {
 	 * @return {uint32_t} offset into index
 	 */
 	inline uint32_t lookupPatternFirst(uint32_t sidQ, uint32_t sidT, uint32_t tidTQ) {
+		assert(this->numPatternFirst);
 		ctx.cntHash++;
 
 		// split sidT into invert bit and unsigned parts 
@@ -2553,6 +2558,7 @@ struct database_t {
 	 * @return {number} offset into index
 	 */
 	inline uint32_t lookupPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidFQ) {
+		assert(this->numPatternSecond);
 		ctx.cntHash++;
 
 		// verify data fits in packed fields
@@ -2625,9 +2631,6 @@ struct database_t {
 	 * Rebuild imprints and recreate imprint index.
 	 */
 	void rebuildImprint(void) {
-		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
-
 		// erase first entry
 		memset(this->imprints, 0, sizeof(*this->imprints));
 		this->numImprint = 1;
@@ -2637,6 +2640,9 @@ struct database_t {
 
 		if (this->numSignature <= 1)
 			return; //nothing to do
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
 
 		/*
 		 * Create imprints for signature groups
@@ -2722,6 +2728,10 @@ struct database_t {
 			numProgress += this->numPair;
 		if (sections & ALLOCMASK_MEMBERINDEX)
 			numProgress += this->numMember;
+		if (sections & ALLOCMASK_PATTERNFIRSTINDEX)
+			numProgress += this->numPatternFirst;
+		if (sections & ALLOCMASK_PATTERNSECONDINDEX)
+			numProgress += this->numPatternSecond;
 		ctx.setupSpeed(numProgress);
 		ctx.tick = 0;
 
@@ -2928,6 +2938,90 @@ struct database_t {
 				uint32_t ix = this->lookupMember(pMember->name);
 				assert(this->memberIndex[ix] == 0);
 				this->memberIndex[ix] = iMember;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * PatternsFirst
+		 */
+
+		if (sections & ALLOCMASK_PATTERNFIRSTINDEX) {
+			// clear
+			::memset(this->patternFirstIndex, 0, this->patternFirstIndexSize * sizeof(*this->patternFirstIndex));
+
+			// rebuild
+			for (uint32_t iPatternfirst = 1; iPatternfirst < this->numPatternFirst; iPatternfirst++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+							ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+							(double) ctx.cntCompare / ctx.cntHash);
+					}
+
+					ctx.tick = 0;
+				}
+
+				const patternFirst_t *pPatternFirst = this->patternsFirst + iPatternfirst;
+
+				uint32_t ix = this->lookupPatternFirst(pPatternFirst->sidQ, pPatternFirst->sidTu ^ (pPatternFirst->sidTj ? IBIT : 0), pPatternFirst->tidTQ); 
+				assert(this->patternFirstIndex[ix] == 0);
+				this->patternFirstIndex[ix] = iPatternfirst;
+
+				ctx.progress++;
+			}
+		}
+
+		/*
+		 * PatternsSecond
+		 */
+
+		if (sections & ALLOCMASK_PATTERNSECONDINDEX) {
+			// clear
+			::memset(this->patternSecondIndex, 0, this->patternSecondIndexSize * sizeof(*this->patternSecondIndex));
+
+			// rebuild
+			for (uint32_t iPatternsecond = 1; iPatternsecond < this->numPatternSecond; iPatternsecond++) {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | hash=%.3f", ctx.timeAsString(), ctx.progress, perSecond, (double) ctx.cntCompare / ctx.cntHash);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d  | hash=%.3f",
+							ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+							(double) ctx.cntCompare / ctx.cntHash);
+					}
+
+					ctx.tick = 0;
+				}
+
+				const patternSecond_t *pPatternSecond = this->patternsSecond + iPatternsecond;
+
+				uint32_t ix = this->lookupPatternSecond(pPatternSecond->idFirst, pPatternSecond->sidF, pPatternSecond->tidFQ);
+				assert(this->patternSecondIndex[ix] == 0);
+				this->patternSecondIndex[ix] = iPatternsecond;
 
 				ctx.progress++;
 			}
