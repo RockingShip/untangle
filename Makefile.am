@@ -10,7 +10,7 @@ CLEANFILES =
 BUILT_SOURCES = genrestartdata rewritedata.h
 
 noinst_PROGRAMS =
-bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4)
+bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4) $(PROGRAMS_PART5)
 
 ##
 ## This section for dataset creation utilities
@@ -190,3 +190,15 @@ genrewritedata_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-06-10 11:39:02
 validaterewrite_SOURCES = validaterewrite.cc rewritedata.h basetree.h context.h rewritedata.c
 validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
+
+##
+## This section for detector patterns
+##
+
+PROGRAMS_PART5 = genpattern
+EXTRA_PART5 =
+
+# @date 2021-10-17 17:51:31
+genpattern_SOURCES = genpattern.cc genpattern.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
+genpattern_LDADD = $(LDADD) $(AM_LDADD)
+
