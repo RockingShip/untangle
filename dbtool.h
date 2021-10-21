@@ -210,6 +210,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.signatureIndexSize = ctx.nextPrime(store.maxSignature * this->opt_ratio);
+
+				if (store.signatureIndexSize < origSize) {
+					fprintf(stderr, "raising --signatureindexsize to %u\n", origSize);
+					store.signatureIndexSize = origSize;
+				}
 			}
 
 			assert(store.signatureIndexSize > 0);
@@ -265,6 +270,12 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.swapIndexSize = ctx.nextPrime(store.maxSwap * this->opt_ratio);
+
+
+				if (store.swapIndexSize < origSize) {
+					fprintf(stderr, "raising --swapindexsize to %u\n", origSize);
+					store.swapIndexSize = origSize;
+				}
 			}
 
 			assert(store.swapIndexSize > 0);
@@ -282,7 +293,7 @@ struct dbtool_t : callable_t {
 		 */
 
 		if (sections & database_t::ALLOCMASK_IMPRINT) {
-			uint32_t  origInterleave = store.maxImprint;
+			uint32_t  origInterleave = store.interleave;
 			uint32_t  origMax        = store.maxImprint;
 
 			// interleave is not a section but a setting
@@ -342,6 +353,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.imprintIndexSize = ctx.nextPrime(store.maxImprint * this->opt_ratio);
+
+				if (store.imprintIndexSize < origSize) {
+					fprintf(stderr, "raising --imprintindexsize to %u\n", origSize);
+					store.imprintIndexSize = origSize;
+				}
 			}
 
 			assert(store.imprintIndexSize > 0);
@@ -397,6 +413,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.pairIndexSize = ctx.nextPrime(store.maxPair * this->opt_ratio);
+
+				if (store.pairIndexSize < origSize) {
+					fprintf(stderr, "raising --pairindexsize to %u\n", origSize);
+					store.pairIndexSize = origSize;
+				}
 			}
 
 			assert(store.pairIndexSize > 0);
@@ -452,6 +473,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.memberIndexSize = ctx.nextPrime(store.maxMember * this->opt_ratio);
+
+				if (store.memberIndexSize < origSize) {
+					fprintf(stderr, "raising --memberindexsize to %u\n", origSize);
+					store.memberIndexSize = origSize;
+				}
 			}
 
 			assert(store.memberIndexSize > 0);
@@ -507,6 +533,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.patternFirstIndexSize = ctx.nextPrime(store.maxPatternFirst * this->opt_ratio);
+
+				if (store.patternFirstIndexSize < origSize) {
+					fprintf(stderr, "raising --patternfirstindexsize to %u\n", origSize);
+					store.patternFirstIndexSize = origSize;
+				}
 			}
 
 			assert(store.patternFirstIndexSize > 0);
@@ -562,6 +593,11 @@ struct dbtool_t : callable_t {
 			} else {
 				// resize using metrics
 				store.patternSecondIndexSize = ctx.nextPrime(store.maxPatternSecond * this->opt_ratio);
+
+				if (store.patternSecondIndexSize < origSize) {
+					fprintf(stderr, "raising --patternsecondindexsize to %u\n", origSize);
+					store.maxPatternSecond = origSize;
+				}
 			}
 
 			assert(store.patternSecondIndexSize > 0);

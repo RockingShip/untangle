@@ -129,7 +129,7 @@
  *
  * Text modes:
  *
- * `--text[=1]` Brief mode that show selected candidates passed to `foundTreeSignature()`.
+ * `--text[=1]` Brief mode that show selected candidates passed to `foundTreeMember()`.
  *              Selected candidates are those that challenge and win the current display name.
  *              Also intended for transport and merging when broken into multiple tasks.
  *              Can be used for the `--load=<file>` option.
@@ -137,7 +137,7 @@
  *
  *              <name>
  *
- * `--text=2`   Full mode of all candidates passed to `foundTreeSignature()` including what needed to compare against the display name.
+ * `--text=2`   Full mode of all candidates passed to `foundTreeMember()` including what needed to compare against the display name.
  *
  *              <cid> <sid> <cmp> <name> <size> <numPlaceholder> <numEndpoint> <numBackRef>
 
