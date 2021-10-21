@@ -1477,7 +1477,7 @@ struct database_t {
 		 */
 		if (this->numPatternFirst) {
 			// first entry must be zero
-			member_t zero;
+			patternFirst_t zero;
 			::memset(&zero, 0, sizeof(zero));
 			assert(::memcmp(this->patternsFirst, &zero, sizeof(zero)) == 0);
 
@@ -1498,7 +1498,7 @@ struct database_t {
 		 */
 		if (this->numPatternSecond) {
 			// Second entry must be zero
-			member_t zero;
+			patternSecond_t zero;
 			::memset(&zero, 0, sizeof(zero));
 			assert(::memcmp(this->patternsSecond, &zero, sizeof(zero)) == 0);
 
@@ -1521,16 +1521,18 @@ struct database_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[Kclosing");
 
-		fileHeader.magic                 = FILE_MAGIC;
-		fileHeader.magic_flags           = creationFlags;
-		fileHeader.magic_maxSlots        = MAXSLOTS;
-		fileHeader.magic_sizeofSignature = sizeof(signature_t);
-		fileHeader.magic_sizeofSwap      = sizeof(swap_t);
-		fileHeader.magic_sizeofUnused    = 0;
-		fileHeader.magic_sizeofImprint   = sizeof(imprint_t);
-		fileHeader.magic_sizeofPair      = sizeof(pair_t);
-		fileHeader.magic_sizeofMember    = sizeof(member_t);
-		fileHeader.offEnd                = flen;
+		fileHeader.magic                     = FILE_MAGIC;
+		fileHeader.magic_flags               = creationFlags;
+		fileHeader.magic_maxSlots            = MAXSLOTS;
+		fileHeader.magic_sizeofSignature     = sizeof(signature_t);
+		fileHeader.magic_sizeofSwap          = sizeof(swap_t);
+		fileHeader.magic_sizeofUnused        = 0;
+		fileHeader.magic_sizeofImprint       = sizeof(imprint_t);
+		fileHeader.magic_sizeofPair          = sizeof(pair_t);
+		fileHeader.magic_sizeofMember        = sizeof(member_t);
+		fileHeader.magic_sizeofPatternFirst  = sizeof(patternFirst_t);
+		fileHeader.magic_sizeofPatternSecond = sizeof(patternSecond_t);
+		fileHeader.offEnd                    = flen;
 
 		// rewrite header
 		fseek(outf, 0, SEEK_SET);
@@ -2598,7 +2600,7 @@ struct database_t {
 	}
 
 	/**
-	 * Add a new patternFirst to the dataset
+	 * Add a new patternSecond to the dataset
 	 *
 	 * @param v {string} name - key value
 	 * @return {number} memberId
@@ -2606,7 +2608,7 @@ struct database_t {
 	inline uint32_t addPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidFQ) {
 		patternSecond_t *pPatternSecond = this->patternsSecond + this->numPatternSecond++;
 
-		if (this->numPatternFirst > this->maxPatternFirst)
+		if (this->numPatternSecond > this->maxPatternSecond)
 			ctx.fatal("\n{\"error\":\"storage full\",\"where\":\"%s:%s:%d\",\"maxPatternSecond\":%u}\n", __FUNCTION__, __FILE__, __LINE__, this->maxPatternSecond);
 
 		// clear before use
