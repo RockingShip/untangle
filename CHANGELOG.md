@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-21 21:39:50 Added: `tinyTree_t::addStringFast()`.
 2021-10-21 21:36:00 Fixed: Minor `patternFirst`/`patternSecond` tweaks.
 2021-10-21 21:32:30 Fixed: Serious `patternFirst`/`patternSecond` fixes.
 2021-10-20 12:35:44 Added: `genpattern` skeleton. 

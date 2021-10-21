@@ -2211,12 +2211,9 @@ struct tinyTree_t {
 	 * @param {string} pName - The notation describing the tree
 	 * @param {string} pSkin - Skin
 	 */
-	void loadStringFast(const char *pName, const char *pSkin = "abcdefghi") {
+	uint32_t addStringFast(const char *pName, const char *pSkin = "abcdefghi") {
 
 		assert(pName[0]); // disallow empty name
-
-		// initialise tree
-		this->clearTree();
 
 		// state storage for postfix notation
 		uint32_t stack[TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
@@ -2407,12 +2404,31 @@ struct tinyTree_t {
 			}
 		}
 		assert (numStack == 1);
-
-		// store result into root
-		this->root = stack[numStack - 1];
-
 		assert(this->count <= tinyTree_t::TINYTREE_NEND);
 		assert(nextPlaceholder <= TINYTREE_NSTART);
+
+		// return root of name
+		return stack[numStack - 1];
+
+	}
+
+	/**
+	 * @date 2020-03-13 21:11:04
+	 *
+	 * Parse notation and construct tree accordingly.
+	 * Notation is taken literally and not normalised
+	 *
+	 * WARNING: Does not check anything
+	 *
+	 * @param {string} pName - The notation describing the tree
+	 * @param {string} pSkin - Skin
+	 */
+	inline void loadStringFast(const char *pName, const char *pSkin = "abcdefghi") {
+
+		// initialise tree
+		this->clearTree();
+		// load root
+		this->root = this->addStringFast(pName, pSkin);
 	}
 
 	/**
