@@ -808,7 +808,6 @@ struct database_t {
 		// signature store
 		if (maxSignature && !(excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
-			maxSignature = maxSignature;
 			numSignature = 1; // do not start at 1
 			signatures   = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
 			allocFlags |= ALLOCMASK_SIGNATURE;
@@ -822,7 +821,6 @@ struct database_t {
 		// swap store
 		if (maxSwap && !(excludeSections & ALLOCMASK_SWAP)) {
 			// increase with 5%
-			maxSwap = maxSwap;
 			numSwap = 1; // do not start at 1
 			swaps   = (swap_t *) ctx.myAlloc("database_t::swaps", maxSwap, sizeof(*swaps));
 			allocFlags |= ALLOCMASK_SWAP;
@@ -837,7 +835,6 @@ struct database_t {
 		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT)) {
 			assert(interleave && interleaveStep);
 			// increase with 5%
-			maxImprint = maxImprint;
 			numImprint = 1; // do not start at 1
 			imprints   = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			allocFlags |= ALLOCMASK_IMPRINT;
@@ -851,7 +848,6 @@ struct database_t {
 		// sid/tid store
 		if (maxPair && !(excludeSections & ALLOCMASK_PAIR)) {
 			// increase with 5%
-			maxPair = maxPair;
 			numPair = 1; // do not start at 1
 			pairs   = (pair_t *) ctx.myAlloc("database_t::pairs", maxPair, sizeof(*pairs));
 			allocFlags |= ALLOCMASK_PAIR;
@@ -865,7 +861,6 @@ struct database_t {
 		// member store
 		if (maxMember && !(excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
-			maxMember = maxMember;
 			numMember = 1; // do not start at 1
 			members   = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
 			allocFlags |= ALLOCMASK_MEMBER;
@@ -879,7 +874,6 @@ struct database_t {
 		// patternFirst store
 		if (maxPatternFirst && !(excludeSections & ALLOCMASK_PATTERNFIRST)) {
 			// increase with 5%
-			maxPatternFirst = maxPatternFirst;
 			numPatternFirst = 1; // do not start at 1
 			patternsFirst   = (patternFirst_t *) ctx.myAlloc("database_t::patternFirst", maxPatternFirst, sizeof(*patternsFirst));
 			allocFlags |= ALLOCMASK_PATTERNFIRST;
@@ -893,7 +887,6 @@ struct database_t {
 		// patternSecond store
 		if (maxPatternSecond && !(excludeSections & ALLOCMASK_PATTERNSECOND)) {
 			// increase with 5%
-			maxPatternSecond = maxPatternSecond;
 			numPatternSecond = 1; // do not start at 1
 			patternsSecond   = (patternSecond_t *) ctx.myAlloc("database_t::patternSecond", maxPatternSecond, sizeof(*patternsSecond));
 			allocFlags |= ALLOCMASK_PATTERNSECOND;
@@ -2099,6 +2092,10 @@ struct database_t {
 	 */
 	inline bool lookupImprintAssociative(const tinyTree_t *pTree, footprint_t *pFwdEvaluator, footprint_t *pRevEvaluator, uint32_t *sid, uint32_t *tid, uint32_t root = 0) {
 		/*
+		 * @date 2021-10-20 22:23:56
+		 * NOTE: Any changes here should also be applied to `genpatternContext_t::foundTreePattern()`.
+		 */
+		/*
 		 * According to `performSelfTestInterleave` the following is true:
 	         *   fwdTransform[row + col] == fwdTransform[row][fwdTransform[col]]
 	         *   revTransform[row][fwdTransform[row + col]] == fwdTransform[col]
@@ -2463,7 +2460,7 @@ struct database_t {
 	 * @param v {uint32_t} tidQT - key value
 	 * @return {uint32_t} offset into index
 	 */
-	inline uint32_t lookupPatternFirst(uint32_t sidQ, uint32_t sidT, uint32_t tidTQ) {
+	inline uint32_t lookupPatternFirst(uint32_t sidQ, uint32_t sidT, uint32_t tidSlotT) {
 		assert(this->numPatternFirst);
 		ctx.cntHash++;
 
@@ -2474,13 +2471,13 @@ struct database_t {
 		// verify data fits in packed fields
 		assert(sidQ < (1 << 20));
 		assert(sidTu < (1 << 20));
-		assert(tidTQ < (1 << 19));
+		assert(tidSlotT < (1 << 19));
 
 		// calculate starting position
 		uint32_t crc32 = 0;
 		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(sidQ));
 		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(sidT));
-		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(tidTQ));
+		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(tidSlotT));
 
 		uint32_t ix   = crc32 % patternFirstIndexSize;
 		uint32_t bump = ix;
@@ -2496,7 +2493,7 @@ struct database_t {
 
 			const patternFirst_t *pPatternFirst = this->patternsFirst + this->patternFirstIndex[ix];
 
-			if (pPatternFirst->sidQ == sidQ && pPatternFirst->sidTu == sidTu && pPatternFirst->sidTj == sidTj && pPatternFirst->tidTQ == tidTQ)
+			if (pPatternFirst->sidQ == sidQ && pPatternFirst->sidTu == sidTu && pPatternFirst->sidTj == sidTj && pPatternFirst->tidSlotT == tidSlotT)
 				return ix; // "found"
 
 			// overflow, jump to next entry
@@ -2516,7 +2513,7 @@ struct database_t {
 	 * @param v {uint32_t} tidQT - key value
 	 * @return {uint32_t} memberId
 	 */
-	inline uint32_t addPatternFirst(uint32_t sidQ, uint32_t sidT, uint32_t tidTQ) {
+	inline uint32_t addPatternFirst(uint32_t sidQ, uint32_t sidT, uint32_t tidSlotT) {
 		// split sidT into invert bit and unsigned parts 
 		unsigned sidTj = sidT & IBIT ? 1 : 0;
 		uint32_t sidTu = sidT & ~IBIT;
@@ -2532,13 +2529,13 @@ struct database_t {
 		// verify data fits in packed fields
 		assert(sidQ < (1 << 20));
 		assert(sidTu < (1 << 20));
-		assert(tidTQ < (1 << 19));
+		assert(tidSlotT < (1 << 19));
 
 		// only populate key fields
-		pPatternFirst->sidQ  = sidQ;
-		pPatternFirst->sidTj  = sidTj;
-		pPatternFirst->sidTu  = sidTu;
-		pPatternFirst->tidTQ = tidTQ;
+		pPatternFirst->sidQ     = sidQ;
+		pPatternFirst->sidTj    = sidTj;
+		pPatternFirst->sidTu    = sidTu;
+		pPatternFirst->tidSlotT = tidSlotT;
 
 		return (uint32_t) (pPatternFirst - this->patternsFirst);
 	}
@@ -2559,20 +2556,20 @@ struct database_t {
 	 * @param v {uint32_t} sidFQ - key value
 	 * @return {number} offset into index
 	 */
-	inline uint32_t lookupPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidFQ) {
+	inline uint32_t lookupPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidSlotF) {
 		assert(this->numPatternSecond);
 		ctx.cntHash++;
 
 		// verify data fits in packed fields
 		assert(idFirst < (1 << 25));
 		assert(sidF < (1 << 20));
-		assert(tidFQ < (1 << 19));
+		assert(tidSlotF < (1 << 19));
 
 		// calculate starting position
 		uint32_t crc32 = 0;
 		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(idFirst));
 		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(sidF));
-		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(tidFQ));
+		__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(tidSlotF));
 
 		uint32_t ix   = crc32 % patternSecondIndexSize;
 		uint32_t bump = ix;
@@ -2588,7 +2585,7 @@ struct database_t {
 
 			const patternSecond_t *pPatternSecond = this->patternsSecond + this->patternSecondIndex[ix];
 
-			if (pPatternSecond->idFirst == idFirst && pPatternSecond->tidFQ == tidFQ && pPatternSecond->sidF == sidF)
+			if (pPatternSecond->idFirst == idFirst && pPatternSecond->tidSlotF == tidSlotF && pPatternSecond->sidF == sidF)
 				return ix; // "found"
 
 			// overflow, jump to next entry
@@ -2605,7 +2602,7 @@ struct database_t {
 	 * @param v {string} name - key value
 	 * @return {number} memberId
 	 */
-	inline uint32_t addPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidFQ) {
+	inline uint32_t addPatternSecond(uint32_t idFirst, uint32_t sidF, uint32_t tidSlotF) {
 		patternSecond_t *pPatternSecond = this->patternsSecond + this->numPatternSecond++;
 
 		if (this->numPatternSecond > this->maxPatternSecond)
@@ -2616,13 +2613,13 @@ struct database_t {
 
 		// verify data fits in packed fields
 		assert(idFirst < (1 << 25));
-		assert(tidFQ < (1 << 19));
 		assert(sidF < (1 << 20));
+		assert(tidSlotF < (1 << 19));
 
 		// only populate key fields
-		pPatternSecond->idFirst = idFirst;
-		pPatternSecond->tidFQ   = tidFQ;
-		pPatternSecond->sidF   = sidF;
+		pPatternSecond->idFirst  = idFirst;
+		pPatternSecond->tidSlotF = tidSlotF;
+		pPatternSecond->sidF     = sidF;
 
 		return (uint32_t) (pPatternSecond - this->patternsSecond);
 	}
@@ -2979,7 +2976,7 @@ struct database_t {
 
 				const patternFirst_t *pPatternFirst = this->patternsFirst + iPatternfirst;
 
-				uint32_t ix = this->lookupPatternFirst(pPatternFirst->sidQ, pPatternFirst->sidTu ^ (pPatternFirst->sidTj ? IBIT : 0), pPatternFirst->tidTQ); 
+				uint32_t ix = this->lookupPatternFirst(pPatternFirst->sidQ, pPatternFirst->sidTu ^ (pPatternFirst->sidTj ? IBIT : 0), pPatternFirst->tidSlotT); 
 				assert(this->patternFirstIndex[ix] == 0);
 				this->patternFirstIndex[ix] = iPatternfirst;
 
@@ -3021,7 +3018,7 @@ struct database_t {
 
 				const patternSecond_t *pPatternSecond = this->patternsSecond + iPatternsecond;
 
-				uint32_t ix = this->lookupPatternSecond(pPatternSecond->idFirst, pPatternSecond->sidF, pPatternSecond->tidFQ);
+				uint32_t ix = this->lookupPatternSecond(pPatternSecond->idFirst, pPatternSecond->sidF, pPatternSecond->tidSlotF);
 				assert(this->patternSecondIndex[ix] == 0);
 				this->patternSecondIndex[ix] = iPatternsecond;
 
@@ -3033,7 +3030,7 @@ struct database_t {
 			fprintf(stderr, "\r\e[K");
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Indices built\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] Indices updated\n", ctx.timeAsString());
 	}
 
 	char *sectionToText(unsigned sections, char *pBuffer = NULL) {

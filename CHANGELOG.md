@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-21 21:36:00 Fixed: Minor `patternFirst`/`patternSecond` tweaks.
 2021-10-21 21:32:30 Fixed: Serious `patternFirst`/`patternSecond` fixes.
 2021-10-20 12:35:44 Added: `genpattern` skeleton. 
 2021-10-19 23:03:00 Fixed: `dbtool_t::prepareSections()`.
