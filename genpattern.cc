@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * @date 2021-10-17 17:53:40
@@ -553,18 +553,10 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
 
-//	if (app.opt_load)
-//		app.patternsFromFile();
-	if (app.opt_generate) {
-		if (app.arg_numNodes == 1) {
-			// also include "0" and "a"
-			app.arg_numNodes = 0;
-			app.patternsFromGenerator();
-			app.arg_numNodes = 1;
-		}
-
+	if (app.opt_load)
+		app.patternsFromFile();
+	if (app.opt_generate)
 		app.patternsFromGenerator();
-	}
 
 #if 0
 	/*

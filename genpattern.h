@@ -163,7 +163,762 @@ struct genpatternContext_t : dbtool_t {
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
 	bool /*__attribute__((optimize("O0")))*/ foundTreePattern(tinyTree_t &treeR, const char *pNameR, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		assert(!"Placeholder");
+
+		if (this->truncated)
+			return false; // quit as fast as possible
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			int perSecond = ctx.updateSpeed();
+
+			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
+					ctx.timeAsString(), ctx.progress, perSecond,
+					pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
+					pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
+					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+			} else {
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
+					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
+					pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
+					pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
+					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+								}
+
+			if (ctx.restartTick) {
+				// passed a restart point
+				fprintf(stderr, "\n");
+				ctx.restartTick = 0;
+			}
+
+			ctx.tick = 0;
+		}
+
+		/*
+		 * Test for database overflow
+		 */
+		if (this->opt_truncate) {
+			// avoid `"storage full"`. Give warning later
+			if (pStore->maxPatternFirst - pStore->numPatternFirst <= 1 || pStore->maxPatternSecond - pStore->numPatternSecond <= 1) {
+				// break now, display text later/ Leave progress untouched
+				this->truncated = ctx.progress;
+				::strcpy(this->truncatedName, pNameR);
+
+				// quit as fast as possible
+				return false;
+			}
+		}
+
+		if (opt_mixed) {
+			enum {
+				FULL, MIXED, PURE
+			} area;
+			area = PURE;
+
+			for (unsigned k = tinyTree_t::TINYTREE_NSTART; k < treeR.root; k++) {
+				if (!(treeR.N[k].T & IBIT)) {
+					area = FULL;
+					break;
+				}
+			}
+			if (area == PURE && !(treeR.N[treeR.root].T & IBIT))
+				area = MIXED;
+
+			// with `--mixed`, only accept PURE/MIXED
+			if (area == FULL)
+				return true;
+		}
+
+#if 0
+		// @date <historic>
+		// extra lines to test hardened restart by matching progress/name
+		// test with `./genshrink --numnode=4 --sge` and comparing results without `--sge`'
+		printf("%ju %s\n", progress-1, treeR.saveString(treeR.count-1));
+		return true;
+#endif
+
+		/*
+		 * Skip patterns with 'wildcard' nodes
+		 * Wildcards are nodes that can be replaced by a placeholder because they do not share endpoints with other nodes 
+		 * 
+		 */
+		if (0/*opt_wildcard*/) { // todo:
+			uint32_t singleRef = 0;
+			uint32_t multiRef  = 0;
+
+			for (unsigned i = tinyTree_t::TINYTREE_NSTART; i < treeR.count; i++) {
+				const tinyNode_t *pNode = treeR.N + i;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
+				const uint32_t   F      = pNode->F;
+
+				if (Q && Q < tinyTree_t::TINYTREE_NSTART) {
+					multiRef |= singleRef & (1 << Q);
+					singleRef |= (1 << Q);
+				}
+				if (Tu && Tu < tinyTree_t::TINYTREE_NSTART) {
+					multiRef |= singleRef & (1 << Tu);
+					singleRef |= (1 << Tu);
+				}
+				if (F && F < tinyTree_t::TINYTREE_NSTART && F != Tu) {
+					multiRef |= singleRef & (1 << F);
+					singleRef |= (1 << F);
+				}
+			}
+
+			for (unsigned i = tinyTree_t::TINYTREE_NSTART; i < treeR.count; i++) {
+				const tinyNode_t *pNode = treeR.N + i;
+				const uint32_t   Q      = pNode->Q;
+				const uint32_t   T      = pNode->T;
+				const uint32_t   Fu     = pNode->F & ~IBIT;
+
+				if (Q < tinyTree_t::TINYTREE_NSTART && T < tinyTree_t::TINYTREE_NSTART && Fu < tinyTree_t::TINYTREE_NSTART) {
+					if (!(multiRef & (1 << Q)) && !(multiRef & (1 << T)) && !(multiRef & (1 << Fu))) {
+//						numSkipped3++; todo:
+						return true;
+					}
+				}
+			}
+		}
+
+		/*
+		 * Search the QTF components
+		 */
+		enum FIND {
+			FIND_F = 1 << 0,
+			FIND_T = 1 << 1,
+			FIND_Q = 1 << 2,
+			FIND_R = 1 << 3,
+		};
+		unsigned find;
+
+		// Get top-level QTF
+		uint32_t R    = treeR.root;
+		uint32_t tlQ  = treeR.N[R].Q;
+		uint32_t tlTi = treeR.N[R].T & IBIT;
+		uint32_t tlTu = treeR.N[R].T & ~IBIT;
+		uint32_t tlF  = treeR.N[R].F;
+
+		uint32_t sidR = 0, sidQ = 0, sidT = 0, sidF = 0;
+		uint32_t tidR = 0, tidQ = 0, tidT = 0, tidF = 0;
+
+		/*
+		 * Which top-level components to analyse. Optimise/delay NE.  
+		 */
+		if (tlTu == tlF)
+			find = FIND_R | FIND_Q | FIND_T; // NE has double reference
+		else
+			find = FIND_R | FIND_Q | FIND_T | FIND_F; // find all components
+
+		/*
+		 * catch endpoint lookups
+		 */
+		{
+			static uint32_t fastSid[tinyTree_t::TINYTREE_NSTART];
+			static uint32_t fastTid[tinyTree_t::TINYTREE_NSTART];
+
+			/*
+			 * Initialise lookup table
+			 */
+			if (fastSid[0] == 0) {
+				uint32_t ix = pStore->lookupSignature("0");
+				fastSid[0] = pStore->signatureIndex[ix];
+				fastTid[0] = 0;
+				assert(fastSid[0] != 0);
+				
+				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+					char name[2] = {(char) ('a' + iSlot), 0};
+
+					uint32_t ix = pStore->lookupSignature("a");
+					fastSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
+					fastTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
+					assert(fastSid[tinyTree_t::TINYTREE_KSTART] != 0);
+				}
+			}
+
+
+			if (tlQ < tinyTree_t::TINYTREE_NSTART) {
+				sidQ = fastSid[tlQ];
+				tidQ = fastTid[tlQ];
+				find &= ~FIND_Q;
+			}
+			if (tlTu < tinyTree_t::TINYTREE_NSTART) {
+				sidT = fastSid[tlTu];
+				tidT = fastTid[tlTu];
+				find &= ~FIND_T;
+			}
+			if (tlF < tinyTree_t::TINYTREE_NSTART) {
+				sidF = fastSid[tlF];
+				tidF = fastTid[tlF];
+				find &= ~FIND_F;
+			}
+		}
+
+		/*
+		 * @date 2021-10-20 22:21:02
+		 * 
+		 * Perform an associative lookup for the root and the top-level components
+		 * 
+		 * Instead of performing 4x `database_t::lookupImprintAssociative()` with basically the same tree,
+		 * Unwind the call by evaluating the tree once and examining the Q/T/F/R entry points.
+		 * 
+		 * The following code is taken directly from `database_t::lookupImprintAssociative()`.
+		 * For optimisation, it assumes versioned memory is disabled.
+		 * Comments have been trimmed/
+		 */
+		assert(pStore->imprintVersion == NULL);
+		if (pStore->interleave == pStore->interleaveStep) {
+			/*
+			 * index is populated with key cols, runtime scans rows
+			 * Because of the jumps, memory cache might be killed
+			 */
+
+			// permutate all rows
+			for (unsigned iRow = 0; iRow < MAXTRANSFORM; iRow += pStore->interleaveStep) {
+
+				// find where the evaluator for the key is located in the evaluator store
+				footprint_t *v = pStore->revEvaluator + iRow * tinyTree_t::TINYTREE_NEND;
+
+				// apply the reverse transform
+				treeR.eval(v);
+
+				if (find & FIND_R) {
+					// debug validation
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[R]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidR = pImprint->sid;
+						tidR = pImprint->tid + iRow;
+
+						find &= ~FIND_R;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_Q) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlQ]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidQ = pImprint->sid;
+						tidQ = pImprint->tid + iRow;
+
+						find &= ~FIND_Q;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_T) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlTu]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidT = pImprint->sid;
+						tidT = pImprint->tid + iRow;
+
+						find &= ~FIND_T;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_F) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlF]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidF = pImprint->sid;
+						tidF = pImprint->tid + iRow;
+
+						find &= ~FIND_F;
+						if (!find)
+							break;
+					}
+				}
+
+			}
+		} else {
+			/*
+			 * index is populated with key rows, runtime scans cols
+			 *
+			 * @date 2020-04-18 22:51:05
+			 *
+			 * This path is cpu cache friendlier because of `iCol++`
+			 */
+			footprint_t *v = pStore->fwdEvaluator;
+
+			// permutate all colums
+			for (unsigned iCol = 0; iCol < pStore->interleaveStep; iCol++) {
+
+				// apply the tree to the store
+				treeR.eval(v);
+
+				if (find & FIND_R) {
+					// debug validation
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[R]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidR = pImprint->sid;
+						tidR = pStore->revTransformIds[pImprint->tid + iCol];
+
+						find &= ~FIND_R;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_Q) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlQ]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidQ = pImprint->sid;
+						tidQ = pStore->revTransformIds[pImprint->tid + iCol];
+
+						find &= ~FIND_Q;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_T) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlTu]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidT = pImprint->sid;
+						tidT = pStore->revTransformIds[pImprint->tid + iCol];
+
+						find &= ~FIND_T;
+						if (!find)
+							break;
+					}
+				}
+
+				if (find & FIND_F) {
+					// de-sign
+					uint32_t ix = pStore->lookupImprint(v[tlF]);
+					if (pStore->imprintIndex[ix] != 0) {
+						imprint_t *pImprint = pStore->imprints + pStore->imprintIndex[ix];
+						sidF = pImprint->sid;
+						tidF = pStore->revTransformIds[pImprint->tid + iCol];
+
+						find &= ~FIND_F;
+						if (!find)
+							break;
+					}
+				}
+
+				v += tinyTree_t::TINYTREE_NEND;
+			}
+		}
+		
+		// test all components found
+		if (find != 0) {
+//			numSkipped2++; todo:
+			return true;
+		}
+
+		/*
+		 * @date 2021-10-21 20:07:46
+		 * Component structures in `treeR` are raw and have not been tested if they collapse.
+		 * Count the component endpoints and reject if their count do not match their signatures.
+		 */
+		{
+			// mark/propagate endpoints per node
+			uint32_t bitset[tinyTree_t::TINYTREE_NEND];
+			bitset[0] = 0; // zero is not an endpoint
+
+			// mark endpoints
+			for (uint32_t k = tinyTree_t::TINYTREE_KSTART; k < tinyTree_t::TINYTREE_NSTART; k++)
+				bitset[k] = 1 << k;
+
+			// mark nodes
+			for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < treeR.count; iNode++) {
+				tinyNode_t *pNode = treeR.N + iNode;
+				bitset[iNode] = bitset[pNode->Q] | bitset[pNode->T & ~IBIT] | bitset[pNode->F];
+			}
+
+			// convert bitset to bitcount
+			for (uint32_t k = tinyTree_t::TINYTREE_KSTART; k < tinyTree_t::TINYTREE_NSTART; k++)
+				bitset[k] = 1;
+
+			// ancient bitcount hack 
+			for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < treeR.count; iNode++) {
+				bitset[iNode] = ((bitset[iNode] & 0xaaaaaaaa) >> 1) + (bitset[iNode] & 0x55555555);
+				bitset[iNode] = ((bitset[iNode] & 0xcccccccc) >> 2) + (bitset[iNode] & 0x33333333);
+				bitset[iNode] = ((bitset[iNode] & 0xf0f0f0f0) >> 4) + (bitset[iNode] & 0x0f0f0f0f);
+				bitset[iNode] = ((bitset[iNode] & 0xff00ff00) >> 8) + (bitset[iNode] & 0x00ff00ff);
+				bitset[iNode] = ((bitset[iNode] & 0xffff0000) >> 16) + (bitset[iNode] & 0x0000ffff);
+			}
+
+			if ((bitset[tlQ] != pStore->signatures[sidQ].numPlaceholder) ||
+			    (bitset[tlTu] != pStore->signatures[sidT].numPlaceholder) ||
+			    (bitset[tlF] != pStore->signatures[sidF].numPlaceholder)) {
+				return true;
+			}
+		}
+
+		/*
+		 * Fixup delayed NE
+		 */
+		if (tlTu == tlF) {
+			// root is NE, T-invert is stored in tlTi
+			sidF = sidT;
+			tidF = tidT;
+		}
+		
+		assert(sidR && sidQ && sidT && sidF);
+
+
+		/*
+		 * @date 2021-10-20 02:22:04
+		 * 
+		 * Point of NO return.
+		 * 
+		 * The structure in `treeR` has been identified as: sidR/tidR, sidQ/tidQ, sidT/tidT, sidF/tidF.
+		 */
+		
+		/*
+		 * Convert tidR/tidQ/tidT/tidF such that `tidR=0`. 
+		 */
+		{
+			char reverse[MAXSLOTS + 1];
+
+			// determine inverse transform to get from result to intermediate
+			const char *revRstr = pStore->revTransformNames[tidR];
+			const char *fwdQstr = pStore->fwdTransformNames[tidQ];
+			const char *fwdTstr = pStore->fwdTransformNames[tidT];
+			const char *fwdFstr = pStore->fwdTransformNames[tidF];
+
+			// reverse the transforms
+			for (int i = 0; i < MAXSLOTS; i++)
+				reverse[i] = revRstr[fwdQstr[i] - 'a'];
+			reverse[pStore->signatures[sidQ].numPlaceholder] = 0;
+			tidQ = pStore->lookupFwdTransform(reverse);
+
+			for (int i = 0; i < MAXSLOTS; i++)
+				reverse[i] = revRstr[fwdTstr[i] - 'a'];
+			reverse[pStore->signatures[sidT].numPlaceholder] = 0;
+			tidT = pStore->lookupFwdTransform(reverse);
+
+			for (int i = 0; i < MAXSLOTS; i++)
+				reverse[i] = revRstr[fwdFstr[i] - 'a'];
+			reverse[pStore->signatures[sidF].numPlaceholder] = 0;
+			tidF = pStore->lookupFwdTransform(reverse);
+			
+			tidR = 0;
+		}
+		
+		/*
+		 * Sid-swap endpoints as the run-time would do
+		 */
+		tidR = this->sidSwapTid(sidR, tidR);
+		tidQ = this->sidSwapTid(sidQ, tidQ);
+		tidT = this->sidSwapTid(sidT, tidT);
+		tidF = this->sidSwapTid(sidF, tidF);
+
+		/*
+		 * Validate
+		 */
+		if (ctx.flags & ctx.MAGICMASK_PARANOID) {
+			char name[tinyTree_t::TINYTREE_NAMELEN * 3 + 1 + 1]; // for 3 trees and final operator
+			unsigned nameLen = 0;
+			tinyTree_t tree(ctx);
+
+			tree.loadStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
+			tree.saveString(tree.root, name + nameLen, NULL);
+			nameLen = strlen(name);
+
+			tree.loadStringFast(pStore->signatures[sidT].name, pStore->fwdTransformNames[tidT]);
+			tree.saveString(tree.root, name + nameLen, NULL);
+			nameLen = strlen(name);
+
+			tree.loadStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
+			tree.saveString(tree.root, name + nameLen, NULL);
+			nameLen = strlen(name);
+			
+			name[nameLen++] = (tlTi) ? '!' : '?';
+			name[nameLen] = 0;
+
+			tree.loadStringFast(name);
+
+			uint32_t sid = 0;
+			uint32_t tid = 0;
+			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
+
+			assert(sid == sidR);
+			assert(tid == 0);
+
+//			printf("./eval \"%s\" \"%s\"\n", name, pStore->signatures[sidR].name);
+		}
+		
+		/*
+		 * Get name.
+		 */
+		if (opt_text == OPTTEXT_COMPARE) {
+
+			// progress sidQ tidQ sidT tidT sidF tidF sidR treeR
+
+			printf("%lu\t%u:%s\t%u:%.*s\t%u:%s%s\t%u:%.*s\t%u:%s\t%u:%.*s\t%u:%s\t%s\n",
+			       ctx.progress,
+
+			       sidQ, pStore->signatures[sidQ].name,
+			       tidQ, pStore->signatures[sidQ].numPlaceholder, pStore->fwdTransformNames[tidQ],
+
+			       sidT, pStore->signatures[sidT].name,
+			       tlTi ? "~" : "",
+			       tidT, pStore->signatures[sidT].numPlaceholder, pStore->fwdTransformNames[tidT],
+
+			       sidF, pStore->signatures[sidF].name,
+			       tidF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidF],
+
+			       sidR, pStore->signatures[sidR].name, pNameR);
+		}
+
+		if (tlTi)
+			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
+		else
+			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
+		
+		return true;
+	}
+	
+	/*
+	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering 
+	 */
+	uint32_t sidSwapTid(uint32_t sid, uint32_t tid) {
+		signature_t *pSignature = pStore->signatures + sid;
+
+		if (pSignature->swapId == 0)
+			return tid;
+
+		// get signature
+		swap_t *pSwap = pStore->swaps + pSignature->swapId;
+
+		// fill simple slots for comparing
+		char slots[MAXSLOTS + 1];
+		memcpy(slots, pStore->fwdTransformNames[tid], MAXSLOTS + 1);
+
+		bool changed;
+		do {
+			changed = false;
+
+			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+				tid = pSwap->tids[iSwap];
+
+				// get the transform string
+				const char *pTransformStr = pStore->fwdTransformNames[tid];
+
+				// test if swap needed
+				bool needSwap = false;
+
+				for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+					if (slots[i] > slots[pTransformStr[i] - 'a']) {
+						needSwap = true;
+						break;
+					}
+					if (slots[i] < slots[pTransformStr[i] - 'a']) {
+						needSwap = false;
+						break;
+					}
+				}
+
+				if (needSwap) {
+					char newSlots[MAXSLOTS];
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+						newSlots[i] = slots[pTransformStr[i] - 'a'];
+
+					memcpy(slots, newSlots, pSignature->numPlaceholder);
+
+					changed = true;
+				}
+			}
+		} while (changed);
+
+		return pStore->lookupFwdTransform(slots);
+	}
+
+	/*
+	 * @date 2021-10-21 15:26:44
+	 * 
+	 * Add top level triplet to database
+	 * Extract the 3 components and scan them as the runtime (Q/T/F cross product) would do.
+	 * Determine the transform needed to re-arrange the resulting slot for the `groupTree_t` node.
+	 * `groupTree_t` does not scan trees for pattern matches but is a collection of prime structures that are cross-product.
+	 * First step is the cross-product between Q and T.
+	 * Second step are the ound combos cross-multiplied with F.
+	 */
+	uint32_t /*__attribute__((optimize("O0")))*/ addPatternToDatabase(const char *pNameR, uint32_t sidR, uint32_t sidQ, uint32_t tidQ, uint32_t sidT, uint32_t tidT, uint32_t sidF, uint32_t tidF) {
+		assert(!(sidR & IBIT));
+		assert(!(sidQ & IBIT));
+		assert(!(sidF & IBIT));
+
+		// reassembly transform
+		char     slotsQ[MAXSLOTS + 1];
+		char     slotsT[MAXSLOTS + 1];
+		char     slotsF[MAXSLOTS + 1];
+		char     slotsR[MAXSLOTS + 1];
+		// reassembly TF transform relative to Q
+		uint32_t tidSlotT = 0;
+		uint32_t tidSlotF = 0;
+		uint32_t tidSlotR = 0;  // transform from `slotsR[]` to resulting `groupNode_t::slots[]`.
+		// nodes already processed
+		uint32_t beenThere = 0; // bit set means beenWhat[] is valid/defined
+		char     beenWhat[tinyTree_t::TINYTREE_NEND]; // endpoint in resulting `slotsR[]`
+		uint32_t nextSlot  = 0;
+		
+		
+		/*
+		 * Slot population as `fragmentTree_t` would do
+		 */
+		
+		signature_t *pSignature = pStore->signatures + sidQ;
+		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+			// get slot value
+			unsigned endpoint = pStore->fwdTransformNames[tidQ][iSlot] - 'a';
+			// was it seen before
+			if (!(beenThere & (1 << endpoint))) {
+				beenWhat[endpoint] = (char) ('a' + nextSlot); // assign new placeholder
+				slotsR[nextSlot]   = (char) ('a' + endpoint); // put endpoint in result
+				nextSlot++;
+				beenThere |= (1 << endpoint);
+			}
+			slotsQ[iSlot] = beenWhat[endpoint];
+		}
+		slotsQ[pSignature->numPlaceholder] = 0; // terminator
+
+		pSignature = pStore->signatures + (sidT & ~IBIT);
+		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+			// get slot value
+			unsigned endpoint = pStore->fwdTransformNames[tidT][iSlot] - 'a';
+			// was it seen before
+			if (!(beenThere & (1 << endpoint))) {
+				beenWhat[endpoint] = (char) ('a' + nextSlot);
+				slotsR[nextSlot]   = (char) ('a' + endpoint);
+				nextSlot++;
+				beenThere |= (1 << endpoint);
+			}
+			slotsT[iSlot] = beenWhat[endpoint];
+		}
+		slotsT[pSignature->numPlaceholder] = 0; // terminator
+
+		pSignature = pStore->signatures + sidF;
+		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+			// get slot value
+			unsigned endpoint = pStore->fwdTransformNames[tidF][iSlot] - 'a';
+			// was it seen before
+			if (!(beenThere & (1 << endpoint))) {
+				beenWhat[endpoint] = (char) ('a' + nextSlot);
+				slotsR[nextSlot]   = (char) ('a' + endpoint);
+				nextSlot++;
+				beenThere |= (1 << endpoint);
+			}
+			slotsF[iSlot] = beenWhat[endpoint];
+		}
+		slotsF[pSignature->numPlaceholder] = 0; // terminator
+
+		(void)slotsQ;
+		assert(nextSlot <= MAXSLOTS); // slots should not overflow
+
+		slotsR[nextSlot] = 0; // terminator
+
+		/*
+		 * @date 2021-10-21 19:22:25
+		 * Structures that collapse, like "aab+b>" can have more slots than the resulting structure.
+		 */
+		if (nextSlot != pStore->signatures[sidR].numPlaceholder) {
+			// collapse occurred, structure is unsuited as a pattern.
+			
+			// skipCollapse++; // todo:
+			return 0;
+		}		
+
+		/*
+		 * Get slot transforms relative to Q
+		 */
+		tidSlotR = pStore->lookupRevTransform(slotsR);
+		tidSlotT = pStore->lookupFwdTransform(slotsT);
+		tidSlotF = pStore->lookupFwdTransform(slotsF);
+		assert(tidSlotR != IBIT);
+		assert(tidSlotT != IBIT);
+		assert(tidSlotF != IBIT);
+
+		/*
+		 * @date 2021-10-21 23:45:02
+		 * The result slots can have swapped placeholders
+		 * 
+		 * 'a baac>! >' 'a caab>! >'
+		 * 
+		 * "baac>!" and "caab>!" are distinct, however as component they can exchange b/c
+		 * The difference between these two are found in `slotsR[]`.
+		 * 
+		 */
+		tidSlotR = this->sidSwapTid(sidR, tidSlotR);
+
+		/*
+		 * Add to database
+		 */
+
+		// lookup/create first
+		uint32_t ixFirst = pStore->lookupPatternFirst(sidQ, sidT, tidSlotT);
+		if (pStore->patternFirstIndex[ixFirst] == 0)
+			pStore->patternFirstIndex[ixFirst] = pStore->addPatternFirst(sidQ, sidT, tidSlotT);
+		uint32_t idFirst = pStore->patternFirstIndex[ixFirst];
+
+		// lookup/create second
+		uint32_t ixSecond = pStore->lookupPatternSecond(idFirst, sidF, tidSlotF);
+		uint32_t idSecond;
+		patternSecond_t *patternSecond;
+
+		if (pStore->patternSecondIndex[ixSecond] == 0) {
+			pStore->patternSecondIndex[ixSecond] = pStore->addPatternSecond(idFirst, sidF, tidSlotF);
+
+			// new entry
+			idSecond      = pStore->patternSecondIndex[ixSecond];
+			patternSecond = pStore->patternsSecond + idSecond;
+
+			assert(sidR < (1 << 20));
+
+			patternSecond->sidR     = sidR;
+			patternSecond->tidSlotR = tidSlotR;
+
+			if (opt_text == OPTTEXT_WON) {
+				/*
+				 * Construct tree containing sid/tid
+				 */
+				tinyTree_t tree(ctx);
+				uint32_t tlQ = tree.addStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
+				uint32_t tlT = tree.addStringFast(pStore->signatures[sidT & ~IBIT].name, pStore->fwdTransformNames[tidT]);
+				uint32_t tlF = tree.addStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
+				tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT&IBIT) ? IBIT : 0), tlF);
+				
+				printf("%s\n", tree.saveString(tree.root));
+			}
+		} else {
+			// verify duplicate
+			idSecond = pStore->patternSecondIndex[ixSecond];
+			patternSecond = pStore->patternsSecond + idSecond;
+
+			assert(patternSecond->sidR == sidR);
+			assert(patternSecond->tidSlotR == tidSlotR);
+			skipDuplicate++;
+		}
+
+		return idSecond;
 	}
 
 	/**
@@ -276,7 +1031,7 @@ struct genpatternContext_t : dbtool_t {
 				ctx.progress,
 				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
-				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->numPatternSecond,
+				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
 				skipDuplicate);
 	}
 
@@ -372,7 +1127,7 @@ struct genpatternContext_t : dbtool_t {
 			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 				pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
-				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->numPatternSecond,
+				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
 				skipDuplicate);
 	}
 };

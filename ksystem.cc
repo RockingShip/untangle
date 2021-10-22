@@ -236,7 +236,7 @@ struct kextractContext_t {
 kextractContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.json> <input.dat>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.dat> <input.dat>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
