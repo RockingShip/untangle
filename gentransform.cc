@@ -279,8 +279,11 @@ int main(int argc, char *argv[]) {
 	store.transformIndexSize = MAXTRANSFORMINDEX;
 	store.maxEvaluator       = tinyTree_t::TINYTREE_NEND * MAXTRANSFORM;
 
-	// create memory-based store
-	store.create(0);
+	/*
+	 * Allocate sections
+	 */
+	store.allocateSections(database_t::ALLOCMASK_TRANSFORM | database_t::ALLOCMASK_EVALUATOR);
+
 	app.pStore = &store;
 
 	/*

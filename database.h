@@ -1086,12 +1086,13 @@ struct database_t {
 	void allocateSections(unsigned sections) {
 		// transform store
 		if (sections & ALLOCMASK_TRANSFORM) {
-			assert(maxTransform == MAXTRANSFORM);
+			assert(maxTransform > 0);
 			fwdTransformData      = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
 			revTransformData      = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
 			fwdTransformNames     = (transformName_t *) ctx.myAlloc("database_t::fwdTransformNames", maxTransform, sizeof(*this->fwdTransformNames));
 			revTransformNames     = (transformName_t *) ctx.myAlloc("database_t::revTransformNames", maxTransform, sizeof(*this->revTransformNames));
 			revTransformIds       = (uint32_t *) ctx.myAlloc("database_t::revTransformIds", maxTransform, sizeof(*this->revTransformIds));
+			assert(transformIndexSize > 0);
 			fwdTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::fwdTransformNameIndex", transformIndexSize, sizeof(*fwdTransformNameIndex));
 			revTransformNameIndex = (uint32_t *) ctx.myAlloc("database_t::revTransformNameIndex", transformIndexSize, sizeof(*revTransformNameIndex));
 			allocFlags |= ALLOCMASK_TRANSFORM;
@@ -2717,8 +2718,19 @@ struct database_t {
 	 * @param {number} sections - set of sections to reindex
 	 */
 	void rebuildIndices(unsigned sections) {
+		// anything to do
+		sections &= ALLOCMASK_SIGNATUREINDEX |
+			    ALLOCMASK_SWAPINDEX |
+			    ALLOCMASK_IMPRINTINDEX |
+			    ALLOCMASK_PAIRINDEX |
+			    ALLOCMASK_MEMBERINDEX |
+			    ALLOCMASK_PATTERNFIRSTINDEX |
+			    ALLOCMASK_PATTERNSECONDINDEX;
+		if (!sections)
+			return;
+
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
-			fprintf(stderr, "[%s] Rebuilding indices\n", ctx.timeAsString());
+			fprintf(stderr, "[%s] Rebuilding indices [%s]\n", ctx.timeAsString(), this->sectionToText(sections).c_str());
 
 		// reset ticker
 		uint64_t numProgress = 0;
