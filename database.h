@@ -225,77 +225,76 @@ struct database_t {
 	// I/O context
 	context_t &ctx;
 
-	// @formatter:off
-	int                hndl;
-	const uint8_t      *rawDatabase;                // base location of mmap segment
-	fileHeader_t       fileHeader;                  // file header
-	uint32_t           creationFlags;               // creation constraints
-	uint32_t           allocFlags;                  // memory constraints
+	int             hndl;
+	const uint8_t   *rawDatabase;                // base location of mmap segment
+	fileHeader_t    fileHeader;                  // file header
+	size_t          fileSize;                    // size of original file
+	uint32_t        creationFlags;               // creation constraints
+	uint32_t        allocFlags;                  // memory constraints
 	// transforms
-	uint32_t           numTransform;                // number of elements in collection
-	uint32_t           maxTransform;                // maximum size of collection
-	uint64_t           *fwdTransformData;           // forward transform (binary)
-	uint64_t           *revTransformData;           // reverse transform (binary)
-	transformName_t    *fwdTransformNames;          // forward transform (string)
-	transformName_t    *revTransformNames;          // reverse transform (string)
-	uint32_t           *revTransformIds;            // reverse transform (id)
-	uint32_t           transformIndexSize;          // index size (must be prime)
-	uint32_t           *fwdTransformNameIndex;      // fwdTransformNames index
-	uint32_t           *revTransformNameIndex;      // revTransformNames index
+	uint32_t        numTransform;                // number of elements in collection
+	uint32_t        maxTransform;                // maximum size of collection
+	uint64_t        *fwdTransformData;           // forward transform (binary)
+	uint64_t        *revTransformData;           // reverse transform (binary)
+	transformName_t *fwdTransformNames;          // forward transform (string)
+	transformName_t *revTransformNames;          // reverse transform (string)
+	uint32_t        *revTransformIds;            // reverse transform (id)
+	uint32_t        transformIndexSize;          // index size (must be prime)
+	uint32_t        *fwdTransformNameIndex;      // fwdTransformNames index
+	uint32_t        *revTransformNameIndex;      // revTransformNames index
 	// evaluator store [COPY-ON-WRITE] Preloaded for a `tinyTree_t`.
-	uint32_t           numEvaluator;                // number of evaluators (tinyTree_t::TINYTREE_NEND * MAXTRANSFORM)
-	uint32_t           maxEvaluator;                // maximum size of collection
-	footprint_t	   *fwdEvaluator;		// evaluator for forward transforms
-	footprint_t	   *revEvaluator;		// evaluator for reverse transforms
+	uint32_t        numEvaluator;                // number of evaluators (tinyTree_t::TINYTREE_NEND * MAXTRANSFORM)
+	uint32_t        maxEvaluator;                // maximum size of collection
+	footprint_t     *fwdEvaluator;               // evaluator for forward transforms
+	footprint_t     *revEvaluator;               // evaluator for reverse transforms
 	// signature store
-	uint32_t           numSignature;                // number of signatures
-	uint32_t           maxSignature;                // maximum size of collection
-	signature_t        *signatures;                 // signature collection
-	uint32_t           signatureIndexSize;          // index size (must be prime)
-	uint32_t           *signatureIndex;             // index
+	uint32_t        numSignature;                // number of signatures
+	uint32_t        maxSignature;                // maximum size of collection
+	signature_t     *signatures;                 // signature collection
+	uint32_t        signatureIndexSize;          // index size (must be prime)
+	uint32_t        *signatureIndex;             // index
 	// swap store
-	uint32_t           numSwap;                     // number of swaps
-	uint32_t           maxSwap;                     // maximum size of collection
-	swap_t             *swaps;                      // swap collection
-	uint32_t           swapIndexSize;               // index size (must be prime)
-	uint32_t           *swapIndex;                  // index
+	uint32_t        numSwap;                     // number of swaps
+	uint32_t        maxSwap;                     // maximum size of collection
+	swap_t          *swaps;                      // swap collection
+	uint32_t        swapIndexSize;               // index size (must be prime)
+	uint32_t        *swapIndex;                  // index
 	// imprint store
-	uint32_t           interleave;                  // imprint interleave factor (display value)
-	uint32_t           interleaveStep;              // imprint interleave factor (interleave distance)
-	uint32_t           numImprint;                  // number of elements in collection
-	uint32_t           maxImprint;                  // maximum size of collection
-	imprint_t          *imprints;                   // imprint collection
-	uint32_t           imprintIndexSize;            // index size (must be prime)
-	uint32_t           *imprintIndex;               // index
+	uint32_t        interleave;                  // imprint interleave factor (display value)
+	uint32_t        interleaveStep;              // imprint interleave factor (interleave distance)
+	uint32_t        numImprint;                  // number of elements in collection
+	uint32_t        maxImprint;                  // maximum size of collection
+	imprint_t       *imprints;                   // imprint collection
+	uint32_t        imprintIndexSize;            // index size (must be prime)
+	uint32_t        *imprintIndex;               // index
 	// pair store
-	uint32_t           numPair;                     // number of sid/tid pairs
-	uint32_t           maxPair;                     // maximum size of collection
-	pair_t             *pairs;                      // sid/tid pair collection
-	uint32_t           pairIndexSize;               // index size (must be prime)
-	uint32_t           *pairIndex;                  // index
+	uint32_t        numPair;                     // number of sid/tid pairs
+	uint32_t        maxPair;                     // maximum size of collection
+	pair_t          *pairs;                      // sid/tid pair collection
+	uint32_t        pairIndexSize;               // index size (must be prime)
+	uint32_t        *pairIndex;                  // index
 	// member store
-	uint32_t           numMember;                   // number of members
-	uint32_t           maxMember;                   // maximum size of collection
-	member_t           *members;                    // member collection
-	uint32_t           memberIndexSize;             // index size (must be prime)
-	uint32_t           *memberIndex;                // index
+	uint32_t        numMember;                   // number of members
+	uint32_t        maxMember;                   // maximum size of collection
+	member_t        *members;                    // member collection
+	uint32_t        memberIndexSize;             // index size (must be prime)
+	uint32_t        *memberIndex;                // index
 	// patternFirst store
-	uint32_t           numPatternFirst;             // number of patternsFirst
-	uint32_t           maxPatternFirst;             // maximum size of collection
-	patternFirst_t     *patternsFirst;              // patternFirst collection
-	uint32_t           patternFirstIndexSize;       // index size (must be prime)
-	uint32_t           *patternFirstIndex;          // index
+	uint32_t        numPatternFirst;             // number of patternsFirst
+	uint32_t        maxPatternFirst;             // maximum size of collection
+	patternFirst_t  *patternsFirst;              // patternFirst collection
+	uint32_t        patternFirstIndexSize;       // index size (must be prime)
+	uint32_t        *patternFirstIndex;          // index
 	// patternSecond store
-	uint32_t           numPatternSecond;             // number of patternsSecond
-	uint32_t           maxPatternSecond;             // maximum size of collection
-	patternSecond_t    *patternsSecond;              // patternSecond collection
-	uint32_t           patternSecondIndexSize;       // index size (must be prime)
-	uint32_t           *patternSecondIndex;          // index
+	uint32_t        numPatternSecond;            // number of patternsSecond
+	uint32_t        maxPatternSecond;            // maximum size of collection
+	patternSecond_t *patternsSecond;             // patternSecond collection
+	uint32_t        patternSecondIndexSize;      // index size (must be prime)
+	uint32_t        *patternSecondIndex;         // index
 	// versioned memory
-	uint32_t           iVersion;                    // version current incarnation
-	uint32_t           *imprintVersion;             // versioned memory for `imprintIndex`
-	uint32_t           *signatureVersion;           // versioned memory for `signatureIndex`
-	// @formatter:on
+	uint32_t        iVersion;                    // version current incarnation
+	uint32_t        *imprintVersion;             // versioned memory for `imprintIndex`
+	uint32_t        *signatureVersion;           // versioned memory for `signatureIndex`
 
 	/**
 	 * Constructor
@@ -440,7 +439,7 @@ struct database_t {
 			/*
 			 * Database was opened with `mmap()`
 			 */
-			if (::munmap((void *) rawDatabase, fileHeader.offEnd))
+			if (::munmap((void *) rawDatabase, this->fileSize))
 				ctx.fatal("\n{\"error\":\"munmap()\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", __FUNCTION__, __FILE__, __LINE__);
 			if (::close(hndl))
 				ctx.fatal("\n{\"error\":\"close()\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", __FUNCTION__, __FILE__, __LINE__);
@@ -935,19 +934,25 @@ struct database_t {
 		struct stat sbuf;
 		if (::fstat(hndl, &sbuf))
 			ctx.fatal("\n{\"error\":\"fstat('%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
+		
+		/*
+		 * @date 2021-10-23 23:55:11
+		 * Remember file size as that is used for `mmap()`/`munmap()`.
+		 */
+		this->fileSize = sbuf.st_size;
 
 #if defined(HAVE_MMAP)
 		/*
 		 * Load using mmap() and enable copy-on-write
 		 */
-		void *pMemory = ::mmap(NULL, (size_t) sbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
+		void *pMemory = ::mmap(NULL, (size_t) this->fileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE, hndl, 0);
 		if (pMemory == MAP_FAILED)
 			ctx.fatal("\n{\"error\":\"mmap(PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_NORESERVE,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		// set memory usage preferances
-		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_RANDOM))
+		if (::madvise(pMemory, (size_t) this->fileSize, MADV_RANDOM))
 			ctx.fatal("\n{\"error\":\"madvise(MADV_RANDOM,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
-		if (::madvise(pMemory, (size_t) sbuf.st_size, MADV_DONTDUMP))
+		if (::madvise(pMemory, (size_t) this->fileSize, MADV_DONTDUMP))
 			ctx.fatal("\n{\"error\":\"madvise(MADV_DONTDUMP,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
 		rawDatabase = (const uint8_t *) pMemory;
@@ -959,12 +964,12 @@ struct database_t {
 		/*
 		 * Allocate storage
 		 */
-		rawDatabase = (uint8_t *) ctx.myAlloc("database_t::rawDatabase", 1, (size_t) sbuf.st_size);
+		rawDatabase = (uint8_t *) ctx.myAlloc("database_t::rawDatabase", 1, this->fileSize);
 
-		ctx.progressHi = (uint64_t) sbuf.st_size;
+		ctx.progressHi = (uint64_t) this->fileSize;
 		ctx.progress = 0;
 
-		readData(hndl, (uint8_t *) rawDatabase, (size_t) sbuf.st_size);
+		readData(hndl, (uint8_t *) rawDatabase, this->fileSize);
 
 		/*
 		 * Close
@@ -978,8 +983,8 @@ struct database_t {
 			ctx.fatal("\n{\"error\":\"db version mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%08x\",\"expected\":\"%08x\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic, FILE_MAGIC);
 		if (fileHeader.magic_maxSlots != MAXSLOTS)
 			ctx.fatal("\n{\"error\":\"db magic_maxslots\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_maxSlots, MAXSLOTS);
-		if (fileHeader.offEnd != (uint64_t) sbuf.st_size)
-			ctx.fatal("\n{\"error\":\"db size mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%lu\",\"expected\":\"%lu\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.offEnd, sbuf.st_size);
+		if (fileHeader.offEnd != this->fileSize)
+			ctx.fatal("\n{\"error\":\"db size mismatch\",\"where\":\"%s:%s:%d\",\"encountered\":\"%lu\",\"expected\":\"%lu\"}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.offEnd, this->fileSize);
 		if (fileHeader.magic_sizeofSignature != sizeof(signature_t) && fileHeader.numSignature > 0)
 			ctx.fatal("\n{\"error\":\"db magic_sizeofSignature\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, fileHeader.magic_sizeofSignature, (unsigned) sizeof(signature_t));
 		if (fileHeader.magic_sizeofSwap != sizeof(swap_t) && fileHeader.numSwap > 0)

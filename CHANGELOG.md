@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-24 00:00:15 Fixed: Region size `mmap()`/`munmap()` must match.
 2021-10-22 22:13:12 Added: `genmember` core routines `foundTreePattern()` and `addPatternToDatabase()`.
 2021-10-21 21:41:13 Fixed: `dbtool_t::prepareSections()`.
 2021-10-21 21:39:50 Added: `tinyTree_t::addStringFast()`.
