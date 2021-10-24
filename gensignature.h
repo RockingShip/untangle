@@ -281,6 +281,15 @@ struct gensignatureContext_t : dbtool_t {
 		truncatedName[0] = 0;
 	}
 
+	/*
+	 * @date 2021-10-24 10:57:19
+	 * 
+	 * Connect database
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
+	}
+
 	/**
 	 * @date 2020-03-22 00:57:15
 	 *

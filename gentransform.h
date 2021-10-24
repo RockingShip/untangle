@@ -108,6 +108,15 @@ struct gentransformContext_t {
 		opt_text           = 0;
 		pStore		   = NULL;
 	}
+	
+	/*
+	 * @date 2021-10-24 10:57:19
+	 * 
+	 * Connect database
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
+	}
 
 	/**
 	 * @date 2020-03-12 00:39:44

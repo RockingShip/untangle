@@ -188,6 +188,56 @@ struct genswapContext_t : dbtool_t {
 		ctx.myFree("database_t::swapsWeight", swapsWeight);
 	}
 
+	/*
+	 * @date 2021-10-24 10:57:19
+	 * 
+	 * Connect database and continue initialisation
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
+
+		/*
+		 * get upper limit for tid's for given number of placeholders
+		 */
+		assert(MAXSLOTS == 9);
+		this->tidHi[0] = 0;
+		this->tidHi[1] = pStore->lookupTransform("a", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[2] = pStore->lookupTransform("ba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[3] = pStore->lookupTransform("cba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[4] = pStore->lookupTransform("dcba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[5] = pStore->lookupTransform("edcba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[6] = pStore->lookupTransform("fedcba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[7] = pStore->lookupTransform("gfedcba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[8] = pStore->lookupTransform("hgfedcba", pStore->fwdTransformNameIndex) + 1;
+		this->tidHi[9] = MAXTRANSFORM;
+		assert(this->tidHi[2] == 2 && this->tidHi[3] == 6 && this->tidHi[4] == 24 && this->tidHi[5] == 120 && this->tidHi[6] == 720 && this->tidHi[7] == 5040 && this->tidHi[8] == 40320);
+
+		/*
+		 * Determine weights of transforms. More shorter cyclic loops the better
+		 */
+
+		for (unsigned iTid = 0; iTid < pStore->numTransform; iTid++) {
+			this->swapsWeight[iTid] = 0;
+
+			// count cycles
+			unsigned      found  = 0;
+			const char    *pName = pStore->fwdTransformNames[iTid];
+			for (unsigned j      = 0; j < MAXSLOTS; j++) {
+				if (!(found & (1 << (pName[j] - 'a')))) {
+					// new starting point
+					unsigned      w = 1;
+					// walk cycle
+					for (unsigned k = pName[j] - 'a'; ~found & (1 << k); k = pName[k] - 'a') {
+						w *= (MAXSLOTS + 1); // weight is power of length
+						found |= 1 << k;
+					}
+					// update wight
+					this->swapsWeight[iTid] += w;
+				}
+			}
+		}
+	}
+
 
 	/**
 	 * @date 2020-05-04 23:54:12

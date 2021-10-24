@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Open input database for update
+	 * Open database for update
 	 */
 
 	// Open input

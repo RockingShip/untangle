@@ -442,13 +442,13 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Open input database
+	 * Open database for update
 	 */
 
 	// Open input
 	database_t db(ctx);
 
-	// test for readOnly mode
+	// test readOnly mode
 	app.readOnlyMode = (app.arg_outputDatabase == NULL);
 
 	db.open(app.arg_inputDatabase);
@@ -483,50 +483,28 @@ int main(int argc, char *argv[]) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
-	/*
-	 * Create output database
-	 */
+	// prepare sections and indices for use
+	app.prepareSections(db, 4,
+			    database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
+			    database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
 
-	database_t store(ctx);
-
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
-	// will require local copy of signatures
-	app.rebuildSections |= database_t::ALLOCMASK_SIGNATURE;
-
-	// sync signatures to input
-	app.opt_maxSignature = db.numSignature;
-
-	if (db.numTransform == 0)
-		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
-	if (db.numEvaluator == 0)
-		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
-	if (db.numSignature == 0)
-		ctx.fatal("Missing signature section: %s\n", app.arg_inputDatabase);
-
-	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, 0, !app.readOnlyMode); // numNodes is only needed for defaults that should not occur
+	// attach database
+	app.connect(db);
 
 	/*
 	 * Finalise allocations and create database
 	 */
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
-
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
-			double percent = 100.0 * allocated / info.freeram;
+			double percent = 100.0 * ctx.totalAllocated / info.freeram;
 			if (percent > 80)
 				fprintf(stderr, "WARNING: using %.1f%% of free memory minus cache\n", percent);
 		}
 	}
 
-	// actual create
-	store.create(app.inheritSections);
-	app.pStore = &store;
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
@@ -535,84 +513,14 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Inherit/copy sections
+	 * All preparations done
+	 * Invoke main entrypoint of application context
 	 */
-
-	app.populateDatabaseSections(store, db);
-
-	/*
-	 * Rebuild sections
-	 */
-
-	// todo: move this to `populateDatabaseSections()`
-	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_MEMBER)) == 0);
-
-	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
-		store.numSignature = db.numSignature;
-		::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
-	}
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
-
-	/*
-	 * get upper limit for tid's for given number of placeholders
-	 */
-	assert(MAXSLOTS == 9);
-	app.tidHi[0] = 0;
-	app.tidHi[1] = store.lookupTransform("a", store.fwdTransformNameIndex) + 1;
-	app.tidHi[2] = store.lookupTransform("ba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[3] = store.lookupTransform("cba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[4] = store.lookupTransform("dcba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[5] = store.lookupTransform("edcba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[6] = store.lookupTransform("fedcba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[7] = store.lookupTransform("gfedcba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[8] = store.lookupTransform("hgfedcba", store.fwdTransformNameIndex) + 1;
-	app.tidHi[9] = MAXTRANSFORM;
-	assert(app.tidHi[2] == 2 && app.tidHi[3] == 6 && app.tidHi[4] == 24 && app.tidHi[5] == 120 && app.tidHi[6] == 720 && app.tidHi[7] == 5040 && app.tidHi[8] == 40320);
-
-	/*
-	 * Determine weights of transforms. More shorter cyclic loops the better
-	 */
-
-	for (unsigned iTid = 0; iTid < store.numTransform; iTid++) {
-		app.swapsWeight[iTid] = 0;
-
-		// count cycles
-		unsigned      found  = 0;
-		const char    *pName = store.fwdTransformNames[iTid];
-		for (unsigned j      = 0; j < MAXSLOTS; j++) {
-			if (!(found & (1 << (pName[j] - 'a')))) {
-				// new starting point
-				unsigned      w = 1;
-				// walk cycle
-				for (unsigned k = pName[j] - 'a'; ~found & (1 << k); k = pName[k] - 'a') {
-					w *= (MAXSLOTS + 1); // weight is power of length
-					found |= 1 << k;
-				}
-				// update wight
-				app.swapsWeight[iTid] += w;
-			}
-		}
-	}
-
-	/*
-	 * Where to look for new candidates
-	 */
-
-	// if input is empty, skip reserved entries
-	if (!app.readOnlyMode) {
-	}
 
 	if (app.opt_load)
 		app.swapsFromFile();
-	if (app.opt_generate) {
-		/*
-		 * Create worker database to count imprints.
-		 * Use separate db as to not to interfere with real imprints
-		 */
+	if (app.opt_generate)
 		app.swapsFromSignatures();
-	}
 
 	/*
 	 * List result
@@ -621,9 +529,9 @@ int main(int argc, char *argv[]) {
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
 		// Many swaps are empty, only output those found
 
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			const signature_t *pSignature = store.signatures + iSid;
-			const swap_t      *pSwap      = store.swaps + pSignature->swapId;
+		for (unsigned iSid = 1; iSid < db.numSignature; iSid++) {
+			const signature_t *pSignature = db.signatures + iSid;
+			const swap_t      *pSwap      = db.swaps + pSignature->swapId;
 
 			if (pSwap->tids[0]) {
 				printf("%s\t", pSignature->name);
@@ -642,20 +550,20 @@ int main(int argc, char *argv[]) {
 
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
-			store.signatureIndexSize = 0;
-			store.imprintIndexSize   = 0;
-			store.numImprint         = 0;
-			store.interleave         = 0;
-			store.interleaveStep     = 0;
-			store.pairIndexSize      = 0;
-			store.memberIndexSize    = 0;
+			db.signatureIndexSize = 0;
+			db.imprintIndexSize   = 0;
+			db.numImprint         = 0;
+			db.interleave         = 0;
+			db.interleaveStep     = 0;
+			db.pairIndexSize      = 0;
+			db.memberIndexSize    = 0;
 		}
 
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
-		store.save(app.arg_outputDatabase);
+		db.save(app.arg_outputDatabase);
 	}
 
 
@@ -672,7 +580,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-		store.jsonInfo(jResult);
+		db.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 

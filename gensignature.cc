@@ -679,7 +679,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
 	/*
-	 * Open input database for update
+	 * Open database for update
 	 */
 
 	// Open input
@@ -721,7 +721,7 @@ int main(int argc, char *argv[]) {
 			    database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
 
 	// attach database
-	app.pStore = &db;
+	app.connect(db);
 
 	/*
 	 * Finalise allocations and create database

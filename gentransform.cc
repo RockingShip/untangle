@@ -284,7 +284,7 @@ int main(int argc, char *argv[]) {
 	 */
 	store.allocateSections(database_t::ALLOCMASK_TRANSFORM | database_t::ALLOCMASK_EVALUATOR);
 
-	app.pStore = &store;
+	app.connect(store);
 
 	/*
 	 * Statistics
@@ -292,7 +292,6 @@ int main(int argc, char *argv[]) {
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 		fprintf(stderr, "[%s] Allocated %.3fG memory\n", ctx.timeAsString(), ctx.totalAllocated / 1e9);
-
 
 	/*
 	 * Invoke main entrypoint of application context
