@@ -408,6 +408,8 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	fprintf(stderr, "WARNING: *** genswap is now integral part of gensignature and will be removed in future releases.\n");
+	
 	/*
 	 * None of the outputs may exist
 	 */

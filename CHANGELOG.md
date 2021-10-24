@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-24 11:50:28 Changed: Integrate `genswap` into `gensignature`.
 2021-10-24 10:38:55 Changed: `genswap` database creation.
 2021-10-24 10:38:55 Changed: `gensignature` database creation.
 2021-10-24 10:38:55 Changed: `gentransform` database creation.

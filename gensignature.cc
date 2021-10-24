@@ -178,6 +178,7 @@
 
 #include "config.h"
 #include "gensignature.h"
+#include "genswap.h"
 #include "metrics.h"
 
 // Need generator to allow ranges
@@ -198,6 +199,15 @@ context_t ctx;
  * @global {gensignatureContext_t} Application context
  */
 gensignatureContext_t app(ctx);
+
+/*
+ * @date 2021-10-24 10:51:25
+ * 
+ * Application context for generating signature swaps.
+
+ * @global {gensignatureContext_t} Application context
+ */
+genswapContext_t appSwap(ctx);
 
 /**
  * @date 2020-03-11 23:06:35
@@ -259,6 +269,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --markmixed                     Flag signatures that have pure with top-level mixed members\n");
 		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
 		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --maxswap=<number>              Maximum number of swaps [default=%u]\n", app.opt_maxSwap);
 		fprintf(stderr, "\t   --mixed                         Top-level node may be mixed QnTF/QTF\n");
 		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
@@ -267,6 +278,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --saveinterleave=<number>       Save with interleave [default=%u]\n", app.opt_saveInterleave);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --swapindexsize=<number>        Size of swap index [default=%u]\n", app.opt_swapIndexSize);
 		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text[=1]                      Selected signatures calling `foundTree()` that challenged and passed current display name\n");
@@ -316,6 +328,7 @@ int main(int argc, char *argv[]) {
 			LO_MARKMIXED,
 			LO_MAXIMPRINT,
 			LO_MAXSIGNATURE,
+			LO_MAXSWAP,
 			LO_MIXED,
 			LO_NOAINF,
 			LO_NOCASCADE,
@@ -329,6 +342,7 @@ int main(int argc, char *argv[]) {
 			LO_RATIO,
 			LO_SAVEINDEX,
 			LO_SIGNATUREINDEXSIZE,
+			LO_SWAPINDEXSIZE,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
@@ -359,6 +373,7 @@ int main(int argc, char *argv[]) {
 			{"markmixed",          0, 0, LO_MARKMIXED},
 			{"maximprint",         1, 0, LO_MAXIMPRINT},
 			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
+			{"maxswap",            1, 0, LO_MAXSWAP},
 			{"mixed",              2, 0, LO_MIXED},
 			{"no-ainf",            0, 0, LO_NOAINF},
 			{"no-cascade",         0, 0, LO_NOCASCADE},
@@ -373,6 +388,7 @@ int main(int argc, char *argv[]) {
 			{"saveindex",          0, 0, LO_SAVEINDEX},
 			{"saveinterleave",     1, 0, LO_SAVEINTERLEAVE},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
+			{"swapindexsize",      1, 0, LO_SWAPINDEXSIZE},
 			{"task",               1, 0, LO_TASK},
 			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
@@ -457,6 +473,9 @@ int main(int argc, char *argv[]) {
 		case LO_MAXSIGNATURE:
 			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
 			break;
+		case LO_MAXSWAP:
+			app.opt_maxSwap = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
 		case LO_MIXED:
 			app.opt_mixed = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_mixed + 1;
 			break;
@@ -500,6 +519,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_SIGNATUREINDEXSIZE:
 			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_SWAPINDEXSIZE:
+			app.opt_swapIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
 		case LO_TASK: {
 			if (::strcmp(optarg, "sge") == 0) {
@@ -722,6 +744,7 @@ int main(int argc, char *argv[]) {
 
 	// attach database
 	app.connect(db);
+	appSwap.connect(db);
 
 	/*
 	 * Finalise allocations and create database
@@ -743,6 +766,12 @@ int main(int argc, char *argv[]) {
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
+
+	/*
+	 * All preparations done
+	 * Invoke main entrypoint of application context
+	 */
+
 	if (app.opt_load)
 		app.signaturesFromFile();
 	if (app.opt_generate) {
@@ -834,6 +863,12 @@ int main(int argc, char *argv[]) {
 
 			ctx.myFree("pNewSid", pNewSid);
 		}
+
+		/*
+		 * @date 2021-10-24 10:54:53
+		 * Before saving database, make sure the swap section is up-to-date
+		 */
+		appSwap.swapsFromSignatures();
 	}
 
 	/*
