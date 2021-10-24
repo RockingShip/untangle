@@ -1085,7 +1085,7 @@ struct database_t {
 	 */
 	void allocateSections(unsigned sections) {
 		// transform store
-		if (maxTransform && (sections & ALLOCMASK_TRANSFORM)) {
+		if (sections & ALLOCMASK_TRANSFORM) {
 			assert(maxTransform == MAXTRANSFORM);
 			fwdTransformData      = (uint64_t *) ctx.myAlloc("database_t::fwdTransformData", maxTransform, sizeof(*this->fwdTransformData));
 			revTransformData      = (uint64_t *) ctx.myAlloc("database_t::revTransformData", maxTransform, sizeof(*this->revTransformData));
@@ -1098,7 +1098,7 @@ struct database_t {
 		}
 
 		// evaluator store [COPY-ON-WRITE]
-		if (maxEvaluator && (sections & ALLOCMASK_EVALUATOR)) {
+		if (sections & ALLOCMASK_EVALUATOR) {
 			assert(maxTransform == MAXTRANSFORM);
 			assert(maxEvaluator == tinyTree_t::TINYTREE_NEND * maxTransform);
 			fwdEvaluator = (footprint_t *) ctx.myAlloc("database_t::fwdEvaluator", maxEvaluator, sizeof(*this->fwdEvaluator));
@@ -1114,8 +1114,8 @@ struct database_t {
 			if (numSignature > 0)
 				memcpy(signatures, origData, numSignature * sizeof(*signatures));
 		}
-		if (signatureIndexSize && (sections & ALLOCMASK_SIGNATUREINDEX)) {
-			assert(ctx.isPrime(signatureIndexSize));
+		if (sections & ALLOCMASK_SIGNATUREINDEX) {
+			assert(signatureIndexSize && ctx.isPrime(signatureIndexSize));
 			signatureIndex = (uint32_t *) ctx.myAlloc("database_t::signatureIndex", signatureIndexSize, sizeof(*signatureIndex));
 			allocFlags |= ALLOCMASK_SIGNATUREINDEX;
 		}
@@ -1129,8 +1129,8 @@ struct database_t {
 			if (numSwap > 0)
 				memcpy(swaps, origData, numSwap * sizeof(*swaps));
 		}
-		if (swapIndexSize && (sections & ALLOCMASK_SWAPINDEX)) {
-			assert(ctx.isPrime(swapIndexSize));
+		if (sections & ALLOCMASK_SWAPINDEX) {
+			assert(swapIndexSize && ctx.isPrime(swapIndexSize));
 			swapIndex = (uint32_t *) ctx.myAlloc("database_t::swapIndex", swapIndexSize, sizeof(*swapIndex));
 			allocFlags |= ALLOCMASK_SWAPINDEX;
 		}
@@ -1144,8 +1144,8 @@ struct database_t {
 			if (numImprint > 0)
 				memcpy(imprints, origData, numImprint * sizeof(*imprints));
 		}
-		if (imprintIndexSize && (sections & ALLOCMASK_IMPRINTINDEX)) {
-			assert(ctx.isPrime(imprintIndexSize));
+		if (sections & ALLOCMASK_IMPRINTINDEX) {
+			assert(imprintIndexSize && ctx.isPrime(imprintIndexSize));
 			imprintIndex = (uint32_t *) ctx.myAlloc("database_t::imprintIndex", imprintIndexSize, sizeof(*imprintIndex));
 			allocFlags |= ALLOCMASK_IMPRINTINDEX;
 		}
@@ -1159,8 +1159,8 @@ struct database_t {
 			if (numPair > 0)
 				memcpy(pairs, origData, numPair * sizeof(*pairs));
 		}
-		if (pairIndexSize && (sections & ALLOCMASK_PAIRINDEX)) {
-			assert(ctx.isPrime(pairIndexSize));
+		if (sections & ALLOCMASK_PAIRINDEX) {
+			assert(pairIndexSize && ctx.isPrime(pairIndexSize));
 			pairIndex = (uint32_t *) ctx.myAlloc("database_t::pairIndex", pairIndexSize, sizeof(*pairIndex));
 			allocFlags |= ALLOCMASK_PAIRINDEX;
 		}
@@ -1174,8 +1174,8 @@ struct database_t {
 			if (numMember > 0)
 				memcpy(members, origData, numMember * sizeof(*members));
 		}
-		if (memberIndexSize && (sections & ALLOCMASK_MEMBERINDEX)) {
-			assert(ctx.isPrime(memberIndexSize));
+		if (sections & ALLOCMASK_MEMBERINDEX) {
+			assert(memberIndexSize && ctx.isPrime(memberIndexSize));
 			memberIndex = (uint32_t *) ctx.myAlloc("database_t::memberIndex", memberIndexSize, sizeof(*memberIndex));
 			allocFlags |= ALLOCMASK_MEMBERINDEX;
 		}
@@ -1189,8 +1189,8 @@ struct database_t {
 			if (numPatternFirst > 0)
 				memcpy(patternsFirst, origData, numPatternFirst * sizeof(*patternsFirst));
 		}
-		if (patternFirstIndexSize && (sections & ALLOCMASK_PATTERNFIRSTINDEX)) {
-			assert(ctx.isPrime(patternFirstIndexSize));
+		if (sections & ALLOCMASK_PATTERNFIRSTINDEX) {
+			assert(patternFirstIndexSize && ctx.isPrime(patternFirstIndexSize));
 			patternFirstIndex = (uint32_t *) ctx.myAlloc("database_t::patternFirstIndex", patternFirstIndexSize, sizeof(*patternFirstIndex));
 			allocFlags |= ALLOCMASK_PATTERNFIRSTINDEX;
 		}
@@ -1204,8 +1204,8 @@ struct database_t {
 			if (numPatternSecond > 0)
 				memcpy(patternsSecond, origData, numPatternSecond * sizeof(*patternsSecond));
 		}
-		if (patternSecondIndexSize && (sections & ALLOCMASK_PATTERNSECONDINDEX)) {
-			assert(ctx.isPrime(patternSecondIndexSize));
+		if (sections & ALLOCMASK_PATTERNSECONDINDEX) {
+			assert(patternSecondIndexSize && ctx.isPrime(patternSecondIndexSize));
 			patternSecondIndex = (uint32_t *) ctx.myAlloc("database_t::patternSecondIndex", patternSecondIndexSize, sizeof(*patternSecondIndex));
 			allocFlags |= ALLOCMASK_PATTERNSECONDINDEX;
 		}

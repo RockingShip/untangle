@@ -12,8 +12,6 @@ image: assets/favimage-472x472.jpg
 
 Extract essence of information and store/contain in fractal structures
 
-Content grows on-demand as parts of v1 get merged, currently at about 40%
-
 ### Welcome to the Wonderful World of fractal logic and computing
 
 _This might be a good spot to break the loop_
