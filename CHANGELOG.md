@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-24 10:38:55 Changed: `gensignature` database creation.
 2021-10-24 10:38:55 Changed: `gentransform` database creation.
 2021-10-24 01:30:15 Changed: "Enumeration to text" now `std::string`.
 2021-10-24 01:09:11 Changed: Active section detection in `database_t::allocateSections()`.

@@ -679,7 +679,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
 	/*
-	 * Open input and create output database
+	 * Open input database for update
 	 */
 
 	// Open input
@@ -705,15 +705,6 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	/*
-	 * create output
-	 */
-
-	database_t store(ctx);
-
-	// need non-empty sections
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-
-	/*
 	 * @date 2020-03-17 13:57:25
 	 *
 	 * Database indices are hashlookup tables with overflow.
@@ -723,85 +714,35 @@ int main(int argc, char *argv[]) {
 	 * The ratio between index and data size is called `ratio`.
 	 */
 
-	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, app.arg_numNodes, !app.readOnlyMode);
+	// prepare sections and indices for use
+	app.prepareSections(db, app.arg_numNodes,
+			    database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
+			    database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
+			    database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
 
-	if (db.numTransform == 0)
-		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
-	if (db.numEvaluator == 0)
-		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
-
-	if (app.opt_saveInterleave && app.opt_saveInterleave > store.interleave)
-		ctx.fatal("--saveinterleave=%u exceeds --interleave=%u\n", app.opt_saveInterleave, store.interleave);
-
-#if 0
-	// no input imprints or interleave changed
-	if (db.numImprint == 0 || db.interleave == store.interleave) {
-		app.rebuildSections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX;
-		app.inheritSections &= ~app.rebuildSections;
-	}
-#endif
+	// attach database
+	app.pStore = &db;
 
 	/*
 	 * Finalise allocations and create database
 	 */
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
-
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
-			double percent = 100.0 * allocated / info.freeram;
+			double percent = 100.0 * ctx.totalAllocated / info.freeram;
 			if (percent > 80)
 				fprintf(stderr, "WARNING: using %.1f%% of free memory minus cache\n", percent);
 		}
 	}
 
-	// actual create
-	store.create(app.inheritSections);
-	app.pStore = &store;
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
 
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
-
-	/*
-	 * Inherit/copy sections
-	 */
-
-	app.populateDatabaseSections(store, db);
-
-	/*
-	 * Rebuild sections
-	 */
-
-	// todo: move this to `populateDatabaseSections()`
-	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_MEMBER)) == 0);
-
-	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-		// rebuild imprints
-		app.rebuildImprints();
-		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-	}
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
-
-	/*
-	 * Where to look for new candidates
-	 */
-
-	// if input is empty, skip reserved entries
-	if (!app.readOnlyMode) {
-		assert(store.numSignature > 0);
-		assert(store.numImprint > 0);
-	}
-
 	if (app.opt_load)
 		app.signaturesFromFile();
 	if (app.opt_generate) {
@@ -824,18 +765,18 @@ int main(int argc, char *argv[]) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Sorting signatures\n", ctx.timeAsString());
 
-		assert(store.numSignature >= 1);
-		qsort_r(store.signatures + 1, store.numSignature - 1, sizeof(*store.signatures), app.comparSignature, &app);
+		assert(db.numSignature >= 1);
+		qsort_r(db.signatures + 1, db.numSignature - 1, sizeof(*db.signatures), app.comparSignature, &app);
 
 		// clear name index
-		::memset(store.signatureIndex, 0, store.signatureIndexSize * sizeof(*store.signatureIndex));
+		::memset(db.signatureIndex, 0, db.signatureIndexSize * sizeof(*db.signatureIndex));
 
 		// reindex
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
 			// re-index name
-			uint32_t ix = store.lookupSignature(store.signatures[iSid].name);
-			assert(store.signatureIndex[ix] == 0);
-			store.signatureIndex[ix] = iSid;
+			uint32_t ix = db.lookupSignature(db.signatures[iSid].name);
+			assert(db.signatureIndex[ix] == 0);
+			db.signatureIndex[ix] = iSid;
 		}
 
 		app.rebuildImprints();
@@ -850,7 +791,7 @@ int main(int argc, char *argv[]) {
 		 */
 		bool changed = false;
 		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			if (strcmp(db.signatures[iSid].name, store.signatures[iSid].name) != 0) {
+			if (strcmp(db.signatures[iSid].name, db.signatures[iSid].name) != 0) {
 				changed = true;
 				break;
 			}
@@ -863,18 +804,18 @@ int main(int argc, char *argv[]) {
 			/*
 			 * Allocate and find initial mapping
 			 */
-			uint32_t *pNewSid = (uint32_t *) ctx.myAlloc("pNewSid", store.maxSignature, sizeof(*pNewSid));
+			uint32_t *pNewSid = (uint32_t *) ctx.myAlloc("pNewSid", db.maxSignature, sizeof(*pNewSid));
 
 			for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-				uint32_t ix = store.lookupSignature(db.signatures[iSid].name);
-				pNewSid[iSid] = store.signatureIndex[ix];
+				uint32_t ix = db.lookupSignature(db.signatures[iSid].name);
+				pNewSid[iSid] = db.signatureIndex[ix];
 
 				if (pNewSid[iSid] == 0) {
 					// this run changed an old signature name, perform imprint lookup
 					tinyTree_t tree(ctx);
 					tree.loadStringFast(db.signatures[iSid].name);
 					unsigned tid;
-					store.lookupImprintAssociative(&tree, store.fwdEvaluator, store.revEvaluator, &pNewSid[iSid], &tid);
+					db.lookupImprintAssociative(&tree, db.fwdEvaluator, db.revEvaluator, &pNewSid[iSid], &tid);
 				}
 				// this run changed
 				assert(pNewSid[iSid] != 0);
@@ -883,8 +824,8 @@ int main(int argc, char *argv[]) {
 			/*
 			 * Remap sids, this has no effect on the member index
 			 */
-			for (uint32_t iMember = 1; iMember < store.numMember; iMember++) {
-				member_t *pMember = store.members + iMember;
+			for (uint32_t iMember = 1; iMember < db.numMember; iMember++) {
+				member_t *pMember = db.members + iMember;
 
 				assert(pMember->sid < db.numSignature);
 
@@ -900,15 +841,15 @@ int main(int argc, char *argv[]) {
 	 */
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			const signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			const signature_t *pSignature = db.signatures + iSid;
 
 			app.signatureLine(pSignature);
 		}
 	}
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			const signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			const signature_t *pSignature = db.signatures + iSid;
 
 			printf("%u\t%s\t%u\t%u\t%u\t%u", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
 
@@ -935,8 +876,8 @@ int main(int argc, char *argv[]) {
 	 */
 	if (app.opt_listSafe) {
 		// list all safe signatures
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
 				app.signatureLine(pSignature);
@@ -944,8 +885,8 @@ int main(int argc, char *argv[]) {
 	}
 	if (app.opt_listUnsafe) {
 		// list all signatures that are empty or unsafe
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				app.signatureLine(pSignature);
@@ -956,8 +897,8 @@ int main(int argc, char *argv[]) {
 	 * List signature still in use after `gendepreciate`
 	 */
 	if (app.opt_listUsed) {
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember != 0)
 				app.signatureLine(pSignature);
@@ -965,8 +906,8 @@ int main(int argc, char *argv[]) {
 	}
 	if (app.opt_listIncomplete) {
 		// list sigatures used for lookups but are not SAFE
-		for (uint32_t iSid = 1; iSid < store.numSignature; iSid++) {
-			signature_t *pSignature = store.signatures + iSid;
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
 
 			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				app.signatureLine(pSignature);
@@ -979,13 +920,13 @@ int main(int argc, char *argv[]) {
 
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
-			store.signatureIndexSize = 0;
-			store.imprintIndexSize   = 0;
-			store.numImprint         = 0;
-			store.interleave         = 0;
-			store.interleaveStep     = 0;
-			store.pairIndexSize      = 0;
-			store.memberIndexSize    = 0;
+			db.signatureIndexSize = 0;
+			db.imprintIndexSize   = 0;
+			db.numImprint         = 0;
+			db.interleave         = 0;
+			db.interleaveStep     = 0;
+			db.pairIndexSize      = 0;
+			db.memberIndexSize    = 0;
 		} else {
 			// adjust interleave for saving
 			if (app.opt_saveInterleave) {
@@ -993,8 +934,8 @@ int main(int argc, char *argv[]) {
 				const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave);
 				assert(pMetrics);
 
-				store.interleave     = pMetrics->numStored;
-				store.interleaveStep = pMetrics->interleaveStep;
+				db.interleave     = pMetrics->numStored;
+				db.interleaveStep = pMetrics->interleaveStep;
 			}
 		}
 
@@ -1006,7 +947,7 @@ int main(int argc, char *argv[]) {
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
-		store.save(app.arg_outputDatabase);
+		db.save(app.arg_outputDatabase);
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1022,7 +963,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-		store.jsonInfo(jResult);
+		db.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 
