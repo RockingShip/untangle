@@ -3038,105 +3038,107 @@ struct database_t {
 			fprintf(stderr, "[%s] Indices updated\n", ctx.timeAsString());
 	}
 
-	char *sectionToText(unsigned sections, char *pBuffer = NULL) {
-		static char buffer[512];
-		if (pBuffer == NULL)
-			pBuffer = buffer;
-
-		*pBuffer = 0;
-
+	std::string sectionToText(unsigned sections) {
+		std::string txt;
+		
 		if (sections & ALLOCMASK_TRANSFORM) {
-			::strcat(pBuffer, "transform");
+			txt += "transform";
 			sections &= ~ALLOCMASK_TRANSFORM;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_EVALUATOR) {
-			::strcat(pBuffer, "evaluator");
+			txt += "evaluator";
 			sections &= ~ALLOCMASK_EVALUATOR;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_SIGNATURE) {
-			::strcat(pBuffer, "signature");
+			txt += "signature";
 			sections &= ~ALLOCMASK_SIGNATURE;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_SIGNATUREINDEX) {
-			::strcat(pBuffer, "signatureIndex");
+			txt += "signatureIndex";
 			sections &= ~ALLOCMASK_SIGNATUREINDEX;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_SWAP) {
-			::strcat(pBuffer, "swap");
+			txt += "swap";
 			sections &= ~ALLOCMASK_SWAP;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_SWAPINDEX) {
-			::strcat(pBuffer, "swapIndex");
+			txt += "swapIndex";
 			sections &= ~ALLOCMASK_SWAPINDEX;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_IMPRINT) {
-			::strcat(pBuffer, "imprint");
+			txt += "imprint";
 			sections &= ~ALLOCMASK_IMPRINT;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_IMPRINTINDEX) {
-			::strcat(pBuffer, "imprintIndex");
+			txt += "imprintIndex";
 			sections &= ~ALLOCMASK_IMPRINTINDEX;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PAIR) {
-			::strcat(pBuffer, "pair");
+			txt += "pair";
 			sections &= ~ALLOCMASK_PAIR;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PAIRINDEX) {
-			::strcat(pBuffer, "pairIndex");
+			txt += "pairIndex";
 			sections &= ~ALLOCMASK_PAIRINDEX;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_MEMBER) {
-			::strcat(pBuffer, "member");
+			txt += "member";
 			sections &= ~ALLOCMASK_MEMBER;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_MEMBERINDEX) {
-			::strcat(pBuffer, "memberIndex");
+			txt += "memberIndex";
 			sections &= ~ALLOCMASK_MEMBERINDEX;
+			if (sections)
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PATTERNFIRST) {
-			::strcat(pBuffer, "patternFirst");
+			txt += "patternFirst";
 			sections &= ~ALLOCMASK_PATTERNFIRST;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PATTERNFIRSTINDEX) {
-			::strcat(pBuffer, "patternFirstIndex");
+			txt += "patternFirstIndex";
 			sections &= ~ALLOCMASK_PATTERNFIRSTINDEX;
+			if (sections)
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PATTERNSECOND) {
-			::strcat(pBuffer, "patternSecond");
+			txt += "patternSecond";
 			sections &= ~ALLOCMASK_PATTERNSECOND;
 			if (sections)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (sections & ALLOCMASK_PATTERNSECONDINDEX) {
-			::strcat(pBuffer, "patternSecondIndex");
+			txt += "patternSecondIndex";
 			sections &= ~ALLOCMASK_PATTERNSECONDINDEX;
+			if (sections)
+				txt += '|';
 		}
 
-		return pBuffer;
+		return txt;
 	}
 
 	/*

@@ -406,10 +406,7 @@ int main(int argc, char *argv[]) {
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
-		char dbText[128];
-
-		ctx.flagsToText(store.creationFlags, dbText);
-		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(store.creationFlags).c_str());
 	}
 
 	/*

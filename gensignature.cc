@@ -692,15 +692,13 @@ int main(int argc, char *argv[]) {
 
 	// display system flags when database was created
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-		char dbText[128], ctxText[128];
-
-		ctx.flagsToText(db.creationFlags, dbText);
-		ctx.flagsToText(ctx.flags, ctxText);
+		std::string dbText = ctx.flagsToText(db.creationFlags);
+		std::string ctxText = ctx.flagsToText(ctx.flags);
 
 		if (db.creationFlags != ctx.flags)
-			fprintf(stderr, "[%s] WARNING: Database/system flags differ: database=[%s] current=[%s]\n", ctx.timeAsString(), dbText, ctxText);
+			fprintf(stderr, "[%s] WARNING: Database/system flags differ: database=[%s] current=[%s]\n", ctx.timeAsString(), dbText.c_str(), ctxText.c_str());
 		else if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText);
+			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText.c_str());
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)

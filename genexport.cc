@@ -216,7 +216,7 @@ int main(int argc, char *argv[]) {
 
 	// display system flags when database was created
 	if (db.creationFlags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags));
+		fprintf(stderr, "[%s] DB FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(db.creationFlags).c_str());
 
 	/*
 	 * Main code

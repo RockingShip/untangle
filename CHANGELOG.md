@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-24 01:30:15 Changed: "Enumeration to text" now `std::string`.
 2021-10-24 01:09:11 Changed: Active section detection in `database_t::allocateSections()`.
 2021-10-24 00:00:15 Fixed: Region size `mmap()`/`munmap()` must match.
 2021-10-22 22:13:12 Added: `genmember` core routines `foundTreePattern()` and `addPatternToDatabase()`.

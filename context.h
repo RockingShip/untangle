@@ -31,7 +31,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <cstring>
+#include <string>
 #include <time.h>
 #include <unistd.h>
 
@@ -310,7 +311,7 @@ struct context_t {
 			fatal("failed to allocate %lu bytes for \"%s\"\n", __size, name);
 
 		// clear area
-		::memset(ret, 0, __size);
+		memset(ret, 0, __size);
 
 		if (opt_verbose >= VERBOSE_INITIALIZE)
 			fprintf(stderr, "memory +%p %s\n", ret, name);
@@ -430,48 +431,43 @@ struct context_t {
 	 * Convert system model flags to string
 	 *
 	 * @param {number} flags - mask to encode
-	 * @param {string} pBuffer - optional buffer to store result
 	 * @return {string} Textual description of flags.
 	 */
-	char *flagsToText(unsigned flags, char *pBuffer = NULL) {
-		static char buffer[128];
-		if (pBuffer == NULL)
-			pBuffer = buffer;
-
-		*pBuffer = 0;
+	std::string flagsToText(unsigned flags) {
+		std::string txt;
 
 		if (flags & MAGICMASK_PARANOID) {
-			::strcat(pBuffer, "PARANOID");
+			txt += "PARANOID";
 			flags &= ~MAGICMASK_PARANOID;
 			if (flags)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (flags & MAGICMASK_PURE) {
-			::strcat(pBuffer, "PURE");
+			txt += "PURE";
 			flags &= ~MAGICMASK_PURE;
 			if (flags)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (flags & MAGICMASK_AINF) {
-			::strcat(pBuffer, "AINF");
+			txt += "AINF";
 			flags &= ~MAGICMASK_AINF;
 			if (flags)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (flags & MAGICMASK_CASCADE) {
-			::strcat(pBuffer, "CASCADE");
+			txt += "CASCADE";
 			flags &= ~MAGICMASK_CASCADE;
 			if (flags)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 		if (flags & MAGICMASK_REWRITE) {
-			::strcat(pBuffer, "REWRITE");
+			txt += "REWRITE";
 			flags &= ~MAGICMASK_REWRITE;
 			if (flags)
-				::strcat(pBuffer, "|");
+				txt += '|';
 		}
 
-		return pBuffer;
+		return txt;
 	}
 
 	/**

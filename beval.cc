@@ -651,7 +651,7 @@ int main(int argc, char *argv[]) {
 	
 	// display system flags when database was created
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
-		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags));
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
 
 	rewriteTree_t *pTree = app.main(argc - optind, argv + optind);
 

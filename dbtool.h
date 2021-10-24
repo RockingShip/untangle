@@ -1137,10 +1137,9 @@ struct dbtool_t : callable_t {
 	void __attribute__((optimize("O0"))) populateDatabaseSections(database_t &store, const database_t &db) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
-			static char inheritText[512], rebuildText[512];
-			store.sectionToText(inheritSections, inheritText);
-			store.sectionToText(rebuildSections, rebuildText);
-			fprintf(stderr, "[%s] copyOnWrite=%u inheritSections=[%s] rebuildSections=[%s]\n", ctx.timeAsString(), copyOnWrite, inheritText, rebuildText);
+			std::string inheritText = store.sectionToText(inheritSections);
+			std::string rebuildText = store.sectionToText(rebuildSections);
+			fprintf(stderr, "[%s] copyOnWrite=%u inheritSections=[%s] rebuildSections=[%s]\n", ctx.timeAsString(), copyOnWrite, inheritText.c_str(), rebuildText.c_str());
 		}
 
 		/*
