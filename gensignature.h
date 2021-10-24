@@ -223,8 +223,6 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned opt_markMixed;
 	/// @var {number} --mixed, consider/accept top-level mixed
 	unsigned opt_mixed;
-	/// @var {number} save imprints with given interleave
-	unsigned opt_saveInterleave;
 	/// @var {number} task Id. First task=1
 	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -267,7 +265,6 @@ struct gensignatureContext_t : dbtool_t {
 		opt_load           = NULL;
 		opt_markMixed      = 0;
 		opt_mixed          = 0;
-		opt_saveInterleave = 0;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
 		opt_text           = 0;

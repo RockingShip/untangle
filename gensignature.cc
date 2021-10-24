@@ -276,7 +276,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --saveinterleave=<number>       Save with interleave [default=%u]\n", app.opt_saveInterleave);
 		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
 		fprintf(stderr, "\t   --swapindexsize=<number>        Size of swap index [default=%u]\n", app.opt_swapIndexSize);
 		fprintf(stderr, "\t   --task=sge                      Get window task settings from SGE environment\n");
@@ -336,7 +335,6 @@ int main(int argc, char *argv[]) {
 			LO_NOPARANOID,
 			LO_NOPURE,
 			LO_NOSAVEINDEX,
-			LO_SAVEINTERLEAVE,
 			LO_PARANOID,
 			LO_PURE,
 			LO_RATIO,
@@ -386,7 +384,6 @@ int main(int argc, char *argv[]) {
 			{"quiet",              2, 0, LO_QUIET},
 			{"ratio",              1, 0, LO_RATIO},
 			{"saveindex",          0, 0, LO_SAVEINDEX},
-			{"saveinterleave",     1, 0, LO_SAVEINTERLEAVE},
 			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
 			{"swapindexsize",      1, 0, LO_SWAPINDEXSIZE},
 			{"task",               1, 0, LO_TASK},
@@ -496,11 +493,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
-			break;
-		case LO_SAVEINTERLEAVE:
-			app.opt_saveInterleave = ::strtoul(optarg, NULL, 0);
-			if (!getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave))
-				ctx.fatal("--saveinterleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 			break;
 		case LO_PARANOID:
 			ctx.flags |= context_t::MAGICMASK_PARANOID;
@@ -962,16 +954,6 @@ int main(int argc, char *argv[]) {
 			db.interleaveStep     = 0;
 			db.pairIndexSize      = 0;
 			db.memberIndexSize    = 0;
-		} else {
-			// adjust interleave for saving
-			if (app.opt_saveInterleave) {
-				// find matching `interleaveStep`
-				const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, app.opt_saveInterleave);
-				assert(pMetrics);
-
-				db.interleave     = pMetrics->numStored;
-				db.interleaveStep = pMetrics->interleaveStep;
-			}
 		}
 
 		/*
