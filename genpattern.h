@@ -80,10 +80,6 @@ struct genpatternContext_t : dbtool_t {
 	unsigned   opt_mixed;
 	/// @var {string} --safe, Consider/accept safe members only
 	unsigned   opt_safe;
-	/// @var {number} Sid range upper bound
-	unsigned   opt_sidHi;
-	/// @var {number} Sid range lower bound
-	unsigned   opt_sidLo;
 	/// @var {number} task Id. First task=1
 	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -92,28 +88,26 @@ struct genpatternContext_t : dbtool_t {
 	unsigned   opt_text;
 	/// @var {number} truncate on database overflow
 	double     opt_truncate;
+	/// @var {number} Allow wildcards in structures
+	unsigned   opt_wildcard;
 	/// @var {number} generator upper bound
 	uint64_t   opt_windowHi;
 	/// @var {number} generator lower bound
 	uint64_t   opt_windowLo;
 
 	/// @var {database_t} - Database store to place results
-	database_t  *pStore;
+	database_t *pStore;
 
 	/// @var {number} - THE generator
 	generator_t generator;
-	/// @var {number} - Number of empty signatures left
-	unsigned    numEmpty;
-	/// @var {number} - Number of unsafe signatures left
-	unsigned    numUnsafe;
-	/// @var {number} cascading dyadics
-	unsigned    skipCascade;
-	/// @var {number} `foundTree()` duplicate by name
+	/// @var {number} Duplicate entry
 	unsigned    skipDuplicate;
-	/// @var {number} `foundTree()` too large for signature
-	unsigned    skipSize;
-	/// @var {number} `foundTree()` unsafe abundance
-	unsigned    skipUnsafe;
+	/// @var {number} Structure contained a wildcard node
+	unsigned    skipWildcard;
+	/// @var {number} sid normalisation collapse
+	unsigned    skipCollapse;
+	/// @var {number} slot reconstruction placeholder mismatch
+	unsigned    skipPlaceholder;
 	/// @var {number} Where database overflow was caught
 	uint64_t    truncated;
 	/// @var {number} Name of signature causing overflow
@@ -134,22 +128,29 @@ struct genpatternContext_t : dbtool_t {
 		opt_load           = NULL;
 		opt_mixed          = 0;
 		opt_safe           = 0;
-		opt_sidHi          = 0;
-		opt_sidLo          = 0;
 		opt_text           = 0;
 		opt_truncate       = 0;
+		opt_wildcard       = 0;
 		opt_windowHi       = 0;
 		opt_windowLo       = 0;
 
 		pStore = NULL;
 
-		numUnsafe     = 0;
-		skipCascade   = 0;
-		skipDuplicate = 0;
-		skipSize      = 0;
-		skipUnsafe    = 0;
-		truncated     = 0;
+		skipDuplicate   = 0;
+		skipWildcard    = 0;
+		skipCollapse    = 0;
+		skipPlaceholder = 0;
+		truncated       = 0;
 		truncatedName[0] = 0;
+	}
+
+	/*
+	 * @date 2021-10-25 15:19:41
+	 * 
+	 * Connect database and continue initialisation
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
 	}
 
 	/*
@@ -171,11 +172,11 @@ struct genpatternContext_t : dbtool_t {
 			int perSecond = ctx.updateSpeed();
 
 			if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u  skipWildcard=%u  skipCollapse=%u  skipPlaceholder=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond,
 					pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
 					pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+					skipDuplicate, skipWildcard, skipCollapse, skipPlaceholder, (double) ctx.cntCompare / ctx.cntHash, pNameR);
 			} else {
 				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -186,12 +187,12 @@ struct genpatternContext_t : dbtool_t {
 				int etaS = eta;
 
 
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) |  skipDuplicate=%u  skipWildcard=%u  skipCollapse=%u  skipPlaceholder=%u | hash=%.3f %s",
 					ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
 					pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
 					pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-					skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, pNameR);
-								}
+					skipDuplicate, skipWildcard, skipCollapse, skipPlaceholder, (double) ctx.cntCompare / ctx.cntHash, pNameR);
+			}
 
 			if (ctx.restartTick) {
 				// passed a restart point
@@ -250,7 +251,7 @@ struct genpatternContext_t : dbtool_t {
 		 * Wildcards are nodes that can be replaced by a placeholder because they do not share endpoints with other nodes 
 		 * 
 		 */
-		if (0/*opt_wildcard*/) { // todo:
+		if (!opt_wildcard) {
 			uint32_t singleRef = 0;
 			uint32_t multiRef  = 0;
 
@@ -282,7 +283,7 @@ struct genpatternContext_t : dbtool_t {
 
 				if (Q < tinyTree_t::TINYTREE_NSTART && T < tinyTree_t::TINYTREE_NSTART && Fu < tinyTree_t::TINYTREE_NSTART) {
 					if (!(multiRef & (1 << Q)) && !(multiRef & (1 << T)) && !(multiRef & (1 << Fu))) {
-//						numSkipped3++; todo:
+						skipWildcard++;
 						return true;
 					}
 				}
@@ -372,16 +373,16 @@ struct genpatternContext_t : dbtool_t {
 		 * 
 		 * The following code is taken directly from `database_t::lookupImprintAssociative()`.
 		 * For optimisation, it assumes versioned memory is disabled.
-		 * Comments have been trimmed/
+		 * Comments have been trimmed.
 		 */
-		assert(pStore->imprintVersion == NULL);
+		assert(pStore->imprintVersion == NULL); // not for versioned memory
 		if (pStore->interleave == pStore->interleaveStep) {
 			/*
 			 * index is populated with key cols, runtime scans rows
 			 * Because of the jumps, memory cache might be killed
 			 */
 
-			// permutate all rows
+			// permute all rows
 			for (unsigned iRow = 0; iRow < MAXTRANSFORM; iRow += pStore->interleaveStep) {
 
 				// find where the evaluator for the key is located in the evaluator store
@@ -524,10 +525,9 @@ struct genpatternContext_t : dbtool_t {
 				v += tinyTree_t::TINYTREE_NEND;
 			}
 		}
-		
+
 		// test all components found
 		if (find != 0) {
-//			numSkipped2++; todo:
 			return true;
 		}
 
@@ -579,7 +579,7 @@ struct genpatternContext_t : dbtool_t {
 			sidF = sidT;
 			tidF = tidT;
 		}
-		
+
 		assert(sidR && sidQ && sidT && sidF);
 
 
@@ -590,7 +590,7 @@ struct genpatternContext_t : dbtool_t {
 		 * 
 		 * The structure in `treeR` has been identified as: sidR/tidR, sidQ/tidQ, sidT/tidT, sidF/tidF.
 		 */
-		
+
 		/*
 		 * Convert tidR/tidQ/tidT/tidF such that `tidR=0`. 
 		 */
@@ -618,10 +618,10 @@ struct genpatternContext_t : dbtool_t {
 				reverse[i] = revRstr[fwdFstr[i] - 'a'];
 			reverse[pStore->signatures[sidF].numPlaceholder] = 0;
 			tidF = pStore->lookupFwdTransform(reverse);
-			
+
 			tidR = 0;
 		}
-		
+
 		/*
 		 * Sid-swap endpoints as the run-time would do
 		 */
@@ -634,8 +634,8 @@ struct genpatternContext_t : dbtool_t {
 		 * Validate
 		 */
 		if (ctx.flags & ctx.MAGICMASK_PARANOID) {
-			char name[tinyTree_t::TINYTREE_NAMELEN * 3 + 1 + 1]; // for 3 trees and final operator
-			unsigned nameLen = 0;
+			char       name[tinyTree_t::TINYTREE_NAMELEN * 3 + 1 + 1]; // for 3 trees and final operator
+			unsigned   nameLen = 0;
 			tinyTree_t tree(ctx);
 
 			tree.loadStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
@@ -649,9 +649,9 @@ struct genpatternContext_t : dbtool_t {
 			tree.loadStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
 			tree.saveString(tree.root, name + nameLen, NULL);
 			nameLen = strlen(name);
-			
+
 			name[nameLen++] = (tlTi) ? '!' : '?';
-			name[nameLen] = 0;
+			name[nameLen]   = 0;
 
 			tree.loadStringFast(name);
 
@@ -664,7 +664,7 @@ struct genpatternContext_t : dbtool_t {
 
 //			printf("./eval \"%s\" \"%s\"\n", name, pStore->signatures[sidR].name);
 		}
-		
+
 		/*
 		 * Get name.
 		 */
@@ -692,10 +692,10 @@ struct genpatternContext_t : dbtool_t {
 			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
 		else
 			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
-		
+
 		return true;
 	}
-	
+
 	/*
 	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering 
 	 */
@@ -773,19 +773,18 @@ struct genpatternContext_t : dbtool_t {
 		char     slotsF[MAXSLOTS + 1];
 		char     slotsR[MAXSLOTS + 1];
 		// reassembly TF transform relative to Q
-		uint32_t tidSlotT = 0;
-		uint32_t tidSlotF = 0;
-		uint32_t tidSlotR = 0;  // transform from `slotsR[]` to resulting `groupNode_t::slots[]`.
+		uint32_t tidSlotT  = 0;
+		uint32_t tidSlotF  = 0;
+		uint32_t tidSlotR  = 0;  // transform from `slotsR[]` to resulting `groupNode_t::slots[]`.
 		// nodes already processed
 		uint32_t beenThere = 0; // bit set means beenWhat[] is valid/defined
 		char     beenWhat[tinyTree_t::TINYTREE_NEND]; // endpoint in resulting `slotsR[]`
 		uint32_t nextSlot  = 0;
 		
-		
 		/*
 		 * Slot population as `fragmentTree_t` would do
 		 */
-		
+
 		signature_t *pSignature = pStore->signatures + sidQ;
 		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
@@ -831,7 +830,7 @@ struct genpatternContext_t : dbtool_t {
 		}
 		slotsF[pSignature->numPlaceholder] = 0; // terminator
 
-		(void)slotsQ;
+		(void) slotsQ;
 		assert(nextSlot <= MAXSLOTS); // slots should not overflow
 
 		slotsR[nextSlot] = 0; // terminator
@@ -839,13 +838,14 @@ struct genpatternContext_t : dbtool_t {
 		/*
 		 * @date 2021-10-21 19:22:25
 		 * Structures that collapse, like "aab+b>" can have more slots than the resulting structure.
+		 * In itself this does not pose a problem,
+		 * The issue is that pattern duplicates will have mismatched slots and throw a fit.
 		 */
 		if (nextSlot != pStore->signatures[sidR].numPlaceholder) {
 			// collapse occurred, structure is unsuited as a pattern.
-			
-			// skipCollapse++; // todo:
+			skipPlaceholder++;
 			return 0;
-		}		
+		}
 
 		/*
 		 * Get slot transforms relative to Q
@@ -880,8 +880,8 @@ struct genpatternContext_t : dbtool_t {
 		uint32_t idFirst = pStore->patternFirstIndex[ixFirst];
 
 		// lookup/create second
-		uint32_t ixSecond = pStore->lookupPatternSecond(idFirst, sidF, tidSlotF);
-		uint32_t idSecond;
+		uint32_t        ixSecond = pStore->lookupPatternSecond(idFirst, sidF, tidSlotF);
+		uint32_t        idSecond;
 		patternSecond_t *patternSecond;
 
 		if (pStore->patternSecondIndex[ixSecond] == 0) {
@@ -901,16 +901,16 @@ struct genpatternContext_t : dbtool_t {
 				 * Construct tree containing sid/tid
 				 */
 				tinyTree_t tree(ctx);
-				uint32_t tlQ = tree.addStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
-				uint32_t tlT = tree.addStringFast(pStore->signatures[sidT & ~IBIT].name, pStore->fwdTransformNames[tidT]);
-				uint32_t tlF = tree.addStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
-				tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT&IBIT) ? IBIT : 0), tlF);
-				
+				uint32_t   tlQ = tree.addStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
+				uint32_t   tlT = tree.addStringFast(pStore->signatures[sidT & ~IBIT].name, pStore->fwdTransformNames[tidT]);
+				uint32_t   tlF = tree.addStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
+				tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT & IBIT) ? IBIT : 0), tlF);
+
 				printf("%s\n", tree.saveString(tree.root));
 			}
 		} else {
 			// verify duplicate
-			idSecond = pStore->patternSecondIndex[ixSecond];
+			idSecond      = pStore->patternSecondIndex[ixSecond];
 			patternSecond = pStore->patternsSecond + idSecond;
 
 			assert(patternSecond->sidR == sidR);
@@ -949,7 +949,7 @@ struct genpatternContext_t : dbtool_t {
 		// reset ticker
 		ctx.setupSpeed(0);
 		ctx.tick = 0;
-		skipDuplicate = skipSize = skipUnsafe = skipCascade = 0;
+		skipDuplicate = skipCollapse = skipPlaceholder = skipWildcard = 0;
 
 		char     name[64];
 		unsigned numPlaceholder, numEndpoint, numBackRef;
@@ -1026,13 +1026,14 @@ struct genpatternContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] Read %lu patterns. numSignature=%u(%.0f%%) numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u\n",
+			fprintf(stderr, "[%s] Read %lu patterns. numSignature=%u(%.0f%%) numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u  skipWildcard=%u  skipCollapse=%u  skipPlaceholder=%u\n",
 				ctx.timeAsString(),
 				ctx.progress,
 				pStore->numSignature, pStore->numSignature * 100.0 / pStore->maxSignature,
 				pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
 				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-				skipDuplicate);
+				skipDuplicate, skipWildcard, skipCollapse, skipPlaceholder);
+
 	}
 
 	/**
@@ -1085,7 +1086,7 @@ struct genpatternContext_t : dbtool_t {
 			ctx.setupSpeed(pMetrics ? pMetrics->numProgress : 0);
 		}
 		ctx.tick = 0;
-		skipDuplicate = skipSize = skipUnsafe = skipCascade = 0;
+		skipDuplicate = skipCollapse = skipPlaceholder = skipWildcard = 0;
 
 		/*
 		 * Generate candidates
@@ -1124,10 +1125,11 @@ struct genpatternContext_t : dbtool_t {
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u\n",
+			fprintf(stderr, "[%s] numSlot=%u pure=%u numNode=%u numCandidate=%lu numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u  skipWildcard=%u  skipCollapse=%u  skipPlaceholder=%u\n",
 				ctx.timeAsString(), MAXSLOTS, (ctx.flags & context_t::MAGICMASK_PURE) ? 1 : 0, arg_numNodes, ctx.progress,
 				pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
 				pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-				skipDuplicate);
+				skipDuplicate, skipWildcard, skipCollapse, skipPlaceholder);
+
 	}
 };

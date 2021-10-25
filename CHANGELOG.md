@@ -10,6 +10,7 @@ TODO: no sorting when read-only
 ## [Unreleased]
 
 ```
+2021-10-25 18:48:19 Added: Stat counters and `--wildcard` in `genpattern`.
 2021-10-24 12:22:04 Deleted: `gensignature --saveinterleave`.
 2021-10-24 11:50:28 Changed: Integrate `genswap` into `gensignature`.
 2021-10-24 10:38:55 Changed: `genswap` database creation.

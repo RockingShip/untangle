@@ -119,13 +119,13 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --safe                          Consider safe members only\n");
 		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --sid=[<low>,]<high>            Sid range upper bound  [default=%u,%u]\n", app.opt_sidLo, app.opt_sidHi);
 		fprintf(stderr, "\t   --task=sge                      Get task settings from SGE environment\n");
 		fprintf(stderr, "\t   --task=<id>,<last>              Task id/number of tasks. [default=%u,%u]\n", app.opt_taskId, app.opt_taskLast);
 		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --truncate                      Truncate on database overflow\n");
 		fprintf(stderr, "\t-v --verbose                       Say more\n");
+		fprintf(stderr, "\t-v --wildcard                      Allow promotion of placeholders to nodes\n");
 		fprintf(stderr, "\t   --window=[<low>,]<high>         Upper end restart window [default=%lu,%lu]\n", app.opt_windowLo, app.opt_windowHi);
 	}
 }
@@ -170,11 +170,11 @@ int main(int argc, char *argv[]) {
 			LO_RATIO,
 			LO_SAFE,
 			LO_SAVEINDEX,
-			LO_SID,
 			LO_TASK,
 			LO_TEXT,
 			LO_TIMER,
 			LO_TRUNCATE,
+			LO_WILDCARD,
 			LO_WINDOW,
 			// short opts
 			LO_HELP    = 'h',
@@ -206,12 +206,12 @@ int main(int argc, char *argv[]) {
 			{"ratio",        1, 0, LO_RATIO},
 			{"safe",         0, 0, LO_SAFE},
 			{"saveindex",    0, 0, LO_SAVEINDEX},
-			{"sid",          1, 0, LO_SID},
 			{"task",         1, 0, LO_TASK},
 			{"text",         2, 0, LO_TEXT},
 			{"timer",        1, 0, LO_TIMER},
 			{"truncate",     0, 0, LO_TRUNCATE},
 			{"verbose",      2, 0, LO_VERBOSE},
+			{"wildcard",     0, 0, LO_WILDCARD},
 			{"window",       1, 0, LO_WINDOW},
 			//
 			{NULL,           0, 0, 0}
@@ -305,22 +305,6 @@ int main(int argc, char *argv[]) {
 		case LO_SAVEINDEX:
 			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
 			break;
-		case LO_SID: {
-			unsigned m, n;
-
-			int ret = sscanf(optarg, "%u,%u", &m, &n);
-			if (ret == 2) {
-				app.opt_sidLo = m;
-				app.opt_sidHi = n;
-			} else if (ret == 1) {
-				app.opt_sidHi = m;
-			} else {
-				usage(argv, true);
-				exit(1);
-			}
-
-			break;
-		}
 		case LO_TASK:
 			if (::strcmp(optarg, "sge") == 0) {
 				const char *p;
@@ -372,6 +356,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_VERBOSE:
 			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+		case LO_WILDCARD:
+			app.opt_wildcard = 1;
 			break;
 		case LO_WINDOW: {
 			uint64_t m, n;
@@ -428,6 +415,17 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	/*
+	 * @date 2021-10-25 15:03:46
+	 * `--load=` most likely is the output os `--text=1` of a previous run.
+	 * The list is a signature based rewrite of the original structure.
+	 * `--wildcard` is intended to filter candidate structures, not the sids they represent.
+	 */
+	if (app.opt_load && app.opt_wildcard)
+		ctx.fatal("Combining --wildcard and --load are mutual exclusive\n");
+	if (app.opt_wildcard && app.arg_numNodes < 5)
+		fprintf(stderr, "WARNING: Possible missing --wildcard needed for component structures\n");
+	
 	/*
 	 * `--task` post-processing
 	 */
@@ -528,7 +526,7 @@ int main(int argc, char *argv[]) {
 			    database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX);
 
 	// attach database
-	app.pStore = &db;
+	app.connect(db);
 
 	/*
 	 * Finalise allocations and create database
