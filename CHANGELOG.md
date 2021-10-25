@@ -6,10 +6,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 TODO: no sorting when read-only
+TODO: genpattern save/load
+TODO: genpattern list
 
 ## [Unreleased]
 
 ```
+2021-10-25 20:09:46 Fixed: `genpattern` duplicate detection and error handling.
 2021-10-25 18:56:25 Changed: Sid/tid handling in `genpattern`.
 2021-10-25 18:48:19 Added: Stat counters and `--wildcard` in `genpattern`.
 2021-10-24 12:22:04 Deleted: `gensignature --saveinterleave`.

@@ -676,15 +676,21 @@ struct genpatternContext_t : dbtool_t {
 	uint32_t sidSwapTid(uint32_t sid, uint32_t tid) {
 		signature_t *pSignature = pStore->signatures + sid;
 
-		if (pSignature->swapId == 0)
-			return tid;
-
-		// get signature
-		swap_t *pSwap = pStore->swaps + pSignature->swapId;
-
 		// fill simple slots for comparing
 		char slots[MAXSLOTS + 1];
 		memcpy(slots, pStore->fwdTransformNames[tid], MAXSLOTS + 1);
+
+		if (pSignature->swapId == 0) {
+			/*
+			 * @date 2021-10-25 19:58:38
+			 * Do not return verbatim tid as it needs to be truncated to match the active part of the signature
+			 */
+			slots[pSignature->numPlaceholder] = 0;
+			return pStore->lookupFwdTransform(slots);
+		}
+
+		// get signature
+		swap_t *pSwap = pStore->swaps + pSignature->swapId;
 
 		bool changed;
 		do {
@@ -723,6 +729,7 @@ struct genpatternContext_t : dbtool_t {
 			}
 		} while (changed);
 
+		slots[pSignature->numPlaceholder] = 0;
 		return pStore->lookupFwdTransform(slots);
 	}
 
@@ -814,6 +821,9 @@ struct genpatternContext_t : dbtool_t {
 		 * Structures that collapse, like "aab+b>" can have more slots than the resulting structure.
 		 * In itself this does not pose a problem,
 		 * The issue is that pattern duplicates will have mismatched slots and throw a fit.
+		 * 
+		 * @date 2021-10-25 20:03:41
+		 * Problem seems to be solved by the truncating the slots in `sidSwapTid()`.
 		 */
 		if (nextSlot != pStore->signatures[sidR].numPlaceholder) {
 			// collapse occurred, structure is unsuited as a pattern.
@@ -889,8 +899,47 @@ struct genpatternContext_t : dbtool_t {
 			idSecond      = pStore->patternSecondIndex[ixSecond];
 			patternSecond = pStore->patternsSecond + idSecond;
 
-			assert(patternSecond->sidR == sidR);
-			assert(patternSecond->tidSlotR == tidSlotR);
+			if (patternSecond->sidR != sidR || patternSecond->tidSlotR != tidSlotR) {
+				/*
+				 * @date 2021-10-25 19:29:56
+				 * Be very verbose.
+				 * This is a very nasty situation that may arise hours into the run.
+				 */
+				fprintf(stderr, "ERROR: addPatternToDatabase idFirst=%u idSecond=%u "
+						"oldSidR=%u:%s sidR=%u:%s "
+						"oldTidSlotR=%u:%.*s tidSlotR=%u:%.*s "
+						"sidQ=%u:%s tidQ=%u:%.*s sidT=%u:%s%s tidT=%u:%.*s sidF=%u:%s tidF=%u:%.*s "
+						"tidSlotT=%u:%.*s tidSlotF=%u:%.*s  "
+						"slotsQ=%s slotsT=%s slotsF=%s slotsR=%s\n",
+					idFirst, idSecond,
+
+					patternSecond->sidR, pStore->signatures[patternSecond->sidR].name,
+					sidR, pStore->signatures[sidR].name,
+					patternSecond->tidSlotR, pStore->signatures[patternSecond->sidR].numPlaceholder, pStore->fwdTransformNames[patternSecond->tidSlotR],
+					tidSlotR, pStore->signatures[sidR].numPlaceholder, pStore->fwdTransformNames[tidSlotR],
+
+					sidQ, pStore->signatures[sidQ].name,
+					tidQ, pStore->signatures[sidQ].numPlaceholder, pStore->fwdTransformNames[tidQ],
+
+					sidT & ~IBIT, pStore->signatures[sidT & ~IBIT].name,
+					(sidT & IBIT) ? "~" : "",
+					tidT, pStore->signatures[sidT & ~IBIT].numPlaceholder, pStore->fwdTransformNames[tidT],
+
+					sidF, pStore->signatures[sidF].name,
+					tidF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidF],
+
+					tidSlotT, pStore->signatures[sidT & ~IBIT].numPlaceholder, pStore->fwdTransformNames[tidSlotT],
+					tidSlotF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidSlotF],
+
+					slotsQ,
+					slotsT,
+					slotsF,
+					slotsR);
+
+				assert(patternSecond->sidR == sidR);
+				assert(patternSecond->tidSlotR == tidSlotR);
+			}
+
 			skipDuplicate++;
 		}
 
