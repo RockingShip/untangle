@@ -291,7 +291,36 @@ struct genpatternContext_t : dbtool_t {
 		}
 
 		/*
+		 * @date 2021-10-25 11:44:55
+		 * sid/tid lookup tables for endpoints, to avoid calling `lookupImprintAssociative()`
+		 */
+
+		static uint32_t fastLookupSid[tinyTree_t::TINYTREE_NSTART];
+		static uint32_t fastLookupTid[tinyTree_t::TINYTREE_NSTART];
+
+		// Initialise lookup table
+		if (fastLookupSid[0] == 0) {
+			uint32_t ix = pStore->lookupSignature("0");
+			fastLookupSid[0] = pStore->signatureIndex[ix];
+			fastLookupTid[0] = 0;
+			assert(fastLookupSid[0] != 0);
+
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+				char name[2] = {(char) ('a' + iSlot), 0};
+
+				uint32_t ix = pStore->lookupSignature("a");
+				fastLookupSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
+				fastLookupTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
+				assert(fastLookupSid[tinyTree_t::TINYTREE_KSTART] != 0);
+			}
+		}
+
+		/*
 		 * Search the QTF components
+		 * 
+		 * @date 2021-10-25 11:42:52
+		 * Instead of calling `lookupImprintAssociative()` four times for R/Q/T/F,
+		 * Call it once (by inlining) and perform in parallel
 		 */
 		enum FIND {
 			FIND_F = 1 << 0,
@@ -299,7 +328,7 @@ struct genpatternContext_t : dbtool_t {
 			FIND_Q = 1 << 2,
 			FIND_R = 1 << 3,
 		};
-		unsigned find;
+		unsigned find = FIND_R;
 
 		// Get top-level QTF
 		uint32_t R    = treeR.root;
@@ -312,54 +341,27 @@ struct genpatternContext_t : dbtool_t {
 		uint32_t tidR = 0, tidQ = 0, tidT = 0, tidF = 0;
 
 		/*
-		 * Which top-level components to analyse. Optimise/delay NE.  
+		 * Which top-level components to lookup.  
 		 */
-		if (tlTu == tlF)
-			find = FIND_R | FIND_Q | FIND_T; // NE has double reference
-		else
-			find = FIND_R | FIND_Q | FIND_T | FIND_F; // find all components
-
-		/*
-		 * catch endpoint lookups
-		 */
-		{
-			static uint32_t fastSid[tinyTree_t::TINYTREE_NSTART];
-			static uint32_t fastTid[tinyTree_t::TINYTREE_NSTART];
-
-			/*
-			 * Initialise lookup table
-			 */
-			if (fastSid[0] == 0) {
-				uint32_t ix = pStore->lookupSignature("0");
-				fastSid[0] = pStore->signatureIndex[ix];
-				fastTid[0] = 0;
-				assert(fastSid[0] != 0);
-				
-				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-					char name[2] = {(char) ('a' + iSlot), 0};
-
-					uint32_t ix = pStore->lookupSignature("a");
-					fastSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
-					fastTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
-					assert(fastSid[tinyTree_t::TINYTREE_KSTART] != 0);
-				}
-			}
-
-
-			if (tlQ < tinyTree_t::TINYTREE_NSTART) {
-				sidQ = fastSid[tlQ];
-				tidQ = fastTid[tlQ];
-				find &= ~FIND_Q;
-			}
-			if (tlTu < tinyTree_t::TINYTREE_NSTART) {
-				sidT = fastSid[tlTu];
-				tidT = fastTid[tlTu];
-				find &= ~FIND_T;
-			}
+		if (tlQ < tinyTree_t::TINYTREE_NSTART) {
+			sidQ = fastLookupSid[tlQ];
+			tidQ = fastLookupTid[tlQ];
+		} else {
+			find |= FIND_Q;
+		}
+		if (tlTu < tinyTree_t::TINYTREE_NSTART) {
+			sidT = fastLookupSid[tlTu];
+			tidT = fastLookupTid[tlTu];
+		} else {
+			find |= FIND_T;
+		}
+		if (tlTu != tlF) {
+			// ignore F double reference when T==F
 			if (tlF < tinyTree_t::TINYTREE_NSTART) {
-				sidF = fastSid[tlF];
-				tidF = fastTid[tlF];
-				find &= ~FIND_F;
+				sidF = fastLookupSid[tlF];
+				tidF = fastLookupTid[tlF];
+			} else {
+				find |= FIND_F;
 			}
 		}
 
@@ -532,46 +534,6 @@ struct genpatternContext_t : dbtool_t {
 		}
 
 		/*
-		 * @date 2021-10-21 20:07:46
-		 * Component structures in `treeR` are raw and have not been tested if they collapse.
-		 * Count the component endpoints and reject if their count do not match their signatures.
-		 */
-		{
-			// mark/propagate endpoints per node
-			uint32_t bitset[tinyTree_t::TINYTREE_NEND];
-			bitset[0] = 0; // zero is not an endpoint
-
-			// mark endpoints
-			for (uint32_t k = tinyTree_t::TINYTREE_KSTART; k < tinyTree_t::TINYTREE_NSTART; k++)
-				bitset[k] = 1 << k;
-
-			// mark nodes
-			for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < treeR.count; iNode++) {
-				tinyNode_t *pNode = treeR.N + iNode;
-				bitset[iNode] = bitset[pNode->Q] | bitset[pNode->T & ~IBIT] | bitset[pNode->F];
-			}
-
-			// convert bitset to bitcount
-			for (uint32_t k = tinyTree_t::TINYTREE_KSTART; k < tinyTree_t::TINYTREE_NSTART; k++)
-				bitset[k] = 1;
-
-			// ancient bitcount hack 
-			for (uint32_t iNode = tinyTree_t::TINYTREE_NSTART; iNode < treeR.count; iNode++) {
-				bitset[iNode] = ((bitset[iNode] & 0xaaaaaaaa) >> 1) + (bitset[iNode] & 0x55555555);
-				bitset[iNode] = ((bitset[iNode] & 0xcccccccc) >> 2) + (bitset[iNode] & 0x33333333);
-				bitset[iNode] = ((bitset[iNode] & 0xf0f0f0f0) >> 4) + (bitset[iNode] & 0x0f0f0f0f);
-				bitset[iNode] = ((bitset[iNode] & 0xff00ff00) >> 8) + (bitset[iNode] & 0x00ff00ff);
-				bitset[iNode] = ((bitset[iNode] & 0xffff0000) >> 16) + (bitset[iNode] & 0x0000ffff);
-			}
-
-			if ((bitset[tlQ] != pStore->signatures[sidQ].numPlaceholder) ||
-			    (bitset[tlTu] != pStore->signatures[sidT].numPlaceholder) ||
-			    (bitset[tlF] != pStore->signatures[sidF].numPlaceholder)) {
-				return true;
-			}
-		}
-
-		/*
 		 * Fixup delayed NE
 		 */
 		if (tlTu == tlF) {
@@ -582,6 +544,19 @@ struct genpatternContext_t : dbtool_t {
 
 		assert(sidR && sidQ && sidT && sidF);
 
+		/*
+		 * @date 2021-10-25 12:26:23
+		 * test for sid based collapse
+		 */
+		if (sidQ == 1 ||                               // Q not zero
+		    (sidQ == sidT && tidQ == tidT) ||          // Q/T collapse
+		    (sidQ == sidF && tidQ == tidF) ||          // Q/F collapse
+		    (!tlTi && sidT == sidF && tidT == tidF) || // T/F collapse
+		    (sidT == 1 && sidF == 1) ||                // Q?!0:0 -> Q
+		    (!tlTi && sidT == 1)) {                    // Q?0:F -> F?!Q:0
+			skipCollapse++;
+			return true;
+		}
 
 		/*
 		 * @date 2021-10-20 02:22:04
@@ -625,7 +600,6 @@ struct genpatternContext_t : dbtool_t {
 		/*
 		 * Sid-swap endpoints as the run-time would do
 		 */
-		tidR = this->sidSwapTid(sidR, tidR);
 		tidQ = this->sidSwapTid(sidQ, tidQ);
 		tidT = this->sidSwapTid(sidT, tidT);
 		tidF = this->sidSwapTid(sidF, tidF);
@@ -866,6 +840,8 @@ struct genpatternContext_t : dbtool_t {
 		 * "baac>!" and "caab>!" are distinct, however as component they can exchange b/c
 		 * The difference between these two are found in `slotsR[]`.
 		 * 
+		 * @date 2021-10-25 15:36:47
+		 * There should be a total of 4 calls to `sidSwapTid()`.
 		 */
 		tidSlotR = this->sidSwapTid(sidR, tidSlotR);
 
@@ -922,7 +898,51 @@ struct genpatternContext_t : dbtool_t {
 	}
 
 	/**
-	 * @date 2021-10-20 12:23:41
+	 * @date 2020-04-05 21:07:14
+	 *
+	 * Compare function for `qsort_r`
+	 *
+	 * @param {member_t} lhs - left hand side member
+	 * @param {member_t} rhs - right hand side member
+	 * @param {context_t} arg - I/O context
+	 * @return "<0" if "L<R", "0" if "L==R", ">0" if "L>R"
+	 */
+	static int comparMember(const void *lhs, const void *rhs, void *arg) {
+		if (lhs == rhs)
+			return 0;
+
+		const member_t *pMemberL = static_cast<const member_t *>(lhs);
+		const member_t *pMemberR = static_cast<const member_t *>(rhs);
+		context_t      *pApp     = static_cast<context_t *>(arg);
+
+		int cmp = 0;
+
+		/*
+		 * depreciates go last
+		 */
+		if ((pMemberL->flags & member_t::MEMMASK_DEPR) && !(pMemberR->flags & member_t::MEMMASK_DEPR))
+			return +1;
+		if (!(pMemberL->flags & member_t::MEMMASK_DEPR) && (pMemberR->flags & member_t::MEMMASK_DEPR))
+			return -1;
+
+		// load trees
+		tinyTree_t treeL(*pApp);
+		tinyTree_t treeR(*pApp);
+
+		treeL.loadStringFast(pMemberL->name);
+		treeR.loadStringFast(pMemberR->name);
+
+		// order by size first because (smaller) components must be located first 
+		cmp = (int) treeL.count - (int) treeR.count;
+		if (cmp)
+			return cmp;
+
+		cmp = treeL.compare(treeL.root, &treeR, treeR.root);
+		return cmp;
+	}
+
+	/**
+	 * @date 2020-03-22 01:00:05
 	 *
 	 * Main entrypoint
 	 *

@@ -486,9 +486,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	// prepare sections and indices for use
-	app.prepareSections(db, 4,
-			    database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
-			    database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
+	uint32_t sections = database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
+	if (db.numImprint <= 1)
+		sections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // rebuild imprints only when missing
+	app.prepareSections(db, 4, sections);
+
+	if (db.numSignature <= 1)
+		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
+	if (db.numImprint <= 1)
+		ctx.fatal("Missing/empty imprint section: %s\n", app.arg_inputDatabase);
 
 	// attach database
 	app.connect(db);

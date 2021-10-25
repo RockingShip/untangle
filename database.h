@@ -2178,6 +2178,9 @@ struct database_t {
 				v += tinyTree_t::TINYTREE_NEND;
 			}
 		}
+		
+		// not found
+		sid = tid = 0;
 		return false;
 	}
 

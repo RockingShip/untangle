@@ -519,11 +519,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	// prepare sections and indices for use
-	app.prepareSections(db, app.arg_numNodes,
-			    database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
-			    database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
-			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX |
-			    database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX);
+	uint32_t sections = database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
+	if (db.numImprint <= 1)
+		sections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // rebuild imprints only when missing
+	app.prepareSections(db, app.arg_numNodes, sections);
+
+	if (db.numSignature <= 1)
+		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
+	if (db.numImprint <= 1)
+		ctx.fatal("Missing/empty imprint section: %s\n", app.arg_inputDatabase);
 
 	// attach database
 	app.connect(db);
@@ -633,6 +637,7 @@ int main(int argc, char *argv[]) {
 
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
+			// drop indices
 			db.interleave             = 0;
 			db.interleaveStep         = 0;
 			db.signatureIndexSize     = 0;
@@ -643,6 +648,14 @@ int main(int argc, char *argv[]) {
 			db.memberIndexSize        = 0;
 			db.patternFirstIndexSize  = 0;
 			db.patternSecondIndexSize = 0;
+		} else {
+			// rebuild indices based on actual counts so that loading the database does not cause a rebuild
+			uint32_t size = ctx.nextPrime(db.numPatternFirst * app.opt_ratio);
+			if (db.patternFirstIndexSize > size)
+				db.patternFirstIndexSize = size;
+			size = ctx.nextPrime(db.numPatternSecond * app.opt_ratio);
+			if (db.patternSecondIndexSize > size)
+				db.patternSecondIndexSize = size;
 		}
 
 		// unexpected termination should unlink the outputs
