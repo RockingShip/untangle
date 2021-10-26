@@ -116,7 +116,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --truncate                      Truncate on database overflow\n");
 		fprintf(stderr, "\t-v --verbose                       Say more\n");
 		fprintf(stderr, "\t-V --version                       Show versions\n");
-		fprintf(stderr, "\t   --wildcard                      Allow promotion of placeholders to nodes\n");
+		fprintf(stderr, "\t   --wildcard                      Allow wildcard nodes in component structures\n");
 		fprintf(stderr, "\nSystem options:\n");
 		fprintf(stderr, "\t   --[no-]cascade                  Cascading dyadic normalisation [default=%s]\n", (ctx.flags & context_t::MAGICMASK_CASCADE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]paranoid                 Expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
@@ -534,9 +534,9 @@ int main(int argc, char *argv[]) {
 	 * The list is a signature based rewrite of the original structure.
 	 * `--wildcard` is intended to filter candidate structures, not the sids they represent.
 	 */
-//	if (app.opt_load && app.opt_wildcard)
-//		ctx.fatal("Combining --wildcard and --load are mutual exclusive\n");
-	if (!app.opt_wildcard && app.arg_numNodes < 5)
+	if (app.opt_load && !app.opt_wildcard)
+		fprintf(stderr, "WARNING: --load might need --wildcard\n");
+	if (!app.opt_wildcard && app.arg_numNodes < 4)
 		fprintf(stderr, "WARNING: Possible missing --wildcard needed for component structures\n");
 	
 	/*

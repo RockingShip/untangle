@@ -597,9 +597,9 @@ struct genpatternContext_t : dbtool_t {
 		/*
 		 * Sid-swap endpoints as the run-time would do
 		 */
-		tidQ = this->sidSwapTid(sidQ, tidQ);
-		tidT = this->sidSwapTid(sidT, tidT);
-		tidF = this->sidSwapTid(sidF, tidF);
+		tidQ = this->sidSwapTid(sidQ, tidQ, pStore->fwdTransformNames);
+		tidT = this->sidSwapTid(sidT, tidT, pStore->fwdTransformNames);
+		tidF = this->sidSwapTid(sidF, tidF, pStore->fwdTransformNames);
 
 		/*
 		 * Validate
@@ -668,9 +668,12 @@ struct genpatternContext_t : dbtool_t {
 	}
 
 	/*
-	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering 
+	 * @date 2021-10-26 23:39:23
+	 * 
+	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering
+	 * `fwdTransformNames` is `fwd` when adding to `slotsR`, and `rev` when extracting from `slotsR`.
 	 */
-	uint32_t sidSwapTid(uint32_t sid, uint32_t tid) {
+	uint32_t sidSwapTid(uint32_t sid, uint32_t tid, transformName_t *fwdTransformNames) {
 		signature_t *pSignature = pStore->signatures + sid;
 
 		// fill simple slots for comparing
@@ -697,7 +700,7 @@ struct genpatternContext_t : dbtool_t {
 				tid = pSwap->tids[iSwap];
 
 				// get the transform string
-				const char *pTransformStr = pStore->fwdTransformNames[tid];
+				const char *pTransformStr = fwdTransformNames[tid];
 
 				// test if swap needed
 				bool needSwap = false;
@@ -850,7 +853,7 @@ struct genpatternContext_t : dbtool_t {
 		 * @date 2021-10-25 15:36:47
 		 * There should be a total of 4 calls to `sidSwapTid()`.
 		 */
-		tidSlotR = this->sidSwapTid(sidR, tidSlotR);
+		tidSlotR = this->sidSwapTid(sidR, tidSlotR, pStore->revTransformNames);
 
 		/*
 		 * Add to database
@@ -902,13 +905,13 @@ struct genpatternContext_t : dbtool_t {
 				 * Be very verbose.
 				 * This is a very nasty situation that may arise hours into the run.
 				 */
-				fprintf(stderr, "ERROR: addPatternToDatabase idFirst=%u idSecond=%u "
+				fprintf(stderr, "ERROR: addPatternToDatabase progress=%lu name=%s idFirst=%u idSecond=%u "
 						"oldSidR=%u:%s sidR=%u:%s "
 						"oldTidSlotR=%u:%.*s tidSlotR=%u:%.*s "
 						"sidQ=%u:%s tidQ=%u:%.*s sidT=%u:%s%s tidT=%u:%.*s sidF=%u:%s tidF=%u:%.*s "
 						"tidSlotT=%u:%.*s tidSlotF=%u:%.*s  "
 						"slotsQ=%s slotsT=%s slotsF=%s slotsR=%s\n",
-					idFirst, idSecond,
+					ctx.progress, pNameR, idFirst, idSecond,
 
 					patternSecond->sidR, pStore->signatures[patternSecond->sidR].name,
 					sidR, pStore->signatures[sidR].name,
