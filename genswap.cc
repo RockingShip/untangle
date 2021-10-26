@@ -701,13 +701,24 @@ int main(int argc, char *argv[]) {
 
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
-			db.signatureIndexSize = 0;
-			db.imprintIndexSize   = 0;
-			db.numImprint         = 0;
-			db.interleave         = 0;
-			db.interleaveStep     = 0;
-			db.pairIndexSize      = 0;
-			db.memberIndexSize    = 0;
+			// drop indices
+			db.interleave             = 0;
+			db.interleaveStep         = 0;
+			db.signatureIndexSize     = 0;
+			db.swapIndexSize          = 0;
+			db.numImprint             = 0;
+			db.imprintIndexSize       = 0;
+			db.pairIndexSize          = 0;
+			db.memberIndexSize        = 0;
+			db.patternFirstIndexSize  = 0;
+			db.patternSecondIndexSize = 0;
+		} else {
+			// rebuild indices based on actual counts so that loading the database does not cause a rebuild
+			uint32_t size = ctx.nextPrime(db.numSwap * app.opt_ratio);
+			if (db.swapIndexSize > size)
+				db.swapIndexSize = size;
+
+			db.rebuildIndices(database_t::ALLOCMASK_SWAPINDEX);
 		}
 
 		// unexpected termination should unlink the outputs

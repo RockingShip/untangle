@@ -632,9 +632,10 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	// prepare sections and indices for use
-	uint32_t sections = database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
+	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINTINDEX |
+			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
 	if (db.numImprint <= 1)
-		sections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // rebuild imprints only when missing
+		sections |= database_t::ALLOCMASK_IMPRINT; // rebuild imprints only when missing
 	app.prepareSections(db, app.arg_numNodes, sections);
 
 	if (db.numSignature <= 1)
@@ -769,6 +770,8 @@ int main(int argc, char *argv[]) {
 			size = ctx.nextPrime(db.numPatternSecond * app.opt_ratio);
 			if (db.patternSecondIndexSize > size)
 				db.patternSecondIndexSize = size;
+			
+			db.rebuildIndices(database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNSECOND);
 		}
 
 		// unexpected termination should unlink the outputs

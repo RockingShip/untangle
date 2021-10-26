@@ -780,7 +780,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
 	/*
-	 * Open database for update
+	 * Open input and create output database
 	 */
 
 	// Open input
@@ -1029,23 +1029,36 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * ... and rebuild imprints
+	 * Save the database
 	 */
 
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
-			db.signatureIndexSize = 0;
-			db.imprintIndexSize   = 0;
-			db.numImprint         = 0;
-			db.interleave         = 0;
-			db.interleaveStep     = 0;
-			db.pairIndexSize      = 0;
-			db.memberIndexSize    = 0;
-		}
+			// drop indices
+			db.interleave             = 0;
+			db.interleaveStep         = 0;
+			db.signatureIndexSize     = 0;
+			db.swapIndexSize          = 0;
+			db.numImprint             = 0;
+			db.imprintIndexSize       = 0;
+			db.pairIndexSize          = 0;
+			db.memberIndexSize        = 0;
+			db.patternFirstIndexSize  = 0;
+			db.patternSecondIndexSize = 0;
+		} else {
+			// rebuild indices based on actual counts so that loading the database does not cause a rebuild
+			uint32_t size = ctx.nextPrime(db.numSignature * app.opt_ratio);
+			if (db.signatureIndexSize > size)
+				db.signatureIndexSize = size;
+			size = ctx.nextPrime(db.numSwap * app.opt_ratio);
+			if (db.swapIndexSize > size)
+				db.swapIndexSize = size;
+			size = ctx.nextPrime(db.numImprint * app.opt_ratio);
+			if (db.imprintIndexSize > size)
+				db.imprintIndexSize = size;
 
-		/*
-		 * Save the database
-		 */
+			db.rebuildIndices(database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_SWAPINDEX | database_t::ALLOCMASK_IMPRINTINDEX);
+		}
 
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
