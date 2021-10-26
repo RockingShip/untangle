@@ -186,24 +186,41 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
-		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
-		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --lookupsafe                    Only lookup signatures are safe\n");
-		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
-		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
-		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
 		fprintf(stderr, "\t   --mode=<number>                 Operational mode [default=%u]\n", app.opt_mode);
-		fprintf(stderr, "\t   --[no-]paranoid                 Enable expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
-		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
 		fprintf(stderr, "\t   --reverse                       Reverse order of signatures\n");
-		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
-		fprintf(stderr, "\t   --text                          Textual output instead of binary database\n");
+		fprintf(stderr, "\t   --text[=1]                      Brief accepted `foundTree()` candidates\n");
+		fprintf(stderr, "\t   --text=2                        Verbose accepted `foundTree()` candidates\n");
+		fprintf(stderr, "\t   --text=3                        Brief database dump\n");
+		fprintf(stderr, "\t   --text=4                        Verbose database dump\n");
 		fprintf(stderr, "\t   --timer=<seconds>               Interval timer for verbose updates [default=%u]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose                       Say more\n");
+		fprintf(stderr, "\t-V --version                       Show versions\n");
+		fprintf(stderr, "\nSystem options:\n");
+		fprintf(stderr, "\t   --[no-]cascade                  Cascading dyadic normalisation [default=%s]\n", (ctx.flags & context_t::MAGICMASK_CASCADE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid                 Expensive assertions [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PARANOID) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure                     QTF->QnTF (single-node) rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_PURE) ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite                  Structure (multi-node)  rewriting [default=%s]\n", (ctx.flags & context_t::MAGICMASK_REWRITE) ? "enabled" : "disabled");
+		fprintf(stderr, "\nDatabase options:\n");
+		fprintf(stderr, "\t   --firstindexsize=<number>       Size of patternFirst index [default=%u]\n", app.opt_patternFirstIndexSize);
+		fprintf(stderr, "\t   --imprintindexsize=<number>     Size of imprint index [default=%u]\n", app.opt_imprintIndexSize);
+		fprintf(stderr, "\t   --interleave=<number>           Imprint index interleave [default=%u]\n", app.opt_interleave);
+		fprintf(stderr, "\t   --maxfirst=<number>             Maximum of (first step) patterns [default=%u]\n", app.opt_maxPatternFirst);
+		fprintf(stderr, "\t   --maximprint=<number>           Maximum number of imprints [default=%u]\n", app.opt_maxImprint);
+		fprintf(stderr, "\t   --maxmember=<number>            Maximum number of members [default=%u]\n", app.opt_maxMember);
+		fprintf(stderr, "\t   --maxpair=<number>              Maximum number of sid/tid pairs [default=%u]\n", app.opt_maxPair);
+		fprintf(stderr, "\t   --maxsecond=<number>            Maximum of (second step) patterns [default=%u]\n", app.opt_maxPatternSecond);
+		fprintf(stderr, "\t   --maxsignature=<number>         Maximum number of signatures [default=%u]\n", app.opt_maxSignature);
+		fprintf(stderr, "\t   --maxswap=<number>              Maximum number of swaps [default=%u]\n", app.opt_maxSwap);
+		fprintf(stderr, "\t   --memberindexsize=<number>      Size of member index [default=%u]\n", app.opt_memberIndexSize);
+		fprintf(stderr, "\t   --pairindexsize=<number>        Size of sid/tid pair index [default=%u]\n", app.opt_pairIndexSize);
+		fprintf(stderr, "\t   --ratio=<number>                Index/data ratio [default=%.1f]\n", app.opt_ratio);
+		fprintf(stderr, "\t   --[no-]saveindex                Save with indices [default=%s]\n", app.opt_saveIndex ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --secondindexsize=<number>      Size of patternSecond index [default=%u]\n", app.opt_patternSecondIndexSize);
+		fprintf(stderr, "\t   --signatureindexsize=<number>   Size of signature index [default=%u]\n", app.opt_signatureIndexSize);
+		fprintf(stderr, "\t   --swapindexsize=<number>        Size of swap index [default=%u]\n", app.opt_swapIndexSize);
 	}
 }
 
@@ -227,69 +244,109 @@ int main(int argc, char *argv[]) {
 	for (;;) {
 		// Long option shortcuts
 		enum {
-			// long-only opts
-			LO_BURST = 1,
-			LO_CASCADE,
-			LO_DEBUG,
-			LO_FORCE,
-			LO_GENERATE,
-			LO_IMPRINTINDEXSIZE,
-			LO_INTERLEAVE,
-			LO_LOAD,
-			LO_LOOKUPSAFE,
-			LO_MAXIMPRINT,
-			LO_MAXMEMBER,
-			LO_MEMBERINDEXSIZE,
-			LO_MODE,
-			LO_NOGENERATE,
-			LO_NOPARANOID,
-			LO_NOPURE,
-			LO_NOSAVEINDEX,
-			LO_PARANOID,
-			LO_PURE,
-			LO_RATIO,
-			LO_REVERSE,
-			LO_SAVEINDEX,
-			LO_SIGNATUREINDEXSIZE,
-			LO_TEXT,
-			LO_TIMER,
 			// short opts
 			LO_HELP    = 'h',
 			LO_QUIET   = 'q',
 			LO_VERBOSE = 'v',
+			LO_VERSION = 'V',
+			// long opts
+			LO_BURST = 1,
+			LO_DEBUG,
+			LO_FORCE,
+			LO_GENERATE,
+			LO_LOAD,
+			LO_LOOKUPSAFE,
+			LO_MODE,
+			LO_NOGENERATE,
+			LO_REVERSE,
+			LO_TEXT,
+			LO_TIMER,
+			// system options
+			LO_AINF,
+			LO_CASCADE,
+			LO_NOAINF,
+			LO_NOCASCADE,
+			LO_NOPARANOID,
+			LO_NOPURE,
+			LO_PARANOID,
+			LO_PURE,
+			// generator options
+			LO_MIXED,
+			LO_SID,
+			LO_TASK,
+			LO_WINDOW,
+			// database options
+			LO_IMPRINTINDEXSIZE,
+			LO_INTERLEAVE,
+			LO_MAXIMPRINT,
+			LO_MAXMEMBER,
+			LO_MAXPAIR,
+			LO_MAXPATTERNFIRST,
+			LO_MAXPATTERNSECOND,
+			LO_MAXSIGNATURE,
+			LO_MAXSWAP,
+			LO_MEMBERINDEXSIZE,
+			LO_NOSAVEINDEX,
+			LO_PAIRINDEXSIZE,
+			LO_PATTERNFIRSTINDEXSIZE,
+			LO_PATTERNSECONDINDEXSIZE,
+			LO_RATIO,
+			LO_SAVEINDEX,
+			LO_SIGNATUREINDEXSIZE,
+			LO_SWAPINDEXSIZE,
 		};
 
 		// long option descriptions
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"burst",              1, 0, LO_BURST},
-			{"cascade",            0, 0, LO_CASCADE},
+			// short options
 			{"debug",              1, 0, LO_DEBUG},
 			{"force",              0, 0, LO_FORCE},
-			{"generate",           0, 0, LO_GENERATE},
 			{"help",               0, 0, LO_HELP},
-			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
-			{"interleave",         1, 0, LO_INTERLEAVE},
-			{"load",               1, 0, LO_LOAD},
-			{"lookupsafe",         0, 0, LO_LOOKUPSAFE},
-			{"maximprint",         1, 0, LO_MAXIMPRINT},
-			{"maxmember",          1, 0, LO_MAXMEMBER},
-			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
-			{"mode",               1, 0, LO_MODE},
-			{"no-generate",        0, 0, LO_NOGENERATE},
-			{"no-paranoid",        0, 0, LO_NOPARANOID},
-			{"no-pure",            0, 0, LO_NOPURE},
-			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
-			{"paranoid",           0, 0, LO_PARANOID},
-			{"pure",               0, 0, LO_PURE},
 			{"quiet",              2, 0, LO_QUIET},
-			{"ratio",              1, 0, LO_RATIO},
-			{"reverse",            0, 0, LO_REVERSE},
-			{"saveindex",          0, 0, LO_SAVEINDEX},
-			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
-			{"text",               2, 0, LO_TEXT},
 			{"timer",              1, 0, LO_TIMER},
 			{"verbose",            2, 0, LO_VERBOSE},
+			{"version",            0, 0, LO_VERSION},
+			// long options
+			{"burst",              1, 0, LO_BURST},
+			{"generate",           0, 0, LO_GENERATE},
+			{"load",               1, 0, LO_LOAD},
+			{"lookupsafe",         0, 0, LO_LOOKUPSAFE},
+			{"mode",               1, 0, LO_MODE},
+			{"reverse",            0, 0, LO_REVERSE},
+			{"text",               2, 0, LO_TEXT},
+			// system options
+			{"ainf",               0, 0, LO_AINF},
+			{"cascade",            0, 0, LO_CASCADE},
+			{"no-ainf",            0, 0, LO_NOAINF},
+			{"no-cascade",         0, 0, LO_NOCASCADE},
+			{"no-paranoid",        0, 0, LO_NOPARANOID},
+			{"no-pure",            0, 0, LO_NOPURE},
+			{"paranoid",           0, 0, LO_PARANOID},
+			{"pure",               0, 0, LO_PURE},
+			// generator options
+			{"mixed",              0, 0, LO_MIXED},
+			{"task",               1, 0, LO_TASK},
+			{"window",             1, 0, LO_WINDOW},
+			// database options
+			{"imprintindexsize",   1, 0, LO_IMPRINTINDEXSIZE},
+			{"interleave",         1, 0, LO_INTERLEAVE},
+			{"maximprint",         1, 0, LO_MAXIMPRINT},
+			{"maxfirst",           1, 0, LO_MAXPATTERNFIRST},
+			{"maxmember",          1, 0, LO_MAXMEMBER},
+			{"maxpair",            1, 0, LO_MAXPAIR},
+			{"maxsecond",          1, 0, LO_MAXPATTERNSECOND},
+			{"maxsignature",       1, 0, LO_MAXSIGNATURE},
+			{"maxswap",            1, 0, LO_MAXSWAP},
+			{"memberindexsize",    1, 0, LO_MEMBERINDEXSIZE},
+			{"no-saveindex",       0, 0, LO_NOSAVEINDEX},
+			{"pairindexsize",      1, 0, LO_PAIRINDEXSIZE},
+			{"firstindexsize",     1, 0, LO_PATTERNFIRSTINDEXSIZE},
+			{"secondindexsize",    1, 0, LO_PATTERNSECONDINDEXSIZE},
+			{"ratio",              1, 0, LO_RATIO},
+			{"saveindex",          0, 0, LO_SAVEINDEX},
+			{"signatureindexsize", 1, 0, LO_SIGNATUREINDEXSIZE},
+			{"swapindexsize",      1, 0, LO_SWAPINDEXSIZE},
 			//
 			{NULL,                 0, 0, 0}
 		};
@@ -318,31 +375,39 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
-		case LO_BURST:
-			app.opt_burst = ::strtoul(optarg, NULL, 0);
-			break;
-		case LO_CASCADE:
-			ctx.flags |= context_t::MAGICMASK_CASCADE;
-			break;
+			/*
+			 * Short options
+			 */
 		case LO_DEBUG:
 			ctx.opt_debug = ::strtoul(optarg, NULL, 0);
 			break;
 		case LO_FORCE:
 			app.opt_force++;
 			break;
-		case LO_GENERATE:
-			app.opt_generate++;
-			break;
 		case LO_HELP:
 			usage(argv, true);
 			exit(0);
-		case LO_IMPRINTINDEXSIZE:
-			app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+		case LO_QUIET:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
 			break;
-		case LO_INTERLEAVE:
-			app.opt_interleave = ::strtoul(optarg, NULL, 0);
-			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
-				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
+		case LO_TIMER:
+			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_VERBOSE:
+			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+			break;
+		case LO_VERSION:
+			printf("Program=%s Database=%x\n", PACKAGE_VERSION, FILE_MAGIC);
+			exit(0);
+
+			/*
+			 * Long options
+			 */
+		case LO_BURST:
+			app.opt_burst = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_GENERATE:
+			app.opt_generate++;
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
@@ -350,20 +415,33 @@ int main(int argc, char *argv[]) {
 		case LO_LOOKUPSAFE:
 			app.opt_lookupSafe++;
 			break;
-		case LO_MAXIMPRINT:
-			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
-			break;
-		case LO_MAXMEMBER:
-			app.opt_maxMember = ctx.dToMax(::strtod(optarg, NULL));
-			break;
-		case LO_MEMBERINDEXSIZE:
-			app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
-			break;
 		case LO_MODE:
 			app.opt_mode = ::strtoul(optarg, NULL, 0);
 			break;
 		case LO_NOGENERATE:
 			app.opt_generate = 0;
+			break;
+		case LO_REVERSE:
+			app.opt_reverse++;
+			break;
+		case LO_TEXT:
+			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
+			break;
+
+			/*
+			 * System options
+			 */
+		case LO_AINF:
+			ctx.flags |= context_t::MAGICMASK_AINF;
+			break;
+		case LO_CASCADE:
+			ctx.flags |= context_t::MAGICMASK_CASCADE;
+			break;
+		case LO_NOAINF:
+			ctx.flags &= ~context_t::MAGICMASK_AINF;
+			break;
+		case LO_NOCASCADE:
+			ctx.flags &= ~context_t::MAGICMASK_CASCADE;
 			break;
 		case LO_NOPARANOID:
 			ctx.flags &= ~context_t::MAGICMASK_PARANOID;
@@ -377,17 +455,56 @@ int main(int argc, char *argv[]) {
 		case LO_PURE:
 			ctx.flags |= context_t::MAGICMASK_PURE;
 			break;
-		case LO_QUIET:
-			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose - 1;
+
+			/*
+			 * Database options
+			 */
+		case LO_IMPRINTINDEXSIZE:
+			app.opt_imprintIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
-		case LO_RATIO:
-			app.opt_ratio = strtof(optarg, NULL);
+		case LO_INTERLEAVE:
+			app.opt_interleave = ::strtoul(optarg, NULL, 0);
+			if (!getMetricsInterleave(MAXSLOTS, app.opt_interleave))
+				ctx.fatal("--interleave must be one of [%s]\n", getAllowedInterleaves(MAXSLOTS));
 			break;
-		case LO_REVERSE:
-			app.opt_reverse++;
+		case LO_MAXIMPRINT:
+			app.opt_maxImprint = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXMEMBER:
+			app.opt_maxMember = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXPAIR:
+			app.opt_maxPair = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXPATTERNFIRST:
+			app.opt_maxPatternFirst = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXPATTERNSECOND:
+			app.opt_maxPatternSecond = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXSIGNATURE:
+			app.opt_maxSignature = ctx.dToMax(::strtod(optarg, NULL));
+			break;
+		case LO_MAXSWAP:
+			app.opt_maxSwap = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_MEMBERINDEXSIZE:
+			app.opt_memberIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
 		case LO_NOSAVEINDEX:
 			app.opt_saveIndex = 0;
+			break;
+		case LO_PAIRINDEXSIZE:
+			app.opt_pairIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_PATTERNFIRSTINDEXSIZE:
+			app.opt_patternFirstIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_PATTERNSECONDINDEXSIZE:
+			app.opt_patternSecondIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
+			break;
+		case LO_RATIO:
+			app.opt_ratio = strtof(optarg, NULL);
 			break;
 		case LO_SAVEINDEX:
 			app.opt_saveIndex = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_saveIndex + 1;
@@ -395,14 +512,8 @@ int main(int argc, char *argv[]) {
 		case LO_SIGNATUREINDEXSIZE:
 			app.opt_signatureIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
-		case LO_TEXT:
-			app.opt_text = optarg ? ::strtoul(optarg, NULL, 0) : app.opt_text + 1;
-			break;
-		case LO_TIMER:
-			ctx.opt_timer = ::strtoul(optarg, NULL, 0);
-			break;
-		case LO_VERBOSE:
-			ctx.opt_verbose = optarg ? ::strtoul(optarg, NULL, 0) : ctx.opt_verbose + 1;
+		case LO_SWAPINDEXSIZE:
+			app.opt_swapIndexSize = ctx.nextPrime(::strtod(optarg, NULL));
 			break;
 
 		case '?':

@@ -78,8 +78,6 @@ struct genpatternContext_t : dbtool_t {
 	const char *opt_load;
 	/// @var {string} --mixed, Consider/accept top-level mixed members only
 	unsigned   opt_mixed;
-	/// @var {string} --safe, Consider/accept safe members only
-	unsigned   opt_safe;
 	/// @var {number} task Id. First task=1
 	unsigned   opt_taskId;
 	/// @var {number} Number of tasks / last task
@@ -127,7 +125,6 @@ struct genpatternContext_t : dbtool_t {
 		opt_taskLast       = 0;
 		opt_load           = NULL;
 		opt_mixed          = 0;
-		opt_safe           = 0;
 		opt_text           = 0;
 		opt_truncate       = 0;
 		opt_wildcard       = 0;
