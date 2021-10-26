@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-10-26 23:44:54 Changed: Improved rebuilding indices during program start.
 2021-10-26 00:34:40 Changed: `genpattern` needs placeholders for inherited copy-paste blocks. 
 2021-10-26 00:27:50 Changed: Recreate indices (shrink-to-fit) when saving.
 2021-10-26 00:07:21 Changed: usage/arguments database generators.
@@ -24,7 +25,7 @@ TODO: genpattern list
 2021-10-24 10:38:55 Changed: `gensignature` database creation.
 2021-10-24 10:38:55 Changed: `gentransform` database creation.
 2021-10-24 01:30:15 Changed: "Enumeration to text" now `std::string`.
-2021-10-24 01:09:11 Changed: Active section detection in `database_t::allocateSections()`.
+2021-10-24 01:09:11 Changed: Active section detection in `database_t::reallocateSections()`.
 2021-10-24 00:00:15 Fixed: Region size `mmap()`/`munmap()` must match.
 2021-10-22 22:13:12 Added: `genmember` core routines `foundTreePattern()` and `addPatternToDatabase()`.
 2021-10-21 21:41:13 Fixed: `dbtool_t::prepareSections()`.

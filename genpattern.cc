@@ -632,16 +632,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	// prepare sections and indices for use
-	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_IMPRINTINDEX |
+	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_SWAPINDEX | database_t::ALLOCMASK_IMPRINTINDEX |
 			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
 	if (db.numImprint <= 1)
 		sections |= database_t::ALLOCMASK_IMPRINT; // rebuild imprints only when missing
-	app.prepareSections(db, app.arg_numNodes, sections);
+		
+	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
 
 	if (db.numSignature <= 1)
 		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
-	if (db.numImprint <= 1)
-		ctx.fatal("Missing/empty imprint section: %s\n", app.arg_inputDatabase);
 
 	// attach database
 	app.connect(db);
@@ -667,6 +666,25 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] Allocated %.3fG memory. freeMemory=%.3fG.\n", ctx.timeAsString(), ctx.totalAllocated / 1e9, info.freeram / 1e9);
 	}
 
+	/*
+	 * Reconstruct indices
+	 */
+
+	// imprints are auto-generated from signatures
+	if (rebuildIndices & database_t::ALLOCMASK_IMPRINT) {
+		// reconstruct imprints based on signatures
+		db.rebuildImprint();
+		rebuildIndices &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+
+	if (rebuildIndices) {
+		db.rebuildIndices(rebuildIndices);
+	}
+
+	/*
+	 * Main 
+	 */
+	
 	if (app.opt_load)
 		app.patternsFromFile();
 	if (app.opt_generate)

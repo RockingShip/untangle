@@ -552,7 +552,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	fprintf(stderr, "WARNING: *** genswap is now integral part of gensignature and will be removed in future releases.\n");
-	
+
 	/*
 	 * None of the outputs may exist
 	 */
@@ -609,22 +609,6 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), dbText.c_str());
 	}
 
-	/*
-	 * apply settings for `--task`
-	 */
-	if (app.opt_taskId || app.opt_taskLast) {
-		// split progress into chunks
-		uint64_t taskSize = db.numSignature / app.opt_taskLast;
-		if (taskSize == 0)
-			taskSize = 1;
-
-		app.opt_sidLo = taskSize * (app.opt_taskId - 1);
-		app.opt_sidHi = taskSize * app.opt_taskId;
-
-		if (app.opt_taskId == app.opt_taskLast)
-			app.opt_sidHi = 0;
-	}
-
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
@@ -632,12 +616,11 @@ int main(int argc, char *argv[]) {
 	uint32_t sections = database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
 	if (db.numImprint <= 1)
 		sections |= database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX; // rebuild imprints only when missing
-	app.prepareSections(db, 4, sections);
+
+	unsigned rebuildIndices = app.prepareSections(db, 4, sections);
 
 	if (db.numSignature <= 1)
 		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
-	if (db.numImprint <= 1)
-		ctx.fatal("Missing/empty imprint section: %s\n", app.arg_inputDatabase);
 
 	// attach database
 	app.connect(db);
@@ -664,8 +647,39 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * All preparations done
-	 * Invoke main entrypoint of application context
+	 * Reconstruct indices
+	 */
+
+	// imprints are auto-generated from signatures
+	if (rebuildIndices & database_t::ALLOCMASK_IMPRINT) {
+		// reconstruct imprints based on signatures
+		db.rebuildImprint();
+		rebuildIndices &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+
+	if (rebuildIndices) {
+		db.rebuildIndices(rebuildIndices);
+	}
+
+	/*
+	 * apply settings for `--task` (needs number of signatures)
+	 */
+	if (app.opt_taskId || app.opt_taskLast) {
+		// split progress into chunks
+		uint64_t taskSize = db.numSignature / app.opt_taskLast;
+		if (taskSize == 0)
+			taskSize = 1;
+
+		app.opt_sidLo = taskSize * (app.opt_taskId - 1);
+		app.opt_sidHi = taskSize * app.opt_taskId;
+
+		if (app.opt_taskId == app.opt_taskLast)
+			app.opt_sidHi = 0;
+	}
+
+
+	/*
+	 * Main 
 	 */
 
 	if (app.opt_load)

@@ -282,7 +282,7 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Allocate sections
 	 */
-	store.allocateSections(database_t::ALLOCMASK_TRANSFORM | database_t::ALLOCMASK_EVALUATOR);
+	store.reallocateSections(database_t::ALLOCMASK_TRANSFORM | database_t::ALLOCMASK_EVALUATOR);
 
 	app.connect(store);
 

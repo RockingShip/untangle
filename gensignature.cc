@@ -780,7 +780,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "[%s] WARNING: add-if-not-found leaks false positives and is considered experimental\n", ctx.timeAsString());
 
 	/*
-	 * Open input and create output database
+	 * Open database for update
 	 */
 
 	// Open input
@@ -816,10 +816,11 @@ int main(int argc, char *argv[]) {
 	 */
 
 	// prepare sections and indices for use
-	app.prepareSections(db, app.arg_numNodes,
-			    database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_SIGNATUREINDEX |
-			    database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
-			    database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX);
+	uint32_t sections =  database_t::ALLOCMASK_SIGNATURE |  database_t::ALLOCMASK_SIGNATUREINDEX |
+			     database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX |
+		             database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_SWAPINDEX;
+
+	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
 
 	// attach database
 	app.connect(db);
@@ -847,8 +848,22 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * All preparations done
-	 * Invoke main entrypoint of application context
+	 * Reconstruct indices
+	 */
+
+	// imprints are auto-generated from signatures
+	if (rebuildIndices & database_t::ALLOCMASK_IMPRINT) {
+		// reconstruct imprints based on signatures
+		db.rebuildImprint();
+		rebuildIndices &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+
+	if (rebuildIndices) {
+		db.rebuildIndices(rebuildIndices);
+	}
+
+	/*
+	 * Main 
 	 */
 
 	if (app.opt_load)

@@ -150,21 +150,21 @@ struct dbtool_t : callable_t {
 	 * Prepare sections.
 	 * Update sizes (for growing) when requested and ensure indices are present.
 	 */
-	void __attribute__((optimize("O0"))) prepareSections(database_t &store, unsigned numNodes, unsigned sections) {
-		unsigned allocSections = 0;
-		unsigned rebuildSections = 0;
+	unsigned __attribute__((optimize("O0"))) prepareSections(database_t &store, unsigned numNodes, unsigned sections) {
+		unsigned allocSections  = 0;
+		unsigned rebuildIndices = 0;
 
 		/*
 		 * Changing ratio invalidates all indices
 		 */
 		if ((int)(this->opt_ratio * 10 + 0.5) != dbtool_t::METRICS_DEFAULT_RATIO) {
-			rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX |
-					   database_t::ALLOCMASK_SWAPINDEX |
-					   database_t::ALLOCMASK_IMPRINTINDEX |
-					   database_t::ALLOCMASK_PAIRINDEX |
-					   database_t::ALLOCMASK_MEMBERINDEX |
-					   database_t::ALLOCMASK_PATTERNFIRSTINDEX |
-					   database_t::ALLOCMASK_PATTERNSECONDINDEX;
+			rebuildIndices |= database_t::ALLOCMASK_SIGNATUREINDEX |
+					  database_t::ALLOCMASK_SWAPINDEX |
+					  database_t::ALLOCMASK_IMPRINTINDEX |
+					  database_t::ALLOCMASK_PAIRINDEX |
+					  database_t::ALLOCMASK_MEMBERINDEX |
+					  database_t::ALLOCMASK_PATTERNFIRSTINDEX |
+					  database_t::ALLOCMASK_PATTERNSECONDINDEX;
 		}
 				
 		/*
@@ -223,7 +223,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
 			}
 			if (store.signatureIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_SIGNATUREINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_SIGNATUREINDEX;
 			}
 		}
 
@@ -284,7 +284,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_SWAPINDEX;
 			}
 			if (store.swapIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_SWAPINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_SWAPINDEX;
 			}
 		}
 
@@ -314,7 +314,7 @@ struct dbtool_t : callable_t {
 
 			// changing interleave invalidates imprints
 			if (store.interleave != origInterleave) {
-				rebuildSections |= database_t::ALLOCMASK_IMPRINT;
+				rebuildIndices |= database_t::ALLOCMASK_IMPRINT;
 			}
 				
 			if (this->opt_maxImprint) {
@@ -366,7 +366,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_IMPRINTINDEX;
 			}
 			if (store.imprintIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_IMPRINTINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_IMPRINTINDEX;
 			}
 		}
 
@@ -426,7 +426,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_PAIRINDEX;
 			}
 			if (store.pairIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_PAIRINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_PAIRINDEX;
 			}
 		}
 
@@ -486,7 +486,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_MEMBERINDEX;
 			}
 			if (store.memberIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_MEMBERINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_MEMBERINDEX;
 			}
 		}
 
@@ -546,7 +546,7 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
 			}
 			if (store.patternFirstIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_PATTERNFIRSTINDEX;
 			}
 		}
 
@@ -606,14 +606,14 @@ struct dbtool_t : callable_t {
 				allocSections |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
 			}
 			if (store.patternSecondIndexSize != origSize) {
-				rebuildSections |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
+				rebuildIndices |= database_t::ALLOCMASK_PATTERNSECONDINDEX;
 			}
 		}
 
 		/*
 		 * Allocate/expand sections
 		 */
-		store.allocateSections(allocSections);
+		store.reallocateSections(allocSections);
 
 		/*
 		 * Initial entries
@@ -654,24 +654,15 @@ struct dbtool_t : callable_t {
 			store.numPatternSecond = 1;
 		}
 
-		/*
-		 * Reconstruct indices
-		 */
-
-		// imprints are auto-generated from signatures
-		if (rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-			// reconstruct imprints based on signatures
-			store.rebuildImprint();
-			rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-		}
-
-		if (rebuildSections) {
-			store.rebuildIndices(allocSections);
-		}
-
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 			fprintf(stderr, "[%s] Storage: interleave=%u  maxSignature=%u signatureIndexSize=%u  maxSwap=%u swapIndexSize=%u  interleave=%u  maxImprint=%u imprintIndexSize=%u  maxPair=%u pairIndexSize=%u  maxMember=%u memberIndexSize=%u  maxPatternFirst=%u patternFirstIndexSize=%u  maxPatternSecond=%u patternSecondIndexSize=%u\n",
 				ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize, store.maxPatternFirst, store.patternFirstIndexSize, store.maxPatternSecond, store.patternSecondIndexSize);
+
+		// reconstruct missing imprints for signatures
+		if (store.numSignature > 1 && store.numImprint <= 1)
+			rebuildIndices |= database_t::ALLOCMASK_IMPRINT;
+
+		return rebuildIndices;
 	}
 
 	/**

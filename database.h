@@ -1083,7 +1083,7 @@ struct database_t {
 	 *
 	 * @param {number} sections - set of sections to process
 	 */
-	void allocateSections(unsigned sections) {
+	void reallocateSections(unsigned sections) {
 		// transform store
 		if (sections & ALLOCMASK_TRANSFORM) {
 			assert(maxTransform > 0);
