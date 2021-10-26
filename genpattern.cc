@@ -534,9 +534,9 @@ int main(int argc, char *argv[]) {
 	 * The list is a signature based rewrite of the original structure.
 	 * `--wildcard` is intended to filter candidate structures, not the sids they represent.
 	 */
-	if (app.opt_load && app.opt_wildcard)
-		ctx.fatal("Combining --wildcard and --load are mutual exclusive\n");
-	if (app.opt_wildcard && app.arg_numNodes < 5)
+//	if (app.opt_load && app.opt_wildcard)
+//		ctx.fatal("Combining --wildcard and --load are mutual exclusive\n");
+	if (!app.opt_wildcard && app.arg_numNodes < 5)
 		fprintf(stderr, "WARNING: Possible missing --wildcard needed for component structures\n");
 	
 	/*
@@ -672,78 +672,17 @@ int main(int argc, char *argv[]) {
 	if (app.opt_generate)
 		app.patternsFromGenerator();
 
-#if 0
 	/*
-	 * Where to look for new candidates
+	 * List result
 	 */
 
-	// if input is empty, skip reserved entries
-	if (!app.readOnlyMode) {
-		assert(store.numMember > 0);
-	}
-
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
-		/*
-		 * Display members of complete dataset
-		 *
-		 * <memberName> <numPlaceholder>
-		 */
-		for (unsigned iMid = 1; iMid < store.numMember; iMid++)
-			printf("%s\n", store.members[iMid].name);
+		printf("placeholder");
 	}
 
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
-		/*
-		 * Display full members, grouped by signature
-		 */
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
-			const signature_t *pSignature = store.signatures + iSid;
-
-			for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
-				member_t *pMember = store.members + iMid;
-
-				printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
-				printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
-
-				uint32_t Qmid = store.pairs[pMember->Qmt].id, Qtid = store.pairs[pMember->Qmt].tid;
-				printf("%u:%s/%u:%.*s\t",
-				       Qmid, store.members[Qmid].name,
-				       Qtid, store.signatures[store.members[Qmid].sid].numPlaceholder, store.fwdTransformNames[Qtid]);
-
-				uint32_t Tmid = store.pairs[pMember->Tmt].id, Ttid = store.pairs[pMember->Tmt].tid;
-				printf("%u:%s/%u:%.*s\t",
-				       Tmid, store.members[Tmid].name,
-				       Ttid, store.signatures[store.members[Tmid].sid].numPlaceholder, store.fwdTransformNames[Ttid]);
-
-				uint32_t Fmid = store.pairs[pMember->Fmt].id, Ftid = store.pairs[pMember->Fmt].tid;
-				printf("%u:%s/%u:%.*s\t",
-				       Fmid, store.members[Fmid].name,
-				       Ftid, store.signatures[store.members[Fmid].sid].numPlaceholder, store.fwdTransformNames[Ftid]);
-
-				for (unsigned i = 0; i < member_t::MAXHEAD; i++)
-					printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
-
-				if (pSignature->flags & signature_t::SIGMASK_SAFE) {
-					if (pMember->flags & member_t::MEMMASK_SAFE)
-						printf("S");
-					else
-						printf("s");
-				}
-				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_KEY)
-					printf("K");
-				if (pMember->flags & member_t::MEMMASK_COMP)
-					printf("C");
-				if (pMember->flags & member_t::MEMMASK_LOCKED)
-					printf("L");
-				if (pMember->flags & member_t::MEMMASK_DEPR)
-					printf("D");
-				if (pMember->flags & member_t::MEMMASK_DELETE)
-					printf("X");
-				printf("\n");
-			}
-		}
+		printf("placeholder");
 	}
-#endif
 	
 	/*
 	 * Save the database

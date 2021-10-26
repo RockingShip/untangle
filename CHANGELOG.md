@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-10-26 00:34:40 Changed: `genpattern` needs placeholders for inherited copy-paste blocks. 
 2021-10-26 00:27:50 Changed: Recreate indices (shrink-to-fit) when saving.
 2021-10-26 00:07:21 Changed: usage/arguments database generators.
 2021-10-25 20:09:46 Fixed: `genpattern` duplicate detection and error handling.
