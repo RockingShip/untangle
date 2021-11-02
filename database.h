@@ -454,7 +454,9 @@ struct database_t {
 	/**
 	 * @date 2020-04-17 00:54:09
 	 *
-	 * Enable versioned memory for selected indices
+	 * Enable versioned memory for selected indices.
+	 * 
+	 * This allows the single-instruction erasing of signature/imprints instead of memzeroing them. 
 	 */
 	inline void enableVersioned(void) {
 
@@ -2570,7 +2572,7 @@ struct database_t {
 		ctx.cntHash++;
 
 		// verify data fits in packed fields
-		assert(idFirst < (1 << 25));
+		assert(idFirst < (1 << 27));
 		assert(sidF < (1 << 20));
 		assert(tidSlotF < (1 << 19));
 
@@ -2621,7 +2623,7 @@ struct database_t {
 		::memset(pPatternSecond, 0, sizeof(*pPatternSecond));
 
 		// verify data fits in packed fields
-		assert(idFirst < (1 << 25));
+		assert(idFirst < (1 << 27));
 		assert(sidF < (1 << 20));
 		assert(tidSlotF < (1 << 19));
 
@@ -3217,7 +3219,7 @@ struct database_t {
 
 			// TODO: Normalise skin
 #if 0
-			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+			for (uint32_t iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
 				uint32_t tid = pSwap->tids[iSwap];
 
 				// get the transform string
