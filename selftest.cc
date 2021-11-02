@@ -1440,6 +1440,128 @@ struct selftestContext_t : dbtool_t {
 			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
+	/*
+	 * @date 2021-10-28 21:06:40
+	 *
+	 * Test that signature-based placeholder swapping covers all slot permutations e consistency of tree comparing.
+	 *
+	 * - For each swap record find a signature using it
+	 * - Apply sid-based swapping
+	 * - Perform an associative lookup
+	 * - Group by uniqueness
+	 * - Each group should have the same resulting slots 
+	 */
+	void performSelfTestSwaps(database_t &db) {
+		unsigned numPassed = 0;
+		
+		/*
+		 * Determine upper limit transform for number of used slots 
+		 */
+		unsigned tidHi[MAXSLOTS];
+
+		assert(MAXSLOTS == 9);
+		tidHi[0] = 0;
+		tidHi[1] = db.lookupTransform("a", db.fwdTransformNameIndex) + 1;
+		tidHi[2] = db.lookupTransform("ba", db.fwdTransformNameIndex) + 1;
+		tidHi[3] = db.lookupTransform("cba", db.fwdTransformNameIndex) + 1;
+		tidHi[4] = db.lookupTransform("dcba", db.fwdTransformNameIndex) + 1;
+		tidHi[5] = db.lookupTransform("edcba", db.fwdTransformNameIndex) + 1;
+		tidHi[6] = db.lookupTransform("fedcba", db.fwdTransformNameIndex) + 1;
+		tidHi[7] = db.lookupTransform("gfedcba", db.fwdTransformNameIndex) + 1;
+		tidHi[8] = db.lookupTransform("hgfedcba", db.fwdTransformNameIndex) + 1;
+		tidHi[9] = MAXTRANSFORM;
+		assert(tidHi[2] == 2 && tidHi[3] == 6 && tidHi[4] == 24 && tidHi[5] == 120 && tidHi[6] == 720 && tidHi[7] == 5040 && tidHi[8] == 40320);
+
+		/*
+		 * create a temporary database for per-signature imprints
+		 */
+		database_t tmpdb(ctx);
+		tmpdb.maxImprint       = MAXTRANSFORM;
+		tmpdb.imprintIndexSize = ctx.nextPrime(tmpdb.maxImprint * 5);
+		tmpdb.reallocateSections(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		// enabled versioned memory
+		tmpdb.enableVersioned();
+
+		/*
+		 * Iterate through all swaps
+		 */
+		tinyTree_t tree(ctx);
+
+		for (uint32_t iSwap = 1; iSwap < db.numSwap; iSwap++) {
+			/*
+			 * find a signature using swap
+			 */
+			uint32_t iSid = 0;
+			for (iSid = 1; iSid < db.numSignature; iSid++) {
+				if (db.signatures[iSid].swapId == iSwap)
+					break;
+			}
+			if (iSid == 0) continue;
+			if (iSid == 0) {
+				printf("{\"error\":\"missing signature for swap\",\"where\":\"%s:%s:%d\",\"iSwap\":%u}\n",
+				       __FUNCTION__, __FILE__, __LINE__, iSwap);
+				exit(1);
+			}
+			signature_t *pSignature = db.signatures + iSid;
+
+			/*
+			 * Reset imprint section
+			 */
+			tmpdb.InvalidateVersioned();
+			tmpdb.numImprint = 1;
+
+			/*
+			 * Find until upper limit for slot permutations
+			 */
+			unsigned high = tidHi[pSignature->numPlaceholder];
+			for (uint32_t iTid = 0; iTid < high; iTid++) {
+				// load tree 
+				tree.loadStringFast(pSignature->name, db.fwdTransformNames[iTid]);
+
+				// evaluate tree
+				tree.eval(this->pEvalFwd);
+
+				// perform swapping
+				uint32_t tidSlot = dbtool_t::sidSwapTid(db, iSid, iTid, db.fwdTransformNames);
+
+				// lookup imprint
+				uint32_t ix = tmpdb.lookupImprint(this->pEvalFwd[tree.root]);
+				if (tmpdb.imprintVersion[ix] != tmpdb.iVersion) {
+					// first time
+					uint32_t iImprint = tmpdb.addImprint(this->pEvalFwd[tree.root]);
+
+					// save sid/tidSlot
+					imprint_t *pImprint = tmpdb.imprints + iImprint;
+					pImprint->sid = iSid;
+					pImprint->tid = tidSlot;
+
+					tmpdb.imprintIndex[ix] = iImprint;
+					tmpdb.imprintVersion[ix] = tmpdb.iVersion;
+				} else {
+					// followups
+					uint32_t iImprint = tmpdb.imprintIndex[ix];
+
+					// verify that all similars share the same tidSlot
+					imprint_t *pImprint = tmpdb.imprints + iImprint;
+					assert(pImprint->sid == iSid);
+					if (pImprint->tid == tidSlot) {
+						numPassed++;
+					} else {
+						printf("{\"error\":\"sidSwapTid() fail\",\"where\":\"%s:%s:%d\",\"swap:\":%u,\"signature\":\"%u:%s\",\",expected\":\"%u:%.*s\",encountered\":\"%u:%.*s\"}\n",
+						       __FUNCTION__, __FILE__, __LINE__,
+						       iSwap, iSid, pSignature->name,
+						       pImprint->tid, pSignature->numPlaceholder, db.fwdTransformNames[pImprint->tid],
+						       tidSlot, pSignature->numPlaceholder, db.fwdTransformNames[tidSlot]);
+//						exit(1);
+					}
+				}
+			}
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+	}
+	
 	/**
 	 * @date 2020-03-24 23:57:51
 	 *
@@ -2082,6 +2204,15 @@ int main(int argc, char *argv[]) {
 	 * Test the tree comparing.
 	 */
 	app.performSelfTestCompare();
+	
+	if (db.numSignature <= 1 || db.numSwap <= 1) {
+		fprintf(stderr, "[%s] Skipping tests that require a database with a `signature`+`swap` section.\n", ctx.timeAsString());
+		exit(1);
+	}
+	/*
+	 * Test that swaps cover all slot permutations
+	 */
+	app.performSelfTestSwaps(db);
 
 	return 0;
 }

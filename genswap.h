@@ -149,11 +149,13 @@ struct genswapContext_t : dbtool_t {
 	uint64_t *swapsWeight;
 	/// @var {number[]} - Weights to assist choosing in case of draws
 	unsigned tidHi[MAXSLOTS + 1];
+	/// @var {database_t} - Temporary database to store/group swap alternatived for `allowDeactivate()`
+	database_t tmpdb;
 
 	/**
 	 * Constructor
 	 */
-	genswapContext_t(context_t &ctx) : dbtool_t(ctx) {
+	genswapContext_t(context_t &ctx) : dbtool_t(ctx), tmpdb(ctx) {
 		// arguments and options
 		opt_force          = 0;
 		opt_generate       = 1;
@@ -175,6 +177,15 @@ struct genswapContext_t : dbtool_t {
 		swapsWeight   = (uint64_t *) ctx.myAlloc("genswapContext_t::swapsWeight", MAXTRANSFORM, sizeof(*swapsWeight));
 		for (unsigned j = 0; j <= MAXSLOTS; j++)
 			tidHi[j] = 0;
+		
+		/*
+		 * prepare tmpdb
+		 */
+		tmpdb.maxImprint       = MAXTRANSFORM;
+		tmpdb.imprintIndexSize = ctx.nextPrime(tmpdb.maxImprint * 5);
+		tmpdb.reallocateSections(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+		// enabled versioned memory
+		tmpdb.enableVersioned();
 	}
 
 	/**
@@ -238,42 +249,49 @@ struct genswapContext_t : dbtool_t {
 		}
 	}
 
-
 	/**
 	 * @date 2020-05-04 23:54:12
 	 *
 	 * Given a list of Transforms, some deactivated by having their IBIT set.
-	 * Apply transform to collection to find pairs.
-	 * Flag better half of pair to pass to next round.
+	 * Apply transform to collection to determine if the results are redundant
+	 * Mark the result after collecting
 	 *
-	 * @param {signature_t} pSignature - signature for `--text` mode
-	 * @param {number} tidFocus - which transform to use
-	 * @param {number} numFound - total number of transforms
-	 * @param {number[]} pFound - list of transforms
-	 * @return {number} - number of transforms still active
+	 * @param {uint32_t} tidPrime - which transform to use
+	 * @param {numEntry} numEntry - total number of transforms
+	 * @param {uint32_t[]} pEntry - list of transforms
+	 * @return {number} - number of entries still active
 	 */
-	unsigned countNextActive(const signature_t *pSignature, unsigned tidFocus, unsigned numFound, uint32_t *pFound) {
+	unsigned __attribute__((optimize("O0"))) countNextActive(uint32_t tidPrime, unsigned numSwaps, uint32_t *pSwap) {
 		// result
 		unsigned numActiveNext = 0;
 
 		// bump version number
 		this->iVersion++;
 
-		// get name of selected transform
-		const char *pFocus = pStore->fwdTransformNames[tidFocus];
+		// get name of request prime transform
+		const char *pPrime = pStore->fwdTransformNames[tidPrime];
 
-		for (unsigned j = 0; j < numFound; j++) {
-			// get transform
-			unsigned   tidOrig = pFound[j];
-			const char *pOrig  = pStore->fwdTransformNames[tidOrig & ~IBIT];
+		for (unsigned j = 0; j < numSwaps; j++) {
+			// get original entry
+			unsigned   tidOrig = pSwap[j] & ~IBIT;
 
 			// apply transform to slots
-			unsigned   tidSwapped = pStore->lookupTransformSlot(pOrig, pFocus, pStore->fwdTransformNameIndex);
+			const char *pOrig     = pStore->fwdTransformNames[tidOrig];
+			unsigned   tidSwapped = pStore->lookupTransformSlot(pOrig, pPrime, pStore->fwdTransformNameIndex);
 			const char *pSwapped  = pStore->fwdTransformNames[tidSwapped];
 
-			// skip if disabled
-			if (tidOrig & IBIT)
-				continue;
+			/*
+			 * The result must already be present as a permutation within the collection, otherwise `tidPrime` is invalid
+			 */
+			bool found = false;
+			for (unsigned k = 0; k < numSwaps; k++) {
+				if ((pSwap[k] & ~IBIT) == tidSwapped) {
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				return 0;
 
 			/*
 			 * Compare pOrig/pSwap
@@ -300,29 +318,77 @@ struct genswapContext_t : dbtool_t {
 			} else {
 				assert(0);
 			}
-
-			if (opt_text == OPTTEXT_COMPARE && pSignature) {
-				// test if `pSwap` becomes active again
-				if (cmp < 0)
-					cmp = '<';
-				else if (cmp > 0)
-					cmp = '>';
-				else
-					assert(0);
-
-				printf("%u\t%s\t%s\t%c\t%.*s\t%.*s\n",
-				       (unsigned) (pSignature - pStore->signatures),
-				       pSignature->name,
-				       pFocus,
-				       cmp,
-				       pSignature->numPlaceholder, pOrig,
-				       pSignature->numPlaceholder, pSwapped);
-			}
-
 		}
 
 		return numActiveNext;
 	}
+
+	/*
+	 * @date 2021-10-29 11:54:57
+	 * 
+	 * Test if deactivating a swap-tid will render the remaining set invalid
+	 * Based on `selftest.cc:performSelfTestSwaps()`
+	 * 
+	 * NOTE: only the active elements are used
+	 * 
+	 * WARNING: CPU intensive
+	 */
+	bool __attribute__((optimize("O0"))) allowDeactivate(uint32_t sid, unsigned numSwaps, uint32_t *pSwap, uint32_t excludeTid) {
+		signature_t *pSignature = pStore->signatures + sid;
+
+		/*
+		 * Iterate through all swaps
+		 */
+		tinyTree_t tree(ctx);
+
+		/*
+		 * Reset imprint section
+		 */
+		tmpdb.InvalidateVersioned();
+		tmpdb.numImprint = 1;
+
+		/*
+		 * Find until upper limit for slot permutations
+		 */
+		unsigned high = tidHi[pSignature->numPlaceholder];
+		for (uint32_t iTid = 0; iTid < high; iTid++) {
+			// load tree 
+			tree.loadStringFast(pSignature->name, pStore->fwdTransformNames[iTid]);
+
+			// evaluate tree
+			tree.eval(pStore->fwdEvaluator);
+
+			// perform swapping
+			uint32_t tidSlot = dbtool_t::sidSwapTidList(*pStore, iTid, pSignature->numPlaceholder, numSwaps, pSwap, excludeTid);
+
+			// lookup imprint
+			uint32_t ix = tmpdb.lookupImprint(pStore->fwdEvaluator[tree.root]);
+			if (tmpdb.imprintVersion[ix] != tmpdb.iVersion) {
+				// first time
+				uint32_t iImprint = tmpdb.addImprint(pStore->fwdEvaluator[tree.root]);
+
+				// save sid/tidSlot
+				imprint_t *pImprint = tmpdb.imprints + iImprint;
+				pImprint->sid = sid;
+				pImprint->tid = tidSlot;
+
+				tmpdb.imprintIndex[ix] = iImprint;
+				tmpdb.imprintVersion[ix] = tmpdb.iVersion;
+			} else {
+				// followups
+				uint32_t iImprint = tmpdb.imprintIndex[ix];
+
+				// verify that all synonyms share the same tidSlot
+				imprint_t *pImprint = tmpdb.imprints + iImprint;
+				assert(pImprint->sid == sid);
+				if (pImprint->tid != tidSlot)
+					return false;
+			}
+		}
+
+		return true;
+	}
+
 
 	/**
 	 * @date 2020-05-02 23:06:26
@@ -337,7 +403,7 @@ struct genswapContext_t : dbtool_t {
 	 * @param {signature_t} pName - signature requiring swaps
 	 * @return {number} swapId
 	 */
-	unsigned foundSignatureSwap(const char *pName) {
+	unsigned __attribute__((optimize("O0"))) foundSignatureSwap(const char *pName) {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 			int perSecond = ctx.updateSpeed();
@@ -386,6 +452,7 @@ struct genswapContext_t : dbtool_t {
 		tree.loadStringFast(pSignature->name);
 
 		// put untransformed result in reverse transform
+		// NOTE: `fwdEvaluator[0]` is identical to `revEvaluator[0]` 
 		tree.eval(pStore->revEvaluator);
 
 		this->iVersion++;
@@ -412,118 +479,66 @@ struct genswapContext_t : dbtool_t {
 			return 0;
 
 		/*
-		 * Record to populate
+		 * Result
 		 */
+		
 		swap_t swap;
-		::memset(&swap, 0, sizeof(swap));
 		unsigned numEntry = 0;
+		::memset(&swap, 0, sizeof(swap));
+
+		assert(numSwaps > 0 && this->swapsFound[0] == 0);
 
 		/*
-		 * Validate if condensing is possible:
-		 *
-		 * For each transform in collection:
-		 * - apply selected transform to every other collection item including self.
-		 * - all transformed should be present in collection.
+		 * Scan through all transforms.
+		 * For those that are capable of condensing the collection,
+		 * Disable active entries that do not break the collection
 		 */
+		for (unsigned iSwap = 1; iSwap < numSwaps; iSwap++) {
+			uint32_t tidPrime = this->swapsFound[iSwap];
 
-		for (unsigned iSelect = 0; iSelect < numSwaps; iSelect++) {
-			unsigned tidSelect = this->swapsFound[iSelect];
-
-			// selected may not be transparent (tid=0) because it has no effect
-			if (tidSelect == 0)
+			// ignore disabled entries
+			if (tidPrime & IBIT)
 				continue;
 
-			const char *pSelect = pStore->fwdTransformNames[tidSelect];
-			bool       okay     = true;
+			// does the entry have the capability to condense the collection
+			unsigned activeLeft = this->countNextActive(tidPrime, numSwaps, this->swapsFound);
+			if (activeLeft == 0)
+				continue; // the resulting collection is invalid
 
-			/*
-			 * apply selected transform to collection and locate pair
-			 */
-			for (unsigned j = 0; j < numSwaps; j++) {
-				unsigned   tidOrig    = this->swapsFound[j] & ~IBIT;
-				const char *pOrig     = pStore->fwdTransformNames[tidOrig];
-				unsigned   tidSwapped = pStore->lookupTransformSlot(pOrig, pSelect, pStore->fwdTransformNameIndex);
+			// disable orphaned entried if possible	
+			for (unsigned iOrphan = 1; iOrphan < numSwaps; iOrphan++) {
+				unsigned tidOrphan = this->swapsFound[iOrphan];
 
-				// test if other half pair present
-				if (this->swapsActive[tidSwapped] != iVersion)
-					okay = false;
-			}
+				if (tidOrphan & IBIT)
+					continue; // already orphaned
+				if (this->swapsActive[tidOrphan] == this->iVersion)
+					continue; // not orphaned
+				if (tidOrphan == tidPrime)
+					continue; // do not disable self
 
-			if (!okay) {
 				/*
-					 * @date 2020-05-04 11:30:06
-					 * Turns out this never happens so coding assumes this to be true.
+				 * verify that the runtime `compare()` can reach all permutations  
+				 * `allowDeactivate()` is horribly expensive, so delay as long as possible
 				 */
-				assert(0);
+				if (allowDeactivate(sid, numSwaps, this->swapsFound, /*excludeTid=*/ tidOrphan))
+					this->swapsFound[iOrphan] |= IBIT;
 			}
 		}
 
 		/*
-		 * Find a transform that maximise the disabling of other permutations
+		 * Add active tids to result
 		 */
-
-		for (unsigned iRound = 0;; iRound++) {
-
-			/*
-			 * NOTE: consider all swaps including those disabled because this allows the possibility that some transforms can be applied multiple times
-			 */
-			unsigned      bestTid   = 0;
-			unsigned      bestCount = 0;
-			for (unsigned iFocus    = 0; iFocus < numSwaps; iFocus++) {
-				unsigned tidFocus = this->swapsFound[iFocus] & ~IBIT;
-				if (tidFocus == 0)
-					continue; // skip transparent or disabled transform
-
-				// calculate number active left after applying selected transform
-				unsigned activeLeft = this->countNextActive(pSignature, tidFocus, numSwaps, this->swapsFound);
-
-				// remember which is best
-				if (bestTid == 0 || activeLeft < bestCount || (activeLeft == bestCount && swapsWeight[tidFocus] < swapsWeight[bestTid])) {
-					bestTid   = tidFocus;
-					bestCount = activeLeft;
-				}
+		for (unsigned iSwap = 1; iSwap < numSwaps; iSwap++) {
+			if (!(this->swapsFound[iSwap] & IBIT)) {
+				assert(numEntry < swap_t::MAXENTRY);
+				swap.tids[numEntry++] = this->swapsFound[iSwap];
 			}
-			assert(bestCount);
-
-			// apply best transform
-			this->countNextActive(pSignature, bestTid, numSwaps, this->swapsFound);
-
-			// apply result
-			for (unsigned iFocus = 0; iFocus < numSwaps; iFocus++) {
-				unsigned tidFocus = this->swapsFound[iFocus];
-
-				if (this->swapsActive[tidFocus & ~IBIT] == this->iVersion) {
-					// focus remains active
-					this->swapsFound[iFocus] &= ~IBIT;
-				} else {
-					// focus becomes inactive
-					this->swapsFound[iFocus] |= IBIT;
-				}
-			}
-
-			// add to record (if not found)
-			assert(numEntry < swap_t::MAXENTRY);
-			bool found = false;
-
-			for (unsigned j = 0; j < numEntry && swap.tids[j]; j++) {
-				if (swap.tids[j] == bestTid)
-					found = true;
-			}
-			if (!found)
-				swap.tids[numEntry++] = bestTid;
-
-			if (bestCount == 1)
-				break;
 		}
 
 		if (opt_text == OPTTEXT_WON) {
-			printf("%s\t", pSignature->name);
-
-			for (unsigned j = 0; j < swap_t::MAXENTRY && swap.tids[j]; j++)
-				printf("\t%u", swap.tids[j]);
-
-			printf("\n");
+			printf("%s\n", pSignature->name);
 		}
+
 
 		// add to database
 		if (!this->readOnlyMode) {

@@ -600,9 +600,9 @@ struct genpatternContext_t : dbtool_t {
 		/*
 		 * Sid-swap endpoints as the run-time would do
 		 */
-		tidQ = this->sidSwapTid(sidQ, tidQ, pStore->fwdTransformNames);
-		tidT = this->sidSwapTid(sidT, tidT, pStore->fwdTransformNames);
-		tidF = this->sidSwapTid(sidF, tidF, pStore->fwdTransformNames);
+		tidQ = dbtool_t::sidSwapTid(*pStore, sidQ, tidQ, pStore->fwdTransformNames);
+		tidT = dbtool_t::sidSwapTid(*pStore, sidT, tidT, pStore->fwdTransformNames);
+		tidF = dbtool_t::sidSwapTid(*pStore, sidF, tidF, pStore->fwdTransformNames);
 
 		/*
 		 * Validate
@@ -639,101 +639,12 @@ struct genpatternContext_t : dbtool_t {
 //			printf("./eval \"%s\" \"%s\"\n", name, pStore->signatures[sidR].name);
 		}
 
-		/*
-		 * Get name.
-		 */
-		if (opt_text == OPTTEXT_COMPARE) {
-
-			// progress sidQ tidQ sidT tidT sidF tidF sidR treeR
-
-			printf("%lu\t%u:%s\t%u:%.*s\t%u:%s%s\t%u:%.*s\t%u:%s\t%u:%.*s\t%u:%s\t%s\n",
-			       ctx.progress,
-
-			       sidQ, pStore->signatures[sidQ].name,
-			       tidQ, pStore->signatures[sidQ].numPlaceholder, pStore->fwdTransformNames[tidQ],
-
-			       sidT, pStore->signatures[sidT].name,
-			       tlTi ? "~" : "",
-			       tidT, pStore->signatures[sidT].numPlaceholder, pStore->fwdTransformNames[tidT],
-
-			       sidF, pStore->signatures[sidF].name,
-			       tidF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidF],
-
-			       sidR, pStore->signatures[sidR].name, pNameR);
-		}
-
 		if (tlTi)
 			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
 		else
 			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
 
 		return true;
-	}
-
-	/*
-	 * @date 2021-10-26 23:39:23
-	 * 
-	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering
-	 * `fwdTransformNames` is `fwd` when adding to `slotsR`, and `rev` when extracting from `slotsR`.
-	 */
-	uint32_t sidSwapTid(uint32_t sid, uint32_t tid, transformName_t *fwdTransformNames) {
-		signature_t *pSignature = pStore->signatures + sid;
-
-		// fill simple slots for comparing
-		char slots[MAXSLOTS + 1];
-		memcpy(slots, pStore->fwdTransformNames[tid], MAXSLOTS + 1);
-
-		if (pSignature->swapId == 0) {
-			/*
-			 * @date 2021-10-25 19:58:38
-			 * Do not return verbatim tid as it needs to be truncated to match the active part of the signature
-			 */
-			slots[pSignature->numPlaceholder] = 0;
-			return pStore->lookupFwdTransform(slots);
-		}
-
-		// get signature
-		swap_t *pSwap = pStore->swaps + pSignature->swapId;
-
-		bool changed;
-		do {
-			changed = false;
-
-			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
-				tid = pSwap->tids[iSwap];
-
-				// get the transform string
-				const char *pTransformStr = fwdTransformNames[tid];
-
-				// test if swap needed
-				bool needSwap = false;
-
-				for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-					if (slots[i] > slots[pTransformStr[i] - 'a']) {
-						needSwap = true;
-						break;
-					}
-					if (slots[i] < slots[pTransformStr[i] - 'a']) {
-						needSwap = false;
-						break;
-					}
-				}
-
-				if (needSwap) {
-					char newSlots[MAXSLOTS];
-
-					for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-						newSlots[i] = slots[pTransformStr[i] - 'a'];
-
-					memcpy(slots, newSlots, pSignature->numPlaceholder);
-
-					changed = true;
-				}
-			}
-		} while (changed);
-
-		slots[pSignature->numPlaceholder] = 0;
-		return pStore->lookupFwdTransform(slots);
 	}
 
 	/*
@@ -876,7 +787,7 @@ struct genpatternContext_t : dbtool_t {
 		 * @date 2021-10-25 15:36:47
 		 * There should be a total of 4 calls to `sidSwapTid()`.
 		 */
-		tidSlotR = this->sidSwapTid(sidR, tidSlotR, pStore->revTransformNames);
+		tidSlotR = dbtool_t::sidSwapTid(*pStore, sidR, tidSlotR, pStore->revTransformNames);
 
 		/*
 		 * Add to database

@@ -1466,6 +1466,133 @@ struct dbtool_t : callable_t {
 			}
 		}
 	}
+
+	/*
+	 * @date 2021-10-26 23:39:23
+	 * 
+	 * Given a sid/tid pair, update tid so that it represents the state of the run-time ordering
+	 * `fwdTransformNames` is `fwd` when adding to `slotsR`, and `rev` when extracting from `slotsR`.
+	 */
+	static uint32_t sidSwapTid(database_t &db, uint32_t sid, uint32_t tid, transformName_t *fwdTransformNames) {
+		signature_t *pSignature = db.signatures + sid;
+
+		// fill simple slots for comparing
+		char slots[MAXSLOTS + 1];
+		memcpy(slots, db.fwdTransformNames[tid], MAXSLOTS + 1);
+
+		if (pSignature->swapId == 0) {
+			/*
+			 * @date 2021-10-25 19:58:38
+			 * Do not return verbatim tid as it needs to be truncated to match the active part of the signature
+			 */
+			slots[pSignature->numPlaceholder] = 0;
+			return db.lookupFwdTransform(slots);
+		}
+
+		// get signature
+		swap_t *pSwap = db.swaps + pSignature->swapId;
+
+		bool changed;
+		do {
+			changed = false;
+
+			for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+				tid = pSwap->tids[iSwap];
+
+				// get the transform string
+				const char *pTransformStr = fwdTransformNames[tid]; // NOTE: this is a parameter
+
+				// test if swap needed
+				bool needSwap = false;
+
+				// to swap or not to swap...
+				for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+					if (slots[i] > slots[pTransformStr[i] - 'a']) {
+						needSwap = true;
+						break;
+					}
+					if (slots[i] < slots[pTransformStr[i] - 'a']) {
+						needSwap = false;
+						break;
+					}
+				}
+
+				if (needSwap) {
+					char newSlots[MAXSLOTS];
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+						newSlots[i] = slots[pTransformStr[i] - 'a'];
+
+					memcpy(slots, newSlots, pSignature->numPlaceholder);
+
+					changed = true;
+				}
+			}
+		} while (changed);
+
+		slots[pSignature->numPlaceholder] = 0;
+		return db.lookupFwdTransform(slots);
+	}
+
+	/*
+	 * @date 2021-10-26 23:39:23
+	 * 
+	 * Find a transform, that when applied, is also a member of the permutation
+	 * With multiple candidates, select the least "complex" (less/shorter cycles)
+	 * Register the transform as (entry) as permutation (instruction)
+	 * Disable the transforms that fail the compare.
+	 */
+	static uint32_t __attribute__((optimize("O0"))) sidSwapTidList(database_t &db, uint32_t tid, unsigned tidLen, unsigned numSwap, uint32_t *pSwap, uint32_t excludeTid = 0) {
+		// fill simple slots for comparing
+		char slots[MAXSLOTS + 1];
+		memcpy(slots, db.fwdTransformNames[tid], MAXSLOTS + 1);
+
+		bool changed;
+		do {
+			changed = false;
+
+			for (unsigned iSwap = 1; iSwap < numSwap; iSwap++) {
+				// get transform
+				unsigned   tid = pSwap[iSwap];
+				// skip if disabled
+				if ((tid & IBIT) || tid == excludeTid)
+					continue;
+
+				// get the transform string
+				const char *pTransformStr = db.fwdTransformNames[tid];
+
+				// test if swap needed
+				bool needSwap = false;
+
+				// to swap or not to swap...
+				for (unsigned i = 0; i < tidLen; i++) {
+					if (slots[i] > slots[pTransformStr[i] - 'a']) {
+						needSwap = true;
+						break;
+					}
+					if (slots[i] < slots[pTransformStr[i] - 'a']) {
+						needSwap = false;
+						break;
+					}
+				}
+
+				if (needSwap) {
+					char newSlots[MAXSLOTS];
+
+					for (unsigned i = 0; i < tidLen; i++)
+						newSlots[i] = slots[pTransformStr[i] - 'a'];
+
+					memcpy(slots, newSlots, tidLen);
+
+					changed = true;
+				}
+			}
+		} while (changed);
+
+		slots[tidLen] = 0;
+		return db.lookupFwdTransform(slots);
+	}
+
 };
 
 #endif

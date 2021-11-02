@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-02 02:11:22 Serious: `genswap_t` missing entries and added selftest.
 2021-11-02 01:30:42 Added: `genpattern --fast` to skip saninty checks during `--load`.
 2021-11-02 00:10:59 Changed: Length of `patternSecond_t::idFirst` increased to 27 bits. No version nummer bump.
 2021-11-02 00:02:34 Fixed: Connect database to application as last before main. 
@@ -34,8 +35,8 @@ TODO: genpattern list
 2021-10-22 22:13:12 Added: `genmember` core routines `foundTreePattern()` and `addPatternToDatabase()`.
 2021-10-21 21:41:13 Fixed: `dbtool_t::prepareSections()`.
 2021-10-21 21:39:50 Added: `tinyTree_t::addStringFast()`.
-2021-10-21 21:36:00 Fixed: Minor `patternFirst`/`patternSecond` tweaks.
-2021-10-21 21:32:30 Fixed: Serious `patternFirst`/`patternSecond` fixes.
+2021-10-21 21:36:00 Fixed: `patternFirst`/`patternSecond` tweaks.
+2021-10-21 21:32:30 Serious: `patternFirst`/`patternSecond` fixes.
 2021-10-20 12:35:44 Added: `genpattern` skeleton. 
 2021-10-19 23:03:00 Fixed: `dbtool_t::prepareSections()`.
 2021-10-18 23:14:20 Added: `dbtool_t::prepareSections()` for replacing opening database as "read-modify-write" with "update/append".  
