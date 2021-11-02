@@ -822,10 +822,6 @@ int main(int argc, char *argv[]) {
 
 	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
 
-	// attach database
-	app.connect(db);
-	appSwap.connect(db);
-
 	/*
 	 * Finalise allocations and create database
 	 */
@@ -865,6 +861,10 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Main 
 	 */
+
+	// attach database
+	app.connect(db);
+	appSwap.connect(db);
 
 	if (app.opt_load)
 		app.signaturesFromFile();

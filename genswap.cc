@@ -622,9 +622,6 @@ int main(int argc, char *argv[]) {
 	if (db.numSignature <= 1)
 		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
 
-	// attach database
-	app.connect(db);
-
 	/*
 	 * Finalise allocations and create database
 	 */
@@ -681,6 +678,9 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Main 
 	 */
+
+	// attach database
+	app.connect(db);
 
 	if (app.opt_load)
 		app.swapsFromFile();

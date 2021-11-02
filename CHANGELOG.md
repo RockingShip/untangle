@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-02 00:02:34 Fixed: Connect database to application as last before main. 
 2021-10-26 23:48:02 Fixed: `genpattern` sid based placeholder swapping for `tidR`.
 2021-10-26 23:44:54 Changed: Improved rebuilding indices during program start.
 2021-10-26 00:34:40 Changed: `genpattern` needs placeholders for inherited copy-paste blocks.
