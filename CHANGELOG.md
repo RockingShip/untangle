@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-02 01:30:42 Added: `genpattern --fast` to skip saninty checks during `--load`.
 2021-11-02 00:10:59 Changed: Length of `patternSecond_t::idFirst` increased to 27 bits. No version nummer bump.
 2021-11-02 00:02:34 Fixed: Connect database to application as last before main. 
 2021-10-26 23:48:02 Fixed: `genpattern` sid based placeholder swapping for `tidR`.

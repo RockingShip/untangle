@@ -143,7 +143,7 @@ struct genswapContext_t : dbtool_t {
 	unsigned skipDuplicate;
 	/// @var {number[]} - Versioned memory of active swaps/transforms
 	uint32_t *swapsActive;
-	/// @var {number[]} - List of found swaps/transforms for signature under investigation. IBET set indicates they are disabled
+	/// @var {number[]} - List of found swaps/transforms for signature under investigation. IBIT set indicates they are disabled
 	uint32_t *swapsFound;
 	/// @var {number[]} - Versioned memory of active swaps/transforms
 	uint64_t *swapsWeight;

@@ -70,6 +70,8 @@ struct genpatternContext_t : dbtool_t {
 	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
+	/// @var {number} --fast, fast load patterns by calling `addPatternDatabase()` directly. 
+	unsigned   opt_fast;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -110,6 +112,10 @@ struct genpatternContext_t : dbtool_t {
 	uint64_t    truncated;
 	/// @var {number} Name of signature causing overflow
 	char        truncatedName[tinyTree_t::TINYTREE_NAMELEN + 1];
+	/// @var {number} Sid lookup table for endpoints and `lookupImprintAssociative()`
+	uint32_t    fastLookupSid[tinyTree_t::TINYTREE_NSTART];
+	/// @var {number} Tid lookup table for endpoints and `lookupImprintAssociative()`
+	uint32_t    fastLookupTid[tinyTree_t::TINYTREE_NSTART];
 
 	/**
 	 * Constructor
@@ -148,6 +154,28 @@ struct genpatternContext_t : dbtool_t {
 	 */
 	void connect(database_t &db) {
 		this->pStore = &db;
+
+		/*
+		 * @date 2021-10-25 11:44:55
+		 * sid/tid lookup tables for endpoints, to avoid calling `lookupImprintAssociative()`
+		 */
+
+		// Initialise lookup table
+		if (fastLookupSid[0] == 0) {
+			uint32_t ix = pStore->lookupSignature("0");
+			fastLookupSid[0] = pStore->signatureIndex[ix];
+			fastLookupTid[0] = 0;
+			assert(fastLookupSid[0] != 0);
+
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+				char name[2] = {(char) ('a' + iSlot), 0};
+
+				uint32_t ix = pStore->lookupSignature("a");
+				fastLookupSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
+				fastLookupTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
+				assert(fastLookupSid[tinyTree_t::TINYTREE_KSTART] != 0);
+			}
+		}
 	}
 
 	/*
@@ -284,31 +312,6 @@ struct genpatternContext_t : dbtool_t {
 						return true;
 					}
 				}
-			}
-		}
-
-		/*
-		 * @date 2021-10-25 11:44:55
-		 * sid/tid lookup tables for endpoints, to avoid calling `lookupImprintAssociative()`
-		 */
-
-		static uint32_t fastLookupSid[tinyTree_t::TINYTREE_NSTART];
-		static uint32_t fastLookupTid[tinyTree_t::TINYTREE_NSTART];
-
-		// Initialise lookup table
-		if (fastLookupSid[0] == 0) {
-			uint32_t ix = pStore->lookupSignature("0");
-			fastLookupSid[0] = pStore->signatureIndex[ix];
-			fastLookupTid[0] = 0;
-			assert(fastLookupSid[0] != 0);
-
-			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-				char name[2] = {(char) ('a' + iSlot), 0};
-
-				uint32_t ix = pStore->lookupSignature("a");
-				fastLookupSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
-				fastLookupTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
-				assert(fastLookupSid[tinyTree_t::TINYTREE_KSTART] != 0);
 			}
 		}
 
@@ -762,6 +765,26 @@ struct genpatternContext_t : dbtool_t {
 		char     beenWhat[tinyTree_t::TINYTREE_NEND]; // endpoint in resulting `slotsR[]`
 		uint32_t nextSlot  = 0;
 		
+		if (opt_text == OPTTEXT_COMPARE) {
+
+			// progress sidQ tidQ sidT tidT sidF tidF sidR treeR
+
+			printf("%lu\t%u:%s\t%u:%.*s\t%u:%s%s\t%u:%.*s\t%u:%s\t%u:%.*s\t%u:%s\t%s\n",
+			       ctx.progress,
+
+			       sidQ, pStore->signatures[sidQ].name,
+			       tidQ, pStore->signatures[sidQ].numPlaceholder, pStore->fwdTransformNames[tidQ],
+
+			       sidT, pStore->signatures[sidT & ~IBIT].name,
+			       (sidT & IBIT) ? "~" : "",
+			       tidT, pStore->signatures[sidT & ~IBIT].numPlaceholder, pStore->fwdTransformNames[tidT],
+
+			       sidF, pStore->signatures[sidF].name,
+			       tidF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidF],
+
+			       sidR, pStore->signatures[sidR].name, pNameR);
+		}
+
 		/*
 		 * Slot population as `fragmentTree_t` would do
 		 */
@@ -905,12 +928,12 @@ struct genpatternContext_t : dbtool_t {
 				 * Be very verbose.
 				 * This is a very nasty situation that may arise hours into the run.
 				 */
-				fprintf(stderr, "ERROR: addPatternToDatabase progress=%lu name=%s idFirst=%u idSecond=%u "
-						"oldSidR=%u:%s sidR=%u:%s "
-						"oldTidSlotR=%u:%.*s tidSlotR=%u:%.*s "
-						"sidQ=%u:%s tidQ=%u:%.*s sidT=%u:%s%s tidT=%u:%.*s sidF=%u:%s tidF=%u:%.*s "
-						"tidSlotT=%u:%.*s tidSlotF=%u:%.*s  "
-						"slotsQ=%s slotsT=%s slotsF=%s slotsR=%s\n",
+				fprintf(stderr, "{\"error\":\"addPatternToDatabase\",\"progress\":\"%lu\",\"name\":\"%s\",\"idFirst\":\"%u\",\"idSecond\":\"%u\","
+						"\"oldSidR\":\"%u:%s\",\"sidR:%u:%s\","
+						"\"oldTidSlotR\":\"%u:%.*s\",\"tidSlotR:%u:%.*s\","
+						"\"sidQ\":\"%u:%s\",\"tidQ\":\"%u:%.*s\",\"sidT\":\"%u:%s%s\",\"tidT\":\"%u:%.*s\",\"sidF:%u:%s\",\"tidF\":\"%u:%.*s\","
+						"\"tidSlotT\":\"%u:%.*s\",\"tidSlotF\":\"%u:%.*s\","
+						"\"slotsQ\":\"%s\",\"slotsT\":\"%s\",\"slotsF\":\"%s\",\"slotsR:%s\"}\n",
 					ctx.progress, pNameR, idFirst, idSecond,
 
 					patternSecond->sidR, pStore->signatures[patternSecond->sidR].name,
@@ -1074,8 +1097,87 @@ struct genpatternContext_t : dbtool_t {
 			 * call `foundTreePattern()`
 			 */
 
-			if (!foundTreePattern(tree, name, newPlaceholder, newEndpoint, newBackRef))
-				break;
+			if (!opt_fast) {
+				if (!foundTreePattern(tree, name, newPlaceholder, newEndpoint, newBackRef))
+					break;
+			} else {
+				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+					int perSecond = ctx.updateSpeed();
+
+					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
+							ctx.timeAsString(), ctx.progress, perSecond,
+							pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
+							pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
+							skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, name);
+					} else {
+						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+						int etaH = eta / 3600;
+						eta %= 3600;
+						int etaM = eta / 60;
+						eta %= 60;
+						int etaS = eta;
+
+
+						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) |  skipDuplicate=%u | hash=%.3f %s",
+							ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
+							pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
+							pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
+							skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, name);
+					}
+
+					if (ctx.restartTick) {
+						// passed a restart point
+						fprintf(stderr, "\n");
+						ctx.restartTick = 0;
+					}
+
+					ctx.tick = 0;
+				}
+
+				uint32_t R    = tree.root;
+				uint32_t tlQ  = tree.N[R].Q;
+				uint32_t tlTi = tree.N[R].T & IBIT;
+				uint32_t tlTu = tree.N[R].T & ~IBIT;
+				uint32_t tlF  = tree.N[R].F;
+
+				uint32_t sidR = 0, sidQ = 0, sidT = 0, sidF = 0;
+				uint32_t tidR = 0, tidQ = 0, tidT = 0, tidF = 0;
+
+				pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidR, &tidR, R);
+
+				if (tlQ < tinyTree_t::TINYTREE_NSTART) {
+					sidQ = fastLookupSid[tlQ];
+					tidQ = fastLookupTid[tlQ];
+				} else {
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidQ, &tidQ, tlQ);
+				}
+				if (tlTu < tinyTree_t::TINYTREE_NSTART) {
+					sidT = fastLookupSid[tlTu];
+					tidT = fastLookupTid[tlTu];
+				} else {
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidT, &tidT, tlTu);
+				}
+				if (tlTu != tlF) {
+					// ignore F double reference when T==F
+					if (tlF < tinyTree_t::TINYTREE_NSTART) {
+						sidF = fastLookupSid[tlF];
+						tidF = fastLookupTid[tlF];
+					} else {
+						pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidF, &tidF, tlF);
+					}
+				}
+
+				if (tlTu == tlF) {
+					assert(tlTi);
+					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidT, tidT);
+				} else if (tlTi) {
+					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
+				} else {
+					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
+				}
+			}
 
 			ctx.progress++;
 		}

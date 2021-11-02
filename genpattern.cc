@@ -103,6 +103,7 @@ void usage(char *argv[], bool verbose) {
 
 	if (verbose) {
 		fprintf(stderr, "\n");
+		fprintf(stderr, "\t   --fast                          Disable sanity checks during `--load=`\n");
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
@@ -171,6 +172,7 @@ int main(int argc, char *argv[]) {
 			LO_VERSION = 'V',
 			// long opts
 			LO_DEBUG = 1,
+			LO_FAST,
 			LO_FORCE,
 			LO_GENERATE,
 			LO_LOAD,
@@ -218,6 +220,7 @@ int main(int argc, char *argv[]) {
 			/* name, has_arg, flag, val */
 			// short options
 			{"debug",              1, 0, LO_DEBUG},
+			{"fast",               0, 0, LO_FAST},
 			{"force",              0, 0, LO_FORCE},
 			{"help",               0, 0, LO_HELP},
 			{"quiet",              2, 0, LO_QUIET},
@@ -319,6 +322,9 @@ int main(int argc, char *argv[]) {
 			/*
 			 * Long options
 			 */
+		case LO_FAST:
+			app.opt_fast++;
+			break;
 		case LO_GENERATE:
 			app.opt_generate++;
 			break;
