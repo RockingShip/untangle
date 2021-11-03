@@ -12,9 +12,10 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-03 00:30:50 Added: Skeleton for `groupTree_t` in geval.cc` and `grouptree.h`.
 2021-11-02 02:11:22 Serious: `genswap_t` missing entries and added selftest.
 2021-11-02 01:30:42 Added: `genpattern --fast` to skip saninty checks during `--load`.
-2021-11-02 00:10:59 Changed: Length of `patternSecond_t::idFirst` increased to 27 bits. No version nummer bump.
+2021-11-02 00:10:59 Changed: Length of `patternSecond_t::idFirst` increased to 27 bits. No version number bump.
 2021-11-02 00:02:34 Fixed: Connect database to application as last before main. 
 2021-10-26 23:48:02 Fixed: `genpattern` sid based placeholder swapping for `tidR`.
 2021-10-26 23:44:54 Changed: Improved rebuilding indices during program start.

@@ -5052,6 +5052,7 @@ struct baseTree_t {
 
 		json_object_set_new_nocheck(jResult, "roots", jRoots);
 		json_object_set_new_nocheck(jResult, "release", jRelease);
+#endif
 
 		/*
 		 * History
@@ -5061,11 +5062,10 @@ struct baseTree_t {
 
 
 		for (uint32_t i = 0; i < this->numHistory; i++) {
-			json_array_append_new(jHistory, json_string_nocheck( this->kToStr(this->history[i])));
+			json_array_append_new(jHistory, json_string_nocheck(keyNames[this->history[i]].c_str()));
 		}
 
 		json_object_set_new_nocheck(jResult, "history", jHistory);
-#endif
 
 		/*
 		 * Refcounts
