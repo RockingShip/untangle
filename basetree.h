@@ -156,64 +156,59 @@ struct baseTree_t {
 		//@formatter:on
 	};
 
-	//@formatter:off
 	// resources
-	context_t  &ctx;		// resource context
-	int        hndl;                // file handle
-	uint8_t    *rawDatabase;        // base location of mmap segment
-	baseTreeHeader_t *fileHeader;   // file header
+	context_t                &ctx;                  // resource context
+	int                      hndl;                  // file handle
+	uint8_t                  *rawData;          // base location of mmap segment
+	baseTreeHeader_t         *fileHeader;           // file header
 	// meta
-	uint32_t   flags;		// creation constraints
-	uint32_t   allocFlags;		// memory constraints
-	uint32_t   unused1;		//
-	uint32_t   system;		// node of balanced system
+	uint32_t                 flags;                 // creation constraints
+	uint32_t                 allocFlags;            // memory constraints
+	uint32_t                 unused1;               //
+	uint32_t                 system;                // node of balanced system
 	// primary fields
-	uint32_t   kstart;		// first input key id.
-	uint32_t   ostart;		// first output key id.
-	uint32_t   estart;		// first external/extended key id. Roots from previous tree in chain.
-	uint32_t   nstart;		// id of first node
-	uint32_t   ncount;		// number of nodes in use
-	uint32_t   maxNodes;		// maximum tree capacity
-	uint32_t   numRoots;		// entries in roots[]
+	uint32_t                 kstart;                // first input key id.
+	uint32_t                 ostart;                // first output key id.
+	uint32_t                 estart;                // first external/extended key id. Roots from previous tree in chain.
+	uint32_t                 nstart;                // id of first node
+	uint32_t                 ncount;                // number of nodes in use
+	uint32_t                 maxNodes;              // maximum tree capacity
+	uint32_t                 numRoots;              // entries in roots[]
 	// names
-	std::vector<std::string>keyNames;  // sliced version of `keyNameData`
-	std::vector<std::string>rootNames; // sliced version of `rootNameData`
+	std::vector<std::string> keyNames;              // sliced version of `keyNameData`
+	std::vector<std::string> rootNames;             // sliced version of `rootNameData`
 	// primary storage
-	baseNode_t *N;			// nodes
-	uint32_t   *roots;		// entry points. can be inverted. first estart entries should match keys
+	baseNode_t               *N;                    // nodes
+	uint32_t                 *roots;                // entry points. can be inverted. first estart entries should match keys
 	// history
-	uint32_t   numHistory;		//
-	uint32_t   posHistory;		//
-	uint32_t   *history;		//
+	uint32_t                 numHistory;            //
+	uint32_t                 posHistory;            //
+	uint32_t                 *history;              //
 	// node index
-	uint32_t   nodeIndexSize;	// hash/cache size. MUST BE PRIME!
-	uint32_t   *nodeIndex;		// index to nodes
-	uint32_t   *nodeIndexVersion;	// content version
-	uint32_t   nodeIndexVersionNr;	// active version number
+	uint32_t                 nodeIndexSize;         // hash/cache size. MUST BE PRIME!
+	uint32_t                 *nodeIndex;            // index to nodes
+	uint32_t                 *nodeIndexVersion;     // content version
+	uint32_t                 nodeIndexVersionNr;    // active version number
 	// pools
-	unsigned   numPoolMap;		// Number of node-id pools in use
-	uint32_t   **pPoolMap;		// Pool of available node-id maps
-	unsigned   numPoolVersion;	// Number of version-id pools in use
-	uint32_t   **pPoolVersion;	// Pool of available version-id maps
-	uint32_t   mapVersionNr;	// Version number
+	unsigned                 numPoolMap;            // Number of node-id pools in use
+	uint32_t                 **pPoolMap;            // Pool of available node-id maps
+	unsigned                 numPoolVersion;        // Number of version-id pools in use
+	uint32_t                 **pPoolVersion;        // Pool of available version-id maps
+	uint32_t                 mapVersionNr;          // Version number
 	// structure based compare
-	uint32_t   *stackL;		// id of lhs
-	uint32_t   *stackR;		// id of rhs
-	uint32_t   *compBeenWhatL;	// versioned memory for compare - visited node id Left
-	uint32_t   *compBeenWhatR;
-	uint32_t   *compVersionL;	// versioned memory for compare - content version
-	uint32_t   *compVersionR;
-	uint32_t   compVersionNr;	// versioned memory for compare - active version number
-	uint64_t   numCompare;		// number of compares performed
+	uint32_t                 *stackL;               // id of lhs
+	uint32_t                 *stackR;               // id of rhs
+	uint32_t                 *compBeenWhatL;        // versioned memory for compare - visited node id Left
+	uint32_t                 *compBeenWhatR;
+	uint32_t                 *compVersionL;         // versioned memory for compare - content version
+	uint32_t                 *compVersionR;
+	uint32_t                 compVersionNr;         // versioned memory for compare - active version number
+	uint64_t                 numCompare;            // number of compares performed
 	// rewrite normalisation
-	uint32_t   *rewriteMap;         // results of intermediate lookups
-	uint32_t   *rewriteVersion;     // versioned memory for rewrites
-	uint32_t   iVersionRewrite;     // active version number
-	uint64_t   numRewrite;          // number of rewrites performed
-
-	// reserved for evaluator
-
-	//@formatter:on
+	uint32_t                 *rewriteMap;           // results of intermediate lookups
+	uint32_t                 *rewriteVersion;	// versioned memory for rewrites
+	uint32_t                 iVersionRewrite;       // active version number
+	uint64_t                 numRewrite;            // number of rewrites performed
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -228,10 +223,9 @@ struct baseTree_t {
 	 * Create an empty tree, placeholder for reading from file
 	 */
 	baseTree_t(context_t &ctx) :
-	//@formatter:off
 		ctx(ctx),
 		hndl(-1),
-		rawDatabase(NULL),
+		rawData(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(0),
@@ -280,9 +274,7 @@ struct baseTree_t {
 		rewriteMap(NULL),
 		rewriteVersion(NULL),
 		iVersionRewrite(1),
-		numRewrite(0)
-	//@formatter:on
-	{
+		numRewrite(0) {
 	}
 
 	/*
@@ -292,7 +284,7 @@ struct baseTree_t {
 	//@formatter:off
 		ctx(ctx),
 		hndl(-1),
-		rawDatabase(NULL),
+		rawData(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(flags),
@@ -415,22 +407,22 @@ struct baseTree_t {
 			 * Database is open an `mmap()`
 			 */
 			int ret;
-			ret = ::munmap((void *) rawDatabase, fileHeader->offEnd);
+			ret = ::munmap((void *) rawData, fileHeader->offEnd);
 			if (ret)
 				ctx.fatal("munmap() returned: %m\n");
 			ret = ::close(hndl);
 			if (ret)
 				ctx.fatal("close() returned: %m\n");
-		} else if (rawDatabase) {
+		} else if (rawData) {
 			/*
 			 * Database was read into `malloc()` buffer
 			 */
-			ctx.myFree("baseTreeFile_t::rawDatabase", rawDatabase);
+			ctx.myFree("baseTreeFile_t::rawData", rawData);
 		}
 
 		// zombies need to trigger SEGV
-		rawDatabase      = NULL;
-		fileHeader       = NULL;
+		rawData    = NULL;
+		fileHeader = NULL;
 		N                = NULL;
 		roots            = NULL;
 		history          = NULL;
@@ -4269,18 +4261,18 @@ struct baseTree_t {
 			if (madvise(pMemory, (size_t) stbuf.st_size, MADV_RANDOM | MADV_DONTDUMP))
 				ctx.fatal("madvise(MADV_RANDOM|MADV_DONTDUMP) returned: %m\n");
 
-			rawDatabase = (uint8_t *) pMemory;
+			rawData = (uint8_t *) pMemory;
 		} else {
 			/*
 			 * Read the contents
 			 */
-			rawDatabase = (uint8_t *) ctx.myAlloc("baseTreeFile_t::rawDatabase", 1, (size_t) stbuf.st_size);
+			rawData = (uint8_t *) ctx.myAlloc("baseTreeFile_t::rawData", 1, (size_t) stbuf.st_size);
 			uint64_t progressHi = stbuf.st_size;
 			uint64_t progress   = 0;
 
 			// read in chunks of 1024*1024 bytes
 			uint64_t dataLength = stbuf.st_size;
-			uint8_t  *dataPtr   = rawDatabase;
+			uint8_t  *dataPtr   = rawData;
 			while (dataLength > 0) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					fprintf(stderr, "\r\e[K%.5f%%", progress * 100.0 / progressHi);
@@ -4318,7 +4310,7 @@ struct baseTree_t {
 			hndl = -1;
 		}
 
-		fileHeader = (baseTreeHeader_t *) rawDatabase;
+		fileHeader = (baseTreeHeader_t *) rawData;
 		if (fileHeader->magic != BASETREE_MAGIC)
 			ctx.fatal("baseTree version mismatch. Expected %08x, Encountered %08x\n", BASETREE_MAGIC, fileHeader->magic);
 		if (fileHeader->offEnd != (uint64_t) stbuf.st_size)
@@ -4340,9 +4332,9 @@ struct baseTree_t {
 		maxNodes = ncount; // used for map allocations
 
 		// primary
-		N             = (baseNode_t *) (rawDatabase + fileHeader->offNodes);
-		roots         = (uint32_t *) (rawDatabase + fileHeader->offRoots);
-		history       = (uint32_t *) (rawDatabase + fileHeader->offHistory);
+		N             = (baseNode_t *) (rawData + fileHeader->offNodes);
+		roots         = (uint32_t *) (rawData + fileHeader->offRoots);
+		history       = (uint32_t *) (rawData + fileHeader->offHistory);
 		// pools
 		pPoolMap      = (uint32_t **) ctx.myAlloc("baseTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap));
 		pPoolVersion  = (uint32_t **) ctx.myAlloc("baseTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
@@ -4361,7 +4353,7 @@ struct baseTree_t {
 
 		// slice names
 		{
-			const char *pData = (const char *) (rawDatabase + fileHeader->offNames);
+			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
 			for (uint32_t iKey  = 0; iKey < nstart; iKey++) {
 				assert(*pData != 0);

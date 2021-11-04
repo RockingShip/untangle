@@ -157,7 +157,7 @@ struct groupTree_t {
 	context_t                &ctx;                  // resource context
 	database_t               &db;                   // database for table lookups
 	int                      hndl;                  // file handle
-	uint8_t                  *rawDatabase;          // base location of mmap segment
+	uint8_t                  *rawData;              // base location of mmap segment
 	groupTreeHeader_t        *fileHeader;           // file header
 	// meta
 	uint32_t                 flags;                 // creation constraints
@@ -225,7 +225,7 @@ struct groupTree_t {
 		ctx(ctx),
 		db(db),
 		hndl(-1),
-		rawDatabase(NULL),
+		rawData(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(0),
@@ -286,7 +286,7 @@ struct groupTree_t {
 		ctx(ctx),
 		db(db),
 		hndl(-1),
-		rawDatabase(NULL),
+		rawData(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(flags),
@@ -412,21 +412,21 @@ struct groupTree_t {
 			 * Database is open an `mmap()`
 			 */
 			int ret;
-			ret = ::munmap((void *) rawDatabase, fileHeader->offEnd);
+			ret = ::munmap((void *) rawData, fileHeader->offEnd);
 			if (ret)
 				ctx.fatal("munmap() returned: %m\n");
 			ret = ::close(hndl);
 			if (ret)
 				ctx.fatal("close() returned: %m\n");
-		} else if (rawDatabase) {
+		} else if (rawData) {
 			/*
 			 * Database was read into `malloc()` buffer
 			 */
-			ctx.myFree("baseTreeFile_t::rawDatabase", rawDatabase);
+			ctx.myFree("baseTreeFile_t::rawData", rawData);
 		}
 
 		// zombies need to trigger SEGV
-		rawDatabase      = NULL;
+		rawData          = NULL;
 		fileHeader       = NULL;
 		N                = NULL;
 		roots            = NULL;
@@ -1209,18 +1209,18 @@ struct groupTree_t {
 			if (madvise(pMemory, (size_t) stbuf.st_size, MADV_RANDOM | MADV_DONTDUMP))
 				ctx.fatal("madvise(MADV_RANDOM|MADV_DONTDUMP) returned: %m\n");
 
-			rawDatabase = (uint8_t *) pMemory;
+			rawData = (uint8_t *) pMemory;
 		} else {
 			/*
 			 * Read the contents
 			 */
-			rawDatabase = (uint8_t *) ctx.myAlloc("baseTreeFile_t::rawDatabase", 1, (size_t) stbuf.st_size);
+			rawData = (uint8_t *) ctx.myAlloc("baseTreeFile_t::rawData", 1, (size_t) stbuf.st_size);
 			uint64_t progressHi = stbuf.st_size;
 			uint64_t progress   = 0;
 
 			// read in chunks of 1024*1024 bytes
 			uint64_t dataLength = stbuf.st_size;
-			uint8_t  *dataPtr   = rawDatabase;
+			uint8_t  *dataPtr   = rawData;
 			while (dataLength > 0) {
 				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 					fprintf(stderr, "\r\e[K%.5f%%", progress * 100.0 / progressHi);
@@ -1258,7 +1258,7 @@ struct groupTree_t {
 			hndl = -1;
 		}
 
-		fileHeader = (groupTreeHeader_t *) rawDatabase;
+		fileHeader = (groupTreeHeader_t *) rawData;
 		if (fileHeader->magic != GROUPTREE_MAGIC)
 			ctx.fatal("baseTree version mismatch. Expected %08x, Encountered %08x\n", GROUPTREE_MAGIC, fileHeader->magic);
 		if (fileHeader->offEnd != (uint64_t) stbuf.st_size)
@@ -1282,9 +1282,9 @@ struct groupTree_t {
 		maxNodes = ncount; // used for map allocations
 
 		// primary
-		N             = (groupNode_t *) (rawDatabase + fileHeader->offNodes);
-		roots         = (uint32_t *) (rawDatabase + fileHeader->offRoots);
-		history       = (uint32_t *) (rawDatabase + fileHeader->offHistory);
+		N             = (groupNode_t *) (rawData + fileHeader->offNodes);
+		roots         = (uint32_t *) (rawData + fileHeader->offRoots);
+		history       = (uint32_t *) (rawData + fileHeader->offHistory);
 		// pools
 		pPoolMap      = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap));
 		pPoolVersion  = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
@@ -1305,7 +1305,7 @@ struct groupTree_t {
 
 		// slice names
 		{
-			const char *pData = (const char *) (rawDatabase + fileHeader->offNames);
+			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
 			for (uint32_t iKey  = 0; iKey < nstart; iKey++) {
 				assert(*pData != 0);
