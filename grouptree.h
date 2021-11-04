@@ -74,7 +74,7 @@ struct groupTreeHeader_t {
 	// meta
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
-	uint32_t unused1;             //
+	uint32_t sidCRC;               // CRC of database containing sid descriptions
 	uint32_t system;              // node of balanced system (0 if none)
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 
@@ -153,46 +153,45 @@ struct groupTree_t {
 		//@formatter:on
 	};
 
-	//@formatter:off
 	// resources
-	context_t  &ctx;		// resource context
-	int        hndl;                // file handle
-	uint8_t    *rawDatabase;        // base location of mmap segment
-	groupTreeHeader_t *fileHeader;   // file header
+	context_t                &ctx;                  // resource context
+	database_t               &db;                   // database for table lookups
+	int                      hndl;                  // file handle
+	uint8_t                  *rawDatabase;          // base location of mmap segment
+	groupTreeHeader_t        *fileHeader;           // file header
 	// meta
-	uint32_t   flags;		// creation constraints
-	uint32_t   allocFlags;		// memory constraints
-	uint32_t   unused1;		//
-	uint32_t   system;		// node of balanced system
+	uint32_t                 flags;                 // creation constraints
+	uint32_t                 allocFlags;            // memory constraints
+	uint32_t                 system;                // node of balanced system
 	// primary fields
-	uint32_t   kstart;		// first input key id.
-	uint32_t   ostart;		// first output key id.
-	uint32_t   estart;		// first external/extended key id. Roots from previous tree in chain.
-	uint32_t   nstart;		// id of first node
-	uint32_t   ncount;		// number of nodes in use
-	uint32_t   maxNodes;		// maximum tree capacity
-	uint32_t   numRoots;		// entries in roots[]
+	uint32_t                 kstart;                // first input key id.
+	uint32_t                 ostart;                // first output key id.
+	uint32_t                 estart;                // first external/extended key id. Roots from previous tree in chain.
+	uint32_t                 nstart;                // id of first node
+	uint32_t                 ncount;                // number of nodes in use
+	uint32_t                 maxNodes;              // maximum tree capacity
+	uint32_t                 numRoots;              // entries in roots[]
 	// names
-	std::vector<std::string>keyNames;  // sliced version of `keyNameData`
-	std::vector<std::string>rootNames; // sliced version of `rootNameData`
+	std::vector<std::string> keyNames;              // sliced version of `keyNameData`
+	std::vector<std::string> rootNames;             // sliced version of `rootNameData`
 	// primary storage
-	groupNode_t *N;			// nodes
-	uint32_t   *roots;		// entry points. can be inverted. first estart entries should match keys
+	groupNode_t              *N;                    // nodes
+	uint32_t                 *roots;                // entry points. can be inverted. first estart entries should match keys
 	// history
-	uint32_t   numHistory;		//
-	uint32_t   posHistory;		//
-	uint32_t   *history;		//
+	uint32_t                 numHistory;            //
+	uint32_t                 posHistory;            //
+	uint32_t                 *history;              //
 	// node index
-	uint32_t   nodeIndexSize;	// hash/cache size. MUST BE PRIME!
-	uint32_t   *nodeIndex;		// index to nodes
-	uint32_t   *nodeIndexVersion;	// content version
-	uint32_t   nodeIndexVersionNr;	// active version number
+	uint32_t                 nodeIndexSize;         // hash/cache size. MUST BE PRIME!
+	uint32_t                 *nodeIndex;            // index to nodes
+	uint32_t                 *nodeIndexVersion;     // content version
+	uint32_t                 nodeIndexVersionNr;    // active version number
 	// pools
-	unsigned   numPoolMap;		// Number of node-id pools in use
-	uint32_t   **pPoolMap;		// Pool of available node-id maps
-	unsigned   numPoolVersion;	// Number of version-id pools in use
-	uint32_t   **pPoolVersion;	// Pool of available version-id maps
-	uint32_t   mapVersionNr;	// Version number
+	unsigned                 numPoolMap;            // Number of node-id pools in use
+	uint32_t                 **pPoolMap;            // Pool of available node-id maps
+	unsigned                 numPoolVersion;        // Number of version-id pools in use
+	uint32_t                 **pPoolVersion;        // Pool of available version-id maps
+	uint32_t                 mapVersionNr;          // Version number
 #if 0
 	// structure based compare
 	uint32_t   *stackL;		// id of lhs
@@ -209,9 +208,6 @@ struct groupTree_t {
 	uint32_t   iVersionRewrite;     // active version number
 	uint64_t   numRewrite;          // number of rewrites performed
 #endif	
-	// reserved for evaluator
-
-	//@formatter:on
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -225,16 +221,15 @@ struct groupTree_t {
 	/*
 	 * Create an empty tree, placeholder for reading from file
 	 */
-	groupTree_t(context_t &ctx) :
-	//@formatter:off
+	groupTree_t(context_t &ctx, database_t &db) :
 		ctx(ctx),
+		db(db),
 		hndl(-1),
 		rawDatabase(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(0),
 		allocFlags(0),
-		unused1(0),
 		system(0),
 		// primary fields
 		kstart(0),
@@ -266,22 +261,21 @@ struct groupTree_t {
 		pPoolVersion(NULL),
 		mapVersionNr(0)
 #if 0
-		// structure based compare (NOTE: needs to go after pools!)
-		stackL(NULL),
-		stackR(NULL),
-		compBeenWhatL(NULL),
-		compBeenWhatR(NULL),
-		compVersionL(NULL), // allocate as node-id map because of local version numbering
-		compVersionR(NULL),  // allocate as node-id map because of local version numbering
-		compVersionNr(1),
-		numCompare(0),
-		// rewrite normalisation
-		rewriteMap(NULL),
-		rewriteVersion(NULL),
-		iVersionRewrite(1),
-		numRewrite(0)
+	// structure based compare (NOTE: needs to go after pools!)
+	stackL(NULL),
+	stackR(NULL),
+	compBeenWhatL(NULL),
+	compBeenWhatR(NULL),
+	compVersionL(NULL), // allocate as node-id map because of local version numbering
+	compVersionR(NULL),  // allocate as node-id map because of local version numbering
+	compVersionNr(1),
+	numCompare(0),
+	// rewrite normalisation
+	rewriteMap(NULL),
+	rewriteVersion(NULL),
+	iVersionRewrite(1),
+	numRewrite(0)
 #endif
-		//@formatter:on
 	{
 	}
 
@@ -289,15 +283,14 @@ struct groupTree_t {
 	 * Create a memory stored tree
 	 */
 	groupTree_t(context_t &ctx, database_t &db, uint32_t kstart, uint32_t ostart, uint32_t estart, uint32_t nstart, uint32_t numRoots, uint32_t maxNodes, uint32_t flags) :
-	//@formatter:off
 		ctx(ctx),
+		db(db),
 		hndl(-1),
 		rawDatabase(NULL),
 		fileHeader(NULL),
 		// meta
 		flags(flags),
 		allocFlags(0),
-		unused1(0),
 		system(0),
 		// primary fields
 		kstart(kstart),
@@ -326,25 +319,24 @@ struct groupTree_t {
 		numPoolMap(0),
 		pPoolMap((uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
 		numPoolVersion(0),
-		pPoolVersion( (uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
+		pPoolVersion((uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
 		mapVersionNr(0)
 #if 0
-		// structure based compare (NOTE: needs to go after pools!)
-		stackL(allocMap()),
-		stackR(allocMap()),
-		compBeenWhatL(allocMap()),
-		compBeenWhatR(allocMap()),
-		compVersionL(allocMap()), // allocate as node-id map because of local version numbering
-		compVersionR(allocMap()),  // allocate as node-id map because of local version numbering
-		compVersionNr(1),
-		numCompare(0),
-		// rewrite normalisation
-		rewriteMap(allocMap()),
-		rewriteVersion(allocMap()), // allocate as node-id map because of local version numbering
-		iVersionRewrite(1),
-		numRewrite(0)
+	// structure based compare (NOTE: needs to go after pools!)
+	stackL(allocMap()),
+	stackR(allocMap()),
+	compBeenWhatL(allocMap()),
+	compBeenWhatR(allocMap()),
+	compVersionL(allocMap()), // allocate as node-id map because of local version numbering
+	compVersionR(allocMap()),  // allocate as node-id map because of local version numbering
+	compVersionNr(1),
+	numCompare(0),
+	// rewrite normalisation
+	rewriteMap(allocMap()),
+	rewriteVersion(allocMap()), // allocate as node-id map because of local version numbering
+	iVersionRewrite(1),
+	numRewrite(0)
 #endif
-	//@formatter:on
 	{
 #if 0
 		if (this->N)
@@ -1273,7 +1265,6 @@ struct groupTree_t {
 			ctx.fatal("baseTree size mismatch. Expected %lu, Encountered %lu\n", fileHeader->offEnd, (uint64_t) stbuf.st_size);
 
 		flags      = fileHeader->magic_flags;
-		unused1    = fileHeader->unused1;
 		system     = fileHeader->system;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
@@ -1283,6 +1274,9 @@ struct groupTree_t {
 		numRoots   = fileHeader->numRoots;
 		numHistory = fileHeader->numHistory;
 		posHistory = fileHeader->posHistory;
+
+		if (fileHeader->sidCRC != db.fileHeader.magic_sidCRC)
+			ctx.fatal("database/tree sidCRC mismatch. Expected %08x, Encountered %08x\n", db.fileHeader.magic_sidCRC, fileHeader->sidCRC);
 
 		// @date 2021-05-14 21:46:35 Tree is read-only
 		maxNodes = ncount; // used for map allocations
@@ -1567,7 +1561,7 @@ struct groupTree_t {
 
 		header.magic       = GROUPTREE_MAGIC;
 		header.magic_flags = flags;
-		header.unused1     = unused1;
+		header.sidCRC      = db.fileHeader.magic_sidCRC;
 		header.system      = pMap[system & ~IBIT] ^ (system & IBIT);
 		header.crc32       = crc32;
 		header.kstart      = kstart;

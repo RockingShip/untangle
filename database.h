@@ -81,6 +81,7 @@
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
 #define FILE_MAGIC        0x20210715
+// NOTE: with next version, reposition `magic_sidCRC`
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -100,7 +101,7 @@ struct fileHeader_t {
 	uint32_t magic_maxSlots;
 	uint32_t magic_sizeofSignature;
 	uint32_t magic_sizeofSwap;
-	uint32_t magic_sizeofUnused;     // unused
+	uint32_t magic_sidCRC;           // crc of signature names
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofPair;
 	uint32_t magic_sizeofMember;
@@ -1364,6 +1365,7 @@ struct database_t {
 		/*
 		 * write signatures
 		 */
+		uint32_t sidCRC = 0;
 		if (this->numSignature) {
 			// first entry must be zero
 			signature_t zero;
@@ -1379,6 +1381,14 @@ struct database_t {
 				fileHeader.signatureIndexSize = this->signatureIndexSize;
 				fileHeader.offSignatureIndex  = flen;
 				flen += writeData(outf, this->signatureIndex, sizeof(*this->signatureIndex) * this->signatureIndexSize, fileName, "signatureIndex");
+			}
+
+			// calculate CRC of sid names
+			for (uint32_t iSid = 1; iSid < this->numSignature; iSid++) {
+				const signature_t *pSignature = this->signatures + iSid;
+
+				for (const char *pName = pSignature->name; *pName; pName++)
+					__asm__ __volatile__ ("crc32b %1, %0" : "+r"(sidCRC) : "rm"(*pName));
 			}
 		}
 
@@ -1527,7 +1537,7 @@ struct database_t {
 		fileHeader.magic_maxSlots            = MAXSLOTS;
 		fileHeader.magic_sizeofSignature     = sizeof(signature_t);
 		fileHeader.magic_sizeofSwap          = sizeof(swap_t);
-		fileHeader.magic_sizeofUnused        = 0;
+		fileHeader.magic_sidCRC              = sidCRC;
 		fileHeader.magic_sizeofImprint       = sizeof(imprint_t);
 		fileHeader.magic_sizeofPair          = sizeof(pair_t);
 		fileHeader.magic_sizeofMember        = sizeof(member_t);
@@ -3274,6 +3284,11 @@ struct database_t {
 		if (jResult == NULL)
 			jResult = json_object();
 		json_object_set_new_nocheck(jResult, "flags", json_integer(this->creationFlags));
+		{
+			char hex[10];
+			sprintf(hex, "%08x", fileHeader.magic_sidCRC);
+			json_object_set_new_nocheck(jResult, "sidCRC", json_string_nocheck(hex));
+		}
 		json_object_set_new_nocheck(jResult, "numTransform", json_integer(this->numTransform));
 		json_object_set_new_nocheck(jResult, "transformIndexSize", json_integer(this->transformIndexSize));
 		json_object_set_new_nocheck(jResult, "numEvaluator", json_integer(this->numEvaluator));
