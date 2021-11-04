@@ -207,7 +207,7 @@ struct groupTree_t {
 	uint32_t   *rewriteVersion;     // versioned memory for rewrites
 	uint32_t   iVersionRewrite;     // active version number
 	uint64_t   numRewrite;          // number of rewrites performed
-#endif	
+#endif
 
 	/**
 	 * @date 2021-06-13 00:01:50

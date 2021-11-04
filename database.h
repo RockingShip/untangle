@@ -296,6 +296,8 @@ struct database_t {
 	uint32_t        iVersion;                    // version current incarnation
 	uint32_t        *imprintVersion;             // versioned memory for `imprintIndex`
 	uint32_t        *signatureVersion;           // versioned memory for `signatureIndex`
+	// reserved 1n9 SID id's
+	uint32_t        SID_ZERO, SID_SELF, SID_OR, SID_GT, SID_NE, SID_AND, SID_QNTF, SID_QTF;
 
 	/**
 	 * Constructor
@@ -377,6 +379,9 @@ struct database_t {
 		iVersion         = 0;
 		imprintVersion   = NULL;
 		signatureVersion = NULL;
+		
+		// 1n9 sids
+		SID_ZERO = SID_SELF = SID_OR = SID_GT = SID_NE = SID_AND = SID_QNTF = SID_QTF = 0;
 	};
 
 	/**
@@ -958,7 +963,7 @@ struct database_t {
 		if (::madvise(pMemory, (size_t) this->fileSize, MADV_DONTDUMP))
 			ctx.fatal("\n{\"error\":\"madvise(MADV_DONTDUMP,'%s')\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n", fileName, __FUNCTION__, __FILE__, __LINE__);
 
-		rawDatabase = (const uint8_t *) pMemory;
+		rawDatabase            = (const uint8_t *) pMemory;
 #else
 		/*
 		 * Load using read()
@@ -1011,71 +1016,89 @@ struct database_t {
 
 		// transforms
 		maxTransform          = fileHeader.numTransform;
-		numTransform          = fileHeader.numTransform;
-		fwdTransformData      = (uint64_t *) (rawDatabase + fileHeader.offFwdTransforms);
-		revTransformData      = (uint64_t *) (rawDatabase + fileHeader.offRevTransforms);
-		fwdTransformNames     = (transformName_t *) (rawDatabase + fileHeader.offFwdTransformNames);
-		revTransformNames     = (transformName_t *) (rawDatabase + fileHeader.offRevTransformNames);
-		revTransformIds       = (uint32_t *) (rawDatabase + fileHeader.offRevTransformIds);
-		transformIndexSize    = fileHeader.transformIndexSize;
-		fwdTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offFwdTransformNameIndex);
-		revTransformNameIndex = (uint32_t *) (rawDatabase + fileHeader.offRevTransformNameIndex);
+		numTransform           = fileHeader.numTransform;
+		fwdTransformData       = (uint64_t *) (rawDatabase + fileHeader.offFwdTransforms);
+		revTransformData       = (uint64_t *) (rawDatabase + fileHeader.offRevTransforms);
+		fwdTransformNames      = (transformName_t *) (rawDatabase + fileHeader.offFwdTransformNames);
+		revTransformNames      = (transformName_t *) (rawDatabase + fileHeader.offRevTransformNames);
+		revTransformIds        = (uint32_t *) (rawDatabase + fileHeader.offRevTransformIds);
+		transformIndexSize     = fileHeader.transformIndexSize;
+		fwdTransformNameIndex  = (uint32_t *) (rawDatabase + fileHeader.offFwdTransformNameIndex);
+		revTransformNameIndex  = (uint32_t *) (rawDatabase + fileHeader.offRevTransformNameIndex);
 
 		// evaluator store [COPY-ON-WRITE]
 		maxEvaluator = fileHeader.numEvaluator;
-		numEvaluator = fileHeader.numEvaluator;
-		fwdEvaluator = (footprint_t *) (rawDatabase + fileHeader.offFwdEvaluator);
-		revEvaluator = (footprint_t *) (rawDatabase + fileHeader.offRevEvaluator);
+		numEvaluator           = fileHeader.numEvaluator;
+		fwdEvaluator           = (footprint_t *) (rawDatabase + fileHeader.offFwdEvaluator);
+		revEvaluator           = (footprint_t *) (rawDatabase + fileHeader.offRevEvaluator);
 
 		// signatures
 		maxSignature       = fileHeader.numSignature;
-		numSignature       = fileHeader.numSignature;
-		signatures         = (signature_t *) (rawDatabase + fileHeader.offSignatures);
-		signatureIndexSize = fileHeader.signatureIndexSize;
-		signatureIndex     = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
+		numSignature           = fileHeader.numSignature;
+		signatures             = (signature_t *) (rawDatabase + fileHeader.offSignatures);
+		signatureIndexSize     = fileHeader.signatureIndexSize;
+		signatureIndex         = (uint32_t *) (rawDatabase + fileHeader.offSignatureIndex);
 
 		// swap
 		maxSwap       = fileHeader.numSwap;
-		numSwap       = fileHeader.numSwap;
-		swaps         = (swap_t *) (rawDatabase + fileHeader.offSwaps);
-		swapIndexSize = fileHeader.swapIndexSize;
-		swapIndex     = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
+		numSwap                = fileHeader.numSwap;
+		swaps                  = (swap_t *) (rawDatabase + fileHeader.offSwaps);
+		swapIndexSize          = fileHeader.swapIndexSize;
+		swapIndex              = (uint32_t *) (rawDatabase + fileHeader.offSwapIndex);
 
 		// imprints
 		interleave       = fileHeader.interleave;
 		interleaveStep   = fileHeader.interleaveStep;
-		maxImprint       = numImprint = fileHeader.numImprint;
-		imprints         = (imprint_t *) (rawDatabase + fileHeader.offImprints);
-		imprintIndexSize = fileHeader.imprintIndexSize;
-		imprintIndex     = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
+		maxImprint             = numImprint = fileHeader.numImprint;
+		imprints               = (imprint_t *) (rawDatabase + fileHeader.offImprints);
+		imprintIndexSize       = fileHeader.imprintIndexSize;
+		imprintIndex           = (uint32_t *) (rawDatabase + fileHeader.offImprintIndex);
 
 		// sid/tid
 		maxPair       = fileHeader.numPair;
-		numPair       = fileHeader.numPair;
-		pairs         = (pair_t *) (rawDatabase + fileHeader.offpairs);
-		pairIndexSize = fileHeader.pairIndexSize;
-		pairIndex     = (uint32_t *) (rawDatabase + fileHeader.offPairIndex);
+		numPair                = fileHeader.numPair;
+		pairs                  = (pair_t *) (rawDatabase + fileHeader.offpairs);
+		pairIndexSize          = fileHeader.pairIndexSize;
+		pairIndex              = (uint32_t *) (rawDatabase + fileHeader.offPairIndex);
 
 		// members
 		maxMember       = fileHeader.numMember;
-		numMember       = fileHeader.numMember;
-		members         = (member_t *) (rawDatabase + fileHeader.offMember);
-		memberIndexSize = fileHeader.memberIndexSize;
-		memberIndex     = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
+		numMember              = fileHeader.numMember;
+		members                = (member_t *) (rawDatabase + fileHeader.offMember);
+		memberIndexSize        = fileHeader.memberIndexSize;
+		memberIndex            = (uint32_t *) (rawDatabase + fileHeader.offMemberIndex);
 
 		// patternFirst
 		maxPatternFirst       = fileHeader.numPatternFirst;
-		numPatternFirst       = fileHeader.numPatternFirst;
-		patternsFirst         = (patternFirst_t * )(rawDatabase + fileHeader.offPatternFirst);
-		patternFirstIndexSize = fileHeader.patternFirstIndexSize;
-		patternFirstIndex     = (uint32_t *) (rawDatabase + fileHeader.offPatternFirstIndex);
+		numPatternFirst        = fileHeader.numPatternFirst;
+		patternsFirst          = (patternFirst_t *) (rawDatabase + fileHeader.offPatternFirst);
+		patternFirstIndexSize  = fileHeader.patternFirstIndexSize;
+		patternFirstIndex      = (uint32_t *) (rawDatabase + fileHeader.offPatternFirstIndex);
 
 		// patternSecond
 		maxPatternSecond       = fileHeader.numPatternSecond;
 		numPatternSecond       = fileHeader.numPatternSecond;
-		patternsSecond         = (patternSecond_t * )(rawDatabase + fileHeader.offPatternSecond);
+		patternsSecond         = (patternSecond_t *) (rawDatabase + fileHeader.offPatternSecond);
 		patternSecondIndexSize = fileHeader.patternSecondIndexSize;
 		patternSecondIndex     = (uint32_t *) (rawDatabase + fileHeader.offPatternSecondIndex);
+
+		// if a signature section exists, lookup 1n9 sids
+		if (numSignature > 0) {
+			this->SID_ZERO = lookupSignature("0");
+			this->SID_SELF = lookupSignature("a");
+			this->SID_OR   = lookupSignature("ab+");
+			this->SID_GT   = lookupSignature("ab>");
+			this->SID_NE   = lookupSignature("ab^");
+			this->SID_QNTF = lookupSignature("abc!");
+
+			// test they are available
+			if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
+				ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\",\"filename\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, fileName);
+
+			// AND/QTF are optional  
+			this->SID_AND  = lookupSignature("ab&");
+			this->SID_QTF  = lookupSignature("abc?");
+		}
 	};
 
 	/**

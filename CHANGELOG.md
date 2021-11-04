@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-04 12:36:02 Added: `SID_` id's for all top-level 1n9 signatures.
 2021-11-04 12:29:12 Added: Fingerprint database by adding `sidCRC`.
 2021-11-03 00:30:50 Added: Skeleton for `groupTree_t` in geval.cc` and `grouptree.h`.
 2021-11-02 02:11:22 Serious: `genswap_t` missing entries and added selftest.

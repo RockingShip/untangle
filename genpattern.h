@@ -548,12 +548,12 @@ struct genpatternContext_t : dbtool_t {
 		 * @date 2021-10-25 12:26:23
 		 * test for sid based collapse
 		 */
-		if (sidQ == 1 ||                               // Q not zero
-		    (sidQ == sidT && tidQ == tidT) ||          // Q/T collapse
-		    (sidQ == sidF && tidQ == tidF) ||          // Q/F collapse
-		    (!tlTi && sidT == sidF && tidT == tidF) || // T/F collapse
-		    (sidT == 1 && sidF == 1) ||                // Q?!0:0 -> Q
-		    (!tlTi && sidT == 1)) {                    // Q?0:F -> F?!Q:0
+		if (sidQ == pStore->SID_ZERO ||                               // Q not zero
+		    (sidQ == sidT && tidQ == tidT) ||                         // Q/T collapse
+		    (sidQ == sidF && tidQ == tidF) ||                         // Q/F collapse
+		    (!tlTi && sidT == sidF && tidT == tidF) ||                // T/F collapse
+		    (sidT == pStore->SID_ZERO && sidF == pStore->SID_ZERO) || // Q?!0:0 -> Q
+		    (!tlTi && sidT == pStore->SID_ZERO)) {                    // Q?0:F -> F?!Q:0
 			skipCollapse++;
 			return true;
 		}
