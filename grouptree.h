@@ -36,11 +36,34 @@
 
 struct groupNode_t {
 
-	uint32_t gid;             // group to which this node belongs
-	uint32_t next;            // nest node in list
+	/*
+	 * Group to which this node belongs.
+	 * Each group is a list of nodes.
+	 * The group id is the node id of the first node in the list.
+	 * The list is unordered, except for the first node, 
+	 * The first node is always `0n9` (being either `SID_ZERO` or `SID_SELF`)
+	 * Each active list should have at least one `1n9` node.
+	 */
+	uint32_t gid;
+	
+	/*
+	 * The next node in the list.
+	 * These are the only id that are allowed to be a forward reference.
+	 * The last node in the list has `next=0`.
+	 */
+	uint32_t next;
 
-	uint32_t sid;             // signature of slot (not inverted)
-	uint32_t slots[MAXSLOTS]; // references to other groups (not fragments)
+	/*
+	 * The signature describing the behaviour of the node
+	 */
+	uint32_t sid;
+	
+	/*
+	 * Signature endpoints.
+	 * Endpoints are group id's, always referencing the first node in lists.
+	 * Unused entries should always be zero.
+	 */
+	uint32_t slots[MAXSLOTS];
 
 };
 
@@ -167,22 +190,10 @@ struct groupTree_t {
 	unsigned                 numPoolVersion;        // Number of version-id pools in use
 	uint32_t                 **pPoolVersion;        // Pool of available version-id maps
 	uint32_t                 mapVersionNr;          // Version number
-#if 0
-	// structure based compare
-	uint32_t   *stackL;		// id of lhs
-	uint32_t   *stackR;		// id of rhs
-	uint32_t   *compBeenWhatL;	// versioned memory for compare - visited node id Left
-	uint32_t   *compBeenWhatR;
-	uint32_t   *compVersionL;	// versioned memory for compare - content version
-	uint32_t   *compVersionR;
-	uint32_t   compVersionNr;	// versioned memory for compare - active version number
-	uint64_t   numCompare;		// number of compares performed
-	// rewrite normalisation
-	uint32_t   *rewriteMap;         // results of intermediate lookups
-	uint32_t   *rewriteVersion;     // versioned memory for rewrites
-	uint32_t   iVersionRewrite;     // active version number
-	uint64_t   numRewrite;          // number of rewrites performed
-#endif
+	// slots, for `addNormaliseNode()` because of too many exit points
+	uint32_t                 *slotMap;              // slot position of endpoint 
+	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
+	uint32_t                 slotVersionNr;         // active version number
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -234,23 +245,11 @@ struct groupTree_t {
 		pPoolMap(NULL),
 		numPoolVersion(0),
 		pPoolVersion(NULL),
-		mapVersionNr(0)
-#if 0
-	// structure based compare (NOTE: needs to go after pools!)
-	stackL(NULL),
-	stackR(NULL),
-	compBeenWhatL(NULL),
-	compBeenWhatR(NULL),
-	compVersionL(NULL), // allocate as node-id map because of local version numbering
-	compVersionR(NULL),  // allocate as node-id map because of local version numbering
-	compVersionNr(1),
-	numCompare(0),
-	// rewrite normalisation
-	rewriteMap(NULL),
-	rewriteVersion(NULL),
-	iVersionRewrite(1),
-	numRewrite(0)
-#endif
+		mapVersionNr(0),
+		// slots
+		slotMap(NULL),
+		slotVersion(NULL),
+		slotVersionNr(1)
 	{
 	}
 
@@ -295,23 +294,11 @@ struct groupTree_t {
 		pPoolMap((uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
 		numPoolVersion(0),
 		pPoolVersion((uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
-		mapVersionNr(0)
-#if 0
-	// structure based compare (NOTE: needs to go after pools!)
-	stackL(allocMap()),
-	stackR(allocMap()),
-	compBeenWhatL(allocMap()),
-	compBeenWhatR(allocMap()),
-	compVersionL(allocMap()), // allocate as node-id map because of local version numbering
-	compVersionR(allocMap()),  // allocate as node-id map because of local version numbering
-	compVersionNr(1),
-	numCompare(0),
-	// rewrite normalisation
-	rewriteMap(allocMap()),
-	rewriteVersion(allocMap()), // allocate as node-id map because of local version numbering
-	iVersionRewrite(1),
-	numRewrite(0)
-#endif
+		mapVersionNr(0),
+		// slots
+		slotMap(allocMap()),
+		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
+		slotVersionNr(1)
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -327,7 +314,10 @@ struct groupTree_t {
 		rootNames.resize(numRoots);
 
 		// setup default keys
-		for (unsigned iKey = 0; iKey < nstart; iKey++) {
+		memset(this->N + 0, 0, sizeof(*this->N));
+		this->N[0].sid = db.SID_ZERO;
+		
+		for (unsigned iKey = 1; iKey < nstart; iKey++) {
 			groupNode_t *pNode = this->N + iKey;
 
 			memset(pNode, 0, sizeof(*pNode));
@@ -359,21 +349,11 @@ struct groupTree_t {
 			ctx.myFree("groupTree_t::nodeIndexVersion", this->nodeIndexVersion);
 		}
 
-#if 0		
 		// release maps
-		if (stackL)
-			freeMap(stackL);
-		if (stackR)
-			freeMap(stackR);
-		if (compVersionL)
-			freeMap(compVersionL);
-		if (compVersionR)
-			freeMap(compVersionR);
-		if (compBeenWhatL)
-			freeMap(compBeenWhatL);
-		if (compBeenWhatR)
-			freeMap(compBeenWhatR);
-#endif
+		if (slotMap)
+			freeMap(slotMap);
+		if (slotVersion)
+			freeMap(slotVersion);
 
 		// release pools
 		while (numPoolMap > 0)
@@ -410,16 +390,8 @@ struct groupTree_t {
 		nodeIndexVersion = NULL;
 		pPoolMap         = NULL;
 		pPoolVersion     = NULL;
-#if 0
-		stackL           = NULL;
-		stackR           = NULL;
-		compBeenWhatL    = NULL;
-		compBeenWhatR    = NULL;
-		compVersionL     = NULL;
-		compVersionR     = NULL;
-		rewriteMap       = NULL;
-		rewriteVersion   = NULL;
-#endif
+		slotMap          = NULL;
+		slotVersion      = NULL;
 	}
 
 	/*
@@ -694,11 +666,9 @@ struct groupTree_t {
 			Q ^= IBIT;
 			T = F;
 			F = savT;
-			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~Q\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 		}
 		if (Q == 0) {
 			// "0?T:F" -> "F"
-			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"Q=0\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
 			return F;
 		}
 
@@ -706,7 +676,6 @@ struct groupTree_t {
 			// "Q?T:!F" -> "!(Q?!T:F)"
 			F ^= IBIT;
 			T ^= IBIT;
-			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~F\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 			return addNormaliseNode(Q, T, F, pFailCount, depth) ^ IBIT;
 		}
 
@@ -747,11 +716,9 @@ struct groupTree_t {
 			if (T == IBIT) {
 				if (Q == F) {
 					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a!\",\"N\":%u}", Q);
 					return Q;
 				} else if (F == 0) {
 					// [ 0] a ? !0 : 0  ->  a
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00!\",\"N\":%u}", Q);
 					return Q;
 				} else {
 					// [ 2] a ? !0 : b  -> "+" OR
@@ -759,23 +726,19 @@ struct groupTree_t {
 			} else if ((T ^ IBIT) == Q) {
 				if (Q == F) {
 					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa!\",\"N\":%u}", 0);
 					return 0;
 				} else if (F == 0) {
 					// [ 3] a ? !a : 0  ->  0
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0!\",\"N\":%u}", 0);
 					return 0;
 				} else {
 					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
 					Q = F;
 					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
 			} else {
 				if (Q == F) {
 					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else {
 					// [ 6] a ? !b : 0  -> ">" greater-than
 					// [ 8] a ? !b : b  -> "^" not-equal
@@ -788,40 +751,33 @@ struct groupTree_t {
 			if (T == 0) {
 				if (Q == F) {
 					// [11] a ?  0 : a -> 0
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a?\",\"N\":%u}", 0);
 					return 0;
 				} else if (F == 0) {
 					// [10] a ?  0 : 0 -> 0
 					assert(0); // already tested
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00?\",\"N\":%u}", 0);
 					return 0;
 				} else {
 					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
 					T = Q ^ IBIT;
 					Q = F;
 					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0b?!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
 			} else if (Q == T) {
 				if (Q == F) {
 					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 					assert(0); // already tested
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa?\",\"N\":%u}", Q);
 					return Q;
 				} else if (F == 0) {
 					// [13] a ?  a : 0 -> a
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0?\",\"N\":%u}", Q);
 					return Q;
 				} else {
 					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
 					T = IBIT;
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				}
 			} else {
 				if (Q == F) {
 					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 					F = 0;
-					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
 				} else {
 					// [16] a ?  b : 0             "&" and
 					// [18] a ?  b : b -> b        ALREADY TESTED		
@@ -838,7 +794,6 @@ struct groupTree_t {
 		uint32_t ix = this->lookupNode(Q, T, F);
 		if (this->nodeIndex[ix] != 0) {
 			// node already exists
-			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, this->nodeIndex[ix]);
 			return this->nodeIndex[ix];
 		}
 
@@ -1770,16 +1725,10 @@ struct groupTree_t {
 		// pools
 		pPoolMap      = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap));
 		pPoolVersion  = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
-#if 0
-		// structure based compare
-		stackL        = allocMap();
-		stackR        = allocMap();
-		compBeenWhatL = allocMap();
-		compBeenWhatR = allocMap();
-		compVersionL  = allocMap(); // allocate as node-id map because of local version numbering
-		compVersionR  = allocMap();  // allocate as node-id map because of local version numbering
-		compVersionNr = 1;
-#endif		
+		// slots
+		slotMap       = allocMap();
+		slotVersion   = allocMap(); // allocate as node-id map because of local version numbering
+		slotVersionNr = 1;
 
 		// make all `keyNames`+`rootNames` indices valid
 		keyNames.resize(nstart);
