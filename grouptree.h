@@ -628,6 +628,8 @@ struct groupTree_t {
 	 * @date 2021-11-04 00:44:47
 	 *
 	 * lookup/create and normalise any combination of Q, T and F, inverted or not.
+	 * Returns id of head of group list
+	 * 
 	 * NOTE: the return value may be inverted
 	 * 
 	 */
@@ -663,6 +665,7 @@ struct groupTree_t {
 		if (Q & IBIT) {
 			// "!Q?T:F" -> "Q?F:T"
 			uint32_t savT = T;
+
 			Q ^= IBIT;
 			T = F;
 			F = savT;
@@ -800,19 +803,14 @@ struct groupTree_t {
 #endif
 
 		/*
-		 * @date 2021-11-04 02:08:51
-		 * 
-		 * Second step: Collect selected cross-products of Q/T/F group lists
+		 * Fallback code and validation. 
+		 * Add QTF as single `1n9` node.
 		 */
-
-		/*
-		 * Fallback code and validation
-		 */
-		if (1) {
+		if (0) {
 			/*
 			 * Emit list header
 			 */
-			uint32_t gid = this->ncount++;
+			uint32_t    gid    = this->ncount++;
 			groupNode_t *pNode = this->N + gid;
 
 			if (gid > maxNodes - 10) {
@@ -821,9 +819,9 @@ struct groupTree_t {
 				exit(1);
 			}
 
-			pNode->gid = gid;
+			pNode->gid  = gid;
 			pNode->next = gid + 1;
-			pNode->sid = db.SID_SELF;
+			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = gid;
 
 			/*
@@ -838,7 +836,7 @@ struct groupTree_t {
 				exit(1);
 			}
 
-			pNode->gid = gid;
+			pNode->gid  = gid;
 			pNode->next = 0;
 
 			// set sid/slots
@@ -878,12 +876,330 @@ struct groupTree_t {
 
 			return gid;
 		}
-		
+
 		/*
-		 * Group lists always start with "a" (`SID_SELF`)
-		 * The pattern detector on the next layer will detect and add the Q/T/F combo to the collection   
+		 * @date 2021-11-04 02:08:51
+		 * 
+		 * Second step: create cross-products of Q/T/F group lists
 		 */
 
+		const groupNode_t *pZero = this->N + db.SID_ZERO;
+
+		uint32_t gid = 0;
+
+		// @formatter:off
+		for (unsigned iQ = Q; iQ != 0; iQ = this->N[iQ].next)
+		for (unsigned iT = T & ~IBIT; iT != 0; iT = this->N[iT].next)
+		for (unsigned iF = F; iF != 0; iF = this->N[iF].next) {
+		// @formatter:on
+
+			// point to cross-product components 
+			const groupNode_t *pNodeQ = this->N + iQ;
+			const groupNode_t *pNodeT = this->N + iT;
+			const groupNode_t *pNodeF = this->N + iF;
+
+			/*
+			 * @date 2021-11-05 01:32:20
+			 * 
+			 * Third step: Apply basic normalisation
+			 * Any collapses will result in an early return with the current group being orphaned
+			 */
+
+			// bump versioned memory
+			uint32_t thisVersion = ++slotVersionNr;
+			if (thisVersion == 0) {
+				// version overflow, clear
+				memset(slotVersion, 0, this->maxNodes * sizeof(*slotVersion));
+
+				thisVersion = ++slotVersionNr;
+			}
+
+			uint32_t Ti = T & IBIT;
+
+			if (Ti) {
+
+				if (pNodeT == pZero) {
+					if (pNodeQ == pNodeF) {
+						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+						return pNodeQ->gid;
+					} else if (pNodeF == pZero) {
+						// [ 0] a ? !0 : 0  ->  a
+						return pNodeQ->gid;
+					} else {
+						// [ 2] a ? !0 : b  -> "+" OR
+					}
+				} else if (pNodeT == pNodeQ) {
+					if (pNodeQ == pNodeF) {
+						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+						return pZero->gid;
+					} else if (pNodeF == pZero) {
+						// [ 3] a ? !a : 0  ->  0
+						return pZero->gid;
+					} else {
+						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						pNodeQ = pNodeF;
+						pNodeF = pZero;
+					}
+				} else {
+					if (pNodeQ == pNodeF) {
+						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+						pNodeF = pZero;
+					} else {
+						// [ 6] a ? !b : 0  -> ">" greater-than
+						// [ 8] a ? !b : b  -> "^" not-equal
+						// [ 9] a ? !b : c  -> "!" QnTF
+					}
+				}
+
+			} else {
+
+				if (pNodeT == pZero) {
+					if (pNodeQ == pNodeF) {
+						// [11] a ?  0 : a -> 0
+						return pZero->gid;
+					} else if (pNodeF == pZero) {
+						// [10] a ?  0 : 0 -> 0
+						assert(0); // already tested
+						return pZero->gid;
+					} else {
+						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						pNodeT = pNodeQ;
+						Ti     = IBIT;
+						pNodeQ = pNodeF;
+						pNodeF = pZero;
+					}
+				} else if (pNodeQ == pNodeT) {
+					if (pNodeQ == pNodeF) {
+						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+						assert(0); // already tested
+						return pNodeQ->gid;
+					} else if (pNodeF == pZero) {
+						// [13] a ?  a : 0 -> a
+						return pNodeQ->gid;
+					} else {
+						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+						pNodeT = pZero;
+						Ti     = IBIT;
+					}
+				} else {
+					if (pNodeQ == pNodeF) {
+						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+						pNodeF = pZero;
+					} else {
+						// [16] a ?  b : 0             "&" and
+						// [18] a ?  b : b -> b        ALREADY TESTED		
+						// [19] a ?  b : c             "?" QTF
+					}
+				}
+			}
+
+			/*
+			 * @date 2021-11-05 01:05:27
+			 * 
+			 * Fourth step: load product Q/T/F into slots and perform database lookup
+			 * 
+			 */
+
+			// reassembly transforms
+			char        slotsT[MAXSLOTS + 1];
+			char        slotsF[MAXSLOTS + 1];
+			// resulting slots containing gid's
+			uint32_t    slotsR[MAXSLOTS];
+			// nodes already processed
+			unsigned    nextSlot = 0;
+			signature_t *pSignature;
+			
+			/*
+			 * Slot population as `fragmentTree_t` would do
+			 */
+
+			bool overflow = false;
+
+			// NOTE: `slotQ` is always `tid=0`, so `slotsQ[]` is not needed
+			pSignature = db.signatures + pNodeQ->sid;
+			for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+				// get slot value
+				uint32_t endpoint = pNodeQ->slots[iSlot];
+				assert(endpoint != 0);
+
+				// was it seen before
+				if (slotVersion[endpoint] != thisVersion) {
+					slotVersion[endpoint] = thisVersion;
+					slotMap[endpoint]     = (char) ('a' + nextSlot); // assign new placeholder
+					slotsR[nextSlot]      = endpoint; // put endpoint in result
+					nextSlot++;
+				}
+			}
+
+			pSignature = db.signatures + pNodeT->sid;
+			for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+				// get slot value
+				uint32_t endpoint = pNodeT->slots[iSlot];
+				assert(endpoint != 0);
+
+				// was it seen before
+				if (slotVersion[endpoint] != thisVersion) {
+					overflow = (nextSlot >= MAXSLOTS);
+					if (overflow)
+						break;
+					slotVersion[endpoint] = thisVersion;
+					slotMap[endpoint]     = (char) ('a' + nextSlot);
+					slotsR[nextSlot]      = endpoint;
+					nextSlot++;
+				}
+				slotsT[iSlot] = slotMap[endpoint];
+			}
+			slotsT[pSignature->numPlaceholder] = 0;
+
+			// test for slot overflow
+			if (overflow)
+				continue;
+
+			/*
+			 * Lookup `patternFirst`
+			 */
+			
+			uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
+			assert(tidSlotT != IBIT);
+
+			uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid, tidSlotT);
+			if (db.patternFirstIndex[ixFirst] == 0)
+				continue; // not found
+
+			uint32_t idFirst = db.patternFirstIndex[ixFirst];
+
+			/*
+			 * Add `F` to slots
+			 */
+
+			pSignature = db.signatures + pNodeF->sid;
+			for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+				// get slot value
+				uint32_t endpoint = pNodeF->slots[iSlot];
+				assert(endpoint != 0);
+
+				// was it seen before
+				if (slotVersion[endpoint] != thisVersion) {
+					overflow = (nextSlot >= MAXSLOTS);
+					if (overflow)
+						break;
+					slotVersion[endpoint] = thisVersion;
+					slotMap[endpoint]     = (char) ('a' + nextSlot);
+					slotsR[nextSlot]      = endpoint;
+					nextSlot++;
+				}
+				slotsF[iSlot] = slotMap[endpoint];
+			}
+			slotsF[pSignature->numPlaceholder] = 0;
+
+			// test for slot overflow
+			if (overflow)
+				continue;
+
+			/*
+			 * Lookup `patternSecond`
+			 */
+
+			uint32_t tidSlotF = db.lookupFwdTransform(slotsF);
+			assert(tidSlotF != IBIT);
+
+			uint32_t ixSecond = db.lookupPatternSecond(idFirst, pNodeF->sid, tidSlotF);
+			if (db.patternSecondIndex[ixSecond] == 0)
+				continue; // not found
+			uint32_t        idSecond = db.patternSecondIndex[ixSecond];
+			patternSecond_t *pSecond = db.patternsSecond + idSecond;
+
+			/*
+			 * @date 2021-11-05 02:42:24
+			 * 
+			 * Fifth step: Extract result out of `slotsR[]` and apply signature based endpoint swapping
+			 */
+
+			// zero unused entries
+			while (nextSlot < MAXSLOTS)
+				slotsR[nextSlot++] = 0;
+
+			pSignature = db.signatures + pSecond->sidR;
+			const char *pTransformExtract = db.fwdTransformNames[pSecond->tidSlotR];
+
+			// extract
+			uint32_t      finalSlots[MAXSLOTS];
+			for (unsigned iSlot    = 0; iSlot < pSignature->numPlaceholder; iSlot++)
+				finalSlots[iSlot] = slotsR[pTransformExtract[iSlot] - 'a'];
+			for (unsigned iSlot       = pSignature->numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+				finalSlots[iSlot] = 0;
+
+			/*
+			 * Apply endpoint swapping
+			 */
+			if (pSignature->swapId) {
+				swap_t *pSwap = db.swaps + pSignature->swapId;
+
+				bool changed;
+				do {
+					changed = false;
+
+					for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+						unsigned tid = pSwap->tids[iSwap];
+
+						// get the transform string
+						const char *pTransformSwap = db.fwdTransformNames[tid];
+
+						// test if swap needed
+						bool needSwap = false;
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+							if (this->compare(finalSlots[tinyTree_t::TINYTREE_KSTART + i], this, finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a']) > 0) {
+								needSwap = true;
+								break;
+							}
+							if (this->compare(finalSlots[tinyTree_t::TINYTREE_KSTART + i], this, finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a']) < 0) {
+								needSwap = false;
+								break;
+							}
+						}
+
+						if (needSwap) {
+							uint32_t newSlots[MAXSLOTS];
+
+							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+								newSlots[i] = finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a'];
+
+							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+								finalSlots[tinyTree_t::TINYTREE_KSTART + i] = newSlots[i];
+
+							changed = true;
+						}
+					}
+				} while (changed);
+			}
+			
+			/*
+			 * Add final sid/slot to collection
+			 */
+			
+			uint32_t nid = addToCollection(gid, pSecond->sidR, finalSlots);
+
+			// update current group id to head of list
+			gid = this->N[nid].gid;
+		}
+
+		// return head of list
+		return gid;
+	}
+
+	/*
+	 * @date 2021-11-05 03:09:35
+	 * 
+	 * Add a node to the group list
+	 * Create a new list if necessary (gid=0)
+	 * Return id of list header 
+	 * 
+	 * Handle merging of lists if sit/slot combo already belongs to a different list
+	 */
+	uint32_t addToCollection(uint32_t gid, uint32_t sid, uint32_t *pSlots) {
+		assert(!"placeholder");
+		return 0;
 	}
 
 	/*
