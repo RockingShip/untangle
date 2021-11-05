@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-05 00:34:45 Fixed: Fallback `geval` with dumb `1n9` nodes working.
 2021-11-04 13:26:03 Changed: Renamed `database_t::rawDatabase` to `database_t::rawData`.
 2021-11-04 12:36:02 Added: `SID_` id's for all top-level 1n9 signatures.
 2021-11-04 12:29:12 Added: Fingerprint database by adding `sidCRC`.

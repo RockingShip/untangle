@@ -368,33 +368,73 @@ struct gevalContext_t {
 		// apply tree on placeholders
 		// `pFootprint` is a replacement for "number", it is a bit vector with the Q/T/F operator
 		// the whole tree assumes `tid=0`
-		
-		// Q/T/F 
-		
-		tinyTree_t sigTree(ctx);
-		
-		// go through all nodes
-		for (uint32_t iNode = pTree->nstart; iNode < pTree->ncount; iNode++) {
-			// load and apply the signature 
-			sigTree.loadStringFast(pStore->signatures[pTree->N[iNode].sid].name);
 
-			for (uint32_t iSig = tinyTree_t::TINYTREE_NSTART; iSig < sigTree.count; iSig++) {
-				const tinyNode_t *pSig = sigTree.N + iSig;
-				const uint32_t Q  = pSig->Q;
-				const uint32_t Tu = pSig->T & ~IBIT;
-				const uint32_t Ti = pSig->T & IBIT;
-				const uint32_t F  = pSig->F;
+		// find group headers
+		for (uint32_t iGroup = pTree->nstart; iGroup < pTree->ncount; iGroup++) {
+			if (pTree->N[iGroup].gid != iGroup)
+				continue; // not a group header
 
-				// determine if the operator is `QTF` or `QnTF`
-				if (Ti) {
-					// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
-					for (unsigned j = 0; j < opt_dataSize; j++)
-						pFootprint[iNode][j] = (pFootprint[Q][j] & ~pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
-				} else {
-					// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
-					for (unsigned j = 0; j < opt_dataSize; j++)
-						pFootprint[iNode][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+			// top-level components	
+			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
+
+			// walk through group list in search of a `1n9` node
+			for (uint32_t iNode = iGroup; iNode; iNode = pTree->N[iNode].next) {
+				groupNode_t *pNode = pTree->N + iNode;
+				
+				// catch `1n9`
+				if (pNode->sid == pStore->SID_OR) {
+					Q = pNode->slots[0];
+					Tu = 0;
+					Ti = IBIT;
+					F = pNode->slots[1];
+					break;
+				} else if (pNode->sid == pStore->SID_GT) {
+					Q = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F = 0;
+					break;
+				} else if (pNode->sid == pStore->SID_NE) {
+					Q = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = IBIT;
+					F = pNode->slots[1];
+					break;
+				} else if (pNode->sid == pStore->SID_AND) {
+					Q = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F = 0;
+					break;
+				} else if (pNode->sid == pStore->SID_QNTF) {
+					Q = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = IBIT;
+					F = pNode->slots[2];
+					break;
+				} else if (pNode->sid == pStore->SID_QTF) {
+					Q = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F = pNode->slots[2];
+					break;
 				}
+			}
+			
+			// was anything found
+			if (Q == 0)
+				ctx.fatal("\n{\"error\":\"group misses 1n9\",\"where\":\"%s:%s:%d\",\"gid\":%u}\n",
+					  __FUNCTION__, __FILE__, __LINE__, iGroup);
+
+			// determine if the operator is `QTF` or `QnTF`
+			if (Ti) {
+				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
+				for (unsigned j = 0; j < opt_dataSize; j++)
+					pFootprint[iGroup][j] = (pFootprint[Q][j] & ~pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+			} else {
+				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
+				for (unsigned j = 0; j < opt_dataSize; j++)
+					pFootprint[iGroup][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
 			}
 		}
 		

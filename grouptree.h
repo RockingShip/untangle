@@ -36,34 +36,11 @@
 
 struct groupNode_t {
 
+	uint32_t gid;             // group to which this node belongs
+	uint32_t next;            // nest node in list
+
 	uint32_t sid;             // signature of slot (not inverted)
 	uint32_t slots[MAXSLOTS]; // references to other groups (not fragments)
-
-#if 0
-	uint32_t Q;                // the question
-	uint32_t T;                // the answer if true (may be inverted)
-	uint32_t F;                // the answer if false
-
-	// OR (L?~0:R) is first because it has the QnTF signature
-	inline bool __attribute__((pure)) isOR(void) const {
-		return T == IBIT;
-	}
-
-	// GT (L?~R:0) is second because it has the QnTF signature
-	inline bool __attribute__((pure)) isGT(void) const {
-		return (T & IBIT) && F == 0;
-	}
-
-	// NE (L?~R:R) third because Ti is set (QnTF) but Tu==F
-	inline bool __attribute__((pure)) isNE(void) const {
-		return (T ^ IBIT) == F;
-	}
-
-	// AND (L?R:0) last because not QnTF
-	inline bool __attribute__((pure)) isAND(void) const {
-		return !(T & IBIT) && F == 0;
-	}
-#endif
 
 };
 
@@ -138,19 +115,17 @@ struct groupTree_t {
 	 * Flags to indicate if sections were allocated or mapped
 	 */
 	enum {
-		//@formatter:off
-//		ALLOCFLAG_NAMES = 0,	// key/root names
-//		ALLOCFLAG_NODES,	// nodes
-//		ALLOCFLAG_ROOTS,	// roots
-//		ALLOCFLAG_HISTORY,	// history
-//		ALLOCFLAG_INDEX,	// node index/lookup table
+		ALLOCFLAG_NAMES = 0,    // key/root names
+		ALLOCFLAG_NODES,        // nodes
+		ALLOCFLAG_ROOTS,        // roots
+		ALLOCFLAG_HISTORY,      // history
+		ALLOCFLAG_INDEX,        // node index/lookup table
 
-//		ALLOCMASK_NAMES   = 1 << ALLOCFLAG_NAMES,
-//		ALLOCMASK_NODES   = 1 << ALLOCFLAG_NODES,
-//		ALLOCMASK_ROOTS   = 1 << ALLOCFLAG_ROOTS,
-//		ALLOCMASK_HISTORY = 1 << ALLOCFLAG_HISTORY,
-//		ALLOCMASK_INDEX   = 1 << ALLOCFLAG_INDEX,
-		//@formatter:on
+		ALLOCMASK_NAMES   = 1 << ALLOCFLAG_NAMES,
+		ALLOCMASK_NODES   = 1 << ALLOCFLAG_NODES,
+		ALLOCMASK_ROOTS   = 1 << ALLOCFLAG_ROOTS,
+		ALLOCMASK_HISTORY = 1 << ALLOCFLAG_HISTORY,
+		ALLOCMASK_INDEX   = 1 << ALLOCFLAG_INDEX,
 	};
 
 	// resources
@@ -338,7 +313,6 @@ struct groupTree_t {
 	numRewrite(0)
 #endif
 	{
-#if 0
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
 		if (this->roots)
@@ -354,26 +328,25 @@ struct groupTree_t {
 
 		// setup default keys
 		for (unsigned iKey = 0; iKey < nstart; iKey++) {
-			N[iKey].Q = 0;
-			N[iKey].T = IBIT;
-			N[iKey].F = iKey;
+			groupNode_t *pNode = this->N + iKey;
+
+			memset(pNode, 0, sizeof(*pNode));
+
+			pNode->gid  = iKey;
+			pNode->next = 0;
+			pNode->sid  = db.SID_SELF;
+			pNode->slots[0] = iKey;
 		}
 
 		// setup default roots
 		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
 			roots[iRoot] = iRoot;
-
-#if ENABLE_BASEEVALUATOR
-		gBaseEvaluator = new baseEvaluator_t(kstart, ostart, nstart, maxNodes);
-#endif
-#endif
 	}
 
 	/*
 	 * Release system resources
 	 */
 	virtual ~groupTree_t() {
-#if 0		
 		// release allocations if not mmapped
 		if (allocFlags & ALLOCMASK_NODES)
 			ctx.myFree("groupTree_t::N", this->N);
@@ -386,6 +359,7 @@ struct groupTree_t {
 			ctx.myFree("groupTree_t::nodeIndexVersion", this->nodeIndexVersion);
 		}
 
+#if 0		
 		// release maps
 		if (stackL)
 			freeMap(stackL);
@@ -399,6 +373,7 @@ struct groupTree_t {
 			freeMap(compBeenWhatL);
 		if (compBeenWhatR)
 			freeMap(compBeenWhatR);
+#endif
 
 		// release pools
 		while (numPoolMap > 0)
@@ -435,6 +410,7 @@ struct groupTree_t {
 		nodeIndexVersion = NULL;
 		pPoolMap         = NULL;
 		pPoolVersion     = NULL;
+#if 0
 		stackL           = NULL;
 		stackR           = NULL;
 		compBeenWhatL    = NULL;
@@ -452,6 +428,8 @@ struct groupTree_t {
 	void rewind(void) {
 		// rewind nodes
 		this->ncount = this->nstart;
+		
+		// todo:
 #if 0		
 		// invalidate lookup cache
 		++this->nodeIndexVersionNr;
@@ -675,18 +653,282 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date  2021-05-12 18:08:34
+	 * @date 2021-11-04 00:44:47
 	 *
 	 * lookup/create and normalise any combination of Q, T and F, inverted or not.
 	 * NOTE: the return value may be inverted
-	 * This call is the isolation layer between the existence of inverts.
-	 * The callers of this function should propagate invert to the root
-	 * The workers of this function: invert no longer exists!! remove all the code and logic related.
-	 * Level 3 rewrites make `lookupNode()` lose it's meaning
+	 * 
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount = NULL, unsigned depth = 0) {
-		assert(!"placeholder");
-		return 0;
+		depth++;
+		assert(depth < 240);
+
+		/*
+	  	 * @date 2021-11-04 01:58:34
+		 * 
+		 * First step: Apply same normalisation as the database generators  
+		 */
+
+		assert ((Q & ~IBIT) < this->ncount);
+		assert ((T & ~IBIT) < this->ncount);
+		assert ((F & ~IBIT) < this->ncount);
+
+		/*
+		 * Test for endpoint
+		 */
+
+		if (T == F)
+			return F;
+
+		/*
+		 * Level 1 normalisation: invert propagation
+		 *
+		 * !a ?  b :  c  ->  a ? c : b
+		 *  0 ?  b :  c  ->  c
+		 *  a ?  b : !c  ->  !(a ? !b : c)
+		 */
+
+		if (Q & IBIT) {
+			// "!Q?T:F" -> "Q?F:T"
+			uint32_t savT = T;
+			Q ^= IBIT;
+			T = F;
+			F = savT;
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~Q\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+		}
+		if (Q == 0) {
+			// "0?T:F" -> "F"
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"Q=0\",\"N\":%s%u}", (F & IBIT) ? "~" : "", (F & ~IBIT));
+			return F;
+		}
+
+		if (F & IBIT) {
+			// "Q?T:!F" -> "!(Q?!T:F)"
+			F ^= IBIT;
+			T ^= IBIT;
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level1\":\"~F\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+			return addNormaliseNode(Q, T, F, pFailCount, depth) ^ IBIT;
+		}
+
+		/*
+		 * Level 2 normalisation: single node rewrites
+		 *
+		 * appreciated:
+		 *
+		 *  [ 0] a ? !0 : 0  ->  a
+		 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
+		 *  [ 2] a ? !0 : b                  "+" or
+		 *  [ 3] a ? !a : 0  ->  0
+		 *  [ 4] a ? !a : a  ->  a ? !a : 0
+		 *  [ 5] a ? !a : b  ->  b ? !a : b
+		 *  [ 6] a ? !b : 0                  ">" greater-than
+		 *  [ 7] a ? !b : a  ->  a ? !b : 0
+		 *  [ 8] a ? !b : b                  "^" not-equal
+		 *  [ 9] a ? !b : c                  "!" QnTF
+		 *
+		 * depreciated:
+		 *  [10] a ?  0 : 0 -> 0
+		 *  [11] a ?  0 : a -> 0
+		 *  [12] a ?  0 : b -> b ? !a : 0
+		 *  [13] a ?  a : 0 -> a
+		 *  [14] a ?  a : a -> a ?  a : 0
+		 *  [15] a ?  a : b -> a ? !0 : b
+		 *  [16] a ?  b : 0                  "&" and
+		 *  [17] a ?  b : a -> a ?  b : 0
+		 *  [18] a ?  b : b -> b
+		 *  [19] a ?  b : c                  "?" QTF
+		 *
+ 		 * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
+ 		 *
+		 */
+
+		if (T & IBIT) {
+
+			if (T == IBIT) {
+				if (Q == F) {
+					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a!\",\"N\":%u}", Q);
+					return Q;
+				} else if (F == 0) {
+					// [ 0] a ? !0 : 0  ->  a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00!\",\"N\":%u}", Q);
+					return Q;
+				} else {
+					// [ 2] a ? !0 : b  -> "+" OR
+				}
+			} else if ((T ^ IBIT) == Q) {
+				if (Q == F) {
+					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa!\",\"N\":%u}", 0);
+					return 0;
+				} else if (F == 0) {
+					// [ 3] a ? !a : 0  ->  0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0!\",\"N\":%u}", 0);
+					return 0;
+				} else {
+					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+					Q = F;
+					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+			} else {
+				if (Q == F) {
+					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else {
+					// [ 6] a ? !b : 0  -> ">" greater-than
+					// [ 8] a ? !b : b  -> "^" not-equal
+					// [ 9] a ? !b : c  -> "!" QnTF
+				}
+			}
+
+		} else {
+
+			if (T == 0) {
+				if (Q == F) {
+					// [11] a ?  0 : a -> 0
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0a?\",\"N\":%u}", 0);
+					return 0;
+				} else if (F == 0) {
+					// [10] a ?  0 : 0 -> 0
+					assert(0); // already tested
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a00?\",\"N\":%u}", 0);
+					return 0;
+				} else {
+					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+					T = Q ^ IBIT;
+					Q = F;
+					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"a0b?!\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+			} else if (Q == T) {
+				if (Q == F) {
+					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+					assert(0); // already tested
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aaa?\",\"N\":%u}", Q);
+					return Q;
+				} else if (F == 0) {
+					// [13] a ?  a : 0 -> a
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aa0?\",\"N\":%u}", Q);
+					return Q;
+				} else {
+					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+					T = IBIT;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aab?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				}
+			} else {
+				if (Q == F) {
+					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+					F = 0;
+					if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"level2\":\"aba?\",\"qtf\":[%u,%s%u,%u]}", Q, (T & IBIT) ? "~" : "", (T & ~IBIT), F);
+				} else {
+					// [16] a ?  b : 0             "&" and
+					// [18] a ?  b : b -> b        ALREADY TESTED		
+					// [19] a ?  b : c             "?" QTF
+				}
+			}
+		}
+
+#if 0
+		/*
+		 * Lookup if QTF combo already exists
+		 */
+
+		uint32_t ix = this->lookupNode(Q, T, F);
+		if (this->nodeIndex[ix] != 0) {
+			// node already exists
+			if (ctx.opt_debug & context_t::DEBUGMASK_EXPLAIN) printf(",   \"old\":{\"qtf\":[%u,%s%u,%u],N:%u}", Q, T & IBIT ? "~" : "", T & ~IBIT, F, this->nodeIndex[ix]);
+			return this->nodeIndex[ix];
+		}
+
+#endif
+
+		/*
+		 * @date 2021-11-04 02:08:51
+		 * 
+		 * Second step: Collect selected cross-products of Q/T/F group lists
+		 */
+
+		/*
+		 * Fallback code and validation
+		 */
+		if (1) {
+			/*
+			 * Emit list header
+			 */
+			uint32_t gid = this->ncount++;
+			groupNode_t *pNode = this->N + gid;
+
+			if (gid > maxNodes - 10) {
+				fprintf(stderr, "[OVERFLOW]\n");
+				printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
+				exit(1);
+			}
+
+			pNode->gid = gid;
+			pNode->next = gid + 1;
+			pNode->sid = db.SID_SELF;
+			pNode->slots[0] = gid;
+
+			/*
+			 * Followed by top-level sid
+			 */
+
+			pNode = this->N + this->ncount++;
+
+			if (gid > maxNodes - 10) {
+				fprintf(stderr, "[OVERFLOW]\n");
+				printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
+				exit(1);
+			}
+
+			pNode->gid = gid;
+			pNode->next = 0;
+
+			// set sid/slots
+			if (T == IBIT) {
+				// OR
+				pNode->sid = db.SID_OR;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = F;
+			} else if (F == 0 && (Q & IBIT)) {
+				// GT
+				pNode->sid = db.SID_GT;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = T;
+			} else if (F == (T ^ IBIT)) {
+				// NE
+				pNode->sid = db.SID_NE;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = F;
+			} else if (F == 0) {
+				// AND
+				pNode->sid = db.SID_AND;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = T;
+			} else if (T & IBIT) {
+				// QNTF
+				pNode->sid = db.SID_QNTF;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = T & ~IBIT;
+				pNode->slots[2] = F;
+			} else {
+				// QTF
+				pNode->sid = db.SID_QTF;
+				pNode->slots[0] = Q;
+				pNode->slots[1] = T;
+				pNode->slots[2] = F;
+			}
+
+			return gid;
+		}
+		
+		/*
+		 * Group lists always start with "a" (`SID_SELF`)
+		 * The pattern detector on the next layer will detect and add the Q/T/F combo to the collection   
+		 */
+
 	}
 
 	/*
@@ -718,17 +960,257 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-05-22 19:18:33
+	 * @date 2021-11-04 01:15:46
 	 *
 	 * Export a sub-tree with a given head id as siting.
 	 * Optionally endpoint normalised with a separate transform.
 	 * Return string is static allocated
-	 *
+	 * 
+	 * NOTE: Tree is expressed in terms of 1n9 nodes
 	 * NOTE: `std::string` usage exception because this is NOT speed critical code AND strings can become gigantically large
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
-		assert(!"placeholder");
-		return 0;
+
+		std::string name;
+
+		/*
+		 * Endpoints are simple
+		 */
+		if ((id & ~IBIT) < this->nstart) {
+			if (pTransform) {
+				pTransform->clear();
+				if ((id & ~IBIT) == 0) {
+					name += '0';
+				} else {
+					uint32_t value = (id & ~IBIT) - this->kstart;
+
+					if (value < 26) {
+						*pTransform += (char) ('a' + value);
+					} else {
+						encodePrefix(*pTransform, value / 26);
+						*pTransform += (char) ('a' + (value % 26));
+					}
+
+					name += 'a';
+				}
+
+			} else {
+				if ((id & ~IBIT) == 0) {
+					name += '0';
+				} else {
+					uint32_t value = (id & ~IBIT) - this->kstart;
+					if (value < 26) {
+						name += (char) ('a' + value);
+					} else {
+						encodePrefix(name, value / 26);
+						name += (char) ('a' + (value % 26));
+					}
+				}
+			}
+
+
+			// test for invert
+			if (id & IBIT)
+				name += '~';
+
+			return name;
+		}
+
+		uint32_t nextPlaceholder = this->kstart;
+		uint32_t nextNode        = this->nstart;
+		uint32_t *pStack         = allocMap();
+		uint32_t *pMap           = allocMap();
+		uint32_t *pVersion       = allocVersion();
+		uint32_t thisVersion     = ++mapVersionNr;
+		uint32_t numStack        = 0; // top of stack
+
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
+		}
+
+		// starting point
+		pStack[numStack++] = id & ~IBIT;
+
+		do {
+			// pop stack
+			uint32_t curr = pStack[--numStack];
+
+			assert(curr != 0);
+
+			// if endpoint then emit
+			if (curr < this->nstart) {
+				uint32_t value;
+
+				if (!pTransform) {
+					// endpoint
+					value = curr - this->kstart;
+				} else {
+					// placeholder
+					if (pVersion[curr] != thisVersion) {
+						pVersion[curr] = thisVersion;
+						pMap[curr]     = nextPlaceholder++;
+
+						value = curr - this->kstart;
+						if (value < 26) {
+							*pTransform += (char) ('a' + value);
+						} else {
+							encodePrefix(*pTransform, value / 26);
+							*pTransform += (char) ('a' + (value % 26));
+						}
+					}
+
+					value = pMap[curr] - this->kstart;
+				}
+
+				// convert id to (prefixed) letter
+				if (value < 26) {
+					name += (char) ('a' + value);
+				} else {
+					encodePrefix(name, value / 26);
+					name += (char) ('a' + (value % 26));
+				}
+
+				continue;
+			}
+
+			/*
+			 * First node in group list is SID_SELF,
+			 * Second node is 1n9
+			 */
+
+			// find group headers
+			assert(this->N[curr].gid == curr);
+
+			// top-level components	
+			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
+
+			// walk through group list in search of a `1n9` node
+			for (uint32_t iNode = curr; iNode; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+
+				if (pNode->sid == db.SID_OR) {
+					Q  = pNode->slots[0];
+					Tu = 0;
+					Ti = IBIT;
+					F  = pNode->slots[1];
+					break;
+				} else if (pNode->sid == db.SID_GT) {
+					Q  = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F  = 0;
+					break;
+				} else if (pNode->sid == db.SID_NE) {
+					Q  = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = IBIT;
+					F  = pNode->slots[1];
+					break;
+				} else if (pNode->sid == db.SID_AND) {
+					Q  = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F  = 0;
+					break;
+				} else if (pNode->sid == db.SID_QNTF) {
+					Q  = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = IBIT;
+					F  = pNode->slots[2];
+					break;
+				} else if (pNode->sid == db.SID_QTF) {
+					Q  = pNode->slots[0];
+					Tu = pNode->slots[1];
+					Ti = 0;
+					F  = pNode->slots[2];
+					break;
+				}
+			}
+			if (Q == 0)
+				ctx.fatal("\n{\"error\":\"group misses 1n9\",\"where\":\"%s:%s:%d\",\"gid\":%u}\n",
+					  __FUNCTION__, __FILE__, __LINE__, curr);
+		
+			// determine if node already handled
+			if (pVersion[curr] != thisVersion) {
+				// first time
+				pVersion[curr] = thisVersion;
+				pMap[curr]     = 0;
+
+				// push id so it visits again after expanding
+				pStack[numStack++] = curr;
+
+				// push non-zero endpoints
+				if (F >= this->kstart)
+					pStack[numStack++] = F;
+				if (Tu != F && Tu >= this->kstart)
+					pStack[numStack++] = Tu;
+				if (Q >= this->kstart)
+					pStack[numStack++] = Q;
+
+				assert(numStack < maxNodes);
+
+			} else if (pMap[curr] == 0) {
+				// node complete, output operator
+				pMap[curr] = nextNode++;
+
+				if (Ti) {
+					if (Tu == 0) {
+						// OR Q?!0:F
+						name += '+';
+					} else if (F == 0) {
+						// GT Q?!T:0
+						name += '>';
+					} else if (F == Tu) {
+						// NE Q?!F:F
+						name += '^';
+					} else {
+						// QnTF Q?!T:F
+						name += '!';
+					}
+				} else {
+					if (Tu == 0) {
+						// LT Q?0:F
+						name += '<';
+					} else if (F == 0) {
+						// AND Q?T:0
+						name += '&';
+					} else if (F == Tu) {
+						// SELF Q?F:F
+						assert(!"Q?F:F");
+					} else {
+						// QTF Q?T:F
+						name += '?';
+					}
+				}
+
+			} else {
+				// back-reference to previous node
+				uint32_t dist = nextNode - pMap[curr];
+
+				// convert id to (prefixed) back-link
+				if (dist < 10) {
+					name += (char) ('0' + dist);
+				} else {
+					encodePrefix(name, dist / 10);
+					name += (char) ('0' + (dist % 10));
+				}
+			}
+
+		} while (numStack > 0);
+
+		assert(nextPlaceholder <= this->nstart);
+
+		// test for inverted-root
+		if (id & IBIT)
+			name += '~';
+
+		freeMap(pMap);
+		freeMap(pStack);
+		freeVersion(pVersion);
+
+		return name;
 	}
 
 	/*
@@ -1331,6 +1813,10 @@ struct groupTree_t {
 	 * Save database to binary data file
 	 * NOTE: Tree is compacted on writing
 	 * NOTE: With larger trees over NFS, this may take fome time
+	 * TODO: optional: sort lists before writing
+	 * first entry of lists is always SID_SELF, with the
+	 * SID_ZERO also included because it represents the reference value
+	 * 0 as a value, reference and operator are inter changable. 
 	 */
 	void saveFile(const char *fileName, bool showProgress = true) {
 		assert(numRoots > 0);
@@ -1826,12 +2312,13 @@ struct groupTree_t {
 		if (jResult == NULL)
 			jResult = json_object();
 
-		char crcstr[32];
-		sprintf(crcstr, "%08x", fileHeader->crc32);
-
 		json_object_set_new_nocheck(jResult, "flags", json_integer(fileHeader->magic_flags));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
-		json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
+		{
+			char crcstr[32];
+			sprintf(crcstr, "%08x", fileHeader->crc32);
+			json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
+		}
 		json_object_set_new_nocheck(jResult, "kstart", json_integer(fileHeader->kstart));
 		json_object_set_new_nocheck(jResult, "ostart", json_integer(fileHeader->ostart));
 		json_object_set_new_nocheck(jResult, "estart", json_integer(fileHeader->estart));
