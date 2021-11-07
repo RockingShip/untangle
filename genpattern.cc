@@ -734,7 +734,7 @@ int main(int argc, char *argv[]) {
 			if (db.patternSecondIndexSize > size)
 				db.patternSecondIndexSize = size;
 			
-			db.rebuildIndices(database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNSECOND);
+			db.rebuildIndices(database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECONDINDEX);
 		}
 
 		// unexpected termination should unlink the outputs

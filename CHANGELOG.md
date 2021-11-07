@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-07 00:42:46 Fixed: `genpattern` recreating indices on startup.
 2021-11-07 00:38:56 Changed: Move `database_t::SID_*` to `groupTree_t::SID_*`. 
 2021-11-05 14:27:40 Added: `groupTree_t::addNormaliseNode()`.
 2021-11-05 14:21:38 Added: Cross-product slots for adding nodes.
