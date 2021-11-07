@@ -954,10 +954,15 @@ struct groupTree_t {
 
 		uint32_t gid = 0;
 
+		/*
+		 * @date 2021-11-05 18:48:34
+		 * Q/T/F are zero when referencing `SID_ZERO`
+		 * Therefore end con
+		 */
 		// @formatter:off
-		for (unsigned iQ = Q; iQ != 0; iQ = this->N[iQ].next)
-		for (unsigned iT = T & ~IBIT; iT != 0; iT = this->N[iT].next)
-		for (unsigned iF = F; iF != 0; iF = this->N[iF].next) {
+		unsigned iQ = Q;         do {
+		unsigned iT = T & ~IBIT; do {
+		unsigned iF = F;         do {
 		// @formatter:on
 
 			// point to cross-product components 
@@ -1249,7 +1254,12 @@ struct groupTree_t {
 
 			// update current group id to head of list
 			gid = this->N[nid].gid;
-		}
+
+		// @formatter:off
+		} while (iF != 0 && (iF = this->N[iF].next));
+		} while (iT != 0 && (iT = this->N[iT].next));
+		} while (iQ != 0 && (iQ = this->N[iQ].next));
+		// @formatter:on
 
 		// return head of list
 		return gid;
