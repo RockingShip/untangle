@@ -43,6 +43,8 @@ struct groupNode_t {
 	 * The list is unordered, except for the first node, 
 	 * The first node is always `0n9` (being either `SID_ZERO` or `SID_SELF`)
 	 * Each active list should have at least one `1n9` node.
+	 * 
+	 * Lists consist of several layers, each layer representing a signature node size.
 	 */
 	uint32_t gid;
 	
@@ -194,6 +196,8 @@ struct groupTree_t {
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
+	// reserved 1n9 SID id's
+	uint32_t                 SID_ZERO, SID_SELF, SID_OR, SID_GT, SID_NE, SID_AND, SID_QNTF, SID_QTF;
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -313,9 +317,25 @@ struct groupTree_t {
 		keyNames.resize(nstart);
 		rootNames.resize(numRoots);
 
+		// lookup 1n9 sids
+		this->SID_ZERO = db.signatureIndex[db.lookupSignature("0")];
+		this->SID_SELF = db.signatureIndex[db.lookupSignature("a")];
+		this->SID_OR   = db.signatureIndex[db.lookupSignature("ab+")];
+		this->SID_GT   = db.signatureIndex[db.lookupSignature("ab>")];
+		this->SID_NE   = db.signatureIndex[db.lookupSignature("ab^")];
+		this->SID_QNTF = db.signatureIndex[db.lookupSignature("abc!")];
+
+		// test they are available
+		if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
+			ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\"}\n", __FUNCTION__, __FILE__, __LINE__);
+
+		// AND/QTF are optional  
+		this->SID_AND = db.signatureIndex[db.lookupSignature("ab&")];
+		this->SID_QTF = db.signatureIndex[db.lookupSignature("abc?")];
+
 		// setup default keys
 		memset(this->N + 0, 0, sizeof(*this->N));
-		this->N[0].sid = db.SID_ZERO;
+		this->N[0].sid = SID_ZERO;
 		
 		for (unsigned iKey = 1; iKey < nstart; iKey++) {
 			groupNode_t *pNode = this->N + iKey;
@@ -324,7 +344,7 @@ struct groupTree_t {
 
 			pNode->gid  = iKey;
 			pNode->next = 0;
-			pNode->sid  = db.SID_SELF;
+			pNode->sid  = SID_SELF;
 			pNode->slots[0] = iKey;
 		}
 
@@ -821,7 +841,7 @@ struct groupTree_t {
 
 			pNode->gid  = gid;
 			pNode->next = gid + 1;
-			pNode->sid  = db.SID_SELF;
+			pNode->sid  = SID_SELF;
 			pNode->slots[0] = gid;
 
 			/*
@@ -842,33 +862,33 @@ struct groupTree_t {
 			// set sid/slots
 			if (T == IBIT) {
 				// OR
-				pNode->sid = db.SID_OR;
+				pNode->sid = SID_OR;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = F;
 			} else if (F == 0 && (Q & IBIT)) {
 				// GT
-				pNode->sid = db.SID_GT;
+				pNode->sid = SID_GT;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T;
 			} else if (F == (T ^ IBIT)) {
 				// NE
-				pNode->sid = db.SID_NE;
+				pNode->sid = SID_NE;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = F;
 			} else if (F == 0) {
 				// AND
-				pNode->sid = db.SID_AND;
+				pNode->sid = SID_AND;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T;
 			} else if (T & IBIT) {
 				// QNTF
-				pNode->sid = db.SID_QNTF;
+				pNode->sid = SID_QNTF;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T & ~IBIT;
 				pNode->slots[2] = F;
 			} else {
 				// QTF
-				pNode->sid = db.SID_QTF;
+				pNode->sid = SID_QTF;
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T;
 				pNode->slots[2] = F;
@@ -883,7 +903,7 @@ struct groupTree_t {
 		 * Second step: create cross-products of Q/T/F group lists
 		 */
 
-		const groupNode_t *pZero = this->N + db.SID_ZERO;
+		const groupNode_t *pZero = this->N + SID_ZERO;
 
 		uint32_t gid = 0;
 
@@ -1361,37 +1381,37 @@ struct groupTree_t {
 			for (uint32_t iNode = curr; iNode; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
-				if (pNode->sid == db.SID_OR) {
+				if (pNode->sid == SID_OR) {
 					Q  = pNode->slots[0];
 					Tu = 0;
 					Ti = IBIT;
 					F  = pNode->slots[1];
 					break;
-				} else if (pNode->sid == db.SID_GT) {
+				} else if (pNode->sid == SID_GT) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F  = 0;
 					break;
-				} else if (pNode->sid == db.SID_NE) {
+				} else if (pNode->sid == SID_NE) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F  = pNode->slots[1];
 					break;
-				} else if (pNode->sid == db.SID_AND) {
+				} else if (pNode->sid == SID_AND) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F  = 0;
 					break;
-				} else if (pNode->sid == db.SID_QNTF) {
+				} else if (pNode->sid == SID_QNTF) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F  = pNode->slots[2];
 					break;
-				} else if (pNode->sid == db.SID_QTF) {
+				} else if (pNode->sid == SID_QTF) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;

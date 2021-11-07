@@ -12,8 +12,9 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-07 00:38:56 Changed: Move `database_t::SID_*` to `groupTree_t::SID_*`. 
 2021-11-05 14:27:40 Added: `groupTree_t::addNormaliseNode()`.
-2021-11-05 14:21:38 Added: cross-product slots for adding nodes.
+2021-11-05 14:21:38 Added: Cross-product slots for adding nodes.
 2021-11-05 00:34:45 Fixed: Fallback `geval` with dumb `1n9` nodes working.
 2021-11-04 13:26:03 Changed: Renamed `database_t::rawDatabase` to `database_t::rawData`.
 2021-11-04 12:36:02 Added: `SID_` id's for all top-level 1n9 signatures.
