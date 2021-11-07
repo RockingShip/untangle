@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-07 00:52:41 Fixed: `genpattern.cc` keep collapsing structures.
 2021-11-07 00:45:21 Added: `groupTree_t::cmpare()`.
 2021-11-07 00:42:46 Fixed: `genpattern` recreating indices on startup.
 2021-11-07 00:38:56 Changed: Move `database_t::SID_*` to `groupTree_t::SID_*`. 

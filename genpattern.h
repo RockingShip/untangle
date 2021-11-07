@@ -461,7 +461,7 @@ struct genpatternContext_t : dbtool_t {
 			 */
 			footprint_t *v = pStore->fwdEvaluator;
 
-			// permutate all colums
+			// permutate all columns
 			for (unsigned iCol = 0; iCol < pStore->interleaveStep; iCol++) {
 
 				// apply the tree to the store
@@ -569,6 +569,7 @@ struct genpatternContext_t : dbtool_t {
 
 		/*
 		 * Convert tidR/tidQ/tidT/tidF such that `tidR=0`. 
+		 * One of the test patterns used: "bcd?bca?>"
 		 */
 		{
 			char reverse[MAXSLOTS + 1];
@@ -747,10 +748,11 @@ struct genpatternContext_t : dbtool_t {
 		slotsF[pSignature->numPlaceholder] = 0; // terminator
 
 		(void) slotsQ;
-		assert(nextSlot <= MAXSLOTS); // slots should not overflow
+		assert(nextSlot < MAXSLOTS); // slots should not overflow
 
 		slotsR[nextSlot] = 0; // terminator
 
+#if 0
 		/*
 		 * @date 2021-10-21 19:22:25
 		 * Structures that collapse, like "aab+b>" can have more slots than the resulting structure.
@@ -759,13 +761,19 @@ struct genpatternContext_t : dbtool_t {
 		 * 
 		 * @date 2021-10-25 20:03:41
 		 * Problem seems to be solved by the truncating the slots in `sidSwapTid()`.
+		 * 
+		 * @date 2021-11-06 00:14:38
+		 * `groupTree_t` needs collapses or things like "aabc^^^" will not be detected
 		 */
 		if (nextSlot != pStore->signatures[sidR].numPlaceholder) {
 			// collapse occurred, structure is unsuited as a pattern.
 			skipPlaceholder++;
 			return 0;
 		}
-
+#else
+		assert(nextSlot >= pStore->signatures[sidR].numPlaceholder);
+#endif
+		
 		/*
 		 * Get slot transforms relative to Q
 		 */
