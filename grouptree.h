@@ -1079,7 +1079,7 @@ struct groupTree_t {
 			uint32_t    slotsR[MAXSLOTS];
 			// nodes already processed
 			unsigned    nextSlot = 0;
-			signature_t *pSignature;
+			const signature_t *pSignature;
 			
 			/*
 			 * Slot population as `fragmentTree_t` would do
@@ -1134,7 +1134,7 @@ struct groupTree_t {
 			uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
 			assert(tidSlotT != IBIT);
 
-			uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid, tidSlotT);
+			uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
 			if (db.patternFirstIndex[ixFirst] == 0)
 				continue; // not found
 
@@ -1182,6 +1182,15 @@ struct groupTree_t {
 			patternSecond_t *pSecond = db.patternsSecond + idSecond;
 
 			/*
+			 * test for collapse, (result is `0n9`)
+			 */
+			if (pSecond->sidR == SID_ZERO) {
+				assert(!"SELF_ZERO");
+			} else if (pSecond->sidR == SID_SELF) {
+				assert(!"SELF_SELF");
+			}
+
+			/*
 			 * @date 2021-11-05 02:42:24
 			 * 
 			 * Fifth step: Extract result out of `slotsR[]` and apply signature based endpoint swapping
@@ -1221,11 +1230,11 @@ struct groupTree_t {
 						bool needSwap = false;
 
 						for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-							if (this->compare(finalSlots[tinyTree_t::TINYTREE_KSTART + i], this, finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a']) > 0) {
+							if (this->compare(finalSlots[i], this, finalSlots[pTransformSwap[i] - 'a']) > 0) {
 								needSwap = true;
 								break;
 							}
-							if (this->compare(finalSlots[tinyTree_t::TINYTREE_KSTART + i], this, finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a']) < 0) {
+							if (this->compare(finalSlots[i], this, finalSlots[pTransformSwap[i] - 'a']) < 0) {
 								needSwap = false;
 								break;
 							}
@@ -1235,10 +1244,10 @@ struct groupTree_t {
 							uint32_t newSlots[MAXSLOTS];
 
 							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-								newSlots[i] = finalSlots[tinyTree_t::TINYTREE_KSTART + pTransformSwap[i] - 'a'];
+								newSlots[i] = finalSlots[pTransformSwap[i] - 'a'];
 
 							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-								finalSlots[tinyTree_t::TINYTREE_KSTART + i] = newSlots[i];
+								finalSlots[i] = newSlots[i];
 
 							changed = true;
 						}
@@ -1275,8 +1284,46 @@ struct groupTree_t {
 	 * Handle merging of lists if sit/slot combo already belongs to a different list
 	 */
 	uint32_t addToCollection(uint32_t gid, uint32_t sid, uint32_t *pSlots) {
-		assert(!"placeholder");
-		return 0;
+		uint32_t ix = this->lookupNode(sid, pSlots);
+		if (this->nodeIndex[ix] != 0) {
+			// node already exists
+			assert(this->N[this->nodeIndex[ix]].gid == gid);
+			return this->nodeIndex[ix];
+		}
+
+		if (gid == 0) {
+			/*
+			 * Start new group, do not add to index
+			 */
+			uint32_t selfSlots[MAXSLOTS] = { this->ncount }; // other slots are zerod
+			assert(selfSlots[MAXSLOTS-1] == 0);
+			
+			gid    = this->newNode(SID_SELF, selfSlots);
+			assert(gid == selfSlots[0]);
+			
+			this->N[gid].gid = gid;
+		}
+
+		// create node
+		uint32_t nid = this->newNode(sid, pSlots);
+
+		// add to index
+		this->nodeIndex[ix] = nid;
+
+		groupNode_t *pNode = this->N + nid;
+
+		// add to list, keep it simple, SID_SELF is always first of list
+		pNode->gid        = gid;
+		pNode->next       = this->N[gid].next;
+		this->N[gid].next = nid;
+
+//		if (ctx.opt_debug & ctx.DEBUG_ROW)
+		printf("%u %u %u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+		       gid, nid,
+		       sid, db.signatures[sid].name,
+		       pSlots[0], pSlots[1], pSlots[2], pSlots[3], pSlots[4], pSlots[5], pSlots[6], pSlots[7], pSlots[8]);
+
+		return gid;
 	}
 
 	/*
