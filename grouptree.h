@@ -532,7 +532,40 @@ struct groupTree_t {
 	 *      +1 L > R
 	 */
 	int compare(uint32_t lhs, groupTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
-		assert(!"placeholder");
+
+		/*
+		 * In contrast to baseTree_t, groupTree_t has no structure
+		 * out-of-bound ordering is no problem
+		 * comparing nodegroup id's should be sufficient
+		 */
+		assert(this == treeR);
+
+		if (lhs < rhs) {
+			return -1;
+		} else if (lhs > rhs) {
+			return +1;
+		} else {
+			return 0;
+		}
+		
+		if (this->N[lhs].sid < treeR->N[rhs].sid) {
+			return -1;
+		} else if (this->N[lhs].sid > treeR->N[rhs].sid) {
+			return +1;
+		}
+		
+		/*
+		 * simple compare
+		 * todo: cache results
+		 */
+		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
+
+		for (unsigned iSlot=0; iSlot<pSignature->numPlaceholder; iSlot++) {
+			int ret = this->compare(this->N[lhs].slots[iSlot], treeR,  treeR->N[rhs].slots[iSlot]);
+			if (ret != 0)
+				return ret;
+		}
+		
 		return 0;
 	}
 
@@ -597,6 +630,8 @@ struct groupTree_t {
 		groupNode_t *pNode = this->N + id;
 
 		assert(MAXSLOTS == 9);
+		pNode->gid = 0;
+		pNode->next = 0;
 		pNode->sid = sid;
 		pNode->slots[0] = slots[0];
 		pNode->slots[1] = slots[1];
@@ -607,6 +642,18 @@ struct groupTree_t {
 		pNode->slots[6] = slots[6];
 		pNode->slots[7] = slots[7];
 		pNode->slots[8] = slots[8];
+
+		if (sid != SID_SELF) {
+			assert(N[slots[0]].gid == slots[0]);
+			assert(N[slots[1]].gid == slots[1]);
+			assert(N[slots[2]].gid == slots[2]);
+			assert(N[slots[3]].gid == slots[3]);
+			assert(N[slots[4]].gid == slots[4]);
+			assert(N[slots[5]].gid == slots[5]);
+			assert(N[slots[6]].gid == slots[6]);
+			assert(N[slots[7]].gid == slots[7]);
+			assert(N[slots[8]].gid == slots[8]);
+		}
 
 		return id;
 	}
