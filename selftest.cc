@@ -1457,7 +1457,7 @@ struct selftestContext_t : dbtool_t {
 		/*
 		 * Determine upper limit transform for number of used slots 
 		 */
-		unsigned tidHi[MAXSLOTS];
+		unsigned tidHi[MAXSLOTS + 1];
 
 		assert(MAXSLOTS == 9);
 		tidHi[0] = 0;

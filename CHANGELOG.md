@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-08 17:08:58 Fixed: Buffer overrun in `selftest.cc`.
 2021-11-08 16:52:49 Changed: First (database) record starts at IDFIRST.
 2021-11-08 16:40:50 Changed: Move `groupTree_t::SID_*` back to `database_t::SID_*`. 
 2021-11-07 00:57:27 Changed: trying to get cross-product basics working.
