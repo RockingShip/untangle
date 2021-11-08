@@ -865,18 +865,29 @@ struct groupTree_t {
 			}
 		}
 
-#if 0
 		/*
 		 * Lookup if QTF combo already exists
 		 */
+		uint32_t tlSlots[MAXSLOTS] = { 0 }; // zero contents
 
-		uint32_t ix = this->lookupNode(Q, T, F);
+		// set slots
+		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
+			tlSlots[0] = Q;
+			tlSlots[1] = F;
+		} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
+			tlSlots[0] = Q;
+			tlSlots[1] = T;
+		} else {
+			tlSlots[0] = Q;
+			tlSlots[1] = T & ~IBIT;
+			tlSlots[2] = F;
+		}
+
+		uint32_t ix = this->lookupNode(tlSid, tlSlots);
 		if (this->nodeIndex[ix] != 0) {
 			// node already exists
 			return this->nodeIndex[ix];
 		}
-
-#endif
 
 		/*
 		 * Fallback code and validation. 
