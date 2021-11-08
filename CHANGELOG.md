@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-08 16:40:50 Changed: Move `groupTree_t::SID_*` back to `database_t::SID_*`. 
 2021-11-07 00:57:27 Changed: trying to get cross-product basics working.
 2021-11-07 00:54:40 Fixed: `groupTree_t` cross-product loop overhead.
 2021-11-07 00:52:41 Fixed: `genpattern.cc` keep collapsing structures.

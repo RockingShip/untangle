@@ -296,6 +296,8 @@ struct database_t {
 	uint32_t        iVersion;                    // version current incarnation
 	uint32_t        *imprintVersion;             // versioned memory for `imprintIndex`
 	uint32_t        *signatureVersion;           // versioned memory for `signatureIndex`
+	// reserved 1n9 SID id's
+	uint32_t        SID_ZERO, SID_SELF, SID_OR, SID_GT, SID_NE, SID_AND, SID_QNTF, SID_QTF;
 
 	/**
 	 * Constructor
@@ -377,6 +379,9 @@ struct database_t {
 		iVersion         = 0;
 		imprintVersion   = NULL;
 		signatureVersion = NULL;
+		
+		// 1n9 sids
+		SID_ZERO = SID_SELF = SID_OR = SID_GT = SID_NE = SID_AND = SID_QNTF = SID_QTF = 0;
 	};
 
 	/**
@@ -1076,6 +1081,36 @@ struct database_t {
 		patternsSecond         = (patternSecond_t *) (rawData + fileHeader.offPatternSecond);
 		patternSecondIndexSize = fileHeader.patternSecondIndexSize;
 		patternSecondIndex     = (uint32_t *) (rawData + fileHeader.offPatternSecondIndex);
+
+
+		// lookup 1n9 sids
+		for (uint32_t iSid = 1; iSid < 1 + 10; iSid++) {
+			const signature_t *pSignature = this->signatures + iSid;
+
+			if (strcmp(pSignature->name, "0") == 0)
+				this->SID_ZERO = iSid;
+			else if (strcmp(pSignature->name, "a") == 0)
+				this->SID_SELF = iSid;
+			else if (strcmp(pSignature->name, "ab+") == 0)
+				this->SID_OR = iSid;
+			else if (strcmp(pSignature->name, "ab>") == 0)
+				this->SID_GT = iSid;
+			else if (strcmp(pSignature->name, "ab^") == 0)
+				this->SID_NE = iSid;
+			else if (strcmp(pSignature->name, "ab&") == 0)
+				this->SID_AND = iSid;
+			else if (strcmp(pSignature->name, "abc!") == 0)
+				this->SID_QNTF = iSid;
+			else if (strcmp(pSignature->name, "abc?") == 0)
+				this->SID_QTF = iSid;
+
+		}
+
+		if (numSignature > 1) {
+			// test they are available
+			if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
+				ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\",\"filename\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, fileName);
+		}
 	};
 
 	/**

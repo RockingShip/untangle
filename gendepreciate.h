@@ -997,7 +997,7 @@ struct gendepreciateContext_t : dbtool_t {
 				// explicitly excluded
 				assert (!(pMember->flags & member_t::MEMMASK_LOCKED)); // may not be locked
 				continue;
-			} else if (pMember->sid == 1 || pMember->sid == 2) {
+			} else if (pMember->sid == pStore->SID_ZERO || pMember->sid == pStore->SID_SELF) {
 				// "0" or "a"
 				pSafeMid[iMid] = iVersionSafe;
 				cntMid++;

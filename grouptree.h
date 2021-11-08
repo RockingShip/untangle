@@ -196,8 +196,6 @@ struct groupTree_t {
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
-	// reserved 1n9 SID id's
-	uint32_t                 SID_ZERO, SID_SELF, SID_OR, SID_GT, SID_NE, SID_AND, SID_QNTF, SID_QTF;
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -317,25 +315,9 @@ struct groupTree_t {
 		keyNames.resize(nstart);
 		rootNames.resize(numRoots);
 
-		// lookup 1n9 sids
-		this->SID_ZERO = db.signatureIndex[db.lookupSignature("0")];
-		this->SID_SELF = db.signatureIndex[db.lookupSignature("a")];
-		this->SID_OR   = db.signatureIndex[db.lookupSignature("ab+")];
-		this->SID_GT   = db.signatureIndex[db.lookupSignature("ab>")];
-		this->SID_NE   = db.signatureIndex[db.lookupSignature("ab^")];
-		this->SID_QNTF = db.signatureIndex[db.lookupSignature("abc!")];
-
-		// test they are available
-		if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
-			ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\"}\n", __FUNCTION__, __FILE__, __LINE__);
-
-		// AND/QTF are optional  
-		this->SID_AND = db.signatureIndex[db.lookupSignature("ab&")];
-		this->SID_QTF = db.signatureIndex[db.lookupSignature("abc?")];
-
 		// setup default keys
 		memset(this->N + 0, 0, sizeof(*this->N));
-		this->N[0].sid = SID_ZERO;
+		this->N[0].sid = db.SID_ZERO;
 		
 		for (unsigned iKey = 1; iKey < nstart; iKey++) {
 			groupNode_t *pNode = this->N + iKey;
@@ -344,7 +326,7 @@ struct groupTree_t {
 
 			pNode->gid  = iKey;
 			pNode->next = 0;
-			pNode->sid  = SID_SELF;
+			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
 
@@ -643,7 +625,7 @@ struct groupTree_t {
 		pNode->slots[7] = slots[7];
 		pNode->slots[8] = slots[8];
 
-		if (sid != SID_SELF) {
+		if (sid != db.SID_SELF) {
 			assert(N[slots[0]].gid == slots[0]);
 			assert(N[slots[1]].gid == slots[1]);
 			assert(N[slots[2]].gid == slots[2]);
@@ -780,7 +762,9 @@ struct groupTree_t {
  		 * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
  		 *
 		 */
-
+		
+		uint32_t tlSid = 0;
+		
 		if (T & IBIT) {
 
 			if (T == IBIT) {
@@ -792,6 +776,7 @@ struct groupTree_t {
 					return Q;
 				} else {
 					// [ 2] a ? !0 : b  -> "+" OR
+					tlSid = db.SID_OR;
 				}
 			} else if ((T ^ IBIT) == Q) {
 				if (Q == F) {
@@ -804,15 +789,24 @@ struct groupTree_t {
 					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
 					Q = F;
 					F = 0;
+					tlSid = db.SID_GT;
 				}
 			} else {
 				if (Q == F) {
 					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 					F = 0;
+					tlSid = db.SID_GT;
 				} else {
-					// [ 6] a ? !b : 0  -> ">" greater-than
-					// [ 8] a ? !b : b  -> "^" not-equal
-					// [ 9] a ? !b : c  -> "!" QnTF
+					if (F == 0) {
+						// [ 6] a ? !b : 0  -> ">" greater-than
+						tlSid = db.SID_GT;
+					} else if ((T ^ IBIT) == F) {
+						// [ 8] a ? !b : b  -> "^" not-equal/xor
+						tlSid = db.SID_NE;
+					} else {
+						// [ 9] a ? !b : c  -> "!" QnTF
+						tlSid = db.SID_QNTF;
+					}
 				}
 			}
 
@@ -831,6 +825,7 @@ struct groupTree_t {
 					T = Q ^ IBIT;
 					Q = F;
 					F = 0;
+					tlSid = db.SID_GT;
 				}
 			} else if (Q == T) {
 				if (Q == F) {
@@ -843,15 +838,22 @@ struct groupTree_t {
 				} else {
 					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
 					T = IBIT;
+					tlSid = db.SID_OR;
 				}
 			} else {
 				if (Q == F) {
 					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 					F = 0;
+					tlSid = db.SID_AND;
 				} else {
-					// [16] a ?  b : 0             "&" and
-					// [18] a ?  b : b -> b        ALREADY TESTED		
-					// [19] a ?  b : c             "?" QTF
+					if (F == 0) {
+						// [16] a ?  b : 0             "&" and
+						tlSid = db.SID_AND;
+					} else {
+						// [18] a ?  b : b -> b        ALREADY TESTED		
+						// [19] a ?  b : c             "?" QTF
+						tlSid = db.SID_QTF;
+					}
 				}
 			}
 		}
@@ -888,7 +890,7 @@ struct groupTree_t {
 
 			pNode->gid  = gid;
 			pNode->next = gid + 1;
-			pNode->sid  = SID_SELF;
+			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = gid;
 
 			/*
@@ -907,37 +909,15 @@ struct groupTree_t {
 			pNode->next = 0;
 
 			// set sid/slots
-			if (T == IBIT) {
-				// OR
-				pNode->sid = SID_OR;
+			if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = F;
-			} else if (F == 0 && (Q & IBIT)) {
-				// GT
-				pNode->sid = SID_GT;
+			} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T;
-			} else if (F == (T ^ IBIT)) {
-				// NE
-				pNode->sid = SID_NE;
-				pNode->slots[0] = Q;
-				pNode->slots[1] = F;
-			} else if (F == 0) {
-				// AND
-				pNode->sid = SID_AND;
-				pNode->slots[0] = Q;
-				pNode->slots[1] = T;
-			} else if (T & IBIT) {
-				// QNTF
-				pNode->sid = SID_QNTF;
+			} else {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = T & ~IBIT;
-				pNode->slots[2] = F;
-			} else {
-				// QTF
-				pNode->sid = SID_QTF;
-				pNode->slots[0] = Q;
-				pNode->slots[1] = T;
 				pNode->slots[2] = F;
 			}
 
@@ -950,7 +930,7 @@ struct groupTree_t {
 		 * Second step: create cross-products of Q/T/F group lists
 		 */
 
-		const groupNode_t *pZero = this->N + SID_ZERO;
+		const groupNode_t *pZero = this->N + db.SID_ZERO;
 
 		uint32_t gid = 0;
 
@@ -1184,9 +1164,9 @@ struct groupTree_t {
 			/*
 			 * test for collapse, (result is `0n9`)
 			 */
-			if (pSecond->sidR == SID_ZERO) {
+			if (pSecond->sidR == db.SID_ZERO) {
 				assert(!"SELF_ZERO");
-			} else if (pSecond->sidR == SID_SELF) {
+			} else if (pSecond->sidR == db.SID_SELF) {
 				assert(!"SELF_SELF");
 			}
 
@@ -1298,7 +1278,7 @@ struct groupTree_t {
 			uint32_t selfSlots[MAXSLOTS] = { this->ncount }; // other slots are zerod
 			assert(selfSlots[MAXSLOTS-1] == 0);
 			
-			gid    = this->newNode(SID_SELF, selfSlots);
+			gid    = this->newNode(db.SID_SELF, selfSlots);
 			assert(gid == selfSlots[0]);
 			
 			this->N[gid].gid = gid;
@@ -1485,37 +1465,37 @@ struct groupTree_t {
 			for (uint32_t iNode = curr; iNode; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
-				if (pNode->sid == SID_OR) {
+				if (pNode->sid == db.SID_OR) {
 					Q  = pNode->slots[0];
 					Tu = 0;
 					Ti = IBIT;
 					F  = pNode->slots[1];
 					break;
-				} else if (pNode->sid == SID_GT) {
+				} else if (pNode->sid == db.SID_GT) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F  = 0;
 					break;
-				} else if (pNode->sid == SID_NE) {
+				} else if (pNode->sid == db.SID_NE) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F  = pNode->slots[1];
 					break;
-				} else if (pNode->sid == SID_AND) {
+				} else if (pNode->sid == db.SID_AND) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F  = 0;
 					break;
-				} else if (pNode->sid == SID_QNTF) {
+				} else if (pNode->sid == db.SID_QNTF) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F  = pNode->slots[2];
 					break;
-				} else if (pNode->sid == SID_QTF) {
+				} else if (pNode->sid == db.SID_QTF) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;

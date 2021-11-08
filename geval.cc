@@ -382,37 +382,37 @@ struct gevalContext_t {
 				groupNode_t *pNode = pTree->N + iNode;
 				
 				// catch `1n9`
-				if (pNode->sid == pTree->SID_OR) {
+				if (pNode->sid == pStore->SID_OR) {
 					Q = pNode->slots[0];
 					Tu = 0;
 					Ti = IBIT;
 					F = pNode->slots[1];
 					break;
-				} else if (pNode->sid == pTree->SID_GT) {
+				} else if (pNode->sid == pStore->SID_GT) {
 					Q = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F = 0;
 					break;
-				} else if (pNode->sid == pTree->SID_NE) {
+				} else if (pNode->sid == pStore->SID_NE) {
 					Q = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F = pNode->slots[1];
 					break;
-				} else if (pNode->sid == pTree->SID_AND) {
+				} else if (pNode->sid == pStore->SID_AND) {
 					Q = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
 					F = 0;
 					break;
-				} else if (pNode->sid == pTree->SID_QNTF) {
+				} else if (pNode->sid == pStore->SID_QNTF) {
 					Q = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
 					F = pNode->slots[2];
 					break;
-				} else if (pNode->sid == pTree->SID_QTF) {
+				} else if (pNode->sid == pStore->SID_QTF) {
 					Q = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
