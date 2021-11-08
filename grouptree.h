@@ -682,10 +682,17 @@ struct groupTree_t {
 	 * NOTE: the return value may be inverted
 	 * 
 	 */
-	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount = NULL, unsigned depth = 0) {
+	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = 0, unsigned depth = 0) {
 		depth++;
-		assert(depth < 240);
+		assert(depth < 30);
 
+		printf("%u:\tQ=%u%s T=%u%s F=%u%s %u\n",
+		       depth,
+		       Q & ~IBIT, (Q & IBIT) ? "~" : "",
+		       T & ~IBIT, (T & IBIT) ? "~" : "",
+		       F & ~IBIT, (F & IBIT) ? "~" : "",
+		       this->ncount);
+		
 		/*
 	  	 * @date 2021-11-04 01:58:34
 		 * 
@@ -728,7 +735,7 @@ struct groupTree_t {
 			// "Q?T:!F" -> "!(Q?!T:F)"
 			F ^= IBIT;
 			T ^= IBIT;
-			return addNormaliseNode(Q, T, F, pFailCount, depth) ^ IBIT;
+			return addNormaliseNode(Q, T, F, gid, depth) ^ IBIT;
 		}
 
 		/*
@@ -931,8 +938,6 @@ struct groupTree_t {
 		 */
 
 		const groupNode_t *pZero = this->N + db.SID_ZERO;
-
-		uint32_t gid = 0;
 
 		/*
 		 * @date 2021-11-05 18:48:34
@@ -1176,12 +1181,15 @@ struct groupTree_t {
 			 * Fifth step: Extract result out of `slotsR[]` and apply signature based endpoint swapping
 			 */
 
+			pSignature = db.signatures + pSecond->sidR;
+			const char *pTransformExtract = db.fwdTransformNames[pSecond->tidSlotR];
+
+			assert(nextSlot >= pSignature->numPlaceholder);
+			unsigned collapse = nextSlot - pSignature->numPlaceholder;
+
 			// zero unused entries
 			while (nextSlot < MAXSLOTS)
 				slotsR[nextSlot++] = 0;
-
-			pSignature = db.signatures + pSecond->sidR;
-			const char *pTransformExtract = db.fwdTransformNames[pSecond->tidSlotR];
 
 			// extract
 			uint32_t      finalSlots[MAXSLOTS];
@@ -1239,7 +1247,19 @@ struct groupTree_t {
 			 * Add final sid/slot to collection
 			 */
 			
-			uint32_t nid = addToCollection(gid, pSecond->sidR, finalSlots);
+			uint32_t oldCount = this->ncount;
+			uint32_t nid = addToCollection(pSecond->sidR, finalSlots, gid, depth);
+
+			if (this->ncount != oldCount) {
+				// if (ctx.opt_debug & ctx.DEBUG_ROW)
+				printf("%u:\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+				       depth,
+				       gid, nid,
+				       pSignature->size, collapse,
+				       iQ, iT, iF,
+				       pSecond->sidR, db.signatures[pSecond->sidR].name,
+				       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
+			}
 
 			// update current group id to head of list
 			gid = this->N[nid].gid;
@@ -1250,6 +1270,9 @@ struct groupTree_t {
 		} while (iQ != 0 && (iQ = this->N[iQ].next));
 		// @formatter:on
 
+		// The detector must detect at least one pattern, minimal is a `1n9`.
+		assert(gid && this->N[gid].next != 0);
+		
 		// return head of list
 		return gid;
 	}
@@ -1262,8 +1285,23 @@ struct groupTree_t {
 	 * Return id of list header 
 	 * 
 	 * Handle merging of lists if sit/slot combo already belongs to a different list
+	 * 
+	 * @date 2021-11-07 14:41:06
+	 * 
+	 * With slot entry subsets, remove largest, don't prune because it provides sid diversity  
+	 * 35      35      2       0       5       34      33      49:abc^d!/[5 7 9 33 0 0 0 0 0]
+	 * 35      35      2       0       5       34      34      22:abc^^/[5 7 9 0 0 0 0 0 0]
+	 * 
+	 * With multiple sids of same node size, select lowest slots, prune as the don't contribute to cross-product
+	 * 54      61      3       0       19      53      53      194:abcd^^^/[3 5 19 33 0 0 0 0 0] b d aceg^^^ fh^ ^^^
+	 * 54      68      3       0       32      40      40      194:abcd^^^/[2 4 12 40 0 0 0 0 0] a c eg^ bdfh^^^ ^^^
+         * 54      74      3       0       20      41      41      194:abcd^^^/[2 3 14 35 0 0 0 0 0] a b ceg^^ dfh^^ ^^^
+         * 
+         * Prune layers on collapsing
+         * 
+         * For final selection: nodes with highest layer and lowest slot entries
 	 */
-	uint32_t addToCollection(uint32_t gid, uint32_t sid, uint32_t *pSlots) {
+	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		if (this->nodeIndex[ix] != 0) {
 			// node already exists
@@ -1304,13 +1342,7 @@ struct groupTree_t {
 		pNode->next       = this->N[gid].next;
 		this->N[gid].next = nid;
 
-//		if (ctx.opt_debug & ctx.DEBUG_ROW)
-		printf("%u %u %u:%s/[%u %u %u %u %u %u %u %u %u]\n",
-		       gid, nid,
-		       sid, db.signatures[sid].name,
-		       pSlots[0], pSlots[1], pSlots[2], pSlots[3], pSlots[4], pSlots[5], pSlots[6], pSlots[7], pSlots[8]);
-
-		return gid;
+		return nid;
 	}
 
 	/*
