@@ -1267,6 +1267,12 @@ struct groupTree_t {
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		if (this->nodeIndex[ix] != 0) {
 			// node already exists
+			/*
+			 * @date 2021-11-08 02:06:04
+			 * still surprised assert hasn't been triggered
+			 * just like structure collapsing, not detected yet
+			 * 
+			 */
 			assert(this->N[this->nodeIndex[ix]].gid == gid);
 			return this->nodeIndex[ix];
 		}
@@ -1288,7 +1294,8 @@ struct groupTree_t {
 		uint32_t nid = this->newNode(sid, pSlots);
 
 		// add to index
-		this->nodeIndex[ix] = nid;
+		this->nodeIndex[ix]        = nid;
+		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
 
 		groupNode_t *pNode = this->N + nid;
 

@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-08 17:20:14 Fixed: Adding records to `groupTree_t` index.
 2021-11-08 17:11:45 Fixed: Sorting tid (slots) after reverse transform.
 2021-11-08 17:08:58 Fixed: Buffer overrun in `selftest.cc`.
 2021-11-08 16:52:49 Changed: First (database) record starts at IDFIRST.

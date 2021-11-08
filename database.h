@@ -223,6 +223,20 @@ struct database_t {
 		ALLOCMASK_PATTERNSECONDINDEX = 1 << ALLOCFLAG_PATTERNSECONDINDEX,
 		// @formatter:on
 	};
+	
+	/*
+	 * @date 2021-11-08 02:36:49
+	 * 
+	 * Each section starts with reserved entries
+	 * Record 0, is all zeros. used as reference to indicate a new entry.
+	 * Record 1, is all zeros. used as reference to indicate a deleted entry.
+	 * 
+	 * ignore records that are all zero 
+	 */
+	enum {
+		IDFREE    = 0, // reserved for new entries				
+		IDDELETED = 1, // reserved for deleted/unused entries
+	};
 
 	// I/O context
 	context_t &ctx;
