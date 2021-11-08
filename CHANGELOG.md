@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-13 15:07:17 Added: `groupTree_t::expandSignature()`, recreate node by applying/expanding it's signature.
 2021-11-11 12:02:35 Added: `groupTree_t::validateTree()`, trees are starting to get complex. 
 2021-11-11 12:02:35 Changed: `groupTree_t::addNormalisedNode()`, Returns node id, which caller should promote to group id. 
 2021-11-11 10:35:50 Fixed: `groupTree_t`, iterator for double linked lists.
