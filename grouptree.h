@@ -1353,6 +1353,227 @@ struct groupTree_t {
 		pNode->next       = this->N[gid].next;
 		this->N[gid].next = nid;
 
+		/*
+		 * @date 2021-11-08 00:00:19
+		 * 
+		 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
+		 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
+		 * 
+		 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
+		 * implicitly creating better ordered components.
+		 * 
+		 * This might create many duplicates.
+		 */
+
+		const signature_t *pSignature = db.signatures + sid;
+
+		if (pSignature->size > 1) {
+			/*
+			 * init
+			 */
+
+			uint32_t numStack = 0;
+			uint32_t nextNode = this->nstart;
+			uint32_t *pStack  = allocMap();
+			uint32_t *pMap    = allocMap();
+
+			/*
+			 * Load string
+			 */
+			for (const char *pattern = pSignature->name; *pattern; pattern++) {
+
+				switch (*pattern) {
+				case '0': //
+					pStack[numStack++] = 0;
+					break;
+
+					// @formatter:off
+			case '1': case '2': case '3': case '4':
+			case '5': case '6': case '7': case '8':
+			case '9':
+			// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				if (v < this->nstart || v >= nextNode)
+					ctx.fatal("[node out of range: %d]\n", v);
+				if (numStack >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[numStack++] = pMap[v];
+
+				break;
+			}
+
+					// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+				{
+					/*
+					 * Push endpoint
+					 */
+					uint32_t v = (*pattern - 'a');
+
+					if (v >= pSignature->numPlaceholder)
+						ctx.fatal("[endpoint out of range: %d]\n", v);
+					if (numStack >= this->ncount)
+						ctx.fatal("[stack overflow]\n");
+
+					pStack[numStack++] = pSlots[v];
+					break;
+
+				}
+
+				case '+': {
+					// OR (appreciated)
+					if (numStack < 2)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t R = pStack[--numStack];
+					uint32_t L = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(L, IBIT, R, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(L, IBIT, R, gid, depth+1);
+					}
+
+					break;
+				}
+				case '>': {
+					// GT (appreciated)
+					if (numStack < 2)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t R = pStack[--numStack];
+					uint32_t L = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(L, R ^ IBIT, 0, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(L, R ^ IBIT, 0, gid, depth+1);
+					}
+
+					break;
+				}
+				case '^': {
+					// XOR/NE (appreciated)
+					if (numStack < 2)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t R = pStack[--numStack];
+					uint32_t L = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(L, R ^ IBIT, R, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(L, R ^ IBIT, R, gid, depth+1);
+					}
+
+					break;
+				}
+				case '!': {
+					// QnTF (appreciated)
+					if (numStack < 3)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t F = pStack[--numStack];
+					uint32_t T = pStack[--numStack];
+					uint32_t Q = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(Q, T ^ IBIT, F, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(Q, T ^ IBIT, F, gid, depth+1);
+					}
+
+					break;
+				}
+				case '&': {
+					// AND (depreciated)
+					if (numStack < 2)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t R = pStack[--numStack];
+					uint32_t L = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(L, R, 0, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(L, R, 0, gid, depth+1);
+					}
+
+					break;
+				}
+				case '?': {
+					// QTF (depreciated)
+					if (numStack < 3)
+						ctx.fatal("[stack underflow]\n");
+
+					uint32_t F = pStack[--numStack];
+					uint32_t T = pStack[--numStack];
+					uint32_t Q = pStack[--numStack];
+
+					if (pattern[1]) {
+						uint32_t id = addNormaliseNode(Q, T, F, 0, depth+1);
+						pStack[numStack++] = pMap[nextNode++] = id;
+					} else {
+						assert(numStack == 0);
+						nid = addNormaliseNode(Q, T, F, gid, depth+1);
+					}
+
+					break;
+				}
+				case '~': {
+					// NOT (support)
+					if (numStack < 1)
+						ctx.fatal("[stack underflow]\n");
+
+					pStack[numStack - 1] ^= IBIT;
+					break;
+				}
+
+				case '/':
+					// separator between pattern/transform
+					while (pattern[1])
+						pattern++;
+					break;
+				case ' ':
+					// skip spaces
+					break;
+				default:
+					ctx.fatal("[bad token '%c']\n", *pattern);
+				}
+
+				if (numStack > maxNodes)
+					ctx.fatal("[stack overflow]\n");
+			}
+			if (numStack != 0)
+				ctx.fatal("[stack not empty]\n");
+
+			freeMap(pStack);
+			freeMap(pMap);
+		}
+
 		return nid;
 	}
 

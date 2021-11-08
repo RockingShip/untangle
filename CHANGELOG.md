@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-08 17:37:30 Added: Cascading ordering of slots in `groupTree_t::addToCollection()`.
 2021-11-08 17:35:21 Added: Cached lookup for `groupTree_t::addNormalisedNode()`.
 2021-11-08 17:25:37 Added: `gid` and `depth` to `groupTree_t::addNormalisedNode()`.
 2021-11-08 17:20:14 Fixed: Adding records to `groupTree_t` index.
