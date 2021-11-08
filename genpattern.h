@@ -716,6 +716,7 @@ struct genpatternContext_t : dbtool_t {
 			slotsQ[iSlot] = beenWhat[endpoint];
 		}
 		slotsQ[pSignature->numPlaceholder] = 0; // terminator
+		(void) slotsQ; // suppress compiler warning "unused variable"
 
 		pSignature = pStore->signatures + (sidT & ~IBIT);
 		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
@@ -747,8 +748,8 @@ struct genpatternContext_t : dbtool_t {
 		}
 		slotsF[pSignature->numPlaceholder] = 0; // terminator
 
-		(void) slotsQ;
-		assert(nextSlot < MAXSLOTS); // slots should not overflow
+		// slots should not overflow
+		assert(nextSlot <= MAXSLOTS);
 
 		slotsR[nextSlot] = 0; // terminator
 
@@ -783,6 +784,16 @@ struct genpatternContext_t : dbtool_t {
 		assert(tidSlotR != IBIT);
 		assert(tidSlotT != IBIT);
 		assert(tidSlotF != IBIT);
+		
+		/*
+		 * @date 2021-11-07 01:34:52
+		 * 
+		 * Order slots
+		 * This is needed because reverse transforms of generated structures break ordering 
+		 */
+		
+		tidSlotT = dbtool_t::sidSwapTid(*pStore, sidT & ~IBIT, tidSlotT, pStore->fwdTransformNames);
+		tidSlotF = dbtool_t::sidSwapTid(*pStore, sidF, tidSlotF, pStore->fwdTransformNames);
 
 		/*
 		 * @date 2021-10-21 23:45:02
@@ -879,6 +890,14 @@ struct genpatternContext_t : dbtool_t {
 					slotsF,
 					slotsR);
 
+				/*
+				 * @date 2021-11-08 02:15:53
+				 * 
+				 * emergency break, total collection corrupt
+				 * 
+				 * Difference is highly expected to be `tidSlotR`
+				 * All alternatives should and must be identical in creating `groupNode_t::slots[]` 
+				 */
 				assert(patternSecond->sidR == sidR);
 				assert(patternSecond->tidSlotR == tidSlotR);
 			}
