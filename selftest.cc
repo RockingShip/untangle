@@ -830,7 +830,7 @@ struct selftestContext_t : dbtool_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
-		pStore->numSignature = 1; // skip reserved first entry
+		pStore->numSignature = pStore->IDFIRST; // skip reserved first entries
 
 		/*
 		 * add names to signatures until a collision occurs
@@ -864,7 +864,7 @@ struct selftestContext_t : dbtool_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
-		pStore->numSignature = 1; // skip reserved first entry
+		pStore->numSignature = pStore->IDFIRST; // skip reserved first entries
 
 		// add the collision victim
 		ix1 = pStore->lookupSignature(pStore->fwdTransformNames[collision1]);
@@ -902,7 +902,7 @@ struct selftestContext_t : dbtool_t {
 		// clear signature index deliberately using memset instead of `InvalidateVersioned()`
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
 		::memset(pStore->signatureVersion, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureVersion));
-		pStore->numSignature = 1; // skip reserved first entry
+		pStore->numSignature = pStore->IDFIRST; // skip reserved first entries
 
 		// add the collisions
 		ctx.cntHash = ctx.cntCompare = 0;
@@ -1179,7 +1179,7 @@ struct selftestContext_t : dbtool_t {
 
 			// clear database imprint and index
 			::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
-			pStore->numImprint = 1; // skip reserved entry
+			pStore->numImprint = pStore->IDFIRST; // skip reserved entries
 
 			/*
 			 * Create a test 4n9 tree with unique endpoints so each permutation is unique.

@@ -233,7 +233,7 @@ struct genpatternContext_t : dbtool_t {
 		 */
 		if (this->opt_truncate) {
 			// avoid `"storage full"`. Give warning later
-			if (pStore->maxPatternFirst - pStore->numPatternFirst <= 1 || pStore->maxPatternSecond - pStore->numPatternSecond <= 1) {
+			if (pStore->maxPatternFirst - pStore->numPatternFirst <= pStore->IDFIRST || pStore->maxPatternSecond - pStore->numPatternSecond <= pStore->IDFIRST) {
 				// break now, display text later/ Leave progress untouched
 				this->truncated = ctx.progress;
 				::strcpy(this->truncatedName, pNameR);

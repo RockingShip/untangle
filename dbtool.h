@@ -619,39 +619,39 @@ struct dbtool_t : callable_t {
 		 * Initial entries
 		 */
 		if ((sections & database_t::ALLOCMASK_SIGNATURE) && store.numSignature == 0) {
-			// clear first/reserved entry
-			memset(store.signatures, 0, sizeof *store.signatures);
-			store.numSignature = 1;
+			// clear first/reserved entries
+			memset(store.signatures, 0, store.IDFIRST * sizeof *store.signatures);
+			store.numSignature = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_SWAP) && store.numSwap == 0) {
-			// clear first/reserved entry
-			memset(store.swaps, 0, sizeof *store.swaps);
-			store.numSwap = 1;
+			// clear first/reserved entries
+			memset(store.swaps, 0, store.IDFIRST * sizeof *store.swaps);
+			store.numSwap = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_IMPRINT) && store.numImprint == 0) {
-			// clear first/reserved entry
-			memset(store.imprints, 0, sizeof *store.imprints);
-			store.numImprint = 1;
+			// clear first/reserved entries
+			memset(store.imprints, 0, store.IDFIRST * sizeof *store.imprints);
+			store.numImprint = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_PAIR) && store.numPair == 0) {
-			// clear first/reserved entry
-			memset(store.pairs, 0, sizeof *store.pairs);
-			store.numPair = 1;
+			// clear first/reserved entries
+			memset(store.pairs, 0, store.IDFIRST * sizeof *store.pairs);
+			store.numPair = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_MEMBER) && store.numMember == 0) {
-			// clear first/reserved entry
-			memset(store.members, 0, sizeof *store.members);
-			store.numMember = 1;
+			// clear first/reserved entries
+			memset(store.members, 0, store.IDFIRST * sizeof *store.members);
+			store.numMember = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_PATTERNFIRST) && store.numPatternFirst == 0) {
-			// clear first/reserved entry
-			memset(store.patternsFirst, 0, sizeof *store.patternsFirst);
-			store.numPatternFirst = 1;
+			// clear first/reserved entries
+			memset(store.patternsFirst, 0, store.IDFIRST * sizeof *store.patternsFirst);
+			store.numPatternFirst = store.IDFIRST;
 		}
 		if ((sections & database_t::ALLOCMASK_PATTERNSECOND) && store.numPatternSecond == 0) {
-			// clear second/reserved entry
-			memset(store.patternsSecond, 0, sizeof *store.patternsSecond);
-			store.numPatternSecond = 1;
+			// clear second/reserved entries
+			memset(store.patternsSecond, 0, store.IDFIRST * sizeof *store.patternsSecond);
+			store.numPatternSecond = store.IDFIRST;
 		}
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
@@ -659,7 +659,7 @@ struct dbtool_t : callable_t {
 				ctx.timeAsString(), store.interleave, store.maxSignature, store.signatureIndexSize, store.maxSwap, store.swapIndexSize, store.interleave, store.maxImprint, store.imprintIndexSize, store.maxPair, store.pairIndexSize, store.maxMember, store.memberIndexSize, store.maxPatternFirst, store.patternFirstIndexSize, store.maxPatternSecond, store.patternSecondIndexSize);
 
 		// reconstruct missing imprints for signatures
-		if (store.numSignature > 1 && store.numImprint <= 1)
+		if (store.numSignature > store.IDFIRST && store.numImprint <= store.IDFIRST)
 			rebuildIndices |= database_t::ALLOCMASK_IMPRINT;
 
 		return rebuildIndices;
@@ -734,7 +734,7 @@ struct dbtool_t : callable_t {
 			store.maxSignature = db.numSignature;
 		} else {
 			// empty. create minimal sized section
-			store.maxSignature = 1;
+			store.maxSignature = db.IDFIRST;
 		}
 
 		if (store.maxSignature > db.numSignature) {
@@ -764,7 +764,7 @@ struct dbtool_t : callable_t {
 				store.signatureIndexSize = db.signatureIndexSize;
 			} else {
 				// empty. create minimal sized section
-				store.signatureIndexSize = 1;
+				store.signatureIndexSize = db.IDFIRST;
 			}
 
 			if (store.signatureIndexSize != db.signatureIndexSize) {
@@ -801,7 +801,7 @@ struct dbtool_t : callable_t {
 			store.maxSwap = db.numSwap;
 		} else {
 			// empty. create minimal sized section
-			store.maxSwap = 1;
+			store.maxSwap = db.IDFIRST;
 		}
 
 		if (store.maxSwap > db.numSwap) {
@@ -831,7 +831,7 @@ struct dbtool_t : callable_t {
 				store.swapIndexSize = db.swapIndexSize;
 			} else {
 				// empty. create minimal sized section
-				store.swapIndexSize = 1;
+				store.swapIndexSize = db.IDFIRST;
 			}
 
 			if (store.swapIndexSize != db.swapIndexSize) {
@@ -898,9 +898,9 @@ struct dbtool_t : callable_t {
 				store.maxImprint = db.numImprint;
 			} else {
 				// empty. create minimal sized section
-				store.interleave = 1;
+				store.interleave     = 1;
 				store.interleaveStep = MAXTRANSFORM;
-				store.maxImprint = 1;
+				store.maxImprint     = db.IDFIRST;
 			}
 
 			// imprint as data
@@ -979,7 +979,7 @@ struct dbtool_t : callable_t {
 			store.maxPair = db.numPair;
 		} else {
 			// empty. create minimal sized section
-			store.maxPair = 1;
+			store.maxPair = db.IDFIRST;
 		}
 
 		if (store.maxPair > db.numPair) {

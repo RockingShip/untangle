@@ -240,7 +240,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 * Walk through members, any depreciated component makes the member depreciated, count active components
 		 */
 
-		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
@@ -358,7 +358,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 * Walk through members, any depreciated component makes the member depreciated
 		 */
 
-		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {
@@ -383,7 +383,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * test that all sids have at least a single active member
 		 */
-		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (uint32_t iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			unsigned cntActive = 0; // number of active members for this signature
@@ -410,7 +410,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 */
 		unsigned numComponent = 0;
 
-		for (uint32_t iMid=1; iMid<pStore->numMember; iMid++) {
+		for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			// depr/locked is mutual-exclusive
@@ -448,7 +448,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * count already present locked members
 		 */
-		for (uint32_t j = 1; j < pStore->numMember; j++) {
+		for (uint32_t j = pStore->IDFIRST; j < pStore->numMember; j++) {
 			if (pStore->members[j].flags & member_t::MEMMASK_LOCKED)
 				cntLocked++;
 		}
@@ -459,7 +459,7 @@ struct gendepreciateContext_t : dbtool_t {
 		 * @date 2021-08-06 21:53:02
 		 * Only for `SIGMASK_LOOKUP` signatures, others might be optimised away
 		 */
-		for (uint32_t iSid = pStore->numSignature - 1; iSid >= 1; --iSid) {
+		for (uint32_t iSid = pStore->numSignature - 1; iSid >= pStore->IDFIRST; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			if (opt_lookupSafe && !(pSignature->flags & signature_t::SIGMASK_KEY))
@@ -488,7 +488,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * Propagate locked
 		 */
-		for (uint32_t iMid = pStore->numMember - 1; iMid >= 1; --iMid) {
+		for (uint32_t iMid = pStore->numMember - 1; iMid >= pStore->IDFIRST; --iMid) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pStore->members[iMid].flags & member_t::MEMMASK_LOCKED) {
@@ -857,7 +857,7 @@ struct gendepreciateContext_t : dbtool_t {
 				}
 
 				// update ref counts
-				for (uint32_t iDepr = pStore->numMember - 1; iDepr >= 1; iDepr--) {
+				for (uint32_t iDepr = pStore->numMember - 1; iDepr >= pStore->IDFIRST; iDepr--) {
 					member_t *pDepr = pStore->members + iDepr;
 
 					// depreciate all (new) orphans
@@ -960,7 +960,7 @@ struct gendepreciateContext_t : dbtool_t {
 		/*
 		 * Empty signatures lose their SAFE state
 		 */
-		for (uint32_t iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (uint32_t iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			if (pSignature->firstMember == 0)
@@ -987,7 +987,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 		++iVersionSafe;
 
-		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (unsigned iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DEPR) {

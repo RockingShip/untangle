@@ -345,7 +345,7 @@ struct genswapContext_t : dbtool_t {
 		 * Reset imprint section
 		 */
 		tmpdb.InvalidateVersioned();
-		tmpdb.numImprint = 1;
+		tmpdb.numImprint = pStore->IDFIRST;
 
 		/*
 		 * Find until upper limit for slot permutations
@@ -475,7 +475,7 @@ struct genswapContext_t : dbtool_t {
 		}
 
 		// test if swaps are present
-		if (numSwaps <= 1)
+		if (numSwaps <= pStore->IDFIRST)
 			return 0;
 
 		/*
@@ -493,7 +493,7 @@ struct genswapContext_t : dbtool_t {
 		 * For those that are capable of condensing the collection,
 		 * Disable active entries that do not break the collection
 		 */
-		for (unsigned iSwap = 1; iSwap < numSwaps; iSwap++) {
+		for (unsigned iSwap = pStore->IDFIRST; iSwap < numSwaps; iSwap++) {
 			uint32_t tidPrime = this->swapsFound[iSwap];
 
 			// ignore disabled entries
@@ -506,7 +506,7 @@ struct genswapContext_t : dbtool_t {
 				continue; // the resulting collection is invalid
 
 			// disable orphaned entried if possible	
-			for (unsigned iOrphan = 1; iOrphan < numSwaps; iOrphan++) {
+			for (unsigned iOrphan = pStore->IDFIRST; iOrphan < numSwaps; iOrphan++) {
 				unsigned tidOrphan = this->swapsFound[iOrphan];
 
 				if (tidOrphan & IBIT)
@@ -528,7 +528,7 @@ struct genswapContext_t : dbtool_t {
 		/*
 		 * Add active tids to result
 		 */
-		for (unsigned iSwap = 1; iSwap < numSwaps; iSwap++) {
+		for (unsigned iSwap = pStore->IDFIRST; iSwap < numSwaps; iSwap++) {
 			if (!(this->swapsFound[iSwap] & IBIT)) {
 				assert(numEntry < swap_t::MAXENTRY);
 				swap.tids[numEntry++] = this->swapsFound[iSwap];
@@ -743,7 +743,7 @@ struct genswapContext_t : dbtool_t {
 
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved entry;
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 
 			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi)) {
 				ctx.progress++;

@@ -95,7 +95,7 @@ struct genportContext_t : dbtool_t {
 		 */
 
 		uint32_t signatureCRC = 0;
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			signatureCRC = crc32Name(signatureCRC, pSignature->name);
@@ -124,7 +124,7 @@ struct genportContext_t : dbtool_t {
  		 */
 
 		uint32_t swapCRC = 0;
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 			unsigned swapId = pSignature->swapId;
 
@@ -152,7 +152,7 @@ struct genportContext_t : dbtool_t {
 		 */
 
 		uint32_t memberCRC = 0;
-		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (unsigned iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			const member_t *pMember = pStore->members + iMid;
 
 			if (pMember->flags & member_t::MEMMASK_DELETE)
@@ -304,7 +304,7 @@ struct genportContext_t : dbtool_t {
 	 */
 	void signaturesAsJson(FILE *f) {
 		bool first = true;
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
 			if (first)

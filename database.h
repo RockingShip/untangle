@@ -82,6 +82,7 @@
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
 #define FILE_MAGIC        0x20210715
 // NOTE: with next version, reposition `magic_sidCRC`
+// NOTE: with next version, add `idFirst`
 
 /*
  *  All components contributing and using the database should share the same dimensions
@@ -232,6 +233,7 @@ struct database_t {
 	size_t          fileSize;                    // size of original file
 	uint32_t        creationFlags;               // creation constraints
 	uint32_t        allocFlags;                  // memory constraints
+	uint32_t	IDFIRST;                     // Advised starting id for first record
 	// transforms
 	uint32_t        numTransform;                // number of elements in collection
 	uint32_t        maxTransform;                // maximum size of collection
@@ -307,7 +309,8 @@ struct database_t {
 		rawData = NULL;
 		::memset(&fileHeader, 0, sizeof(fileHeader));
 		creationFlags = 0;
-		allocFlags = 0;
+		allocFlags    = 0;
+		IDFIRST       = 1;
 
 		// transform store
 		numTransform          = 0;
@@ -815,7 +818,7 @@ struct database_t {
 		// signature store
 		if (maxSignature && !(excludeSections & ALLOCMASK_SIGNATURE)) {
 			// increase with 5%
-			numSignature = 1; // do not start at 1
+			numSignature = IDFIRST;
 			signatures   = (signature_t *) ctx.myAlloc("database_t::signatures", maxSignature, sizeof(*signatures));
 			allocFlags |= ALLOCMASK_SIGNATURE;
 		}
@@ -828,7 +831,7 @@ struct database_t {
 		// swap store
 		if (maxSwap && !(excludeSections & ALLOCMASK_SWAP)) {
 			// increase with 5%
-			numSwap = 1; // do not start at 1
+			numSwap = IDFIRST;
 			swaps   = (swap_t *) ctx.myAlloc("database_t::swaps", maxSwap, sizeof(*swaps));
 			allocFlags |= ALLOCMASK_SWAP;
 		}
@@ -842,7 +845,7 @@ struct database_t {
 		if (maxImprint && !(excludeSections & ALLOCMASK_IMPRINT)) {
 			assert(interleave && interleaveStep);
 			// increase with 5%
-			numImprint = 1; // do not start at 1
+			numImprint = IDFIRST;
 			imprints   = (imprint_t *) ctx.myAlloc("database_t::imprints", maxImprint, sizeof(*imprints));
 			allocFlags |= ALLOCMASK_IMPRINT;
 		}
@@ -855,7 +858,7 @@ struct database_t {
 		// sid/tid store
 		if (maxPair && !(excludeSections & ALLOCMASK_PAIR)) {
 			// increase with 5%
-			numPair = 1; // do not start at 1
+			numPair = IDFIRST;
 			pairs   = (pair_t *) ctx.myAlloc("database_t::pairs", maxPair, sizeof(*pairs));
 			allocFlags |= ALLOCMASK_PAIR;
 		}
@@ -868,7 +871,7 @@ struct database_t {
 		// member store
 		if (maxMember && !(excludeSections & ALLOCMASK_MEMBER)) {
 			// increase with 5%
-			numMember = 1; // do not start at 1
+			numMember = IDFIRST;
 			members   = (member_t *) ctx.myAlloc("database_t::members", maxMember, sizeof(*members));
 			allocFlags |= ALLOCMASK_MEMBER;
 		}
@@ -881,7 +884,7 @@ struct database_t {
 		// patternFirst store
 		if (maxPatternFirst && !(excludeSections & ALLOCMASK_PATTERNFIRST)) {
 			// increase with 5%
-			numPatternFirst = 1; // do not start at 1
+			numPatternFirst = IDFIRST;
 			patternsFirst   = (patternFirst_t *) ctx.myAlloc("database_t::patternFirst", maxPatternFirst, sizeof(*patternsFirst));
 			allocFlags |= ALLOCMASK_PATTERNFIRST;
 		}
@@ -894,7 +897,7 @@ struct database_t {
 		// patternSecond store
 		if (maxPatternSecond && !(excludeSections & ALLOCMASK_PATTERNSECOND)) {
 			// increase with 5%
-			numPatternSecond = 1; // do not start at 1
+			numPatternSecond = IDFIRST;
 			patternsSecond   = (patternSecond_t *) ctx.myAlloc("database_t::patternSecond", maxPatternSecond, sizeof(*patternsSecond));
 			allocFlags |= ALLOCMASK_PATTERNSECOND;
 		}
@@ -1084,7 +1087,7 @@ struct database_t {
 
 
 		// lookup 1n9 sids
-		for (uint32_t iSid = 1; iSid < 1 + 10; iSid++) {
+		for (uint32_t iSid = IDFIRST; iSid < IDFIRST + 10; iSid++) {
 			const signature_t *pSignature = this->signatures + iSid;
 
 			if (strcmp(pSignature->name, "0") == 0)
@@ -1106,7 +1109,7 @@ struct database_t {
 
 		}
 
-		if (numSignature > 1) {
+		if (numSignature > IDFIRST) {
 			// test they are available
 			if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
 				ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\",\"filename\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, fileName);
@@ -1402,10 +1405,11 @@ struct database_t {
 		 */
 		uint32_t sidCRC = 0;
 		if (this->numSignature) {
-			// first entry must be zero
+			// first entries must be zero
 			signature_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->signatures, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->signatures + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numSignature  = this->numSignature;
@@ -1431,10 +1435,11 @@ struct database_t {
 		 * write swaps
 		 */
 		if (this->numSwap) {
-			// first entry must be zero
+			// first entries must be zero
 			swap_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->swaps, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->swaps + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numSwap  = this->numSwap;
@@ -1455,10 +1460,11 @@ struct database_t {
 			fileHeader.interleave     = interleave;
 			fileHeader.interleaveStep = interleaveStep;
 
-			// first entry must be zero
+			// first entries must be zero
 			imprint_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->imprints, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->imprints + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numImprint  = this->numImprint;
@@ -1480,10 +1486,11 @@ struct database_t {
 		 * write sid/tid pairs
 		 */
 		if (this->numPair) {
-			// first entry must be zero
+			// first entries must be zero
 			pair_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->pairs, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->pairs + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numPair  = this->numPair;
@@ -1501,10 +1508,11 @@ struct database_t {
 		 * write members
 		 */
 		if (this->numMember) {
-			// first entry must be zero
+			// first entries must be zero
 			member_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->members, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->members + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numMember = this->numMember;
@@ -1522,10 +1530,11 @@ struct database_t {
 		 * write patternFirst
 		 */
 		if (this->numPatternFirst) {
-			// first entry must be zero
+			// first entries must be zero
 			patternFirst_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->patternsFirst, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->patternsFirst + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numPatternFirst = this->numPatternFirst;
@@ -1543,10 +1552,11 @@ struct database_t {
 		 * write patternSecond
 		 */
 		if (this->numPatternSecond) {
-			// Second entry must be zero
+			// Second entries must be zero
 			patternSecond_t zero;
 			::memset(&zero, 0, sizeof(zero));
-			assert(::memcmp(this->patternsSecond, &zero, sizeof(zero)) == 0);
+			for (uint32_t i = 0; i < IDFIRST; i++)
+				assert(::memcmp(this->patternsSecond + i, &zero, sizeof(zero)) == 0);
 
 			// collection
 			fileHeader.numPatternSecond = this->numPatternSecond;
@@ -2686,9 +2696,8 @@ struct database_t {
 	 * Rebuild imprints and recreate imprint index.
 	 */
 	void rebuildImprint(void) {
-		// erase first entry
-		memset(this->imprints, 0, sizeof(*this->imprints));
-		this->numImprint = 1;
+		// start at first record
+		this->numImprint = IDFIRST;
 		
 		// clear imprint index
 		memset(this->imprintIndex, 0, this->imprintIndexSize * sizeof(*this->imprintIndex));

@@ -921,7 +921,7 @@ int main(int argc, char *argv[]) {
 	 */
 
 	app.numEmpty = app.numUnsafe = 0;
-	for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+	for (unsigned iSid = store.IDFIRST; iSid < store.numSignature; iSid++) {
 		if (store.signatures[iSid].firstMember == 0)
 			app.numEmpty++;
 		else if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
@@ -998,7 +998,7 @@ int main(int argc, char *argv[]) {
 		 *
 		 * <memberName> <numPlaceholder>
 		 */
-		for (unsigned iMid = 1; iMid < store.numMember; iMid++)
+		for (unsigned iMid = store.IDFIRST; iMid < store.numMember; iMid++)
 			printf("%s\n", store.members[iMid].name);
 	}
 
@@ -1006,7 +1006,7 @@ int main(int argc, char *argv[]) {
 		/*
 		 * Display full members, grouped by signature
 		 */
-		for (unsigned iSid = 1; iSid < store.numSignature; iSid++) {
+		for (unsigned iSid = store.IDFIRST; iSid < store.numSignature; iSid++) {
 			const signature_t *pSignature = store.signatures + iSid;
 
 			for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {

@@ -640,12 +640,12 @@ int main(int argc, char *argv[]) {
 	// prepare sections and indices for use
 	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_SWAPINDEX | database_t::ALLOCMASK_IMPRINTINDEX |
 			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
-	if (db.numImprint <= 1)
+	if (db.numImprint <= db.IDFIRST)
 		sections |= database_t::ALLOCMASK_IMPRINT; // rebuild imprints only when missing
 		
 	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
 
-	if (db.numSignature <= 1)
+	if (db.numSignature <= db.IDFIRST)
 		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
 
 	/*

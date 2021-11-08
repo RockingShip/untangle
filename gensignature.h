@@ -379,7 +379,7 @@ struct gensignatureContext_t : dbtool_t {
 		 */
 		if (this->opt_truncate) {
 			// avoid `"storage full"`. Give warning later
-			if (pStore->maxImprint - pStore->numImprint <= pStore->interleave || pStore->maxSignature - pStore->numSignature <= 1) {
+			if (pStore->maxImprint - pStore->numImprint <= pStore->interleave || pStore->maxSignature - pStore->numSignature <= pStore->IDFIRST) {
 				// break now, display text later/ Leave progress untouched
 				this->truncated = ctx.progress;
 				::strcpy(this->truncatedName, pNameR);
@@ -637,8 +637,8 @@ struct gensignatureContext_t : dbtool_t {
 		if (pStore->numSignature < 2)
 			return; //nothing to do
 
-		// skip reserved entry
-		pStore->numImprint = 1;
+		// skip reserved entries
+		pStore->numImprint = pStore->IDFIRST;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
@@ -655,7 +655,7 @@ struct gensignatureContext_t : dbtool_t {
 
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
