@@ -513,27 +513,47 @@ struct groupTree_t {
 	 *       0 L = R
 	 *      +1 L > R
 	 */
-	int compare(uint32_t lhs, groupTree_t *treeR, uint32_t rhs, unsigned topLevelCascade = CASCADE_NONE) {
+	int compare(uint32_t lhs, groupTree_t *treeR, uint32_t rhs) {
 
-		/*
-		 * In contrast to baseTree_t, groupTree_t has no structure
-		 * out-of-bound ordering is no problem
-		 * comparing nodegroup id's should be sufficient
-		 */
 		assert(this == treeR);
 
-		if (lhs < rhs) {
-			return -1;
-		} else if (lhs > rhs) {
-			return +1;
-		} else {
+		if (lhs == rhs)
 			return 0;
-		}
 		
+		if (lhs < this->nstart) {
+			if (rhs >= this->nstart)
+				return -1;
+			else if (lhs < rhs)
+				return -1;
+			else
+				return +1;
+		} else if (rhs < this->nstart) {
+			if (lhs >= this->nstart)
+				return +1;
+			else if (lhs < rhs)
+				return -1;
+			else
+				return +1;
+
+		}
+
 		if (this->N[lhs].sid < treeR->N[rhs].sid) {
 			return -1;
 		} else if (this->N[lhs].sid > treeR->N[rhs].sid) {
 			return +1;
+		}
+		
+		/*
+		 * SID_SELF needs special handling or it will recurse on itself 
+		 */
+		if (this->N[lhs].sid == db.SID_SELF) {
+			if (this->N[lhs].slots[0] < treeR->N[rhs].slots[0]) {
+				return -1;
+			} else if (this->N[lhs].slots[0] > treeR->N[rhs].slots[0]) {
+				return +1;
+			} else {
+				return 0;
+			}
 		}
 		
 		/*
