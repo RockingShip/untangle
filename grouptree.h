@@ -1382,6 +1382,11 @@ struct groupTree_t {
 	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		if (this->nodeIndex[ix] != 0) {
+			if (gid == 0 || this->N[this->nodeIndex[ix]].gid == gid)
+				return this->nodeIndex[ix];
+			
+			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[this->nodeIndex[ix]].gid).c_str());
+			
 			// node already exists
 			/*
 			 * @date 2021-11-08 02:06:04
@@ -1393,9 +1398,63 @@ struct groupTree_t {
 			return this->nodeIndex[ix];
 		}
 
+		/*
+		 * @date 2021-11-09 00:01:50
+		 * Create a node only do not add to index yet.
+		 * Also save ncount in case of a rollback
+		 * Need to add node to be able to compare it
+		 */
+		
+		// create node
+		uint32_t nrollback = this->ncount;
+		uint32_t nid       = this->newNode(sid, pSlots);
+
+		assert(nid == nrollback);
+
+		if (gid != 0) {
+			/*
+			 * Check if sid already in group list
+			 */
+			uint32_t lid = gid; // list id
+			do {
+				const groupNode_t *pNode = this->N + lid;
+
+				if (pNode->sid == sid) {
+					assert(pNode->sid != db.SID_SELF);
+
+					/*
+					 * Choose the lowest of the two.
+					 */
+					int cmp = this->compare(lid, this, nid);
+					assert(cmp != 0);
+
+					if (cmp < 0) {
+						this->ncount = nrollback;
+						return lid; // list has lowest
+					}
+
+					/*
+					 * delete list node
+					 */
+					unlinkNode(nid);
+
+					// remove from index
+					uint32_t ix2 = this->lookupNode(pNode->sid, pNode->slots);
+					assert(this->nodeIndex[ix2] == lid);
+
+					this->nodeIndex[ix2] = db.IDDELETED;
+					break;
+				}
+			} while ((lid = this->N[lid].next));
+		}
+
+		// add node to index
+		this->nodeIndex[ix]        = nid;
+		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
 		if (gid == 0) {
 			/*
-			 * Start new group, do not add to index
+			 * Start new group, never add SID_SELF nodes to index
 			 */
 			uint32_t selfSlots[MAXSLOTS] = { this->ncount }; // other slots are zerod
 			assert(selfSlots[MAXSLOTS-1] == 0);
@@ -1405,13 +1464,6 @@ struct groupTree_t {
 			
 			this->N[gid].gid = gid;
 		}
-
-		// create node
-		uint32_t nid = this->newNode(sid, pSlots);
-
-		// add to index
-		this->nodeIndex[ix]        = nid;
-		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
 
 		groupNode_t *pNode = this->N + nid;
 
@@ -1644,6 +1696,23 @@ struct groupTree_t {
 		return nid;
 	}
 
+	/*
+	 * @date 2021-11-09 00:27:01
+	 * 
+	 * Remove a node from its list
+	 */
+	bool unlinkNode(uint32_t nid) {
+
+		// walk the list starting at the head 
+		for (groupNode_t *pNode = N + N[nid].gid; pNode->next; pNode = N + pNode->next) {
+			if (pNode->next == nid) {
+				pNode->next = N[nid].next;
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	/*
 	 * @date 2021-05-22 19:10:33
 	 *
