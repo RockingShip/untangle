@@ -576,7 +576,7 @@ struct groupTree_t {
 	 *
 	 * Lookup a node
 	 */
-	inline uint32_t lookupNode(uint32_t sid, uint32_t slots[]) {
+	inline uint32_t lookupNode(uint32_t sid, const uint32_t slots[]) {
 		ctx.cntHash++;
 
 		// starting position
@@ -593,18 +593,19 @@ struct groupTree_t {
 			ctx.cntCompare++;
 			if (this->nodeIndexVersion[ix] != this->nodeIndexVersionNr) {
 				// let caller finalise index
-				this->nodeIndex[ix] = 0;
 				return ix;
 			}
 
-			const groupNode_t *pNode = this->N + this->nodeIndex[ix];
-			assert(MAXSLOTS == 9);
-			if (pNode->sid == sid &&
-			    pNode->slots[0] == slots[0] && pNode->slots[1] == slots[1] && pNode->slots[2] == slots[2] &&
-			    pNode->slots[3] == slots[3] && pNode->slots[4] == slots[4] && pNode->slots[5] == slots[5] &&
-			    pNode->slots[6] == slots[6] && pNode->slots[7] == slots[7] && pNode->slots[8] == slots[8])
-				return ix;
-
+			if (this->nodeIndex[ix] != db.IDDELETED) {
+				const groupNode_t *pNode = this->N + this->nodeIndex[ix];
+				assert(MAXSLOTS == 9);
+				if (pNode->sid == sid &&
+				    pNode->slots[0] == slots[0] && pNode->slots[1] == slots[1] && pNode->slots[2] == slots[2] &&
+				    pNode->slots[3] == slots[3] && pNode->slots[4] == slots[4] && pNode->slots[5] == slots[5] &&
+				    pNode->slots[6] == slots[6] && pNode->slots[7] == slots[7] && pNode->slots[8] == slots[8])
+					return ix;
+			}
+			
 			ix += bump;
 			if (ix >= this->nodeIndexSize)
 				ix -= this->nodeIndexSize;

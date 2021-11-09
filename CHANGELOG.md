@@ -12,11 +12,12 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
-2021-11-09 22:25:06 Fixed: `groupTree_t::compare()`, now more structure aware.
-2021-11-08 17:37:30 Added: `groupTree_t::addToCollection()`, cascading ordering of slots. 
-2021-11-08 17:35:21 Added: `groupTree_t::addNormalisedNode()`, cached lookup.
-2021-11-08 17:25:37 Added: `groupTree_t::addNormalisedNode()`, added parameters `gid` and `depth`. 
-2021-11-08 17:20:14 Fixed: `groupTree_t`, adding records to index.
+2021-11-09 22:32:48 Changed: `groupTree_t::lookupNode()`, Handle deleted entries.
+2021-11-09 22:25:06 Fixed: `groupTree_t::compare()`, Now more structure aware.
+2021-11-08 17:37:30 Added: `groupTree_t::addToCollection()`, Cascading ordering of slots. 
+2021-11-08 17:35:21 Added: `groupTree_t::addNormalisedNode()`, Cached lookup.
+2021-11-08 17:25:37 Added: `groupTree_t::addNormalisedNode()`, Added parameters `gid` and `depth`. 
+2021-11-08 17:20:14 Fixed: `groupTree_t`, Adding records to index.
 2021-11-08 17:11:45 Fixed: Sorting tid (slots) after reverse transform.
 2021-11-08 17:08:58 Fixed: Buffer overrun in `selftest.cc`.
 2021-11-08 16:52:49 Changed: First (database) record starts at IDFIRST.
