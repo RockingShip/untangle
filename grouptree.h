@@ -707,8 +707,8 @@ struct groupTree_t {
 		depth++;
 		assert(depth < 30);
 
-		printf("%u:\tQ=%u%s T=%u%s F=%u%s %u\n",
-		       depth,
+		printf("%.*sQ=%u%s T=%u%s F=%u%s idNext=%u\n",
+		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 		       Q & ~IBIT, (Q & IBIT) ? "~" : "",
 		       T & ~IBIT, (T & IBIT) ? "~" : "",
 		       F & ~IBIT, (F & IBIT) ? "~" : "",
@@ -759,6 +759,20 @@ struct groupTree_t {
 			return addNormaliseNode(Q, T, F, gid, depth) ^ IBIT;
 		}
 
+		// split `T` into unsigned and invert-bit
+		uint32_t Tu = T & ~IBIT;
+		uint32_t Ti = T & IBIT;
+// guard to not use `T` directly , because `Ti` might flip
+#define T ERROR		
+
+		// make sure using the latest group lists
+		while (this->N[Q].gid != Q)
+			Q = this->N[Q].gid;
+		while (this->N[Tu].gid != Tu)
+			Tu = this->N[Tu].gid;
+		while (this->N[F].gid != Q)
+			F = this->N[F].gid;
+
 		/*
 		 * Level 2 normalisation: single node rewrites
 		 *
@@ -793,9 +807,10 @@ struct groupTree_t {
 		
 		uint32_t tlSid = 0;
 		
-		if (T & IBIT) {
+		if (Ti) {
+			// as you might notice, once `Ti` is set, it stays set
 
-			if (T == IBIT) {
+			if (Tu == 0) {
 				if (Q == F) {
 					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
 					return Q;
@@ -806,7 +821,7 @@ struct groupTree_t {
 					// [ 2] a ? !0 : b  -> "+" OR
 					tlSid = db.SID_OR;
 				}
-			} else if ((T ^ IBIT) == Q) {
+			} else if (Tu == Q) {
 				if (Q == F) {
 					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
 					return 0;
@@ -828,7 +843,7 @@ struct groupTree_t {
 					if (F == 0) {
 						// [ 6] a ? !b : 0  -> ">" greater-than
 						tlSid = db.SID_GT;
-					} else if ((T ^ IBIT) == F) {
+					} else if (Tu == F) {
 						// [ 8] a ? !b : b  -> "^" not-equal/xor
 						tlSid = db.SID_NE;
 					} else {
@@ -840,7 +855,7 @@ struct groupTree_t {
 
 		} else {
 
-			if (T == 0) {
+			if (Tu == 0) {
 				if (Q == F) {
 					// [11] a ?  0 : a -> 0
 					return 0;
@@ -850,12 +865,13 @@ struct groupTree_t {
 					return 0;
 				} else {
 					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-					T = Q ^ IBIT;
+					Tu = Q;
+					Ti = IBIT;
 					Q = F;
 					F = 0;
 					tlSid = db.SID_GT;
 				}
-			} else if (Q == T) {
+			} else if (Q == Tu) {
 				if (Q == F) {
 					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 					assert(0); // already tested
@@ -865,7 +881,8 @@ struct groupTree_t {
 					return Q;
 				} else {
 					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-					T = IBIT;
+					Tu = 0;
+					Ti = IBIT;
 					tlSid = db.SID_OR;
 				}
 			} else {
@@ -897,10 +914,10 @@ struct groupTree_t {
 			tlSlots[1] = F;
 		} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
 			tlSlots[0] = Q;
-			tlSlots[1] = T;
+			tlSlots[1] = Tu;
 		} else {
 			tlSlots[0] = Q;
-			tlSlots[1] = T & ~IBIT;
+			tlSlots[1] = Tu;
 			tlSlots[2] = F;
 		}
 
@@ -953,10 +970,10 @@ struct groupTree_t {
 				pNode->slots[1] = F;
 			} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
 				pNode->slots[0] = Q;
-				pNode->slots[1] = T;
+				pNode->slots[1] = Tu;
 			} else {
 				pNode->slots[0] = Q;
-				pNode->slots[1] = T & ~IBIT;
+				pNode->slots[1] = Tu;
 				pNode->slots[2] = F;
 			}
 
@@ -977,14 +994,17 @@ struct groupTree_t {
 		 * Therefore end con
 		 */
 		// @formatter:off
-		unsigned iQ = Q;         do {
-		unsigned iT = T & ~IBIT; do {
-		unsigned iF = F;         do {
+		unsigned iQ  = Q;  do {
+		unsigned iTu = Tu; do {
+		unsigned iF  = F;  do {
 		// @formatter:on
+		
+			// invert-T for this combo. May flip later due to additional normalisation
+			uint32_t iTi = Ti;
 
 			// point to cross-product components 
 			const groupNode_t *pNodeQ = this->N + iQ;
-			const groupNode_t *pNodeT = this->N + iT;
+			const groupNode_t *pNodeT = this->N + iTu;
 			const groupNode_t *pNodeF = this->N + iF;
 
 			/*
@@ -1003,9 +1023,7 @@ struct groupTree_t {
 				thisVersion = ++slotVersionNr;
 			}
 
-			uint32_t Ti = T & IBIT;
-
-			if (Ti) {
+			if (iTi) {
 
 				if (pNodeT == pZero) {
 					if (pNodeQ == pNodeF) {
@@ -1053,7 +1071,7 @@ struct groupTree_t {
 					} else {
 						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
 						pNodeT = pNodeQ;
-						Ti     = IBIT;
+						iTi    = IBIT;
 						pNodeQ = pNodeF;
 						pNodeF = pZero;
 					}
@@ -1068,7 +1086,7 @@ struct groupTree_t {
 					} else {
 						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
 						pNodeT = pZero;
-						Ti     = IBIT;
+						iTi    = IBIT;
 					}
 				} else {
 					if (pNodeQ == pNodeF) {
@@ -1151,7 +1169,7 @@ struct groupTree_t {
 			uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
 			assert(tidSlotT != IBIT);
 
-			uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
+			uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ iTi, tidSlotT);
 			if (db.patternFirstIndex[ixFirst] == 0)
 				continue; // not found
 
@@ -1284,11 +1302,11 @@ struct groupTree_t {
 
 			if (this->ncount != oldCount) {
 				// if (ctx.opt_debug & ctx.DEBUG_ROW)
-				printf("%u:\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
-				       depth,
+				printf("%.*s%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+				       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 				       gid, nid,
 				       pSignature->size, collapse,
-				       iQ, iT, iF,
+				       iQ, iTu, iF,
 				       pSecond->sidR, db.signatures[pSecond->sidR].name,
 				       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
 			}
@@ -1297,8 +1315,9 @@ struct groupTree_t {
 			gid = this->N[nid].gid;
 
 		// @formatter:off
+		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever. 
 		} while (iF != 0 && (iF = this->N[iF].next));
-		} while (iT != 0 && (iT = this->N[iT].next));
+		} while (iTu != 0 && (iTu = this->N[iTu].next));
 		} while (iQ != 0 && (iQ = this->N[iQ].next));
 		// @formatter:on
 
@@ -1307,6 +1326,8 @@ struct groupTree_t {
 		
 		// return head of list
 		return gid;
+// end of guard		
+#undef T
 	}
 
 	/*

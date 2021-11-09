@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-09 22:35:51 Changed: `groupTree_t::addNormalisedNode()`, Split `T` into `Tu/Ti`.
 2021-11-09 22:32:48 Changed: `groupTree_t::lookupNode()`, Handle deleted entries.
 2021-11-09 22:25:06 Fixed: `groupTree_t::compare()`, Now more structure aware.
 2021-11-08 17:37:30 Added: `groupTree_t::addToCollection()`, Cascading ordering of slots. 
