@@ -770,7 +770,7 @@ struct groupTree_t {
 			Q = this->N[Q].gid;
 		while (this->N[Tu].gid != Tu)
 			Tu = this->N[Tu].gid;
-		while (this->N[F].gid != Q)
+		while (this->N[F].gid != F)
 			F = this->N[F].gid;
 
 		/*
@@ -923,8 +923,14 @@ struct groupTree_t {
 
 		uint32_t ix = this->lookupNode(tlSid, tlSlots);
 		if (this->nodeIndex[ix] != 0) {
-			// node already exists
-			return this->nodeIndex[ix];
+			// node already exists, return group id
+			uint32_t gid = N[this->nodeIndex[ix]].gid;
+
+			// make sure it's the latest version
+			while (this->N[gid].gid != gid)
+				gid = this->N[gid].gid != gid;
+				
+			return gid;
 		}
 
 		/*
@@ -944,6 +950,7 @@ struct groupTree_t {
 				exit(1);
 			}
 
+			memset(pNode, 0, sizeof(*pNode));
 			pNode->gid  = gid;
 			pNode->next = gid + 1;
 			pNode->sid  = db.SID_SELF;
@@ -961,6 +968,7 @@ struct groupTree_t {
 				exit(1);
 			}
 
+			memset(pNode, 0, sizeof(*pNode));
 			pNode->gid  = gid;
 			pNode->next = 0;
 
@@ -1132,7 +1140,7 @@ struct groupTree_t {
 				// was it seen before
 				if (slotVersion[endpoint] != thisVersion) {
 					slotVersion[endpoint] = thisVersion;
-					slotMap[endpoint]     = (char) ('a' + nextSlot); // assign new placeholder
+					slotMap[endpoint]     = 'a' + nextSlot; // assign new placeholder
 					slotsR[nextSlot]      = endpoint; // put endpoint in result
 					nextSlot++;
 				}
@@ -1150,11 +1158,11 @@ struct groupTree_t {
 					if (overflow)
 						break;
 					slotVersion[endpoint] = thisVersion;
-					slotMap[endpoint]     = (char) ('a' + nextSlot);
+					slotMap[endpoint]     = 'a' + nextSlot;
 					slotsR[nextSlot]      = endpoint;
 					nextSlot++;
 				}
-				slotsT[iSlot] = slotMap[endpoint];
+				slotsT[iSlot] = (char) slotMap[endpoint];
 			}
 			slotsT[pSignature->numPlaceholder] = 0;
 
@@ -1191,11 +1199,11 @@ struct groupTree_t {
 					if (overflow)
 						break;
 					slotVersion[endpoint] = thisVersion;
-					slotMap[endpoint]     = (char) ('a' + nextSlot);
+					slotMap[endpoint]     = 'a' + nextSlot;
 					slotsR[nextSlot]      = endpoint;
 					nextSlot++;
 				}
-				slotsF[iSlot] = slotMap[endpoint];
+				slotsF[iSlot] = (char) slotMap[endpoint];
 			}
 			slotsF[pSignature->numPlaceholder] = 0;
 
@@ -1294,6 +1302,22 @@ struct groupTree_t {
 			}
 			
 			/*
+			 * First found should be `1n9` because iQ/iT/iF are all SID_ZERO/SID_SELF
+			 */
+			if (gid == 0) {
+				assert(
+					pSecond->sidR == db.SID_ZERO ||
+					pSecond->sidR == db.SID_SELF ||
+					pSecond->sidR == db.SID_OR ||
+					pSecond->sidR == db.SID_GT ||
+					pSecond->sidR == db.SID_NE ||
+					pSecond->sidR == db.SID_AND ||
+					pSecond->sidR == db.SID_QNTF ||
+					pSecond->sidR == db.SID_QTF
+				);
+			}
+			
+			/*
 			 * Add final sid/slot to collection
 			 */
 			
@@ -1325,6 +1349,7 @@ struct groupTree_t {
 		assert(gid && this->N[gid].next != 0);
 		
 		// return head of list
+		assert(N[gid].gid == gid);
 		return gid;
 // end of guard		
 #undef T
@@ -1659,6 +1684,8 @@ struct groupTree_t {
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
 
+		assert(N[id].gid == id);
+		
 		std::string name;
 
 		/*
@@ -1829,6 +1856,10 @@ struct groupTree_t {
 				// push id so it visits again after expanding
 				pStack[numStack++] = curr;
 
+				assert(N[Q].gid == Q);
+				assert(N[Tu].gid == Tu);
+				assert(N[F].gid == F);
+				
 				// push non-zero endpoints
 				if (F >= this->kstart)
 					pStack[numStack++] = F;
