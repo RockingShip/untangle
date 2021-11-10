@@ -1507,15 +1507,12 @@ struct groupTree_t {
 			
 			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[this->nodeIndex[ix]].gid).c_str());
 			
-			// node already exists
-			/*
-			 * @date 2021-11-08 02:06:04
-			 * still surprised assert hasn't been triggered
-			 * just like structure collapsing, not detected yet
-			 * 
-			 */
-			assert(this->N[this->nodeIndex[ix]].gid == gid);
-			return this->nodeIndex[ix];
+			// node already exists, test if same group
+			if (this->N[this->nodeIndex[ix]].gid == gid)
+				return this->nodeIndex[ix];
+			
+			// merge lists
+			return mergeGroups(gid, this->nodeIndex[ix], depth + 1);
 		}
 
 		/*
@@ -1812,6 +1809,175 @@ struct groupTree_t {
 		return nid;
 	}
 
+	/*
+	 * @date 2021-11-09 22:48:38
+	 * 
+	 * Merge two groups into one.
+	 * Might cause node rewriting with a cascading effect
+	 * 
+	 * NOTE: until optimised, both lists are orphaned 
+	 */
+	uint32_t mergeGroups(uint32_t lhs, uint32_t rhs, unsigned depth) {
+
+		printf("MERGE %u %u\n", lhs, rhs);
+		
+		assert(this->N[lhs].gid == lhs);
+		assert(this->N[rhs].gid == rhs);
+		
+		/*
+		 * Create new group header/list
+		 */
+
+		uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
+		assert(selfSlots[MAXSLOTS - 1] == 0);
+
+		uint32_t gid = this->newNode(db.SID_SELF, selfSlots);
+		assert(gid == selfSlots[0]);
+
+		/*
+		 * Relocate nodes to new head 
+		 */
+
+		// get left list
+		uint32_t tmpListL = this->N[lhs].next;
+		// unlink head from the list (relatively seeing, this empties the list)
+		unlinkNode(lhs);
+		// append list after last node of new group
+		linkNode(this->N[gid].prev, tmpListL);
+
+		// get right list
+		uint32_t tmpListR = this->N[rhs].next;
+		// unlink head from the list (relatively seeing, this empties the list)
+		unlinkNode(rhs);
+		// append list after last node of new group
+		linkNode(this->N[gid].prev, tmpListR);
+
+		// original lists should now be empty
+		assert(this->N[lhs].next == lhs);
+		assert(this->N[rhs].next == rhs);
+
+		/*
+		 * Update gid of all nodes 
+		 */
+
+		for (uint32_t iNode = this->N[gid].next; iNode != gid; iNode = this->N[iNode].next)
+			this->N[iNode].gid = gid;
+
+		/*
+		 * Walk through tree and search for outdated lists
+		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
+		 */
+		for (uint32_t iList =this->nstart; iList < this->ncount; iList++) {
+			// find group headers
+			if (this->N[iList].gid == iList) {
+				
+				// is list up-to-date
+				bool outdated = false;
+				for (uint32_t iNode = this->N[iList].next; iNode != iList; iNode = this->N[iNode].next) {
+					groupNode_t *pNode = this->N + iNode;
+
+					for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						if (id != this->N[id].gid) {
+							outdated = true;
+							break;
+						}
+					}
+					if (outdated)
+						break;
+				}
+				
+				/*
+				 * Group list is outdated, update
+				 */
+				if (outdated) {
+					printf("UPDATE %u\n", iList);
+					
+					/*
+					 * create new list header
+					 */
+					selfSlots[0] = this->ncount;
+
+					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots);
+					assert(newGid == selfSlots[0]);
+
+					this->N[newGid].gid = newGid;
+
+					/*
+					 * Walk and update the list 
+					 */
+					for (uint32_t iNode = this->N[iList].next; iNode != iList; iNode = this->N[iNode].next) {
+						groupNode_t *pNode = this->N + iNode;
+
+						bool nodeDated = false;
+						for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS && !outdated; iSlot++) {
+							uint32_t id = pNode->slots[iSlot];
+							if (id != this->N[id].gid) {
+								nodeDated = true;
+								break;
+							}
+						}
+						
+						if (nodeDated) {
+							// create new node
+							uint32_t newSlots[MAXSLOTS] = {0}; // other slots are zeroed
+							assert(newSlots[MAXSLOTS - 1]);
+
+							for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS && !outdated; iSlot++) {
+								uint32_t id = pNode->slots[iSlot];
+								while (id != this->N[id].gid)
+									id = this->N[id].gid;
+								
+								newSlots[iSlot] = id;
+							}
+
+							// create new replacement
+							uint32_t newNid = this->newNode(pNode->sid, newSlots);
+							this->N[newNid].gid =  newGid;
+
+							// add to list
+							linkNode(this->N[newGid].prev, newNid);
+
+							// add to index
+							uint32_t ix = this->lookupNode(pNode->sid, newSlots);
+							assert(ix != 0);
+
+							this->N[newNid].hashIX     = ix;
+							this->nodeIndex[ix]        = newNid;
+							this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+							// let old node forward to replacement, which will forward to replacement header
+							pNode->gid = newNid;
+							
+							printf("%u->%u,", iNode, newNid);
+						} else {
+							// remember position next node in list
+							uint32_t iNode = pNode->next;
+							
+							// unlink old node (invalidating next position)
+							unlinkNode(iNode);
+							
+							// link to new list
+							linkNode(this->N[newGid].prev, iNode);
+
+							// part of new list
+							pNode->gid = newGid;
+							
+							// reposition
+							iNode = this->N[iNode].prev;
+
+							printf("%u,", iNode);
+						}
+					}
+					
+					printf("\n");
+				}
+			}
+		}
+		
+		return gid;
+	}
+	
 	/*
 	 * @date 2021-05-22 19:10:33
 	 *
