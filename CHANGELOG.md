@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-10 19:48:56 Added: `groupTree_t::compare()`, Compare with an anonymous node (rhs constant).
 2021-11-10 19:34:46 Changed: `groupNode_t`, Now with double linked list.
 2021-11-09 22:41:32 Changed: `groupTree_t::addToCollection()`, Delete duplicates/similars. NOTE: may cause index overflow.
 2021-11-09 22:39:12 Changed: `groupTree_t::addNormalisedNode()`, Ensure group heads point to the latest lists.

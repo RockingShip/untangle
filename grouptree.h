@@ -520,8 +520,7 @@ struct groupTree_t {
 	 *      +1 L > R
 	 */
 	int compare(uint32_t lhs, groupTree_t *treeR, uint32_t rhs) {
-
-		assert(this == treeR);
+		assert(this == treeR && "to be implemented");
 
 		if (lhs == rhs)
 			return 0;
@@ -578,6 +577,52 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-11-10 18:27:04
+	 * 
+	 * variation that allows comparison with an anonymous node
+	 */
+	int compare(uint32_t lhs, uint32_t sidRhs, const uint32_t *pSlotsRhs) {
+
+		if (lhs < this->nstart) {
+			// endpoint is always lover
+			return -1;
+		}
+
+		if (this->N[lhs].sid < sidRhs) {
+			return -1;
+		} else if (this->N[lhs].sid > sidRhs) {
+			return +1;
+		}
+
+		/*
+		 * SID_SELF needs special handling or it will recurse on itself 
+		 */
+		if (this->N[lhs].sid == db.SID_SELF) {
+			if (this->N[lhs].slots[0] < pSlotsRhs[0]) {
+				return -1;
+			} else if (this->N[lhs].slots[0] > pSlotsRhs[0]) {
+				return +1;
+			} else {
+				return 0;
+			}
+		}
+
+		/*
+		 * simple compare
+		 * todo: cache results
+		 */
+		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
+
+		for (unsigned iSlot=0; iSlot<pSignature->numPlaceholder; iSlot++) {
+			int ret = this->compare(this->N[lhs].slots[iSlot], this, pSlotsRhs[iSlot]);
+			if (ret != 0)
+				return ret;
+		}
+
+		return 0;
+	}
+
+	/*
 	 * @date  2021-11-10 00:05:51
 	 * 
 	 * Add node to list
@@ -615,7 +660,20 @@ struct groupTree_t {
 	/*
 	 * @date 2021-05-13 00:38:48
 	 *
-	 * Lookup a node
+	 * Lookup a node.
+	 * 
+	 * NOTE: About deleting entries.
+	 * 
+	 * An entry is invalidated by changing one of it's key values.
+	 * This will cause the key CRC to change, making it highly likely to fail key matching.
+	 * There are pathological situations that a bucket overflow jump "might" jump to the deleted record.
+	 *
+	 * Zeroing the index entry will break bucket overflows, hiding entries from the index.
+	 * To keep overflow consistency, use the reserved `IDDELETED`.
+	 * However, using it will pollute the index and might break the assumption "number of records < number of index entries"
+	 * Breaking will cause the overflow jumping to loop forever.
+	 * 
+	 * todo: count the number of used `IDDELETED` and rebuild index when there are too many 
 	 */
 	inline uint32_t lookupNode(uint32_t sid, const uint32_t slots[]) {
 		ctx.cntHash++;
@@ -969,7 +1027,8 @@ struct groupTree_t {
 		/*
 		 * Lookup if QTF combo already exists
 		 */
-		uint32_t tlSlots[MAXSLOTS] = { 0 }; // zero contents
+		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
+		assert(tlSlots[MAXSLOTS - 1] == 0);
 
 		// set slots
 		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
@@ -1381,6 +1440,8 @@ struct groupTree_t {
 			
 			uint32_t oldCount = this->ncount;
 			uint32_t nid = addToCollection(pSecond->sidR, finalSlots, gid, depth);
+			// update current group id to that of head of list
+			gid = this->N[nid].gid;
 
 			if (this->ncount != oldCount) {
 				// if (ctx.opt_debug & ctx.DEBUG_ROW)
@@ -1392,9 +1453,6 @@ struct groupTree_t {
 				       pSecond->sidR, db.signatures[pSecond->sidR].name,
 				       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
 			}
-
-			// update current group id to head of list
-			gid = this->N[nid].gid;
 
 		// @formatter:off
 		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever. 
@@ -1461,25 +1519,17 @@ struct groupTree_t {
 		}
 
 		/*
-		 * @date 2021-11-09 00:01:50
-		 * Create a node only do not add to index yet.
-		 * Also save ncount in case of a rollback
-		 * Need to add node to be able to compare it
+		 * Optimise similars already in group list
 		 */
 		
-		// create node
-		uint32_t nrollback = this->ncount;
-		uint32_t nid       = this->newNode(sid, pSlots);
-
-		assert(nid == nrollback);
-
 		if (gid != 0) {
 			/*
 			 * Check if sid already in group list
+			 * If present: Lowest gets onto the list, highest gets orphaned
 			 */
 			uint32_t lid = gid; // list id
 			do {
-				const groupNode_t *pNode = this->N + lid;
+				groupNode_t *pNode = this->N + lid;
 
 				if (pNode->sid == sid) {
 					assert(pNode->sid != db.SID_SELF);
@@ -1487,32 +1537,23 @@ struct groupTree_t {
 					/*
 					 * Choose the lowest of the two.
 					 */
-					int cmp = this->compare(lid, this, nid);
+					int cmp = this->compare(lid, sid, pSlots);
 					assert(cmp != 0);
 
 					if (cmp < 0) {
-						this->ncount = nrollback;
-						return lid; // list has lowest
+						// list has lowest
+						// rollback is o avoid newly created node from being orphaned 
+						return lid;
 					}
 
-					/*
-					 * delete list node
-					 */
-					unlinkNode(nid);
-
-					// remove from index
-					uint32_t ix2 = this->lookupNode(pNode->sid, pNode->slots);
-					assert(this->nodeIndex[ix2] == lid);
-
-					this->nodeIndex[ix2] = db.IDDELETED;
 					break;
 				}
 			} while ((lid = this->N[lid].next) != gid);
 		}
 
-		// add node to index
-		this->nodeIndex[ix]        = nid;
-		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+		/*
+		 * Optionally create new group list plus header 
+		 */
 
 		if (gid == 0) {
 			/*
@@ -1527,13 +1568,24 @@ struct groupTree_t {
 			this->N[gid].gid = gid;
 		}
 
+		/*
+		 * Point of no return 
+		 */
+
+		// create node
+		uint32_t    nid    = this->newNode(sid, pSlots);
 		groupNode_t *pNode = this->N + nid;
 
 		// add to list, keep it simple, SID_SELF is always first of list
-		pNode->gid        = gid;
+		pNode->gid = gid;
 
 		// add node to list
 		linkNode(gid, nid);
+
+		// add node to index
+		pNode->hashIX              = ix;
+		this->nodeIndex[ix]        = nid;
+		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
 
 		/*
 		 * @date 2021-11-08 00:00:19
@@ -1756,6 +1808,7 @@ struct groupTree_t {
 			freeMap(pMap);
 		}
 
+		assert(this->N[nid].gid == gid);
 		return nid;
 	}
 
