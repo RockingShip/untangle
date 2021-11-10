@@ -378,7 +378,7 @@ struct gevalContext_t {
 			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
 
 			// walk through group list in search of a `1n9` node
-			for (uint32_t iNode = iGroup; iNode; iNode = pTree->N[iNode].next) {
+			for (uint32_t iNode = pTree->N[iGroup].next; iNode != iGroup; iNode = pTree->N[iNode].next) {
 				groupNode_t *pNode = pTree->N + iNode;
 				
 				// catch `1n9`

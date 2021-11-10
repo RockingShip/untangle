@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-10 19:34:46 Changed: `groupNode_t`, Now with double linked list.
 2021-11-09 22:41:32 Changed: `groupTree_t::addToCollection()`, Delete duplicates/similars. NOTE: may cause index overflow.
 2021-11-09 22:39:12 Changed: `groupTree_t::addNormalisedNode()`, Ensure group heads point to the latest lists.
 2021-11-09 22:35:51 Changed: `groupTree_t::addNormalisedNode()`, Split `T` into `Tu/Ti`.

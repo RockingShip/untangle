@@ -45,28 +45,40 @@ struct groupNode_t {
 	 * Each active list should have at least one `1n9` node.
 	 * 
 	 * Lists consist of several layers, each layer representing a signature node size.
+	 * 
+	 * If `groupId`==`nodeId`, then the node is a group list header.
+	 * Nodes are sometimes relocated to other groups.
+	 * If `gid` is different than the group id of the list, then a better alternative has been found.
+	 * Updating is strongly suggested with `while (id != N[id])...`
 	 */
 	uint32_t gid;
-	
+
 	/*
-	 * The next node in the list.
+	 * Double linked list of nodes
 	 * These are the only id that are allowed to be a forward reference.
 	 * The last node in the list has `next=0`.
+	 * NOTE: Because double linked list, the list header `.prev` always points to the last entry of the list
 	 */
+	uint32_t prev;
 	uint32_t next;
+
+	/*
+	 * Index hash, for fast lookups like when deleting.
+	 * NOTE: `SID_SELF`, the list headers, are never indexed. 
+	 */
+	uint32_t hashIX;
 
 	/*
 	 * The signature describing the behaviour of the node
 	 */
 	uint32_t sid;
-	
+
 	/*
 	 * Signature endpoints.
 	 * Endpoints are group id's, always referencing the first node in lists.
 	 * Unused entries should always be zero.
 	 */
 	uint32_t slots[MAXSLOTS];
-
 };
 
 /*
@@ -325,7 +337,9 @@ struct groupTree_t {
 			memset(pNode, 0, sizeof(*pNode));
 
 			pNode->gid  = iKey;
-			pNode->next = 0;
+			pNode->next = iKey;
+			pNode->prev = iKey;
+			pNode->hashIX = 0xffffffff;
 			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
@@ -403,11 +417,8 @@ struct groupTree_t {
 		// rewind nodes
 		this->ncount = this->nstart;
 		
-		// todo:
-#if 0		
 		// invalidate lookup cache
 		++this->nodeIndexVersionNr;
-#endif		
 	}
 
 	/*
@@ -493,11 +504,6 @@ struct groupTree_t {
 	}
 
 	/*
-	 * Types of communicative dyadics/cascades
-	 */
-	enum { CASCADE_NONE, CASCADE_OR, CASCADE_NE, CASCADE_AND, CASCADE_SYNC };
-
-	/*
 	 * @date 2021-05-12 01:23:06
 	 *
 	 * Compare two-subtrees
@@ -567,8 +573,43 @@ struct groupTree_t {
 			if (ret != 0)
 				return ret;
 		}
-		
+
 		return 0;
+	}
+
+	/*
+	 * @date  2021-11-10 00:05:51
+	 * 
+	 * Add node to list
+	 */
+	inline void linkNode(uint32_t headId, uint32_t nodeId) {
+
+		groupNode_t *pHead  = this->N + headId;
+		groupNode_t *pNode  = this->N + nodeId;
+
+		uint32_t headIdNext = pHead->next;
+		uint32_t nodeIdLast = pNode->prev;
+
+		this->N[headIdNext].prev = nodeIdLast;
+		this->N[nodeIdLast].next = headIdNext;
+
+		pHead->next = nodeId;
+		pNode->prev = headId;
+	}
+
+	/*
+	 * @date 2021-11-10 00:38:00
+	 */
+	inline void unlinkNode(uint32_t nodeId) {
+		groupNode_t *pNode = this->N + nodeId;
+
+		uint32_t    headId = pNode->prev;
+		groupNode_t *pHead = this->N + headId;
+
+		this->N[pHead->next].prev = headId;
+		pHead->next               = pNode->next;
+
+		pNode->next = pNode->prev = nodeId;
 	}
 
 	/*
@@ -599,6 +640,7 @@ struct groupTree_t {
 			if (this->nodeIndex[ix] != db.IDDELETED) {
 				const groupNode_t *pNode = this->N + this->nodeIndex[ix];
 				assert(MAXSLOTS == 9);
+
 				if (pNode->sid == sid &&
 				    pNode->slots[0] == slots[0] && pNode->slots[1] == slots[1] && pNode->slots[2] == slots[2] &&
 				    pNode->slots[3] == slots[3] && pNode->slots[4] == slots[4] && pNode->slots[5] == slots[5] &&
@@ -619,34 +661,14 @@ struct groupTree_t {
 	 *
 	 * Create a new node
 	 */
-	inline uint32_t newNode(uint32_t sid, uint32_t slots[]) {
-		uint32_t id = this->ncount++;
+	inline uint32_t newNode(uint32_t sid, const uint32_t slots[]) {
+		uint32_t nid = this->ncount++;
 
-		if (id > maxNodes - 10) {
-			fprintf(stderr, "[OVERFLOW]\n");
-			printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
-			exit(1);
-		}
-
-		assert(id < maxNodes);
-
-		groupNode_t *pNode = this->N + id;
-
+		assert(nid < maxNodes);
 		assert(MAXSLOTS == 9);
-		pNode->gid = 0;
-		pNode->next = 0;
-		pNode->sid = sid;
-		pNode->slots[0] = slots[0];
-		pNode->slots[1] = slots[1];
-		pNode->slots[2] = slots[2];
-		pNode->slots[3] = slots[3];
-		pNode->slots[4] = slots[4];
-		pNode->slots[5] = slots[5];
-		pNode->slots[6] = slots[6];
-		pNode->slots[7] = slots[7];
-		pNode->slots[8] = slots[8];
 
 		if (sid != db.SID_SELF) {
+			// test referencing to group headers
 			assert(N[slots[0]].gid == slots[0]);
 			assert(N[slots[1]].gid == slots[1]);
 			assert(N[slots[2]].gid == slots[2]);
@@ -658,7 +680,48 @@ struct groupTree_t {
 			assert(N[slots[8]].gid == slots[8]);
 		}
 
-		return id;
+		if (nid > maxNodes - 10) { // 10 is arbitrary
+			fprintf(stderr, "[OVERFLOW]\n");
+			printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
+			exit(1);
+		}
+
+		groupNode_t *pNode = this->N + nid;
+
+		pNode->gid  = 0;
+		pNode->next = nid;
+		pNode->prev = nid;
+		pNode->hashIX = 0xffffffff;
+		pNode->sid    = sid;
+
+		pNode->slots[0] = slots[0];
+		pNode->slots[1] = slots[1];
+		pNode->slots[2] = slots[2];
+		pNode->slots[3] = slots[3];
+		pNode->slots[4] = slots[4];
+		pNode->slots[5] = slots[5];
+		pNode->slots[6] = slots[6];
+		pNode->slots[7] = slots[7];
+		pNode->slots[8] = slots[8];
+
+		return nid;
+	}
+
+	/*
+	 * @date 2021-11-10 01:26:25
+	 */
+	inline void deleteNode(uint32_t nodeId) {
+		groupNode_t *pNode = this->N + nodeId;
+
+		// remove from index
+		if (pNode->hashIX != 0xffffffff)
+			this->nodeIndex[pNode->hashIX] = db.IDDELETED;
+
+		// unlink
+		unlinkNode(nodeId);
+
+		// zero data
+		memset(pNode, 0, sizeof(*pNode));
 	}
 
 	/*
@@ -952,7 +1015,7 @@ struct groupTree_t {
 
 			memset(pNode, 0, sizeof(*pNode));
 			pNode->gid  = gid;
-			pNode->next = gid + 1;
+			pNode->next = pNode->prev = gid + 1; // link to next node
 			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = gid;
 
@@ -970,7 +1033,7 @@ struct groupTree_t {
 
 			memset(pNode, 0, sizeof(*pNode));
 			pNode->gid  = gid;
-			pNode->next = 0;
+			pNode->next = pNode->prev = gid; // link to head (previous node)
 
 			// set sid/slots
 			if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
@@ -996,11 +1059,6 @@ struct groupTree_t {
 
 		const groupNode_t *pZero = this->N + db.SID_ZERO;
 
-		/*
-		 * @date 2021-11-05 18:48:34
-		 * Q/T/F are zero when referencing `SID_ZERO`
-		 * Therefore end con
-		 */
 		// @formatter:off
 		unsigned iQ  = Q;  do {
 		unsigned iTu = Tu; do {
@@ -1340,13 +1398,13 @@ struct groupTree_t {
 
 		// @formatter:off
 		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever. 
-		} while (iF != 0 && (iF = this->N[iF].next));
-		} while (iTu != 0 && (iTu = this->N[iTu].next));
-		} while (iQ != 0 && (iQ = this->N[iQ].next));
+		} while ((iF = this->N[iF].next) != F);
+		} while ((iTu = this->N[iTu].next) != Tu) ;
+		} while ((iQ = this->N[iQ].next) != Q);
 		// @formatter:on
 
 		// The detector must detect at least one pattern, minimal is a `1n9`.
-		assert(gid && this->N[gid].next != 0);
+		assert(gid && this->N[gid].next != gid);
 		
 		// return head of list
 		assert(N[gid].gid == gid);
@@ -1378,8 +1436,12 @@ struct groupTree_t {
          * Prune layers on collapsing
          * 
          * For final selection: nodes with highest layer and lowest slot entries
+         * 
+         * if gid=0, create new group, otherwise add node to group
+         * return node id, which might change group
+         * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
-	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
+	uint32_t addToCollection(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		if (this->nodeIndex[ix] != 0) {
 			if (gid == 0 || this->N[this->nodeIndex[ix]].gid == gid)
@@ -1445,7 +1507,7 @@ struct groupTree_t {
 					this->nodeIndex[ix2] = db.IDDELETED;
 					break;
 				}
-			} while ((lid = this->N[lid].next));
+			} while ((lid = this->N[lid].next) != gid);
 		}
 
 		// add node to index
@@ -1469,8 +1531,9 @@ struct groupTree_t {
 
 		// add to list, keep it simple, SID_SELF is always first of list
 		pNode->gid        = gid;
-		pNode->next       = this->N[gid].next;
-		this->N[gid].next = nid;
+
+		// add node to list
+		linkNode(gid, nid);
 
 		/*
 		 * @date 2021-11-08 00:00:19
@@ -1697,23 +1760,6 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-11-09 00:27:01
-	 * 
-	 * Remove a node from its list
-	 */
-	bool unlinkNode(uint32_t nid) {
-
-		// walk the list starting at the head 
-		for (groupNode_t *pNode = N + N[nid].gid; pNode->next; pNode = N + pNode->next) {
-			if (pNode->next == nid) {
-				pNode->next = N[nid].next;
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	/*
 	 * @date 2021-05-22 19:10:33
 	 *
 	 * Encode a prefix into given parameter `pNode`.
@@ -1871,7 +1917,7 @@ struct groupTree_t {
 			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
 
 			// walk through group list in search of a `1n9` node
-			for (uint32_t iNode = curr; iNode; iNode = this->N[iNode].next) {
+			for (uint32_t iNode = this->N[curr].next; iNode != curr; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
 				if (pNode->sid == db.SID_OR) {
