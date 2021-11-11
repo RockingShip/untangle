@@ -1430,7 +1430,10 @@ struct groupTree_t {
 			 */
 			
 			uint32_t oldCount = this->ncount;
+
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 			uint32_t nid = addToCollection(pSecond->sidR, finalSlots, gid, depth);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			/*
 			 * First found should be `1n9` because iQ/iT/iF are all SID_ZERO/SID_SELF
@@ -1513,9 +1516,13 @@ struct groupTree_t {
 	 */
 	uint32_t addToCollection(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
 		uint32_t ix = this->lookupNode(sid, pSlots);
+		uint32_t nid = this->nodeIndex[ix];
+
 		if (this->nodeIndex[ix] != 0) {
-			if (gid == 0 || this->N[this->nodeIndex[ix]].gid == gid)
-				return this->nodeIndex[ix];
+			// use found if still anonymous or in same group ()
+			if (gid == 0 || this->N[nid].gid == gid)
+				return nid; // duplicate detected
+
 			
 			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[this->nodeIndex[ix]].gid).c_str());
 			
@@ -1528,8 +1535,17 @@ struct groupTree_t {
 			while (rhs != this->N[rhs].gid)
 				rhs = this->N[rhs].gid;
 
-			// merge lists
-			return mergeGroups(gid, this->nodeIndex[ix], depth + 1);
+			// merge groups lists
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+			uint32_t newGid = mergeGroups(gid, rhs, depth + 1);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+			
+			// node should now be member of the new group
+			assert(this->N[nid].gid == newGid);
+			
+			// assert
+			// return original, which should have been rewritten and outdated
+			return nid;
 		}
 
 		/*
@@ -1572,8 +1588,8 @@ struct groupTree_t {
 			/*
 			 * Start new group, never add SID_SELF nodes to index
 			 */
-			uint32_t selfSlots[MAXSLOTS] = { this->ncount }; // other slots are zerod
-			assert(selfSlots[MAXSLOTS-1] == 0);
+			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			gid = this->newNode(db.SID_SELF, selfSlots);
 			this->N[gid].gid = gid;
@@ -1584,7 +1600,7 @@ struct groupTree_t {
 		 */
 
 		// create node
-		uint32_t    nid    = this->newNode(sid, pSlots);
+		nid = this->newNode(sid, pSlots);
 		groupNode_t *pNode = this->N + nid;
 
 		// add to list, keep it simple, SID_SELF is always first of list
@@ -1852,8 +1868,6 @@ struct groupTree_t {
 	 */
 	uint32_t mergeGroups(uint32_t lhs, uint32_t rhs, unsigned depth) {
 
-		printf("MERGE %u %u\n", lhs, rhs);
-		
 		assert(this->N[lhs].gid == lhs);
 		assert(this->N[rhs].gid == rhs);
 		
@@ -1866,6 +1880,8 @@ struct groupTree_t {
 
 		uint32_t mergeGid = this->newNode(db.SID_SELF, selfSlots);
 		this->N[mergeGid].gid = mergeGid;
+
+		printf("MERGE %u %u -> %u\n", lhs, rhs, mergeGid);
 
 		/*
 		 * Relocate nodes to new head 
@@ -1893,25 +1909,34 @@ struct groupTree_t {
 		 * Update gid of all nodes in list
 		 */
 
+		this->N[lhs].gid = mergeGid;
+		this->N[lhs].slots[0] = mergeGid;
+		this->N[rhs].gid = mergeGid;
+		this->N[rhs].slots[0] = mergeGid;
+
 		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
 			this->N[iNode].gid = mergeGid;
 
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+		
 		/*
 		 * Walk through tree and search for outdated lists
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
 		 */
-		for (uint32_t iList =this->nstart; iList < this->ncount; iList++) {
+		for (uint32_t iGroup =this->nstart; iGroup < this->ncount; iGroup++) {
 			// find group headers
-			if (this->N[iList].gid == iList) {
+			if (this->N[iGroup].gid == iGroup) {
 				
 				// is list up-to-date
 				bool outdated = false;
-				for (uint32_t iNode = this->N[iList].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					groupNode_t *pNode = this->N + iNode;
 
 					for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
-						if (id != this->N[id].gid) {
+						if (id == 0) {
+							break; 
+						} else if (id != this->N[id].gid) {
 							outdated = true;
 							break;
 						}
@@ -1924,8 +1949,11 @@ struct groupTree_t {
 				 * Group list is outdated, update
 				 */
 				if (outdated) {
-					printf("UPDATE %u\n", iList);
+					printf("UPDATE %u\n", iGroup);
 					
+					static int xcnt;
+					if (xcnt++ > 20) { printf("LOOP\n"); exit(1); }
+						
 					/*
 					 * create new list header
 					 */
@@ -1937,27 +1965,35 @@ struct groupTree_t {
 					/*
 					 * Walk and update the list 
 					 */
-					for (uint32_t iNode = this->N[iList].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-						groupNode_t *pNode = this->N + iNode;
+					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+						groupNode_t *pNode    = this->N + iNode;
+						bool        nodeDated = false;
 
-						bool nodeDated = false;
 						for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS && !outdated; iSlot++) {
 							uint32_t id = pNode->slots[iSlot];
-							if (id != this->N[id].gid) {
+
+							if (id == 0) {
+								break;
+							} else if (id != this->N[id].gid) {
 								nodeDated = true;
 								break;
 							}
 						}
 						
 						if (nodeDated) {
+							printf("NODE-OUTDATED\n");
 							// create new node
 							uint32_t newSlots[MAXSLOTS] = {0}; // other slots are zeroed
 							assert(newSlots[MAXSLOTS - 1]);
 
 							for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS && !outdated; iSlot++) {
 								uint32_t id = pNode->slots[iSlot];
-								while (id != this->N[id].gid)
-									id = this->N[id].gid;
+								if (id == 0) {
+									break;
+								} else {
+									while (id != this->N[id].gid)
+										id = this->N[id].gid;
+								}
 								
 								newSlots[iSlot] = id;
 							}
@@ -2005,10 +2041,149 @@ struct groupTree_t {
 				}
 			}
 		}
-		
+
+		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			groupNode_t *pNode = this->N + iNode; 
+			printf("%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+			       pNode->gid, iNode,
+			       pNode->sid, db.signatures[pNode->sid].name,
+			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
+		}
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 		return mergeGid;
 	}
 	
+	/*
+	 * @date 2021-11-11 16:44:08
+	 * 
+	 * For debugging
+	 */
+	void validateTree(unsigned lineNr) {
+		uint32_t *pVersion   = allocVersion();
+		uint32_t thisVersion = ++mapVersionNr;
+		int      errors      = 0;
+
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
+		}
+		
+		// mark endpoints as defined
+		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+			pVersion[iKey] = thisVersion;
+
+		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+			// find group headers
+			if (this->N[iGroup].gid == iGroup) {
+
+				// is list up-to-date
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					groupNode_t *pNode = this->N + iNode;
+
+					// test double defined
+					if (pVersion[iNode] == thisVersion)
+						errors++;
+
+					for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						if (id == 0) {
+							break;
+						} else if (pVersion[id] != thisVersion) {
+							// reference not defined
+							errors++;
+						} else if (id != this->N[id].gid) {
+							// reference orphaned
+							errors++;
+						}
+					}
+
+					// mark node found
+					pVersion[iNode] = thisVersion;
+				}
+
+				// test double defined
+				if (pVersion[iGroup] == thisVersion)
+					errors++;
+
+				// mark header found
+				pVersion[iGroup] = thisVersion;
+			}
+		}
+
+		if (errors == 0) {
+			freeVersion(pVersion);
+			return;
+		}
+
+		printf("INVALIDTREE at line %u\n", lineNr);
+
+		// bump version
+		thisVersion = ++mapVersionNr;
+
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
+		}
+
+		// mark endpoints as defined
+		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+			pVersion[iKey] = thisVersion;
+
+		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+			// find group headers
+			if (this->N[iGroup].gid == iGroup) {
+
+				// is list up-to-date
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					groupNode_t *pNode = this->N + iNode;
+
+					// test double defined
+					if (pVersion[iNode] == thisVersion)
+						printf("<DOUBLE nid=%u>", iNode);
+
+					printf("%u\t%u\t%u:%s/[",
+					       pNode->gid, iNode,
+					       pNode->sid, db.signatures[pNode->sid].name);
+
+					for (unsigned iSlot = 0; pNode->slots[iSlot] && iSlot < MAXSLOTS; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						if (id == 0) {
+							break;
+						} else {
+							printf(" %u", pNode->slots[iSlot]);
+
+							if (pVersion[id] != thisVersion) {
+								// reference not defined
+								printf("<MISSING>");
+							} else if (id != this->N[id].gid) {
+								// reference orphaned
+								printf("<ERROR:gid=%u>", this->N[id].gid);
+							}
+						}
+					}
+					
+					printf("]\n");
+
+					// mark node found
+					pVersion[iNode] = thisVersion;
+				}
+
+				// test double defined
+				if (pVersion[iGroup] == thisVersion)
+					printf("<DOUBLE gid=%u>", iGroup);
+
+				// mark header found
+				pVersion[iGroup] = thisVersion;
+			}
+		}
+
+		freeVersion(pVersion);
+
+		exit(1);
+	}
+
 	/*
 	 * @date 2021-05-22 19:10:33
 	 *
