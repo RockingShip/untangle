@@ -651,7 +651,7 @@ struct groupTree_t {
 		uint32_t    headId = pNode->prev;
 		groupNode_t *pHead = this->N + headId;
 
-		this->N[pHead->next].prev = headId;
+		this->N[pNode->next].prev = headId;
 		pHead->next               = pNode->next;
 
 		pNode->next = pNode->prev = nodeId;
