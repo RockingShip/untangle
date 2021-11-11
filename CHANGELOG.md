@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-11 12:02:35 Changed: `groupTree_t::addNormalisedNode()`, Returns node id, which caller should promote to group id. 
 2021-11-11 10:35:50 Fixed: `groupTree_t`, iterator for double linked lists.
 2021-11-11 10:25:05 Fixed: `groupTree_t::unlinkNode()`, oops.
 2021-11-10 19:48:56 Added: `groupTree_t::mergeGroups()`, Combine group lists and rebuild references.

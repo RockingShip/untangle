@@ -1122,8 +1122,9 @@ struct groupTree_t {
 		 * Second step: create cross-products of Q/T/F group lists
 		 */
 
-		const groupNode_t *pZero = this->N + db.SID_ZERO;
-
+		const groupNode_t *pZero   = this->N + db.SID_ZERO;
+		uint32_t          first1n9 = 0;
+		
 		// @formatter:off
 		unsigned iQ  = Q;  do {
 		unsigned iTu = Tu; do {
@@ -1423,7 +1424,14 @@ struct groupTree_t {
 					}
 				} while (changed);
 			}
+		
+			/*
+			 * Add final sid/slot to collection
+			 */
 			
+			uint32_t oldCount = this->ncount;
+			uint32_t nid = addToCollection(pSecond->sidR, finalSlots, gid, depth);
+
 			/*
 			 * First found should be `1n9` because iQ/iT/iF are all SID_ZERO/SID_SELF
 			 */
@@ -1440,12 +1448,6 @@ struct groupTree_t {
 				);
 			}
 			
-			/*
-			 * Add final sid/slot to collection
-			 */
-			
-			uint32_t oldCount = this->ncount;
-			uint32_t nid = addToCollection(pSecond->sidR, finalSlots, gid, depth);
 			// update current group id to that of head of list
 			gid = nid;
 			while (gid != this->N[gid].gid)
@@ -1462,6 +1464,10 @@ struct groupTree_t {
 				       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
 			}
 
+			// remember first `1n9`
+			if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F)
+				first1n9 = nid;
+
 		// @formatter:off
 		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 		} while (iF = this->N[iF].next, this->N[iF].gid != iF);
@@ -1469,12 +1475,10 @@ struct groupTree_t {
 		} while (iQ = this->N[iQ].next, this->N[iQ].gid != iQ);
 		// @formatter:on
 
-		// The detector must detect at least one pattern, minimal is a `1n9`.
-		assert(gid && this->N[gid].next != gid);
+		// The detector must detect at least one pattern
+		assert(first1n9 && this->N[first1n9].gid == gid);
 		
-		// return head of list
-		assert(N[gid].gid == gid);
-		return gid;
+		return first1n9;
 // end of guard		
 #undef T
 	}
@@ -1570,10 +1574,8 @@ struct groupTree_t {
 			 */
 			uint32_t selfSlots[MAXSLOTS] = { this->ncount }; // other slots are zerod
 			assert(selfSlots[MAXSLOTS-1] == 0);
-			
-			gid    = this->newNode(db.SID_SELF, selfSlots);
-			assert(gid == selfSlots[0]);
-			
+
+			gid = this->newNode(db.SID_SELF, selfSlots);
 			this->N[gid].gid = gid;
 		}
 
@@ -1619,6 +1621,7 @@ struct groupTree_t {
 			uint32_t nextNode = this->nstart;
 			uint32_t *pStack  = allocMap();
 			uint32_t *pMap    = allocMap();
+			uint32_t buildGid = 0;
 
 			/*
 			 * Load string
@@ -1691,7 +1694,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(L, IBIT, R, gid, depth+1);
+						buildGid = addNormaliseNode(L, IBIT, R, gid, depth+1);
 					}
 
 					break;
@@ -1711,7 +1714,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(L, R ^ IBIT, 0, gid, depth+1);
+						buildGid = addNormaliseNode(L, R ^ IBIT, 0, gid, depth+1);
 					}
 
 					break;
@@ -1731,7 +1734,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(L, R ^ IBIT, R, gid, depth+1);
+						buildGid = addNormaliseNode(L, R ^ IBIT, R, gid, depth+1);
 					}
 
 					break;
@@ -1752,7 +1755,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(Q, T ^ IBIT, F, gid, depth+1);
+						buildGid = addNormaliseNode(Q, T ^ IBIT, F, gid, depth+1);
 					}
 
 					break;
@@ -1772,7 +1775,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(L, R, 0, gid, depth+1);
+						buildGid = addNormaliseNode(L, R, 0, gid, depth+1);
 					}
 
 					break;
@@ -1793,7 +1796,7 @@ struct groupTree_t {
 						pStack[numStack++] = pMap[nextNode++] = id;
 					} else {
 						assert(numStack == 0);
-						nid = addNormaliseNode(Q, T, F, gid, depth+1);
+						buildGid = addNormaliseNode(Q, T, F, gid, depth+1);
 					}
 
 					break;
@@ -1827,6 +1830,12 @@ struct groupTree_t {
 
 			freeMap(pStack);
 			freeMap(pMap);
+
+			/*
+			 * buildGid is derived from the signature, not the argument.
+			 * however, both should be in the same group, which might have been rebuilt
+			 */
+			assert(buildGid && this->N[nid].gid == this->N[buildGid].gid);
 		}
 
 		assert(this->N[nid].gid == gid);
@@ -1855,8 +1864,8 @@ struct groupTree_t {
 		uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
 		assert(selfSlots[MAXSLOTS - 1] == 0);
 
-		uint32_t gid = this->newNode(db.SID_SELF, selfSlots);
-		assert(gid == selfSlots[0]);
+		uint32_t mergeGid = this->newNode(db.SID_SELF, selfSlots);
+		this->N[mergeGid].gid = mergeGid;
 
 		/*
 		 * Relocate nodes to new head 
@@ -1867,25 +1876,25 @@ struct groupTree_t {
 		// unlink head from the list (relatively seeing, this empties the list)
 		unlinkNode(lhs);
 		// append list after last node of new group
-		linkNode(this->N[gid].prev, tmpListL);
+		linkNode(this->N[mergeGid].prev, tmpListL);
 
 		// get right list
 		uint32_t tmpListR = this->N[rhs].next;
 		// unlink head from the list (relatively seeing, this empties the list)
 		unlinkNode(rhs);
 		// append list after last node of new group
-		linkNode(this->N[gid].prev, tmpListR);
+		linkNode(this->N[mergeGid].prev, tmpListR);
 
 		// original lists should now be empty
 		assert(this->N[lhs].next == lhs);
 		assert(this->N[rhs].next == rhs);
 
 		/*
-		 * Update gid of all nodes 
+		 * Update gid of all nodes in list
 		 */
 
-		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
-			this->N[iNode].gid = gid;
+		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
+			this->N[iNode].gid = mergeGid;
 
 		/*
 		 * Walk through tree and search for outdated lists
@@ -1923,8 +1932,6 @@ struct groupTree_t {
 					selfSlots[0] = this->ncount;
 
 					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots);
-					assert(newGid == selfSlots[0]);
-
 					this->N[newGid].gid = newGid;
 
 					/*
@@ -1976,7 +1983,7 @@ struct groupTree_t {
 							printf("%u->%u,", iNode, newNid);
 						} else {
 							// remember position next node in list
-							uint32_t iNode = pNode->next;
+							uint32_t iNextNode = pNode->next;
 							
 							// unlink old node (invalidating next position)
 							unlinkNode(iNode);
@@ -1986,11 +1993,11 @@ struct groupTree_t {
 
 							// part of new list
 							pNode->gid = newGid;
-							
-							// reposition
-							iNode = this->N[iNode].prev;
 
 							printf("%u,", iNode);
+
+							// reposition
+							iNode = this->N[iNextNode].prev;
 						}
 					}
 					
@@ -1999,7 +2006,7 @@ struct groupTree_t {
 			}
 		}
 		
-		return gid;
+		return mergeGid;
 	}
 	
 	/*
