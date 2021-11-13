@@ -1033,6 +1033,21 @@ struct groupTree_t {
 			}
 		}
 
+		if (gid != 0) {
+			/*
+			 * @date 2021-11-12 14:58:16
+			 * 
+			 * It is possible that Q/T/F are references of (shared) intermediates created after the initial group header
+			 * Rebuild `gid` to make that the highest id
+			 */
+			// rebuild when forwards detected
+			if (Q > gid || Tu > gid || F > gid) {
+				rebuildGroups(gid);
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
+			}
+		}
+
 		/*
 		 * Lookup if QTF combo already exists
 		 */
@@ -1538,6 +1553,8 @@ struct groupTree_t {
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// node should now be member of the new group
+			while (newGid != this->N[newGid].gid)
+				newGid = this->N[newGid].gid;
 			assert(this->N[nid].gid == newGid);
 
 			// assert
@@ -1638,6 +1655,8 @@ struct groupTree_t {
 			 * buildGid is derived from the signature, not the argument.
 			 * however, both should be in the same group, which might have been rebuilt/merged
 			 */
+			while (buildGid != this->N[buildGid].gid)
+				buildGid = this->N[buildGid].gid;
 			assert(this->N[nid].gid == this->N[buildGid].gid);
 		}
 
@@ -1951,7 +1970,31 @@ struct groupTree_t {
 		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
 			this->N[iNode].gid = mergeGid;
 
+		/*
+		 * rebuild groups to resolve forward references 
+		 */
+		rebuildGroups();
+
+		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			groupNode_t *pNode = this->N + iNode;
+			printf("M %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+			       pNode->gid, iNode,
+			       pNode->sid, db.signatures[pNode->sid].name,
+			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
+		}
+
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+		return mergeGid;
+	}
+
+	/*
+	 * @date 2021-11-11 23:19:34
+	 * 
+	 * Rebuild groups that have nodes that have forward references
+	 */
+	void rebuildGroups(uint32_t forceGid = 0) {
+
+		printf("CHECK\n");
 
 		/*
 		 * Walk through tree and search for outdated lists
@@ -1982,11 +2025,20 @@ struct groupTree_t {
 
 						if (id != this->N[id].gid) {
 							outdated = true;
-							printf("<outdated:new=%u>", this->N[id].gid);
+							if (id == forceGid)
+								printf("<forced:new=%u>", this->N[id].gid);
+							else
+								printf("<outdated:new=%u>", this->N[id].gid);
 						}
 					}
 
 					putchar(']');
+
+					if (iGroup == forceGid) {
+						outdated = true;
+						printf("<forced>");
+					}
+
 					putchar('\n');
 
 					if (outdated)
@@ -2009,14 +2061,17 @@ struct groupTree_t {
 					/*
 					 * create new list header
 					 */
-					selfSlots[0] = this->ncount;
+					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
+					assert(selfSlots[MAXSLOTS - 1] == 0);
 
 					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots);
 					this->N[newGid].gid = newGid;
 
 					/*
-					 * Walk and update the list 
+					 * Walk and update the list, relocating or orphaning nodes
 					 */
+
+					printf("REBUILD %u->%u\n", iGroup, newGid);
 
 					char delimiter = 0;
 
@@ -2041,7 +2096,6 @@ struct groupTree_t {
 						delimiter = ',';
 
 						if (nodeDated) {
-							printf("NODE-OUTDATED\n");
 							// create new node
 							uint32_t newSlots[MAXSLOTS] = {0}; // other slots are zeroed
 							assert(newSlots[MAXSLOTS - 1] == 0);
@@ -2097,20 +2151,16 @@ struct groupTree_t {
 					}
 
 					printf("\n"); // end-of-list
+
+					/*
+					 * Let old and head (containing all the orphans) forward to new 
+					 */
+					this->N[iGroup].gid = newGid;
 				}
 			}
 		}
 
-		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t *pNode = this->N + iNode; 
-			printf("%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
-			       pNode->gid, iNode,
-			       pNode->sid, db.signatures[pNode->sid].name,
-			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
-		}
-
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-		return mergeGid;
 	}
 
 	/*
