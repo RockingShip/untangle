@@ -822,6 +822,7 @@ struct groupTree_t {
 	 * 
 	 * Returns main node id, which might be outdated as effect of internal rewriting.
 	 * 
+	 * NOTE: this function is called recursively: `addNormaliseNode()`/`expandSignature()`
 	 * NOTE: the return value may be inverted
 	 * NOTE: do NOT forget to update gid after calling this function
 	 * 
@@ -1031,20 +1032,9 @@ struct groupTree_t {
 			}
 		}
 
-		if (gid != 0) {
-			/*
-			 * @date 2021-11-12 14:58:16
-			 * 
-			 * It is possible that Q/T/F are references of (shared) intermediates created after the initial group header
-			 * Rebuild `gid` to make that the highest id
-			 */
-			// rebuild when forwards detected
-			if (Q > gid || Tu > gid || F > gid) {
-				rebuildGroups(gid);
-				while (gid != this->N[gid].gid)
-					gid = this->N[gid].gid;
-			}
-		}
+		// Q/T/F/gid must be within range
+		assert(gid == 0 || (Q < gid && Tu < gid && F < gid));
+		assert(gid == this->N[gid].gid);
 
 		/*
 		 * Lookup if QTF combo already exists
@@ -1189,6 +1179,23 @@ struct groupTree_t {
 				);
 			}
 
+			/*
+			 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
+			 * It could be that `addToCollection()` orphaned iQ/iTu/iF
+			 */
+			if (Q != this->N[iQ].gid) {
+				while (iQ != this->N[iQ].gid)
+					Q = iQ = this->N[iQ].gid; // restart with new list
+			}
+			if (Tu != this->N[iTu].gid) {
+				while (iTu != this->N[iTu].gid)
+					Tu = iTu = this->N[iTu].gid; // restart with new list
+			}
+			if (F != this->N[iF].gid) {
+				while (iF != this->N[iF].gid)
+					F = iF = this->N[iF].gid; // restart with new list
+			}
+
 		// @formatter:off
 		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 		} while (iF = this->N[iF].next, this->N[iF].gid != iF);
@@ -1198,8 +1205,6 @@ struct groupTree_t {
 
 		// The detector must detect at least one pattern
 		assert(first1n9 && this->N[first1n9].gid == gid);
-
-		assert(first1n9);
 		return first1n9;
 	}
 
@@ -1626,7 +1631,6 @@ struct groupTree_t {
 			assert(this->N[nid].gid == this->N[buildGid].gid);
 		}
 
-		assert(this->N[nid].gid == this->N[gid].gid);
 		return nid;
 	}
 
@@ -1781,11 +1785,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(L, IBIT, R, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(L, IBIT, R, gid, depth + 1);
 				}
 
@@ -1801,11 +1809,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(L, R ^ IBIT, 0, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(L, R ^ IBIT, 0, gid, depth + 1);
 				}
 
@@ -1821,11 +1833,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(L, R ^ IBIT, R, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(L, R ^ IBIT, R, gid, depth + 1);
 				}
 
@@ -1842,11 +1858,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(Q, T ^ IBIT, F, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(Q, T ^ IBIT, F, gid, depth + 1);
 				}
 
@@ -1862,11 +1882,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(L, R, 0, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(L, R, 0, gid, depth + 1);
 				}
 
@@ -1883,11 +1907,15 @@ struct groupTree_t {
 
 				if (pattern[1]) {
 					uint32_t id = addNormaliseNode(Q, T, F, 0, depth + 1);
+					// get latest group
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 					pStack[numStack++] = pMap[nextNode++] = id;
 				} else {
 					assert(numStack == 0);
+					// get latest group
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
 					buildGid = addNormaliseNode(Q, T, F, gid, depth + 1);
 				}
 
@@ -1994,7 +2022,7 @@ struct groupTree_t {
 		rebuildGroups();
 
 		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t *pNode = this->N + iNode;
+			const groupNode_t *pNode = this->N + iNode;
 			printf("M %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
 			       pNode->gid, iNode,
 			       pNode->sid, db.signatures[pNode->sid].name,
@@ -2026,7 +2054,7 @@ struct groupTree_t {
 				bool outdated = false;
 
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					groupNode_t *pNode = this->N + iNode;
+					const groupNode_t *pNode = this->N + iNode;
 
 					printf("C %u\t%u\t%u:%s/[",
 					       pNode->gid, iNode,
@@ -2201,8 +2229,11 @@ struct groupTree_t {
 		}
 
 		// mark endpoints as defined
-		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
+		for (uint32_t iKey = 0; iKey < this->nstart; iKey++) {
+			assert(this->N[iKey].gid == iKey);
+			assert(this->N[iKey].next == iKey);
 			pVersion[iKey] = thisVersion;
+		}
 
 		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			// find group headers
@@ -2210,7 +2241,7 @@ struct groupTree_t {
 
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					groupNode_t *pNode = this->N + iNode;
+					const groupNode_t *pNode = this->N + iNode;
 
 					// test double defined
 					if (pVersion[iNode] == thisVersion)
@@ -2268,7 +2299,7 @@ struct groupTree_t {
 
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					groupNode_t *pNode = this->N + iNode;
+					const groupNode_t *pNode = this->N + iNode;
 
 					// test double defined
 					if (pVersion[iNode] == thisVersion)
@@ -2479,7 +2510,7 @@ struct groupTree_t {
 
 			// walk through group list in search of a `1n9` node
 			for (uint32_t iNode = this->N[curr].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				groupNode_t *pNode = this->N + iNode;
+				const groupNode_t *pNode = this->N + iNode;
 
 				if (pNode->sid == db.SID_OR) {
 					Q  = pNode->slots[0];
