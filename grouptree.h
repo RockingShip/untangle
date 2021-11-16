@@ -1386,8 +1386,9 @@ struct groupTree_t {
 				slotsR[nextSlot++] = 0;
 
 			// extract
-			uint32_t      finalSlots[MAXSLOTS];
-			for (unsigned iSlot    = 0; iSlot < pSignature->numPlaceholder; iSlot++)
+			uint32_t finalSlots[MAXSLOTS];
+
+			for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++)
 				finalSlots[iSlot] = slotsR[pTransformExtract[iSlot] - 'a'];
 			for (unsigned iSlot       = pSignature->numPlaceholder; iSlot < MAXSLOTS; iSlot++)
 				finalSlots[iSlot] = 0;
@@ -1395,47 +1396,8 @@ struct groupTree_t {
 			/*
 			 * Apply endpoint swapping
 			 */
-			if (pSignature->swapId) {
-				swap_t *pSwap = db.swaps + pSignature->swapId;
-
-				bool changed;
-				do {
-					changed = false;
-
-					for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
-						unsigned tid = pSwap->tids[iSwap];
-
-						// get the transform string
-						const char *pTransformSwap = db.fwdTransformNames[tid];
-
-						// test if swap needed
-						bool needSwap = false;
-
-						for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-							if (this->compare(finalSlots[i], this, finalSlots[pTransformSwap[i] - 'a']) > 0) {
-								needSwap = true;
-								break;
-							}
-							if (this->compare(finalSlots[i], this, finalSlots[pTransformSwap[i] - 'a']) < 0) {
-								needSwap = false;
-								break;
-							}
-						}
-
-						if (needSwap) {
-							uint32_t newSlots[MAXSLOTS];
-
-							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-								newSlots[i] = finalSlots[pTransformSwap[i] - 'a'];
-
-							for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-								finalSlots[i] = newSlots[i];
-
-							changed = true;
-						}
-					}
-				} while (changed);
-			}
+			if (pSignature->swapId)
+				applySwapping(pSignature, finalSlots);
 
 			/*
 			 * Add final sid/slot to collection
@@ -1662,6 +1624,58 @@ struct groupTree_t {
 
 		assert(this->N[nid].gid == this->N[gid].gid);
 		return nid;
+	}
+
+	/*
+	 * @date 2021-11-16 13:21:47
+	 * 
+	 * Apply signature based endpoint swapping to slots
+	 */
+	void applySwapping(const signature_t *pSignature, uint32_t *pSlots) {
+		/*
+		 * Apply endpoint swapping
+		 */
+		if (pSignature->swapId) {
+			swap_t *pSwap = db.swaps + pSignature->swapId;
+
+			bool changed;
+			do {
+				changed = false;
+
+				for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+					unsigned tid = pSwap->tids[iSwap];
+
+					// get the transform string
+					const char *pTransformSwap = db.fwdTransformNames[tid];
+
+					// test if swap needed
+					bool needSwap = false;
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) > 0) {
+							needSwap = true;
+							break;
+						}
+						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) < 0) {
+							needSwap = false;
+							break;
+						}
+					}
+
+					if (needSwap) {
+						uint32_t newSlots[MAXSLOTS];
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							pSlots[i] = newSlots[i];
+
+						changed = true;
+					}
+				}
+			} while (changed);
+		}
 	}
 
 	/*

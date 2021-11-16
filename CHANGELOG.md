@@ -12,12 +12,14 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-13 15:59:25 Added: `groupTree_t::applySwapping()`, Apply signature based endpoint swapping.
+2021-11-13 15:59:25 Added: `groupTree_t::orphanLesser()`, Assist in choosing competing nodes during a group merge.
 2021-11-13 15:59:25 Added: `groupTree_t::rebuildGroups()`, Resolve forward node references.
-2021-11-13 15:07:17 Added: `groupTree_t::expandSignature()`, recreate node by applying/expanding it's signature.
-2021-11-11 12:02:35 Added: `groupTree_t::validateTree()`, trees are starting to get complex. 
+2021-11-13 15:07:17 Added: `groupTree_t::expandSignature()`, Recreate node by applying/expanding it's signature.
+2021-11-11 12:02:35 Added: `groupTree_t::validateTree()`, Trees are starting to get complex. 
 2021-11-11 12:02:35 Changed: `groupTree_t::addNormalisedNode()`, Returns node id, which caller should promote to group id. 
-2021-11-11 10:35:50 Fixed: `groupTree_t`, iterator for double linked lists.
-2021-11-11 10:25:05 Fixed: `groupTree_t::unlinkNode()`, oops.
+2021-11-11 10:35:50 Fixed: `groupTree_t`, Iterator for double linked lists.
+2021-11-11 10:25:05 Fixed: `groupTree_t::unlinkNode()`, Oops.
 2021-11-10 19:48:56 Added: `groupTree_t::mergeGroups()`, Combine group lists and rebuild references.
 2021-11-10 19:48:56 Added: `groupTree_t::compare()`, Compare with an anonymous node (rhs constant).
 2021-11-10 19:34:46 Changed: `groupNode_t`, Now with double linked list.
