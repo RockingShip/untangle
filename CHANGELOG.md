@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-16 20:43:38 Changed: `groupTree_t::constructSlots()`, Moved slot construction to a dedicated function.
 2021-11-13 15:59:25 Added: `groupTree_t::applySwapping()`, Apply signature based endpoint swapping.
 2021-11-13 15:59:25 Added: `groupTree_t::orphanLesser()`, Assist in choosing competing nodes during a group merge.
 2021-11-13 15:59:25 Added: `groupTree_t::rebuildGroups()`, Resolve forward node references.
