@@ -658,6 +658,18 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-11-16 19:36:42
+	 * 
+	 * Test arguments belong to the same group
+	 */
+	inline bool isSameGroup(uint32_t gid, uint32_t nid) {
+		while (nid != this->N[nid].gid)
+			nid = this->N[nid].gid;
+		
+		return gid == nid;
+	}
+	
+	/*
 	 * @date 2021-05-13 00:38:48
 	 *
 	 * Lookup a node.
@@ -1055,10 +1067,33 @@ struct groupTree_t {
 			tlSlots[2] = F;
 		}
 
+		// test if node already exists
 		uint32_t ix = this->lookupNode(tlSid, tlSlots);
 		if (this->nodeIndex[ix] != 0) {
-			// node already exists
-			return this->nodeIndex[ix];
+			uint32_t nid = this->nodeIndex[ix];
+
+			if (gid == 0 || isSameGroup(gid, nid))
+				return nid; // node already exists
+
+			// merge groups
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+			mergeGroups(gid, this->N[nid].gid, depth + 1);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+
+			return nid;
+		}
+
+		/* 
+		 * Determine if top-level is depreciated when adding to existing group
+		 */
+		if (gid != 0) {
+			uint32_t id = orphanLesser(gid, tlSid, tlSlots);
+			if (id != 0) {
+				assert(gid == 0 || isSameGroup(gid, id));
+
+				// node has better replacement
+				return id;
+			}
 		}
 
 		/*
@@ -1140,13 +1175,39 @@ struct groupTree_t {
 				continue; // combo not found
 
 			/*
+			 * @date 2021-11-16 16:22:03
+			 * To prevent a recursive loop because this candidate is a lesser alternative, test that first
+			 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is lesser than `ab^/[a bcd^^]`
+			 */
+			if (gid != 0 && orphanLesser(gid, sid, finalSlots) != 0)
+				continue; // a better alternative was found (can safely continue as no changes have been made)
+
+			/*
+			 * @date 2021-11-08 00:00:19
+			 * 
+			 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
+			 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
+			 * 
+			 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
+			 * implicitly creating better ordered components.
+			 * 
+			 * This might create many duplicates.
+			 */
+
+			if (db.signatures[sid].size > 1) {
+				gid = expandSignature(sid, finalSlots, gid, depth);
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
+			}
+
+			/*
 			 * Add final sid/slot to collection
 			 */
 
 			uint32_t oldCount = this->ncount;
 
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			uint32_t nid = addToCollection(sid, finalSlots, gid, depth, /*allowExpand=*/ true);
+			uint32_t nid = addToCollection(sid, finalSlots, gid, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// update current group id to that of head of list
@@ -1497,39 +1558,41 @@ struct groupTree_t {
          * return node id, which might change group
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
-	uint32_t addToCollection(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth, bool allowExpand) {
+	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		uint32_t nid = this->nodeIndex[ix];
 
-		if (this->nodeIndex[ix] != 0) {
-			// use found if still anonymous or in same group ()
-			if (gid == 0 || this->N[nid].gid == gid)
-				return nid; // duplicate detected
-
-
-			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[this->nodeIndex[ix]].gid).c_str());
-
+		/*
+		 * Test if node already exists
+		 */
+		if (nid != 0) {
 			// node already exists, test if same group
-			if (this->N[this->nodeIndex[ix]].gid == gid)
-				return this->nodeIndex[ix];
+			if (gid == 0 || this->N[nid].gid == gid)
+				return nid; // duplicate
 
-			// lhs is group header, rhs is a node, find its group 
-			uint32_t rhs = this->nodeIndex[ix];
+			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
+
+			// lhs(gid) is list header, rhs(nid) is a node, find its group 
+			uint32_t rhs = nid;
 			while (rhs != this->N[rhs].gid)
 				rhs = this->N[rhs].gid;
 
 			// merge groups lists
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			uint32_t newGid = mergeGroups(gid, rhs, depth + 1);
+			mergeGroups(gid, rhs, depth + 1);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// node should now be member of the new group
-			while (newGid != this->N[newGid].gid)
-				newGid = this->N[newGid].gid;
-			assert(this->N[nid].gid == newGid);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+				// gid might have changed
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
 
-			// assert
-			// return original, which should have been rewritten and outdated
+				// node should now be member of the new group
+				assert(isSameGroup(gid, rhs));
+			}
+
+			// return original, which should have relocated to a different group
 			return nid;
 		}
 
@@ -1599,39 +1662,43 @@ struct groupTree_t {
 		this->nodeIndex[ix]        = nid;
 		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
 
-		/*
-		 * @date 2021-11-08 00:00:19
-		 * 
-		 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
-		 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
-		 * 
-		 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
-		 * implicitly creating better ordered components.
-		 * 
-		 * This might create many duplicates.
-		 */
-		/*
-		 * @date 2021-11-11 23:08:10
-		 * 
-		 * NOTE:
-		 *   the cross-product loop calls this function (low gid), which below adds intermediates (high gid)
-		 *   These intermediates might be reused in the following tree evaluation, causing forward references, which is not allowed.
-		 *   After each call to `addNormaliseNode()` verify bound and rebuild where necessary
-		 */
+		return nid;
+	}
 
-		if (allowExpand && db.signatures[sid].size > 1) {
-			uint32_t buildGid = expandSignature(sid, pSlots, gid, depth);
+	/*
+	 * @date 2021-11-13 01:41:11
+	 * 
+	 * Sids need to be unique in group lists
+	 * If the argument is not found return 0
+	 * If the argument is found and worse, orphan it and return 0
+	 * If the argument is found and better return node id
+	 *
+	 *  if (orphanLesser(candidate) == 0)
+	 *     ignoreCandidate();
+	 */
+	uint32_t orphanLesser(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
 
-			/*
-			 * buildGid is derived from the signature, not the argument.
-			 * however, both should be in the same group, which might have been rebuilt/merged
-			 */
-			while (buildGid != this->N[buildGid].gid)
-				buildGid = this->N[buildGid].gid;
-			assert(this->N[nid].gid == this->N[buildGid].gid);
+		for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+			const groupNode_t *pNode = this->N + id;
+
+			if (pNode->sid == sid) {
+				/*
+				 * Choose the lowest of the two.
+				 */
+				int cmp = this->compare(id, sid, pSlots);
+
+				if (cmp <= 0) {
+					// list has best or self 
+					return id;
+				}
+
+				// list has worse, orphan it
+				unlinkNode(id);
+				return 0;
+			}
 		}
 
-		return nid;
+		return 0;
 	}
 
 	/*
@@ -2017,9 +2084,26 @@ struct groupTree_t {
 			this->N[iNode].gid = mergeGid;
 
 		/*
+		 * Select better of multiple sids
+		 */
+		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			const groupNode_t *pNode = this->N + iNode;
+			
+			/*
+			 * Compare all list nodes with own list,
+			 * all lesser nodes (not being self, thus breaking the loop) will be orphaned
+			 */
+			orphanLesser(mergeGid, pNode->sid, pNode->slots); 
+		}
+
+		/*
 		 * rebuild groups to resolve forward references 
 		 */
 		rebuildGroups();
+
+		// rebuilding creates new groups 
+		while (mergeGid != this->N[mergeGid].gid)
+			mergeGid = this->N[mergeGid].gid;
 
 		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
