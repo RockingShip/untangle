@@ -658,18 +658,6 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-11-16 19:36:42
-	 * 
-	 * Test arguments belong to the same group
-	 */
-	inline bool isSameGroup(uint32_t gid, uint32_t nid) {
-		while (nid != this->N[nid].gid)
-			nid = this->N[nid].gid;
-		
-		return gid == nid;
-	}
-	
-	/*
 	 * @date 2021-05-13 00:38:48
 	 *
 	 * Lookup a node.
@@ -1529,229 +1517,6 @@ struct groupTree_t {
 
 		return pSecond->sidR;
 	}
-	
-	/*
-	 * @date 2021-11-05 03:09:35
-	 * 
-	 * Add a node to the group list
-	 * Create a new list if necessary (gid=0)
-	 * Return id of list header 
-	 * 
-	 * Handle merging of lists if sit/slot combo already belongs to a different list
-	 * 
-	 * @date 2021-11-07 14:41:06
-	 * 
-	 * With slot entry subsets, remove largest, don't prune because it provides sid diversity  
-	 * 35      35      2       0       5       34      33      49:abc^d!/[5 7 9 33 0 0 0 0 0]
-	 * 35      35      2       0       5       34      34      22:abc^^/[5 7 9 0 0 0 0 0 0]
-	 * 
-	 * With multiple sids of same node size, select lowest slots, prune as the don't contribute to cross-product
-	 * 54      61      3       0       19      53      53      194:abcd^^^/[3 5 19 33 0 0 0 0 0] b d aceg^^^ fh^ ^^^
-	 * 54      68      3       0       32      40      40      194:abcd^^^/[2 4 12 40 0 0 0 0 0] a c eg^ bdfh^^^ ^^^
-         * 54      74      3       0       20      41      41      194:abcd^^^/[2 3 14 35 0 0 0 0 0] a b ceg^^ dfh^^ ^^^
-         * 
-         * Prune layers on collapsing
-         * 
-         * For final selection: nodes with highest layer and lowest slot entries
-         * 
-         * if gid=0, create new group, otherwise add node to group
-         * return node id, which might change group
-         * NOTE: caller must update group id `gid = this->N[nid].gid`.
-	 */
-	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
-		uint32_t ix = this->lookupNode(sid, pSlots);
-		uint32_t nid = this->nodeIndex[ix];
-
-		/*
-		 * Test if node already exists
-		 */
-		if (nid != 0) {
-			// node already exists, test if same group
-			if (gid == 0 || this->N[nid].gid == gid)
-				return nid; // duplicate
-
-			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
-
-			// lhs(gid) is list header, rhs(nid) is a node, find its group 
-			uint32_t rhs = nid;
-			while (rhs != this->N[rhs].gid)
-				rhs = this->N[rhs].gid;
-
-			// merge groups lists
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			mergeGroups(gid, rhs, depth + 1);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
-			// node should now be member of the new group
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) {
-				// gid might have changed
-				while (gid != this->N[gid].gid)
-					gid = this->N[gid].gid;
-
-				// node should now be member of the new group
-				assert(isSameGroup(gid, rhs));
-			}
-
-			// return original, which should have relocated to a different group
-			return nid;
-		}
-
-		/*
-		 * Optimise similars already in group list
-		 */
-		
-		if (gid != 0) {
-			/*
-			 * Check if sid already in group list
-			 * If present: Lowest gets onto the list, highest gets orphaned
-			 */
-			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
-				groupNode_t *pNode = this->N + id;
-
-				if (pNode->sid == sid) {
-					assert(pNode->sid != db.SID_SELF);
-
-					/*
-					 * Choose the lowest of the two.
-					 */
-					int cmp = this->compare(id, sid, pSlots);
-					assert(cmp != 0);
-
-					if (cmp < 0) {
-						// list has lowest
-						// rollback is o avoid newly created node from being orphaned 
-						return id;
-					}
-
-					break;
-				}
-			}
-		}
-
-		/*
-		 * Optionally create new group list plus header 
-		 */
-
-		if (gid == 0) {
-			/*
-			 * Start new group, never add SID_SELF nodes to index
-			 */
-			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
-			assert(selfSlots[MAXSLOTS - 1] == 0);
-
-			gid = this->newNode(db.SID_SELF, selfSlots);
-			this->N[gid].gid = gid;
-		}
-
-		/*
-		 * Point of no return 
-		 */
-
-		// create node
-		nid = this->newNode(sid, pSlots);
-		groupNode_t *pNode = this->N + nid;
-
-		// add to list, keep it simple, SID_SELF is always first of list
-		pNode->gid = gid;
-
-		// add node to list
-		linkNode(gid, nid);
-
-		// add node to index
-		pNode->hashIX              = ix;
-		this->nodeIndex[ix]        = nid;
-		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-		return nid;
-	}
-
-	/*
-	 * @date 2021-11-13 01:41:11
-	 * 
-	 * Sids need to be unique in group lists
-	 * If the argument is not found return 0
-	 * If the argument is found and worse, orphan it and return 0
-	 * If the argument is found and better return node id
-	 *
-	 *  if (orphanLesser(candidate) == 0)
-	 *     ignoreCandidate();
-	 */
-	uint32_t orphanLesser(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
-
-		for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
-			const groupNode_t *pNode = this->N + id;
-
-			if (pNode->sid == sid) {
-				/*
-				 * Choose the lowest of the two.
-				 */
-				int cmp = this->compare(id, sid, pSlots);
-
-				if (cmp <= 0) {
-					// list has best or self 
-					return id;
-				}
-
-				// list has worse, orphan it
-				unlinkNode(id);
-				return 0;
-			}
-		}
-
-		return 0;
-	}
-
-	/*
-	 * @date 2021-11-16 13:21:47
-	 * 
-	 * Apply signature based endpoint swapping to slots
-	 */
-	void applySwapping(const signature_t *pSignature, uint32_t *pSlots) {
-		/*
-		 * Apply endpoint swapping
-		 */
-		if (pSignature->swapId) {
-			swap_t *pSwap = db.swaps + pSignature->swapId;
-
-			bool changed;
-			do {
-				changed = false;
-
-				for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
-					unsigned tid = pSwap->tids[iSwap];
-
-					// get the transform string
-					const char *pTransformSwap = db.fwdTransformNames[tid];
-
-					// test if swap needed
-					bool needSwap = false;
-
-					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) > 0) {
-							needSwap = true;
-							break;
-						}
-						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) < 0) {
-							needSwap = false;
-							break;
-						}
-					}
-
-					if (needSwap) {
-						uint32_t newSlots[MAXSLOTS];
-
-						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];
-
-						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
-							pSlots[i] = newSlots[i];
-
-						changed = true;
-					}
-				}
-			} while (changed);
-		}
-	}
 
 	/*
 	 * @date 2021-11-08 00:00:19
@@ -2025,6 +1790,141 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-11-05 03:09:35
+	 * 
+	 * Add a node to the group list
+	 * Create a new list if necessary (gid=0)
+	 * Return id of list header 
+	 * 
+	 * Handle merging of lists if sit/slot combo already belongs to a different list
+	 * 
+	 * @date 2021-11-07 14:41:06
+	 * 
+	 * With slot entry subsets, remove largest, don't prune because it provides sid diversity  
+	 * 35      35      2       0       5       34      33      49:abc^d!/[5 7 9 33 0 0 0 0 0]
+	 * 35      35      2       0       5       34      34      22:abc^^/[5 7 9 0 0 0 0 0 0]
+	 * 
+	 * With multiple sids of same node size, select lowest slots, prune as the don't contribute to cross-product
+	 * 54      61      3       0       19      53      53      194:abcd^^^/[3 5 19 33 0 0 0 0 0] b d aceg^^^ fh^ ^^^
+	 * 54      68      3       0       32      40      40      194:abcd^^^/[2 4 12 40 0 0 0 0 0] a c eg^ bdfh^^^ ^^^
+         * 54      74      3       0       20      41      41      194:abcd^^^/[2 3 14 35 0 0 0 0 0] a b ceg^^ dfh^^ ^^^
+         * 
+         * Prune layers on collapsing
+         * 
+         * For final selection: nodes with highest layer and lowest slot entries
+         * 
+         * if gid=0, create new group, otherwise add node to group
+         * return node id, which might change group
+         * NOTE: caller must update group id `gid = this->N[nid].gid`.
+	 */
+	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
+		uint32_t ix = this->lookupNode(sid, pSlots);
+		uint32_t nid = this->nodeIndex[ix];
+
+		/*
+		 * Test if node already exists
+		 */
+		if (nid != 0) {
+			// node already exists, test if same group
+			if (gid == 0 || this->N[nid].gid == gid)
+				return nid; // duplicate
+
+			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
+
+			// lhs(gid) is list header, rhs(nid) is a node, find its group 
+			uint32_t rhs = nid;
+			while (rhs != this->N[rhs].gid)
+				rhs = this->N[rhs].gid;
+
+			// merge groups lists
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+			mergeGroups(gid, rhs, depth + 1);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+
+			// node should now be member of the new group
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+				// gid might have changed
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
+
+				// node should now be member of the new group
+				assert(isSameGroup(gid, rhs));
+			}
+
+			// return original, which should have relocated to a different group
+			return nid;
+		}
+
+		/*
+		 * Optimise similars already in group list
+		 */
+		
+		if (gid != 0) {
+			/*
+			 * Check if sid already in group list
+			 * If present: Lowest gets onto the list, highest gets orphaned
+			 */
+			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+				groupNode_t *pNode = this->N + id;
+
+				if (pNode->sid == sid) {
+					assert(pNode->sid != db.SID_SELF);
+
+					/*
+					 * Choose the lowest of the two.
+					 */
+					int cmp = this->compare(id, sid, pSlots);
+					assert(cmp != 0);
+
+					if (cmp < 0) {
+						// list has lowest
+						// rollback is o avoid newly created node from being orphaned 
+						return id;
+					}
+
+					break;
+				}
+			}
+		}
+
+		/*
+		 * Optionally create new group list plus header 
+		 */
+
+		if (gid == 0) {
+			/*
+			 * Start new group, never add SID_SELF nodes to index
+			 */
+			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+			assert(selfSlots[MAXSLOTS - 1] == 0);
+
+			gid = this->newNode(db.SID_SELF, selfSlots);
+			this->N[gid].gid = gid;
+		}
+
+		/*
+		 * Point of no return 
+		 */
+
+		// create node
+		nid = this->newNode(sid, pSlots);
+		groupNode_t *pNode = this->N + nid;
+
+		// add to list, keep it simple, SID_SELF is always first of list
+		pNode->gid = gid;
+
+		// add node to list
+		linkNode(gid, nid);
+
+		// add node to index
+		pNode->hashIX              = ix;
+		this->nodeIndex[ix]        = nid;
+		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+		return nid;
+	}
+
+	/*
 	 * @date 2021-11-09 22:48:38
 	 * 
 	 * Merge two groups into one.
@@ -2088,12 +1988,12 @@ struct groupTree_t {
 		 */
 		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
-			
+
 			/*
 			 * Compare all list nodes with own list,
 			 * all lesser nodes (not being self, thus breaking the loop) will be orphaned
 			 */
-			orphanLesser(mergeGid, pNode->sid, pNode->slots); 
+			orphanLesser(mergeGid, pNode->sid, pNode->slots);
 		}
 
 		/*
@@ -2294,6 +2194,94 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-11-13 01:41:11
+	 * 
+	 * Sids need to be unique in group lists
+	 * If the argument is not found return 0
+	 * If the argument is found and worse, orphan it and return 0
+	 * If the argument is found and better return node id
+	 *
+	 *  if (orphanLesser(candidate) == 0)
+	 *     ignoreCandidate();
+	 */
+	uint32_t orphanLesser(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
+
+		for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+			const groupNode_t *pNode = this->N + id;
+
+			if (pNode->sid == sid) {
+				/*
+				 * Choose the lowest of the two.
+				 */
+				int cmp = this->compare(id, sid, pSlots);
+
+				if (cmp <= 0) {
+					// list has best or self 
+					return id;
+				}
+
+				// list has worse, orphan it
+				unlinkNode(id);
+				return 0;
+			}
+		}
+
+		return 0;
+	}
+
+	/*
+	 * @date 2021-11-16 13:21:47
+	 * 
+	 * Apply signature based endpoint swapping to slots
+	 */
+	void applySwapping(const signature_t *pSignature, uint32_t *pSlots) {
+		/*
+		 * Apply endpoint swapping
+		 */
+		if (pSignature->swapId) {
+			swap_t *pSwap = db.swaps + pSignature->swapId;
+
+			bool changed;
+			do {
+				changed = false;
+
+				for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+					unsigned tid = pSwap->tids[iSwap];
+
+					// get the transform string
+					const char *pTransformSwap = db.fwdTransformNames[tid];
+
+					// test if swap needed
+					bool needSwap = false;
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) > 0) {
+							needSwap = true;
+							break;
+						}
+						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) < 0) {
+							needSwap = false;
+							break;
+						}
+					}
+
+					if (needSwap) {
+						uint32_t newSlots[MAXSLOTS];
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							pSlots[i] = newSlots[i];
+
+						changed = true;
+					}
+				}
+			} while (changed);
+		}
+	}
+
+	/*
 	 * @date 2021-11-11 16:44:08
 	 * 
 	 * For debugging
@@ -2434,6 +2422,19 @@ struct groupTree_t {
 
 		exit(1);
 	}
+
+	/*
+	 * @date 2021-11-16 19:36:42
+	 * 
+	 * Test arguments belong to the same group
+	 */
+	inline bool isSameGroup(uint32_t gid, uint32_t nid) {
+		while (nid != this->N[nid].gid)
+			nid = this->N[nid].gid;
+
+		return gid == nid;
+	}
+
 
 	/*
 	 * @date 2021-05-22 19:10:33
