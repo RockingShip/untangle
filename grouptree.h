@@ -2606,7 +2606,7 @@ struct groupTree_t {
 				} else if (pNode->sid == db.SID_GT) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
-					Ti = 0;
+					Ti = IBIT;
 					F  = 0;
 					break;
 				} else if (pNode->sid == db.SID_NE) {
