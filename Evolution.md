@@ -47,5 +47,7 @@ as of v2
 - generator/runtime synced ordering for better duplicate detection
 - heapsort to order candidate pivot keys
 - cascades for communicative dyadics
-- signature representative is lowest of all `compare()`.
-- Treewalk placeholder/endpoint assignment
+- signature representative is lowest of all `compare()`
+- treewalk placeholder/endpoint assignment
+- cross-product expands all members of signature group
+- genpattern additional filters against existing members
