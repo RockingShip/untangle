@@ -1067,7 +1067,7 @@ struct groupTree_t {
 
 			// merge groups
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			mergeGroups(gid, this->N[nid].gid, depth);
+			importGroup(gid, this->N[nid].gid, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// todo: need to rebuild, but delay that till top-level is finished
@@ -2235,7 +2235,7 @@ struct groupTree_t {
 
 			// merge groups lists
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			mergeGroups(gid, rhs, depth);
+			importGroup(gid, rhs, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			assert(this->N[nid].gid == gid);
@@ -2316,94 +2316,132 @@ struct groupTree_t {
 	/*
 	 * @date 2021-11-09 22:48:38
 	 * 
-	 * Merge two groups into one.
+	 * Merge oldest into newest
 	 * Might cause node rewriting with a cascading effect
 	 * 
 	 * NOTE: until optimised, both lists are orphaned 
 	 */
-	uint32_t mergeGroups(uint32_t lhs, uint32_t rhs, unsigned depth) {
+	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
-		assert(this->N[lhs].gid == lhs);
-		assert(this->N[rhs].gid == rhs);
-
-		/*
-		 * Create new group header/list
-		 */
-
-		uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
-		assert(selfSlots[MAXSLOTS - 1] == 0);
-
-		uint32_t mergeGid = this->newNode(db.SID_SELF, selfSlots);
-		this->N[mergeGid].gid = mergeGid;
-
-		printf("MERGE %u %u -> %u\n", lhs, rhs, mergeGid);
+		assert(newest < oldest);
+		assert(this->N[newest].gid == newest);
+		assert(this->N[oldest].gid == oldest);
 
 		/*
-		 * Relocate nodes to new head 
+		 * Flood-fill who uses oldest
 		 */
+		uint32_t *pVersion   = allocVersion();
+		uint32_t thisVersion = ++mapVersionNr;
 
-		// get left list
-		uint32_t tmpListL = this->N[lhs].next;
-		// unlink head from the list (relatively seeing, this empties the list)
-		unlinkNode(lhs);
-		// append list after last node of new group
-		linkNode(this->N[mergeGid].prev, tmpListL);
-
-		// get right list
-		uint32_t tmpListR = this->N[rhs].next;
-		// unlink head from the list (relatively seeing, this empties the list)
-		unlinkNode(rhs);
-		// append list after last node of new group
-		linkNode(this->N[mergeGid].prev, tmpListR);
-
-		// original lists should now be empty
-		assert(this->N[lhs].next == lhs);
-		assert(this->N[rhs].next == rhs);
-
-		/*
-		 * Update gid of all nodes in list
-		 */
-
-		this->N[lhs].gid = mergeGid;
-		this->N[lhs].slots[0] = mergeGid;
-		this->N[rhs].gid = mergeGid;
-		this->N[rhs].slots[0] = mergeGid;
-
-		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
-			this->N[iNode].gid = mergeGid;
-
-		/*
-		 * Select better of multiple sids
-		 */
-		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			const groupNode_t *pNode = this->N + iNode;
-
-			/*
-			 * Compare all list nodes with own list,
-			 * all lesser nodes (not being self, thus breaking the loop) will be orphaned
-			 */
-			orphanLesser(mergeGid, pNode->sid, pNode->slots);
+		// clear version map when wraparound
+		if (thisVersion == 0) {
+			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
+			thisVersion = ++mapVersionNr;
 		}
+
+		pVersion[oldest] = thisVersion;
+
+		// flood-fill references
+		for (uint32_t iGroup = oldest + 1; iGroup < this->ncount; iGroup++) {
+			bool found = false;
+
+			if (iGroup != this->N[iGroup].gid)
+				continue;
+
+			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				const groupNode_t *pNode = this->N + iNode;
+
+				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+					uint32_t id = pNode->slots[iSlot];
+					if (id == 0)
+						break;
+
+					if (pVersion[id] == thisVersion) {
+						found = true;
+						break;
+					}
+				}
+				if (found)
+					break;
+			}
+
+			if (found)
+				pVersion[iGroup] = thisVersion;
+		}
+
+		/*
+		 * Orphan all references to older
+		 */
+		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			groupNode_t *pNode = this->N + iNode;
+
+			bool found = true;
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+				uint32_t id = pNode->slots[iSlot];
+				if (id == 0)
+					break;
+
+				if (pVersion[id] == thisVersion) {
+					found = true;
+					break;
+				}
+			}
+
+			if (found) {
+				uint32_t prevId = pNode->prev;
+				unlinkNode(iNode);
+				pNode->gid = newest;
+				iNode = prevId;
+			}
+		}
+
+		/*
+		 * Inherit all that are considered new/better
+		 */
+		for (uint32_t iNode = this->N[oldest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			groupNode_t *pNode = this->N + iNode;
+
+			if (!orphanLesser(newest, pNode->sid, pNode->slots)) {
+				uint32_t prevId = pNode->prev;
+				unlinkNode(iNode);
+				linkNode(this->N[newest].prev, iNode);
+				pNode->gid = newest;
+				iNode = prevId;
+			}
+		}
+
+		/*
+		 * Let orphaned group forward to this group 
+		 */
+		this->N[oldest].gid = newest;
+
+		freeVersion(pVersion);
+
+		printf("%.*sMERGE %u -> %u\n",
+		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+		       oldest, newest);
 
 		/*
 		 * rebuild groups to resolve forward references 
 		 */
+		// todo: delay rebuilding till the very end
 		rebuildGroups();
 
 		// rebuilding creates new groups 
-		while (mergeGid != this->N[mergeGid].gid)
-			mergeGid = this->N[mergeGid].gid;
+		while (newest != this->N[newest].gid)
+			newest = this->N[newest].gid;
 
-		for (uint32_t iNode = this->N[mergeGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
-			printf("M %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+			printf("%.*sM %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 			       pNode->gid, iNode,
 			       pNode->sid, db.signatures[pNode->sid].name,
 			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
 		}
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-		return mergeGid;
+		return newest;
 	}
 
 	/*
