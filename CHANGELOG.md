@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-20 13:11:04 Fixed: `groupTree_t::addNormalisedNode()`, Allow arguments to reference forwards.
 2021-11-20 13:07:51 Changed: `groupTree_t::mergeGroups()`, Redesigned to become `importGroup()`.
 2021-11-20 12:57:35 Added: `groupTree_t::verifySignature()`, Enhance `validateTree()`.
 2021-11-18 11:59:11 Fixed: `groupTree_t::saveString`, typo in creating `>`.

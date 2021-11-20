@@ -831,10 +831,18 @@ struct groupTree_t {
 	 * 	gid = nid;
 	 * 	while (gid != this->N[gid].gid)
 	 *		gid = this->N[gid].gid;
+	 *		
+	 * @date 2021-11-18 17:07:55
+	 * 
+	 * Q/T/F can be higher than gid, which can happen when called recursively.
+	 * This shouldn't be a problem because list construction is busy and Q/T/F are used to reference the cross-product sources and not used for actual slot values.
+	 * 
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = 0, unsigned depth = 0) {
 		depth++;
 		assert(depth < 30);
+
+		assert(gid == this->N[gid].gid);
 
 		printf("%.*sQ=%u%s T=%u%s F=%u%s\n",
 		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
@@ -1032,10 +1040,6 @@ struct groupTree_t {
 			}
 		}
 
-		// Q/T/F/gid must be within range
-		assert(gid == 0 || (Q < gid && Tu < gid && F < gid));
-		assert(gid == this->N[gid].gid);
-
 		/*
 		 * Lookup if 1n9 already exists.
 		 * This is a fast test to find duplicates
@@ -1152,113 +1156,130 @@ struct groupTree_t {
 
 		uint32_t first1n9 = 0;
 
-		// @formatter:off
 		unsigned iQ  = Q;  do {
-		unsigned iTu = Tu; do {
-		unsigned iF  = F;  do {
-		// @formatter:on
+			unsigned iTu = Tu; do {
+				unsigned iF = F; do {
+					do {
 
-			/*
-			 * Build slots and lookup signature
-			 */
-			uint32_t finalSlots[MAXSLOTS];
-			uint32_t sid = constructSlots(this->N + iQ, Ti, this->N + iTu, this->N + iF, finalSlots);
+						/*
+						 * Build slots and lookup signature
+						 */
+						uint32_t finalSlots[MAXSLOTS];
+						uint32_t sid = constructSlots(this->N + iQ, Ti, this->N + iTu, this->N + iF, finalSlots);
 
-			if (sid == 0)
-				continue; // combo not found
+						if (sid == 0)
+							continue; // combo not found
 
-			/*
-			 * @date 2021-11-16 16:22:03
-			 * To prevent a recursive loop because this candidate is a lesser alternative, test that first
-			 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is lesser than `ab^/[a bcd^^]`
-			 */
-			if (gid != 0 && orphanLesser(gid, sid, finalSlots) != 0)
-				continue; // a better alternative was found (can safely continue as no changes have been made)
+						/*
+						 * @date 2021-11-16 16:22:03
+						 * To prevent a recursive loop because this candidate is a lesser alternative, test that first
+						 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is lesser than `ab^/[a bcd^^]`
+						 */
+						if (gid != 0 && orphanLesser(gid, sid, finalSlots) != 0)
+							continue; // a better alternative was found (can safely continue as no changes have been made)
 
-			/*
-			 * @date 2021-11-08 00:00:19
-			 * 
-			 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
-			 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
-			 * 
-			 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
-			 * implicitly creating better ordered components.
-			 * 
-			 * This might create many duplicates.
-			 */
+						/*
+						 * @date 2021-11-08 00:00:19
+						 * 
+						 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
+						 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
+						 * 
+						 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
+						 * implicitly creating better ordered components.
+						 * 
+						 * This might create many duplicates.
+						 */
 
-			if (db.signatures[sid].size > 1) {
-				gid = expandSignature(sid, finalSlots, gid, depth);
-				while (gid != this->N[gid].gid)
-					gid = this->N[gid].gid;
-			}
+						if (db.signatures[sid].size > 1) {
+							uint32_t expandGid = expandSignature(sid, finalSlots, gid, depth);
 
-			/*
-			 * Add final sid/slot to collection
-			 */
+							// did it fold
+							if (expandGid == IBIT)
+								continue; // yes, candidate severely outdated, silently ignore
 
-			uint32_t oldCount = this->ncount;
+							gid         = expandGid;
+							while (gid != this->N[gid].gid)
+								gid = this->N[gid].gid;
+						}
 
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			uint32_t nid = addToCollection(sid, finalSlots, gid, depth);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+						/*
+						 * Add final sid/slot to collection
+						 */
 
-			// update current group id to that of head of list
-			gid = nid;
-			while (gid != this->N[gid].gid)
-				gid = this->N[gid].gid;
+						uint32_t oldCount = this->ncount;
 
-			if (this->ncount != oldCount) {
-				// if (ctx.opt_debug & ctx.DEBUG_ROW)
-				printf("%.*s%u\t%u\t%u\t%u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
-				       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-				       gid, nid,
-				       iQ, iTu, iF,
-				       sid, db.signatures[sid].name,
-				       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
-			}
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+						uint32_t nid = addToCollection(sid, finalSlots, gid, depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
-			// remember first `1n9` (which should always be the first combo created)
-			if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
-				first1n9 = nid;
-				assert(
-					sid == db.SID_ZERO ||
-					sid == db.SID_SELF ||
-					sid == db.SID_OR ||
-					sid == db.SID_GT ||
-					sid == db.SID_NE ||
-					sid == db.SID_AND ||
-					sid == db.SID_QNTF ||
-					sid == db.SID_QTF
-				);
-			}
+						// update current group id to that of head of list
+						gid = nid;
+						while (gid != this->N[gid].gid)
+							gid = this->N[gid].gid;
 
-			/*
-			 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
-			 * It could be that `addToCollection()` orphaned iQ/iTu/iF
-			 */
+						if (this->ncount != oldCount) {
+							// if (ctx.opt_debug & ctx.DEBUG_ROW)
+							printf("%.*sgid:%u\tnid:%u\tQ:%u\tT:%u\tF:%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+							       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+							       gid, nid,
+							       iQ, iTu, iF,
+							       sid, db.signatures[sid].name,
+							       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
+						}
+
+						// remember first `1n9` (which should always be the first combo created)
+						if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
+							first1n9 = nid;
+							assert(
+								sid == db.SID_ZERO ||
+								sid == db.SID_SELF ||
+								sid == db.SID_OR ||
+								sid == db.SID_GT ||
+								sid == db.SID_NE ||
+								sid == db.SID_AND ||
+								sid == db.SID_QNTF ||
+								sid == db.SID_QTF
+							);
+						}
+
+						/*
+						 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
+						 * It could be that `addToCollection()` orphaned iQ/iTu/iF
+						 * 
+						 * NOTE: wrap above within a `do{}while()` so `continue` will update Q/T/F
+						 */
+					} while (0);
+
+					// detect group change
+					if (F != this->N[iF].gid) {
+						while (iF != this->N[iF].gid)
+							F = iF = this->N[iF].gid; // restart with new list
+					}
+
+					// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
+					iF = this->N[iF].next;
+				} while (iF != this->N[iF].gid);
+
+				// detect group change
+				if (Tu != this->N[iTu].gid) {
+					while (iTu != this->N[iTu].gid)
+						Tu = iTu = this->N[iTu].gid; // restart with new list
+				}
+
+				iTu = this->N[iTu].next;
+			} while (iTu != this->N[iTu].gid);
+
+			// detect group change
 			if (Q != this->N[iQ].gid) {
 				while (iQ != this->N[iQ].gid)
 					Q = iQ = this->N[iQ].gid; // restart with new list
 			}
-			if (Tu != this->N[iTu].gid) {
-				while (iTu != this->N[iTu].gid)
-					Tu = iTu = this->N[iTu].gid; // restart with new list
-			}
-			if (F != this->N[iF].gid) {
-				while (iF != this->N[iF].gid)
-					F = iF = this->N[iF].gid; // restart with new list
-			}
 
-		// @formatter:off
-		// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
-		} while (iF = this->N[iF].next, this->N[iF].gid != iF);
-		} while (iTu = this->N[iTu].next, this->N[iTu].gid != iTu);
-		} while (iQ = this->N[iQ].next, this->N[iQ].gid != iQ);
-		// @formatter:on
+			iQ = this->N[iQ].next;
+		} while (iQ != this->N[iQ].gid);
 
 		// The detector must detect at least one pattern
-		assert(first1n9 && this->N[first1n9].gid == gid);
+		assert(first1n9);
 		return first1n9;
 	}
 
@@ -1394,6 +1415,10 @@ struct groupTree_t {
 			// get slot value
 			uint32_t endpoint = pNodeQ->slots[iSlot];
 			assert(endpoint != 0);
+			
+			// get most up-to-date
+			while (endpoint != this->N[endpoint].gid)
+				endpoint = this->N[endpoint].gid;
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
@@ -1409,6 +1434,10 @@ struct groupTree_t {
 			// get slot value
 			uint32_t endpoint = pNodeT->slots[iSlot];
 			assert(endpoint != 0);
+			
+			// get most up-to-date
+			while (endpoint != this->N[endpoint].gid)
+				endpoint = this->N[endpoint].gid;
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
@@ -1450,6 +1479,10 @@ struct groupTree_t {
 			// get slot value
 			uint32_t endpoint = pNodeF->slots[iSlot];
 			assert(endpoint != 0);
+
+			// get most up-to-date
+			while (endpoint != this->N[endpoint].gid)
+				endpoint = this->N[endpoint].gid;
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
