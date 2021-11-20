@@ -1593,277 +1593,19 @@ struct groupTree_t {
 		 * init
 		 */
 
-		uint32_t numStack = 0;
-		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap();
-		uint32_t *pMap    = allocMap();
-		uint32_t buildGid = 0;
-
-		/*
-		 * Load string
-		 */
-		for (const char *pattern = pSignature->name; *pattern; pattern++) {
-
-			switch (*pattern) {
-			case '0': //
-				pStack[numStack++] = 0;
-				break;
-
-				// @formatter:off
-			case '1': case '2': case '3':
-			case '4': case '5': case '6':
-			case '7': case '8': case '9':
-				// @formatter:on
-			{
-				/*
-				 * Push back-reference
-				 */
-				uint32_t v = nextNode - (*pattern - '0');
-
-				if (v < this->nstart || v >= nextNode)
-					ctx.fatal("[node out of range: %d]\n", v);
-				if (numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
-
-				pStack[numStack++] = pMap[v];
-
-				break;
-			}
-
-				// @formatter:off
-			case 'a': case 'b': case 'c': case 'd':
-			case 'e': case 'f': case 'g': case 'h':
-			case 'i': case 'j': case 'k': case 'l':
-			case 'm': case 'n': case 'o': case 'p':
-			case 'q': case 'r': case 's': case 't':
-			case 'u': case 'v': case 'w': case 'x':
-			case 'y': case 'z':
-				// @formatter:on
-			{
-				/*
-				 * Push endpoint
-				 */
-				uint32_t v = (*pattern - 'a');
-
-				if (v >= pSignature->numPlaceholder)
-					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if (numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
-
-				pStack[numStack++] = pSlots[v];
-				break;
-
-			}
-
-			case '+': {
-				// OR (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(L, IBIT, R, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(L, IBIT, R, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '>': {
-				// GT (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(L, R ^ IBIT, 0, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(L, R ^ IBIT, 0, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '^': {
-				// XOR/NE (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(L, R ^ IBIT, R, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(L, R ^ IBIT, R, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '!': {
-				// QnTF (appreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t F = pStack[--numStack];
-				uint32_t T = pStack[--numStack];
-				uint32_t Q = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(Q, T ^ IBIT, F, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(Q, T ^ IBIT, F, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '&': {
-				// AND (depreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(L, R, 0, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(L, R, 0, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '?': {
-				// QTF (depreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				uint32_t F = pStack[--numStack];
-				uint32_t T = pStack[--numStack];
-				uint32_t Q = pStack[--numStack];
-
-				if (pattern[1]) {
-					uint32_t id = addNormaliseNode(Q, T, F, 0, depth + 1);
-					// get latest group
-					while (id != this->N[id].gid)
-						id = this->N[id].gid;
-					pStack[numStack++] = pMap[nextNode++] = id;
-				} else {
-					assert(numStack == 0);
-					// get latest group
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-					buildGid = addNormaliseNode(Q, T, F, gid, depth + 1);
-				}
-
-				break;
-			}
-			case '~': {
-				// NOT (support)
-				if (numStack < 1)
-					ctx.fatal("[stack underflow]\n");
-
-				pStack[numStack - 1] ^= IBIT;
-				break;
-			}
-
-			case '/':
-				// separator between pattern/transform
-				while (pattern[1])
-					pattern++;
-				break;
-			case ' ':
-				// skip spaces
-				break;
-			default:
-				ctx.fatal("[bad token '%c']\n", *pattern);
-			}
-
-			if (numStack > maxNodes)
-				ctx.fatal("[stack overflow]\n");
-		}
-		if (numStack != 0)
-			ctx.fatal("[stack not empty]\n");
-
-		freeMap(pStack);
-		freeMap(pMap);
-
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
-		assert(buildGid != 0);
-		return buildGid;
-	}
-
-	/*
-	 * @date 2021-11-19 19:21:13
-	 * 
-	 * Verify sid/slots to determine if they have collapsed, assuming `expandSignature()` created them.
-	 * return IBIT if signature folded
-	 */
-	uint32_t verifySignature(uint32_t sid, const uint32_t *pSlots) {
-
-		signature_t *pSignature = db.signatures + sid;
-
-		/*
-		 * init
-		 */
-
-		uint32_t numStack = 0;
+		int      numStack = 0;
 		uint32_t nextNode = this->nstart;
 		uint32_t *pStack  = allocMap(); // evaluation stack
 		uint32_t *pMap    = allocMap(); // id of intermediates
 		uint32_t *pActive = allocVersion(); // collection of used id's
 
 		// bump versioned memory
-		uint32_t thisVersion = ++slotVersionNr;
+		uint32_t thisVersion = ++mapVersionNr;
 		if (thisVersion == 0) {
 			// version overflow, clear
 			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
 
-			thisVersion = ++slotVersionNr;
+			thisVersion = ++mapVersionNr;
 		}
 
 		// add slot entries
@@ -1874,14 +1616,14 @@ struct groupTree_t {
 
 			pActive[id] = thisVersion;
 		}
-		
+
 		/*
 		 * Load string
 		 */
 		for (const char *pattern = pSignature->name; *pattern; pattern++) {
 
 			uint32_t Q, Tu, Ti, F;
-			
+
 			switch (*pattern) {
 			case '0': //
 				/*
@@ -1903,7 +1645,7 @@ struct groupTree_t {
 
 				if (v < this->nstart || v >= nextNode)
 					ctx.fatal("[node out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if ((unsigned) numStack >= this->ncount)
 					ctx.fatal("[stack overflow]\n");
 
 				pStack[numStack++] = pMap[v];
@@ -1927,7 +1669,7 @@ struct groupTree_t {
 
 				if (v >= pSignature->numPlaceholder)
 					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if ((unsigned) numStack >= this->ncount)
 					ctx.fatal("[stack overflow]\n");
 
 				pStack[numStack++] = pSlots[v];
@@ -2004,7 +1746,7 @@ struct groupTree_t {
 			default:
 				ctx.fatal("[bad token '%c']\n", *pattern);
 			} // end-switch
-
+			assert(numStack >= 0);
 
 			/*
 			 * Only arrive here when Q/T/F have been set 
@@ -2014,11 +1756,387 @@ struct groupTree_t {
 			 * use the latest lists
 			 */
 
-			while (this->N[Q].gid != Q)
+			// get latest group
+			while (Q != this->N[Q].gid)
 				Q = this->N[Q].gid;
-			while (this->N[Tu].gid != Tu)
+			while (Tu != this->N[Tu].gid)
 				Tu = this->N[Tu].gid;
-			while (this->N[F].gid != F)
+			while (F != this->N[F].gid)
+				F = this->N[F].gid;
+
+			/*
+			 * Perform normalisation
+			 */
+			uint32_t cSid		  = 0; // 0=error/folded
+			uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
+			assert(cSlots[MAXSLOTS - 1] == 0);
+
+			/*
+			 * Level 2 normalisation: single node rewrites
+			 *
+			 * appreciated:
+			 *
+			 *  [ 0] a ? !0 : 0  ->  a
+			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
+			 *  [ 2] a ? !0 : b                  "+" or
+			 *  [ 3] a ? !a : 0  ->  0
+			 *  [ 4] a ? !a : a  ->  a ? !a : 0
+			 *  [ 5] a ? !a : b  ->  b ? !a : b
+			 *  [ 6] a ? !b : 0                  ">" greater-than
+			 *  [ 7] a ? !b : a  ->  a ? !b : 0
+			 *  [ 8] a ? !b : b                  "^" not-equal
+			 *  [ 9] a ? !b : c                  "!" QnTF
+			 *
+			 * depreciated:
+			 *  [10] a ?  0 : 0 -> 0
+			 *  [11] a ?  0 : a -> 0
+			 *  [12] a ?  0 : b -> b ? !a : 0
+			 *  [13] a ?  a : 0 -> a
+			 *  [14] a ?  a : a -> a ?  a : 0
+			 *  [15] a ?  a : b -> a ? !0 : b
+			 *  [16] a ?  b : 0                  "&" and
+			 *  [17] a ?  b : a -> a ?  b : 0
+			 *  [18] a ?  b : b -> b
+			 *  [19] a ?  b : c                  "?" QTF
+			 *
+			  * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
+			  *
+			 */
+
+			if (Q == 0) {
+				// level-1 collapse
+				cSid = 0;
+			} else if (Ti) {
+				if (Tu == 0) {
+					if (Q == F) {
+						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+						cSid = 0;
+					} else if (F == 0) {
+						// [ 0] a ? !0 : 0  ->  a
+						cSid = 0;
+					} else {
+						// [ 2] a ? !0 : b  -> "+" OR
+						cSid = db.SID_OR;
+					}
+				} else if (Q == Tu) {
+					if (Q == F) {
+						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+						cSid = 0;
+					} else if (F == 0) {
+						// [ 3] a ? !a : 0  ->  0
+						cSid = 0;
+					} else {
+						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						Q = F;
+						F = 0;
+						cSid = db.SID_GT;
+					}
+				} else {
+					if (Q == F) {
+						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+						F = 0;
+						cSid = db.SID_GT;
+					} else {
+						if (F == 0) {
+							// [ 6] a ? !b : 0  -> ">" greater-than
+							cSid = db.SID_GT;
+						} else if (Tu == F) {
+							// [ 8] a ? !b : b  -> "^" not-equal/xor
+							cSid = db.SID_NE;
+						} else {
+							// [ 9] a ? !b : c  -> "!" QnTF
+							cSid = db.SID_QNTF;
+						}
+					}
+				}
+
+			} else {
+
+				if (Tu == 0) {
+					if (Q == F) {
+						// [11] a ?  0 : a -> 0
+						cSid = 0;
+					} else if (F == 0) {
+						// [10] a ?  0 : 0 -> 0
+						cSid = 0;
+					} else {
+						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						Tu = Q;
+						Ti = IBIT;
+						Q = F;
+						F = 0;
+						cSid = db.SID_GT;
+					}
+				} else if (Q == Tu) {
+					if (Q == F) {
+						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+						cSid = 0;
+					} else if (F == 0) {
+						// [13] a ?  a : 0 -> a
+						cSid = 0;
+					} else {
+						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+						Tu = 0;
+						Ti = IBIT;
+						cSid = db.SID_OR;
+					}
+				} else {
+					if (Q == F) {
+						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+						F = 0;
+						cSid = db.SID_AND;
+					} else {
+						if (F == 0) {
+							// [16] a ?  b : 0             "&" and
+							cSid = db.SID_AND;
+						} else {
+							// [18] a ?  b : b -> b        ALREADY TESTED		
+							// [19] a ?  b : c             "?" QTF
+							cSid = db.SID_QTF;
+						}
+					}
+				}
+			}
+
+			// have operands folded?
+			if (cSid == 0) {
+				// yes
+//				assert(!"if this folds, then group should collapse");
+				freeMap(pStack);
+				freeMap(pMap);
+				freeVersion(pActive);
+				return IBIT;
+			}
+
+			uint32_t id;
+			if (pattern[1]) {
+				id = addNormaliseNode(Q, Tu ^ Ti, F, 0, depth + 1);
+			} else {
+				assert(numStack == 0);
+				id = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth + 1);
+			}
+			assert(id != db.SID_ZERO && id != db.SID_SELF);
+
+			// get latest
+			while (id != this->N[id].gid)
+				id = this->N[id].gid;
+
+			// is it new
+			if (pActive[id] == thisVersion) {
+				// no
+//				assert(!"structure collapse");
+				freeMap(pStack);
+				freeMap(pMap);
+				freeVersion(pActive);
+				return IBIT;
+			}
+
+			// remember
+			pMap[nextNode++] = id;
+			pActive[id] = thisVersion;
+			pStack[numStack++] = id;
+
+			if ((unsigned) numStack > maxNodes)
+				ctx.fatal("[stack overflow]\n");
+		}
+		if (numStack != 1)
+			ctx.fatal("[stack not empty]\n");
+
+		// release and return
+		uint32_t ret = pStack[0];
+		assert(ret >= this->nstart);
+
+		freeMap(pStack);
+		freeMap(pMap);
+		freeVersion(pActive);
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+
+		return ret;
+	}
+
+	/*
+	 * @date 2021-11-19 19:21:13
+	 * 
+	 * Verify sid/slots to determine if they have collapsed, assuming `expandSignature()` created them.
+	 * return IBIT if signature folded
+	 */
+	uint32_t verifySignature(uint32_t sid, const uint32_t *pSlots) {
+
+		signature_t *pSignature = db.signatures + sid;
+
+		/*
+		 * init
+		 */
+
+		int      numStack = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap(); // evaluation stack
+		uint32_t *pMap    = allocMap(); // id of intermediates
+		uint32_t *pActive = allocVersion(); // collection of used id's
+
+		// bump versioned memory
+		uint32_t thisVersion = ++mapVersionNr;
+		if (thisVersion == 0) {
+			// version overflow, clear
+			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
+
+			thisVersion = ++mapVersionNr;
+		}
+
+		// add slot entries
+		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+			uint32_t id = pSlots[iSlot];
+			if (id == 0)
+				break;
+
+			pActive[id] = thisVersion;
+		}
+		
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = pSignature->name; *pattern; pattern++) {
+
+			uint32_t Q, Tu, Ti, F;
+			
+			switch (*pattern) {
+			case '0': //
+				/*
+				 * Push zero
+				 */
+				pStack[numStack++] = 0;
+				continue; // for
+
+				// @formatter:off
+			case '1': case '2': case '3':
+			case '4': case '5': case '6':
+			case '7': case '8': case '9':
+				// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				if (v < this->nstart || v >= nextNode)
+					ctx.fatal("[node out of range: %d]\n", v);
+				if ((unsigned) numStack >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[numStack++] = pMap[v];
+				continue; // for
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = (*pattern - 'a');
+
+				if (v >= pSignature->numPlaceholder)
+					ctx.fatal("[endpoint out of range: %d]\n", v);
+				if ((unsigned) numStack >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[numStack++] = pSlots[v];
+				continue; // for
+
+			}
+
+			case '+': {
+				// OR (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = 0;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = F;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+				if (numStack < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+				if (numStack < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
+				break;
+			}
+			default:
+				ctx.fatal("[bad token '%c']\n", *pattern);
+			} // end-switch
+			assert(numStack >= 0);
+
+			/*
+			 * Only arrive here when Q/T/F have been set 
+			 */
+
+			/*
+			 * use the latest lists
+			 */
+
+			while (Q != this->N[Q].gid)
+				Q = this->N[Q].gid;
+			while (Tu != this->N[Tu].gid)
+				Tu = this->N[Tu].gid;
+			while (F != this->N[F].gid)
 				F = this->N[F].gid;
 
 			/*
@@ -2201,8 +2319,9 @@ struct groupTree_t {
 			// remember
 			pMap[nextNode++] = id;
 			pActive[id] = thisVersion;
-			
-			if (numStack > maxNodes)
+			pStack[numStack++] = id;
+
+			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
 		}
 		if (numStack != 1)
@@ -2356,7 +2475,7 @@ struct groupTree_t {
 	 */
 	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
-		assert(newest < oldest);
+//		assert(newest < oldest);
 		assert(this->N[newest].gid == newest);
 		assert(this->N[oldest].gid == oldest);
 
