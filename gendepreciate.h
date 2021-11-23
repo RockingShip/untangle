@@ -228,6 +228,21 @@ struct gendepreciateContext_t : dbtool_t {
 	}
 
 	/*
+	 * @date 2021-11-23 18:32:19
+	 * 
+	 * Connect database
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
+
+		// allocate evaluators
+		this->pSafeSid      = (uint32_t *) ctx.myAlloc("gendepreciateContext_t::pSafeSid", db.maxSignature, sizeof(*this->pSafeSid));
+		this->pSafeMid      = (uint32_t *) ctx.myAlloc("gendepreciateContext_t::pSafeMid", db.maxMember, sizeof(*this->pSafeMid));
+		this->pSafeMap      = (uint32_t *) ctx.myAlloc("gendepreciateContext_t::pSafeMap", db.maxMember, sizeof(*this->pSafeMap));
+		this->pSelect       = (uint32_t *) ctx.myAlloc("gendepreciateContext_t::pSelect", db.maxMember, sizeof(*this->pSelect));
+	}
+
+	/*
 	 * @date 2021-07-04 07:29:13
 	 * Display counts for comparison
 	 */
@@ -662,7 +677,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 		unsigned numComponents = 0;
 
-		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR) && (pMember->flags & member_t::MEMMASK_COMP))
@@ -677,7 +692,7 @@ struct gendepreciateContext_t : dbtool_t {
 		refcnt_t *pRefcnts = (refcnt_t*) ctx.myAlloc("pRefcnts", pStore->numMember, sizeof *pRefcnts);
 
 		// populate
-		for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+		for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 
 			if (!(pMember->flags & member_t::MEMMASK_DEPR)) {
@@ -698,7 +713,7 @@ struct gendepreciateContext_t : dbtool_t {
 
 		{
 			// add candidates to heap
-			for (uint32_t iMid = 1; iMid < pStore->numMember; iMid++) {
+			for (uint32_t iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 				member_t *pMember = pStore->members + iMid;
 
 				// entry not on heap
@@ -821,7 +836,7 @@ struct gendepreciateContext_t : dbtool_t {
 			bool allSafe = true;
 			if (opt_lookupSafe) {
 				// only the lookup signatures must be safe
-				for (uint32_t k = 1; k < pStore->numSignature; k++) {
+				for (uint32_t k = pStore->IDFIRST; k < pStore->numSignature; k++) {
 					if (pStore->signatures[k].flags & signature_t::SIGMASK_KEY)
 						if (pSafeSid[k] != iVersionSafe) {
 							allSafe = false; // rewrites must be safe
@@ -830,12 +845,12 @@ struct gendepreciateContext_t : dbtool_t {
 				}
 			} else {
 				// all signature groups must be safe
-				allSafe = (cntSid == pStore->numSignature - 1);
+				allSafe = (cntSid == pStore->numSignature - pStore->IDFIRST);
 			}
 
 			if (allSafe) {
 				// update
-				numDepr = pStore->numMember - 1 - cntMid;
+				numDepr = pStore->numMember - pStore->IDFIRST - cntMid;
 
 				// update burst size
 				if (burstSize != opt_burst)

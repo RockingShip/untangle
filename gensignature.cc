@@ -860,7 +860,7 @@ int main(int argc, char *argv[]) {
 	 */
 	if (app.opt_listSafe) {
 		// list all safe signatures
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
@@ -870,7 +870,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (app.opt_listUnsafe) {
 		// list all signatures that are empty or unsafe
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
@@ -884,7 +884,7 @@ int main(int argc, char *argv[]) {
 	 * List signature still in use after `gendepreciate`
 	 */
 	if (app.opt_listUsed) {
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			signature_t *pSignature = db.signatures + iSid;
 
 			if (pSignature->firstMember != 0)
@@ -895,7 +895,7 @@ int main(int argc, char *argv[]) {
 
 	if (app.opt_listIncomplete) {
 		// list sigatures used for lookups but are not SAFE
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			signature_t *pSignature = db.signatures + iSid;
 
 			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
@@ -956,7 +956,7 @@ int main(int argc, char *argv[]) {
 		::memset(db.signatureIndex, 0, db.signatureIndexSize * sizeof(*db.signatureIndex));
 
 		// reindex
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			// re-index name
 			uint32_t ix = db.lookupSignature(db.signatures[iSid].name);
 			assert(db.signatureIndex[ix] == 0);
@@ -974,7 +974,7 @@ int main(int argc, char *argv[]) {
 		 * only sids change, tids remain unchanged
 		 */
 		bool changed = false;
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			if (strcmp(db.signatures[iSid].name, db.signatures[iSid].name) != 0) {
 				changed = true;
 				break;
@@ -990,7 +990,7 @@ int main(int argc, char *argv[]) {
 			 */
 			uint32_t *pNewSid = (uint32_t *) ctx.myAlloc("pNewSid", db.maxSignature, sizeof(*pNewSid));
 
-			for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 				uint32_t ix = db.lookupSignature(db.signatures[iSid].name);
 				pNewSid[iSid] = db.signatureIndex[ix];
 
@@ -1008,7 +1008,7 @@ int main(int argc, char *argv[]) {
 			/*
 			 * Remap sids, this has no effect on the member index
 			 */
-			for (uint32_t iMember = 1; iMember < db.numMember; iMember++) {
+			for (uint32_t iMember = db.IDFIRST; iMember < db.numMember; iMember++) {
 				member_t *pMember = db.members + iMember;
 
 				assert(pMember->sid < db.numSignature);
@@ -1031,14 +1031,14 @@ int main(int argc, char *argv[]) {
 	 */
 
 	if (app.opt_text == app.OPTTEXT_BRIEF) {
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			const signature_t *pSignature = db.signatures + iSid;
 
 			app.signatureLine(pSignature);
 		}
 	}
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			const signature_t *pSignature = db.signatures + iSid;
 
 			printf("%u\t%s\t%u\t%u\t%u\t%u", iSid, pSignature->name, pSignature->size, pSignature->numPlaceholder, pSignature->numEndpoint, pSignature->numBackRef);
