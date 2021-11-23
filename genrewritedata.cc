@@ -202,9 +202,9 @@ struct genrewritedataContext_t {
 			// validate
 			if (Q1 != Tu1 || Q1 != F1 || Ti1) {
 				if (Q1 == 0) continue;
-				if (Q1 == Tu1) continue;             // Q/T collapse
-				if (Q1 == F1) continue;              // Q/F collapse
-				if (Tu1 == F1 && Ti1 == 0) continue; // T/F collapse
+				if (Q1 == Tu1) continue;             // Q/T fold
+				if (Q1 == F1) continue;              // Q/F fold
+				if (Tu1 == F1 && Ti1 == 0) continue; // T/F fold
 				if (Tu1 == 0 && Ti1 == 0) continue;  // Q?0:F -> F?!Q:0
 				if (Tu1 == 0 && F1 == 0) continue;   // Q?!0:0 -> Q
 			}
@@ -245,9 +245,9 @@ struct genrewritedataContext_t {
 				// validate
 				if (Q2 != Tu2 || Q2 != F2 || Ti2) {
 					if (Q2 == 0 && (Tu2 || Ti2 || F2)) continue;
-					if (Q2 == Tu2) continue;             // Q/T collapse
-					if (Q2 == F2) continue;              // Q/F collapse
-					if (Tu2 == F2 && Ti2 == 0) continue; // T/F collapse
+					if (Q2 == Tu2) continue;             // Q/T fold
+					if (Q2 == F2) continue;              // Q/F fold
+					if (Tu2 == F2 && Ti2 == 0) continue; // T/F fold
 					if (Tu2 == 0 && Ti2 == 0) continue;  // Q?0:F -> F?!Q:0
 					if (Tu2 == 0 && F2 == 0) continue;   // Q?!0:0 -> Q
 					// assume runtime detects duplicates
@@ -291,9 +291,9 @@ struct genrewritedataContext_t {
 					// validate
 					if (Q3 != Tu3 || Q3 != F3 || Ti3) {
 						if (Q3 == 0 && (Tu3 || Ti3 || F3)) continue;
-						if (Q3 == Tu3) continue;             // Q/T collapse
-						if (Q3 == F3) continue;              // Q/F collapse
-						if (Tu3 == F3 && Ti3 == 0) continue; // T/F collapse
+						if (Q3 == Tu3) continue;             // Q/T fold
+						if (Q3 == F3) continue;              // Q/F fold
+						if (Tu3 == F3 && Ti3 == 0) continue; // T/F fold
 						if (Tu3 == 0 && Ti3 == 0) continue;  // Q?0:F -> F?!Q:0
 						if (Tu3 == 0 && F3 == 0) continue;   // Q?!0:0 -> Q
 						// assume runtime detects duplicates
@@ -361,9 +361,9 @@ struct genrewritedataContext_t {
 						// validate
 						if (tlQ != tlTu || tlQ != tlF || tlTi) {
 							if (tlQ == 0 && (tlTu || tlTi || tlF)) continue;
-							if (tlQ == tlTu) continue;              // Q/T collapse
-							if (tlQ == tlF) continue;               // Q/F collapse
-							if (tlTu == tlF && tlTi == 0) continue; // T/F collapse
+							if (tlQ == tlTu) continue;              // Q/T fold
+							if (tlQ == tlF) continue;               // Q/F fold
+							if (tlTu == tlF && tlTi == 0) continue; // T/F fold
 							if (tlTu == 0 && tlTi == 0) continue;   // Q?0:F -> F?!Q:0
 							if (tlTu == 0 && tlF == 0) continue;    // Q?!0:0 -> Q
 						}
@@ -463,9 +463,9 @@ struct genrewritedataContext_t {
 			// validate
 			if (Q1 != Tu1 || Q1 != F1 || Ti1) {
 				if (Q1 == 0) continue;
-				if (Q1 == Tu1) continue;             // Q/T collapse
-				if (Q1 == F1) continue;              // Q/F collapse
-				if (Tu1 == F1 && Ti1 == 0) continue; // T/F collapse
+				if (Q1 == Tu1) continue;             // Q/T fold
+				if (Q1 == F1) continue;              // Q/F fold
+				if (Tu1 == F1 && Ti1 == 0) continue; // T/F fold
 				if (Tu1 == 0 && Ti1 == 0) continue;  // Q?0:F -> F?!Q:0
 				if (Tu1 == 0 && F1 == 0) continue;   // Q?!0:0 -> Q
 			}
@@ -506,9 +506,9 @@ struct genrewritedataContext_t {
 				// validate
 				if (Q2 != Tu2 || Q2 != F2 || Ti2) {
 					if (Q2 == 0 && (Tu2 || Ti2 || F2)) continue;
-					if (Q2 == Tu2) continue;             // Q/T collapse
-					if (Q2 == F2) continue;              // Q/F collapse
-					if (Tu2 == F2 && Ti2 == 0) continue; // T/F collapse
+					if (Q2 == Tu2) continue;             // Q/T fold
+					if (Q2 == F2) continue;              // Q/F fold
+					if (Tu2 == F2 && Ti2 == 0) continue; // T/F fold
 					if (Tu2 == 0 && Ti2 == 0) continue;  // Q?0:F -> F?!Q:0
 					if (Tu2 == 0 && F2 == 0) continue;   // Q?!0:0 -> Q
 					// assume runtime detects duplicates
@@ -552,9 +552,9 @@ struct genrewritedataContext_t {
 					// validate
 					if (Q3 != Tu3 || Q3 != F3 || Ti3) {
 						if (Q3 == 0 && (Tu3 || Ti3 || F3)) continue;
-						if (Q3 == Tu3) continue;             // Q/T collapse
-						if (Q3 == F3) continue;              // Q/F collapse
-						if (Tu3 == F3 && Ti3 == 0) continue; // T/F collapse
+						if (Q3 == Tu3) continue;             // Q/T fold
+						if (Q3 == F3) continue;              // Q/F fold
+						if (Tu3 == F3 && Ti3 == 0) continue; // T/F fold
 						if (Tu3 == 0 && Ti3 == 0) continue;  // Q?0:F -> F?!Q:0
 						if (Tu3 == 0 && F3 == 0) continue;   // Q?!0:0 -> Q
 						// assume runtime detects duplicates
@@ -918,9 +918,9 @@ struct genrewritedataContext_t {
 			// validate
 			if (Q1 != Tu1 || Q1 != F1 || Ti1) {
 				if (Q1 == 0) continue;
-				if (Q1 == Tu1) continue;             // Q/T collapse
-				if (Q1 == F1) continue;              // Q/F collapse
-				if (Tu1 == F1 && Ti1 == 0) continue; // T/F collapse
+				if (Q1 == Tu1) continue;             // Q/T fold
+				if (Q1 == F1) continue;              // Q/F fold
+				if (Tu1 == F1 && Ti1 == 0) continue; // T/F fold
 				if (Tu1 == 0 && Ti1 == 0) continue;  // Q?0:F -> F?!Q:0
 				if (Tu1 == 0 && F1 == 0) continue;   // Q?!0:0 -> Q
 			}
@@ -961,9 +961,9 @@ struct genrewritedataContext_t {
 				// validate
 				if (Q2 != Tu2 || Q2 != F2 || Ti2) {
 					if (Q2 == 0 && (Tu2 || Ti2 || F2)) continue;
-					if (Q2 == Tu2) continue;             // Q/T collapse
-					if (Q2 == F2) continue;              // Q/F collapse
-					if (Tu2 == F2 && Ti2 == 0) continue; // T/F collapse
+					if (Q2 == Tu2) continue;             // Q/T fold
+					if (Q2 == F2) continue;              // Q/F fold
+					if (Tu2 == F2 && Ti2 == 0) continue; // T/F fold
 					if (Tu2 == 0 && Ti2 == 0) continue;  // Q?0:F -> F?!Q:0
 					if (Tu2 == 0 && F2 == 0) continue;   // Q?!0:0 -> Q
 					// assume runtime detects duplicates
@@ -1007,9 +1007,9 @@ struct genrewritedataContext_t {
 					// validate
 					if (Q3 != Tu3 || Q3 != F3 || Ti3) {
 						if (Q3 == 0 && (Tu3 || Ti3 || F3)) continue;
-						if (Q3 == Tu3) continue;             // Q/T collapse
-						if (Q3 == F3) continue;              // Q/F collapse
-						if (Tu3 == F3 && Ti3 == 0) continue; // T/F collapse
+						if (Q3 == Tu3) continue;             // Q/T fold
+						if (Q3 == F3) continue;              // Q/F fold
+						if (Tu3 == F3 && Ti3 == 0) continue; // T/F fold
 						if (Tu3 == 0 && Ti3 == 0) continue;  // Q?0:F -> F?!Q:0
 						if (Tu3 == 0 && F3 == 0) continue;   // Q?!0:0 -> Q
 						// assume runtime detects duplicates
@@ -1159,9 +1159,9 @@ struct genrewritedataContext_t {
 								// validate
 								if (testQ != testTu || testQ != testF || testTi) {
 									if (testQ == 0 && (testTu || testTi || testF)) continue;
-									if (testQ == testTu) continue;             // Q/T collapse
-									if (testQ == testF) continue;              // Q/F collapse
-									if (testTu == testF && testTi == 0) continue; // T/F collapse
+									if (testQ == testTu) continue;             // Q/T fold
+									if (testQ == testF) continue;              // Q/F fold
+									if (testTu == testF && testTi == 0) continue; // T/F fold
 									if (testTu == 0 && testTi == 0) continue;  // Q?0:F -> F?!Q:0
 									if (testTu == 0 && testF == 0) continue;   // Q?!0:0 -> Q
 								}

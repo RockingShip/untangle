@@ -239,10 +239,10 @@ struct validaterewriteContext_t {
 		//@formatter:on
 
 			// validate
-			if (Q1 == 0) continue;                // Q not zero
-			if (Q1 == T1u) continue;              // Q/T collapse
-			if (Q1 == F1) continue;               // Q/F collapse
-			if (T1u == F1 && T1i == 0) continue; // T/F collapse
+			if (Q1 == 0) continue;               // Q not zero
+			if (Q1 == T1u) continue;             // Q/T fold
+			if (Q1 == F1) continue;              // Q/F fold
+			if (T1u == F1 && T1i == 0) continue; // T/F fold
 			if (T1u == 0 && T1i == 0) continue;  // Q?0:F -> F?!Q:0
 			if (T1u == 0 && F1 == 0) continue;   // Q?!0:0 -> Q
 
@@ -256,10 +256,10 @@ struct validaterewriteContext_t {
 				++ctx.progress;
 
 				// validate
-				if (Q2 == 0) continue;                // Q not zero
-				if (Q2 == T2u) continue;              // Q/T collapse
-				if (Q2 == F2) continue;               // Q/F collapse
-				if (T2u == F2 && T2i == 0) continue; // T/F collapse
+				if (Q2 == 0) continue;               // Q not zero
+				if (Q2 == T2u) continue;             // Q/T fold
+				if (Q2 == F2) continue;              // Q/F fold
+				if (T2u == F2 && T2i == 0) continue; // T/F fold
 				if (T2u == 0 && T2i == 0) continue;  // Q?0:F -> F?!Q:0
 				if (T2u == 0 && F2 == 0) continue;   // Q?!0:0 -> Q
 

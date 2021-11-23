@@ -350,9 +350,9 @@ struct gevalContext_t {
 		 * nodes are expressions of polarised sid/tid, where tid=0
 		 * the reduced number of sids 
 		 * the cross-poduct. 
-		 * from one extreme to cross-products of primes
+		 * from one extreme to Cartesian products of primes
 		 * 
-		 *  cross-product (geval) using grupTree_t
+		 *  Cartesian product (geval) using grupTree_t
 		 *  where the nodes are not what you seek, but what you ask.
 		 *  4n9-pure makes is the most minimal dataset covering whole 5n9 addressing space.
 		 *  Average of 1.? members per signature group.

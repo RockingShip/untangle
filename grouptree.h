@@ -835,7 +835,7 @@ struct groupTree_t {
 	 * @date 2021-11-18 17:07:55
 	 * 
 	 * Q/T/F can be higher than gid, which can happen when called recursively.
-	 * This shouldn't be a problem because list construction is busy and Q/T/F are used to reference the cross-product sources and not used for actual slot values.
+	 * This shouldn't be a problem because list construction is busy and Q/T/F are used to reference the Cartesian product sources and not used for actual slot values.
 	 * 
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = 0, unsigned depth = 0) {
@@ -1151,7 +1151,7 @@ struct groupTree_t {
 		/*
 		 * @date 2021-11-04 02:08:51
 		 * 
-		 * Second step: create cross-products of Q/T/F group lists
+		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
 
 		uint32_t first1n9 = 0;
@@ -1187,7 +1187,7 @@ struct groupTree_t {
 						 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
 						 * implicitly creating better ordered components.
 						 * 
-						 * This might create many duplicates.
+						 * This might (and most likely will) create many duplicates.
 						 */
 
 						if (db.signatures[sid].size > 1) {
@@ -1570,7 +1570,7 @@ struct groupTree_t {
 	 * @date 2021-11-11 23:08:10
 	 * 
 	 * NOTE:
-	 *   the cross-product loop calls this function (low gid), which below adds intermediates (high gid)
+	 *   the Cartesian product loop calls this function (low gid), which below adds intermediates (high gid)
 	 *   These intermediates might be reused in the following tree evaluation, causing forward references, which is not allowed.
 	 *   After each call to `addNormaliseNode()` verify bound and rebuild where necessary
 	 *   
@@ -1804,7 +1804,7 @@ struct groupTree_t {
 			 */
 
 			if (Q == 0) {
-				// level-1 collapse
+				// level-1 fold
 				cSid = 0;
 			} else if (Ti) {
 				if (Tu == 0) {
@@ -2179,7 +2179,7 @@ struct groupTree_t {
 			 */
 
 			if (Q == 0) {
-				// level-1 collapse
+				// level-1 fold
 				cSid = 0;
 			} else if (Ti) {
 				if (Tu == 0) {
@@ -2353,7 +2353,7 @@ struct groupTree_t {
 	 * 35      35      2       0       5       34      33      49:abc^d!/[5 7 9 33 0 0 0 0 0]
 	 * 35      35      2       0       5       34      34      22:abc^^/[5 7 9 0 0 0 0 0 0]
 	 * 
-	 * With multiple sids of same node size, select lowest slots, prune as the don't contribute to cross-product
+	 * With multiple sids of same node size, select lowest slots, prune as the don't contribute to Cartesian product
 	 * 54      61      3       0       19      53      53      194:abcd^^^/[3 5 19 33 0 0 0 0 0] b d aceg^^^ fh^ ^^^
 	 * 54      68      3       0       32      40      40      194:abcd^^^/[2 4 12 40 0 0 0 0 0] a c eg^ bdfh^^^ ^^^
          * 54      74      3       0       20      41      41      194:abcd^^^/[2 3 14 35 0 0 0 0 0] a b ceg^^ dfh^^ ^^^

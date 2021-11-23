@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-23 21:30:27 Changed: Textual fixups.
 2021-11-23 21:26:21 Changed: `genmember`, open database in new copy-on-write fashion.
 2021-11-20 13:59:05 Changed: `groupTree_t::expandSignature()`, Simplified code.
 2021-11-20 13:11:04 Fixed: `groupTree_t::addNormalisedNode()`, Allow arguments to reference forwards.
@@ -46,14 +47,14 @@ TODO: genpattern list
 2021-11-08 17:08:58 Fixed: Buffer overrun in `selftest.cc`.
 2021-11-08 16:52:49 Changed: First (database) record starts at IDFIRST.
 2021-11-08 16:40:50 Changed: Move `groupTree_t::SID_*` back to `database_t::SID_*`. 
-2021-11-07 00:57:27 Changed: trying to get cross-product basics working.
-2021-11-07 00:54:40 Fixed: `groupTree_t` cross-product loop overhead.
+2021-11-07 00:57:27 Changed: trying to get Cartesian product basics working.
+2021-11-07 00:54:40 Fixed: `groupTree_t` Cartesian product loop overhead.
 2021-11-07 00:52:41 Fixed: `genpattern.cc` keep collapsing structures.
 2021-11-07 00:45:21 Added: `groupTree_t::cmpare()`.
 2021-11-07 00:42:46 Fixed: `genpattern` recreating indices on startup.
 2021-11-07 00:38:56 Changed: Move `database_t::SID_*` to `groupTree_t::SID_*`. 
 2021-11-05 14:27:40 Added: `groupTree_t::addNormaliseNode()`.
-2021-11-05 14:21:38 Added: Cross-product slots for adding nodes.
+2021-11-05 14:21:38 Added: Cartesian product slots for adding nodes.
 2021-11-05 00:34:45 Fixed: Fallback `geval` with dumb `1n9` nodes working.
 2021-11-04 13:26:03 Changed: Renamed `database_t::rawDatabase` to `database_t::rawData`.
 2021-11-04 12:36:02 Added: `SID_` id's for all top-level 1n9 signatures.

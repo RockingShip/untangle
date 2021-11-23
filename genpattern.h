@@ -550,9 +550,9 @@ struct genpatternContext_t : dbtool_t {
 		 * NOTE: `SID_ZERO=1`
 		 */
 		if (sidQ == pStore->SID_ZERO ||                               // Q not zero
-		    (sidQ == sidT && tidQ == tidT) ||                         // Q/T collapse
-		    (sidQ == sidF && tidQ == tidF) ||                         // Q/F collapse
-		    (!tlTi && sidT == sidF && tidT == tidF) ||                // T/F collapse
+		    (sidQ == sidT && tidQ == tidT) ||                         // Q/T fold
+		    (sidQ == sidF && tidQ == tidF) ||                         // Q/F fold
+		    (!tlTi && sidT == sidF && tidT == tidF) ||                // T/F fold
 		    (sidT == pStore->SID_ZERO && sidF == pStore->SID_ZERO) || // Q?!0:0 -> Q
 		    (!tlTi && sidT == pStore->SID_ZERO)) {                    // Q?0:F -> F?!Q:0
 			skipCollapse++;
@@ -653,10 +653,10 @@ struct genpatternContext_t : dbtool_t {
 	 * @date 2021-10-21 15:26:44
 	 * 
 	 * Add top level triplet to database
-	 * Extract the 3 components and scan them as the runtime (Q/T/F cross product) would do.
+	 * Extract the 3 components and scan them as the runtime (Q/T/F Cartesian product) would do.
 	 * Determine the transform needed to re-arrange the resulting slot for the `groupTree_t` node.
-	 * `groupTree_t` does not scan trees for pattern matches but is a collection of prime structures that are cross-product.
-	 * First step is the cross-product between Q and T.
+	 * `groupTree_t` does not scan trees for pattern matches but is a collection of prime structures that are Cartesian product.
+	 * First step is the Cartesian product between Q and T.
 	 * Second step are the ound combos cross-multiplied with F.
 	 */
 	uint32_t /*__attribute__((optimize("O0")))*/ addPatternToDatabase(const char *pNameR, uint32_t sidR, uint32_t sidQ, uint32_t tidQ, uint32_t sidT, uint32_t tidT, uint32_t sidF, uint32_t tidF) {

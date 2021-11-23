@@ -49,5 +49,5 @@ as of v2
 - cascades for communicative dyadics
 - signature representative is lowest of all `compare()`
 - treewalk placeholder/endpoint assignment
-- cross-product expands all members of signature group
+- Cartesian product expands all members of signature group
 - genpattern additional filters against existing members

@@ -985,9 +985,9 @@ struct baseTree_t {
 			assert(Q != 0);               // Q not zero
 			assert(T != 0);               // Q?0:F -> F?!Q:0
 			assert(F != 0 || T != IBIT);  // Q?!0:0 -> Q
-			assert(Q != (T & ~IBIT));     // Q/T collapse
-			assert(Q != F);               // Q/F collapse
-			assert(T != F);               // T/F collapse
+			assert(Q != (T & ~IBIT));     // Q/T fold
+			assert(Q != F);               // Q/F fold
+			assert(T != F);               // T/F fold
 
 			assert((T & ~IBIT) != F || this->compare(Q, this, F) < 0);     // NE ordering
 			assert(F != 0 || (T & IBIT) || this->compare(Q, this, T) < 0); // AND ordering
@@ -1157,9 +1157,9 @@ struct baseTree_t {
 			assert(Q != 0);                        // Q not zero
 			assert(T != 0);                        // Q?0:F -> F?!Q:0
 			assert(T != IBIT || F != 0);           // Q?!0:0 -> Q
-			assert(Q != (T & ~IBIT));              // Q/T collapse
-			assert(Q != F);                        // Q/F collapse
-			assert(T != F);                        // T/F collapse
+			assert(Q != (T & ~IBIT));              // Q/T fold
+			assert(Q != F);                        // Q/F fold
+			assert(T != F);                        // T/F fold
 
 			if (this->isOR(Q, T, F)) {
 				if (this->flags & ctx.MAGICMASK_CASCADE) {
