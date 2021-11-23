@@ -337,6 +337,18 @@ struct genmemberContext_t : dbtool_t {
 		truncatedName[0] = 0;
 	}
 
+	/*
+	 * @date 2021-11-23 18:32:19
+	 * 
+	 * Connect database
+	 */
+	void connect(database_t &db) {
+		this->pStore = &db;
+
+		// allocate evaluators
+		this->pSafeSize = (uint16_t *) ctx.myAlloc("genmemberContext_t::pSafeSize", db.maxSignature, sizeof(*this->pSafeSize));
+	}
+
 	/**
 	 * @date 2020-04-04 22:00:59
 	 *

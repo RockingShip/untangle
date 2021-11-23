@@ -184,7 +184,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxsignature\n");
 
 				// give metrics a margin of error
-				store.maxSignature = pMetrics->numSignature;
+				store.maxSignature = ctx.raisePercent(pMetrics->numSignature, 5);
 			}
 
 			if (store.maxSignature < store.numSignature) {
@@ -192,8 +192,6 @@ struct dbtool_t : callable_t {
 				store.maxSignature = store.numSignature;
 			}
 
-			// give some breathing space
-			store.maxSignature = ctx.raisePercent(store.maxSignature, 5);
 			assert(store.maxSignature > 0);
 
 			if (store.maxSignature > origMax) {
@@ -244,7 +242,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxswap\n");
 
 				// give metrics a margin of error
-				store.maxSwap = pMetrics->numSwap;
+				store.maxSwap = ctx.raisePercent(pMetrics->numSwap, 5);
 			}
 
 			if (store.maxSwap < store.numSwap) {
@@ -252,8 +250,6 @@ struct dbtool_t : callable_t {
 				store.maxSwap = store.numSwap;
 			}
 
-			// give some breathing space
-			store.maxSwap = ctx.raisePercent(store.maxSwap, 5);
 			assert(store.maxSwap > 0);
 
 			if (store.maxSwap > origMax) {
@@ -290,9 +286,14 @@ struct dbtool_t : callable_t {
 
 		/*
 		 * imprint
+		 * 
+		 * @date 2021-11-23 21:06:37
+		 * 
+		 * Special case:
+		 * if IMPRINTINDEX is set without IMPRINT, then assume imprints are recreated on demand 
 		 */
 
-		if (sections & database_t::ALLOCMASK_IMPRINT) {
+		if ((sections & database_t::ALLOCMASK_IMPRINT) || (sections & database_t::ALLOCMASK_IMPRINTINDEX)) {
 			uint32_t  origInterleave = store.interleave;
 			uint32_t  origMax        = store.maxImprint;
 
@@ -320,14 +321,20 @@ struct dbtool_t : callable_t {
 			if (this->opt_maxImprint) {
 				// user specified
 				store.maxImprint = this->opt_maxImprint;
-			} else {
+			} else if ((sections & database_t::ALLOCMASK_IMPRINT) || store.numImprint <= store.IDFIRST) {
+				/*
+				 * @date 2021-11-23 21:06:37
+				 * Only allocate if explicitly requested and missing in the input database
+				 * (leave section as-is if not requested and non-empty) 
+				 */
+				
 				// resize using metrics
 				const metricsImprint_t *pMetrics = getMetricsImprint(MAXSLOTS, ctx.flags & ctx.MAGICMASK_PURE, store.interleave, numNodes);
 				if (!pMetrics || !pMetrics->numImprint)
 					ctx.fatal("no preset for --maximprint\n");
 
 				// give metrics a margin of error
-				store.maxImprint = pMetrics->numImprint;
+				store.maxImprint = ctx.raisePercent(pMetrics->numImprint, 5);
 			}
 
 			if (store.maxImprint < store.numImprint) {
@@ -335,8 +342,6 @@ struct dbtool_t : callable_t {
 				store.maxImprint = store.numImprint;
 			}
 
-			// give some breathing space
-			store.maxImprint = ctx.raisePercent(store.maxImprint, 5);
 			assert(store.maxImprint > 0);
 
 			if (store.maxImprint > origMax) {
@@ -387,7 +392,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxpair\n");
 
 				// give metrics a margin of error
-				store.maxPair = pMetrics->numPair;
+				store.maxPair = ctx.raisePercent(pMetrics->numPair, 5);
 			}
 
 			if (store.maxPair < store.numPair) {
@@ -395,8 +400,6 @@ struct dbtool_t : callable_t {
 				store.maxPair = store.numPair;
 			}
 
-			// give some breathing space
-			store.maxPair = ctx.raisePercent(store.maxPair, 5);
 			assert(store.maxPair > 0);
 
 			if (store.maxPair > origMax) {
@@ -447,7 +450,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxmember\n");
 
 				// give metrics a margin of error
-				store.maxMember = pMetrics->numMember;
+				store.maxMember =  ctx.raisePercent(pMetrics->numMember, 5);
 			}
 
 			if (store.maxMember < store.numMember) {
@@ -455,8 +458,6 @@ struct dbtool_t : callable_t {
 				store.maxMember = store.numMember;
 			}
 
-			// give some breathing space
-			store.maxMember = ctx.raisePercent(store.maxMember, 5);
 			assert(store.maxMember > 0);
 
 			if (store.maxMember > origMax) {
@@ -507,7 +508,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxpatternfirst\n");
 
 				// give metrics a margin of error
-				store.maxPatternFirst = pMetrics->numPatternFirst;
+				store.maxPatternFirst = ctx.raisePercent(pMetrics->numPatternFirst, 5);
 			}
 
 			if (store.maxPatternFirst < store.numPatternFirst) {
@@ -515,8 +516,6 @@ struct dbtool_t : callable_t {
 				store.maxPatternFirst = store.numPatternFirst;
 			}
 
-			// give some breathing space
-			store.maxPatternFirst = ctx.raisePercent(store.maxPatternFirst, 5);
 			assert(store.maxPatternFirst > 0);
 
 			if (store.maxPatternFirst > origMax) {
@@ -567,7 +566,7 @@ struct dbtool_t : callable_t {
 					ctx.fatal("no preset for --maxpatternsecond\n");
 
 				// give metrics a margin of error
-				store.maxPatternSecond = pMetrics->numPatternSecond;
+				store.maxPatternSecond = ctx.raisePercent(pMetrics->numPatternSecond, 5);
 			}
 
 			if (store.maxPatternSecond < store.numPatternSecond) {
@@ -575,8 +574,6 @@ struct dbtool_t : callable_t {
 				store.maxPatternSecond = store.numPatternSecond;
 			}
 
-			// give some breathing space
-			store.maxPatternSecond = ctx.raisePercent(store.maxPatternSecond, 5);
 			assert(store.maxPatternSecond > 0);
 
 			if (store.maxPatternSecond > origMax) {

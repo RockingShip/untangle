@@ -1126,7 +1126,7 @@ struct database_t {
 		if (numSignature > IDFIRST) {
 			// test they are available
 			if (!this->SID_ZERO || !this->SID_SELF || !this->SID_OR || !this->SID_GT || !this->SID_NE || !this->SID_QNTF)
-				ctx.fatal("\n{\"error\":\"database missing 1n9 sids\",\"where\":\"%s:%s:%d\",\"filename\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, fileName);
+				fprintf(stderr, "[%s] WARNING: Database missing 1n9 sids\n", ctx.timeAsString());
 		}
 	};
 
@@ -1271,13 +1271,13 @@ struct database_t {
 		 * Index really needs to be larger than number of records
 		 * index must be larger than maximum + 1%. Formulate such to avoid integer overflow occurs
 		 */
-		assert(this->signatureIndexSize - this->maxSignature / 100 >= this->maxSignature);
-		assert(this->swapIndexSize - this->maxSwap / 100 >= this->maxSwap);
-		assert(this->imprintIndexSize - this->maxImprint / 100 >= this->maxImprint);
-		assert(this->pairIndexSize - this->maxPair / 100 >= this->maxPair);
-		assert(this->memberIndexSize - this->maxMember / 100 >= this->maxMember);
-		assert(this->patternFirstIndexSize - this->maxPatternFirst / 100 >= this->maxPatternFirst);
-		assert(this->patternSecondIndexSize - this->maxPatternSecond / 100 >= this->maxPatternSecond);
+		assert(!(sections & ALLOCMASK_SIGNATURE) || this->signatureIndexSize - this->maxSignature / 100 >= this->maxSignature);
+		assert(!(sections & ALLOCMASK_SWAP) || this->swapIndexSize - this->maxSwap / 100 >= this->maxSwap);
+		assert(!(sections & ALLOCMASK_IMPRINT) || this->imprintIndexSize - this->maxImprint / 100 >= this->maxImprint);
+		assert(!(sections & ALLOCMASK_PAIR) || this->pairIndexSize - this->maxPair / 100 >= this->maxPair);
+		assert(!(sections & ALLOCMASK_MEMBER) || this->memberIndexSize - this->maxMember / 100 >= this->maxMember);
+		assert(!(sections & ALLOCMASK_PATTERNFIRST) || this->patternFirstIndexSize - this->maxPatternFirst / 100 >= this->maxPatternFirst);
+		assert(!(sections & ALLOCMASK_PATTERNSECOND) || this->patternSecondIndexSize - this->maxPatternSecond / 100 >= this->maxPatternSecond);
 	}
 
 	/**

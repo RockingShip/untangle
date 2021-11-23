@@ -788,7 +788,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Open input and create output database
+	 * Open database for update
 	 */
 
 	// Open input
@@ -826,63 +826,32 @@ int main(int argc, char *argv[]) {
 	 * NOTE: Signature data must be writable when `firstMember` changes (output database present)
 	 */
 
-	database_t store(ctx);
+	if (db.numSignature <= db.IDFIRST)
+		ctx.fatal("\n{\"error\":\"Missing signature section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+			  __FUNCTION__, __FILE__, __LINE__, app.arg_inputDatabase);
 
-	// will be using `lookupSignature()`, `lookupImprintAssociative()`, `lookupPair()` and `lookupMember()`
-	app.inheritSections &= ~(database_t::ALLOCMASK_SIGNATURE | database_t::ALLOCMASK_PAIR | database_t::ALLOCMASK_PAIRINDEX | database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX);
-	// signature indices are used read-only, remove from inherit if sections are empty
-	if (!db.signatureIndexSize)
-		app.inheritSections &= ~database_t::ALLOCMASK_SIGNATUREINDEX;
-	if (!db.numImprint)
-		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINT;
-	if (!db.imprintIndexSize)
-		app.inheritSections &= ~database_t::ALLOCMASK_IMPRINTINDEX;
-	// will require local copy of signatures
-	app.rebuildSections |= database_t::ALLOCMASK_SIGNATURE;
+	// prepare sections (that need writing) and indices for use
+	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX |
+			    database_t::ALLOCMASK_IMPRINTINDEX |
+			    database_t::ALLOCMASK_MEMBER | database_t::ALLOCMASK_MEMBERINDEX |
+			    database_t::ALLOCMASK_PAIR | database_t::ALLOCMASK_PAIRINDEX;
 
-	// input database will always have a minimal node size of 4.
-	unsigned minNodes = app.arg_numNodes > 4 ? app.arg_numNodes : 4;
-
-	// inherit signature size
-	if (!app.readOnlyMode)
-		app.opt_maxSignature = db.numSignature;
-
-	if (db.numTransform == 0)
-		ctx.fatal("Missing transform section: %s\n", app.arg_inputDatabase);
-	if (db.numEvaluator == 0)
-		ctx.fatal("Missing evaluator section: %s\n", app.arg_inputDatabase);
-	if (db.numSignature == 0)
-		ctx.fatal("Missing signature section: %s\n", app.arg_inputDatabase);
-	if (db.numSwap == 0)
-		ctx.fatal("Missing swap section: %s\n", app.arg_inputDatabase);
-
-	// assign sizes to output sections
-	app.sizeDatabaseSections(store, db, minNodes, !app.readOnlyMode);
+	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
 
 	/*
 	 * Finalise allocations and create database
 	 */
 
-	// allocate evaluators
-	app.pSafeSize = (uint16_t *) ctx.myAlloc("genmemberContext_t::pMemberScores", store.maxSignature, sizeof(*app.pSafeSize));
-
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
-		// Assuming with database allocations included
-		size_t allocated = ctx.totalAllocated + store.estimateMemoryUsage(app.inheritSections);
-
 		struct sysinfo info;
 		if (sysinfo(&info) == 0) {
-			double percent = 100.0 * allocated / info.freeram;
+			double percent = 100.0 * ctx.totalAllocated / info.freeram;
 			if (percent > 80)
 				fprintf(stderr, "WARNING: using %.1f%% of free memory minus cache\n", percent);
 		}
 	}
 
-	// actual create
-	store.create(app.inheritSections);
-	app.pStore = &store;
-
-	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS && !(app.rebuildSections & ~app.inheritSections)) {
+	if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
 		struct sysinfo info;
 		if (sysinfo(&info) != 0)
 			info.freeram = 0;
@@ -891,59 +860,55 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Inherit/copy sections
+	 * Reconstruct indices
 	 */
 
-	app.populateDatabaseSections(store, db);
+	// imprints are auto-generated from signatures
+	if (rebuildIndices & database_t::ALLOCMASK_IMPRINT) {
+		// reconstruct imprints based on signatures
+		db.rebuildImprint();
+		rebuildIndices &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
+	}
+
+	if (rebuildIndices) {
+		db.rebuildIndices(rebuildIndices);
+	}
 
 	/*
-	 * Rebuild sections
+	 * Main 
 	 */
 
-	// todo: move this to `populateDatabaseSections()`
-	// data sections cannot be automatically rebuilt
-	assert((app.rebuildSections & (database_t::ALLOCMASK_SWAP | database_t::ALLOCMASK_MEMBER)) == 0);
-
-	if (app.rebuildSections & database_t::ALLOCMASK_SIGNATURE) {
-		store.numSignature = db.numSignature;
-		::memcpy(store.signatures, db.signatures, store.numSignature * sizeof(*store.signatures));
-	}
-	if (app.rebuildSections & database_t::ALLOCMASK_IMPRINT) {
-		// rebuild imprints
-		app.rebuildImprints();
-		app.rebuildSections &= ~(database_t::ALLOCMASK_IMPRINT | database_t::ALLOCMASK_IMPRINTINDEX);
-	}
-	if (app.rebuildSections)
-		store.rebuildIndices(app.rebuildSections);
+	// attach database
+	app.connect(db);
 
 	/*
 	 * count empty/unsafe
 	 */
 
 	app.numEmpty = app.numUnsafe = 0;
-	for (unsigned iSid = store.IDFIRST; iSid < store.numSignature; iSid++) {
-		if (store.signatures[iSid].firstMember == 0)
+	for (unsigned iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
+		if (db.signatures[iSid].firstMember == 0)
 			app.numEmpty++;
-		else if (!(store.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
+		else if (!(db.signatures[iSid].flags & signature_t::SIGMASK_SAFE))
 			app.numUnsafe++;
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 		fprintf(stderr, "[%s] numImprint=%u(%.0f%%) numMember=%u(%.0f%%) numEmpty=%u numUnsafe=%u\n",
 			ctx.timeAsString(),
-			store.numImprint, store.numImprint * 100.0 / store.maxImprint,
-			store.numMember, store.numMember * 100.0 / store.maxMember,
+			db.numImprint, db.numImprint * 100.0 / db.maxImprint,
+			db.numMember, db.numMember * 100.0 / db.maxMember,
 			app.numEmpty, app.numUnsafe);
 
 	/*
 	 * Determine tree size for safe groups
 	 */
 
-	for (unsigned iSid = 0; iSid < store.maxSignature; iSid++)
+	for (unsigned iSid = 0; iSid < db.maxSignature; iSid++)
 		app.pSafeSize[iSid] = 0;
 
 	// calc initial signature group scores (may differ from signature)
-	for (unsigned iSid = 0; iSid < store.numSignature; iSid++) {
+	for (unsigned iSid = 0; iSid < db.numSignature; iSid++) {
 		const signature_t *pSignature = db.signatures + iSid;
 
 		if (pSignature->flags & signature_t::SIGMASK_SAFE) {
@@ -964,7 +929,7 @@ int main(int argc, char *argv[]) {
 
 	// if input is empty, skip reserved entries
 	if (!app.readOnlyMode) {
-		assert(store.numMember > 0);
+		assert(db.numMember > 0);
 	}
 
 	if (app.opt_load)
@@ -998,40 +963,40 @@ int main(int argc, char *argv[]) {
 		 *
 		 * <memberName> <numPlaceholder>
 		 */
-		for (unsigned iMid = store.IDFIRST; iMid < store.numMember; iMid++)
-			printf("%s\n", store.members[iMid].name);
+		for (unsigned iMid = db.IDFIRST; iMid < db.numMember; iMid++)
+			printf("%s\n", db.members[iMid].name);
 	}
 
 	if (app.opt_text == app.OPTTEXT_VERBOSE) {
 		/*
 		 * Display full members, grouped by signature
 		 */
-		for (unsigned iSid = store.IDFIRST; iSid < store.numSignature; iSid++) {
-			const signature_t *pSignature = store.signatures + iSid;
+		for (unsigned iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
+			const signature_t *pSignature = db.signatures + iSid;
 
-			for (unsigned iMid = pSignature->firstMember; iMid; iMid = store.members[iMid].nextMember) {
-				member_t *pMember = store.members + iMid;
+			for (unsigned iMid = pSignature->firstMember; iMid; iMid = db.members[iMid].nextMember) {
+				member_t *pMember = db.members + iMid;
 
 				printf("%u\t%u\t%u\t%s\t", iMid, iSid, pMember->tid, pMember->name);
 				printf("%03x\t", tinyTree_t::calcScoreName(pMember->name));
 
-				uint32_t Qmid = store.pairs[pMember->Qmt].id, Qtid = store.pairs[pMember->Qmt].tid;
+				uint32_t Qmid = db.pairs[pMember->Qmt].id, Qtid = db.pairs[pMember->Qmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Qmid, store.members[Qmid].name,
-				       Qtid, store.signatures[store.members[Qmid].sid].numPlaceholder, store.fwdTransformNames[Qtid]);
+				       Qmid, db.members[Qmid].name,
+				       Qtid, db.signatures[db.members[Qmid].sid].numPlaceholder, db.fwdTransformNames[Qtid]);
 
-				uint32_t Tmid = store.pairs[pMember->Tmt].id, Ttid = store.pairs[pMember->Tmt].tid;
+				uint32_t Tmid = db.pairs[pMember->Tmt].id, Ttid = db.pairs[pMember->Tmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Tmid, store.members[Tmid].name,
-				       Ttid, store.signatures[store.members[Tmid].sid].numPlaceholder, store.fwdTransformNames[Ttid]);
+				       Tmid, db.members[Tmid].name,
+				       Ttid, db.signatures[db.members[Tmid].sid].numPlaceholder, db.fwdTransformNames[Ttid]);
 
-				uint32_t Fmid = store.pairs[pMember->Fmt].id, Ftid = store.pairs[pMember->Fmt].tid;
+				uint32_t Fmid = db.pairs[pMember->Fmt].id, Ftid = db.pairs[pMember->Fmt].tid;
 				printf("%u:%s/%u:%.*s\t",
-				       Fmid, store.members[Fmid].name,
-				       Ftid, store.signatures[store.members[Fmid].sid].numPlaceholder, store.fwdTransformNames[Ftid]);
+				       Fmid, db.members[Fmid].name,
+				       Ftid, db.signatures[db.members[Fmid].sid].numPlaceholder, db.fwdTransformNames[Ftid]);
 
 				for (unsigned i = 0; i < member_t::MAXHEAD; i++)
-					printf("%u:%s\t", pMember->heads[i], store.members[pMember->heads[i]].name);
+					printf("%u:%s\t", pMember->heads[i], db.members[pMember->heads[i]].name);
 
 				if (pSignature->flags & signature_t::SIGMASK_SAFE) {
 					if (pMember->flags & member_t::MEMMASK_SAFE)
@@ -1039,7 +1004,7 @@ int main(int argc, char *argv[]) {
 					else
 						printf("s");
 				}
-				if (store.signatures[pMember->sid].flags & signature_t::SIGMASK_KEY)
+				if (db.signatures[pMember->sid].flags & signature_t::SIGMASK_KEY)
 					printf("K");
 				if (pMember->flags & member_t::MEMMASK_COMP)
 					printf("C");
@@ -1061,33 +1026,33 @@ int main(int argc, char *argv[]) {
 	if (app.arg_outputDatabase) {
 		if (!app.opt_saveIndex) {
 			// drop indices
-			store.interleave             = 0;
-			store.interleaveStep         = 0;
-			store.signatureIndexSize     = 0;
-			store.swapIndexSize          = 0;
-			store.numImprint             = 0;
-			store.imprintIndexSize       = 0;
-			store.pairIndexSize          = 0;
-			store.memberIndexSize        = 0;
-			store.patternFirstIndexSize  = 0;
-			store.patternSecondIndexSize = 0;
+			db.interleave             = 0;
+			db.interleaveStep         = 0;
+			db.signatureIndexSize     = 0;
+			db.swapIndexSize          = 0;
+			db.numImprint             = 0;
+			db.imprintIndexSize       = 0;
+			db.pairIndexSize          = 0;
+			db.memberIndexSize        = 0;
+			db.patternFirstIndexSize  = 0;
+			db.patternSecondIndexSize = 0;
 		} else {
 			// rebuild indices based on actual counts so that loading the database does not cause a rebuild
-			uint32_t size = ctx.nextPrime(store.numPair * app.opt_ratio);
-			if (store.pairIndexSize > size)
-				store.pairIndexSize = size;
-			size = ctx.nextPrime(store.numMember * app.opt_ratio);
-			if (store.memberIndexSize > size)
-				store.memberIndexSize = size;
+			uint32_t size = ctx.nextPrime(db.numPair * app.opt_ratio);
+			if (db.pairIndexSize > size)
+				db.pairIndexSize = size;
+			size = ctx.nextPrime(db.numMember * app.opt_ratio);
+			if (db.memberIndexSize > size)
+				db.memberIndexSize = size;
 
-			store.rebuildIndices(database_t::ALLOCMASK_PAIRINDEX | database_t::ALLOCMASK_MEMBERINDEX);
+			db.rebuildIndices(database_t::ALLOCMASK_PAIRINDEX | database_t::ALLOCMASK_MEMBERINDEX);
 		}
 
 		// unexpected termination should unlink the outputs
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
-		store.save(app.arg_outputDatabase);
+		db.save(app.arg_outputDatabase);
 	}
 
 	if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
@@ -1103,7 +1068,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (app.arg_outputDatabase)
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(app.arg_outputDatabase));
-		store.jsonInfo(jResult);
+		db.jsonInfo(jResult);
 		fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 	}
 
