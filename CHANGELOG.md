@@ -12,8 +12,9 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-23 22:04:16 Changed: `gensignature`, Generate (fast) list queries before generating indices. 
 2021-11-23 21:30:27 Changed: Textual fixups.
-2021-11-23 21:26:21 Changed: `genmember`, open database in new copy-on-write fashion.
+2021-11-23 21:26:21 Changed: `genmember`, Open database in new copy-on-write fashion.
 2021-11-20 13:59:05 Changed: `groupTree_t::expandSignature()`, Simplified code.
 2021-11-20 13:11:04 Fixed: `groupTree_t::addNormalisedNode()`, Allow arguments to reference forwards.
 2021-11-20 13:07:51 Changed: `groupTree_t::mergeGroups()`, Redesigned to become `importGroup()`.

@@ -493,15 +493,19 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_LISTINCOMPLETE:
 			app.opt_listIncomplete++;
+			app.opt_text++; // to test for output redirection
 			break;
 		case LO_LISTSAFE:
 			app.opt_listSafe++;
+			app.opt_text++; // to test for output redirection
 			break;
 		case LO_LISTUNSAFE:
 			app.opt_listUnsafe++;
+			app.opt_text++; // to test for output redirection
 			break;
 		case LO_LISTUSED:
 			app.opt_listUsed++;
+			app.opt_text++; // to test for output redirection
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
@@ -844,6 +848,63 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
+	 * Fast queries before re-building indices 
+	 */
+	
+	/*
+	 * @date 2021-07-26 02:14:33
+	 *
+	 * Create a list of "safe" signatures for `4n9-pure`.
+	 * This will exclude signatures that have 7n1 members.
+	 * Interesting will be how full-throttle normalising will rewrite using basic "QTF->QnTF" conversion
+	 */
+	if (app.opt_listSafe) {
+		// list all safe signatures
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
+
+			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
+				app.signatureLine(pSignature);
+		}
+		exit(0);
+	}
+	if (app.opt_listUnsafe) {
+		// list all signatures that are empty or unsafe
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
+
+			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
+				app.signatureLine(pSignature);
+		}
+		exit(0);
+	}
+
+	/*
+	 * @date 2021-08-06 11:58:26
+	 * List signature still in use after `gendepreciate`
+	 */
+	if (app.opt_listUsed) {
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
+
+			if (pSignature->firstMember != 0)
+				app.signatureLine(pSignature);
+		}
+		exit(0);
+	}
+
+	if (app.opt_listIncomplete) {
+		// list sigatures used for lookups but are not SAFE
+		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
+			signature_t *pSignature = db.signatures + iSid;
+
+			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+				app.signatureLine(pSignature);
+		}
+		exit(0);
+	}
+
+	/*
 	 * Reconstruct indices
 	 */
 
@@ -993,53 +1054,6 @@ int main(int argc, char *argv[]) {
 			if (pSignature->flags & signature_t::SIGMASK_KEY)
 				putchar('K');
 			putchar('\n');
-		}
-	}
-
-	/*
-	 * @date 2021-07-26 02:14:33
-	 *
-	 * Create a list of "safe" signatures for `4n9-pure`.
-	 * This will exclude signatures that have 7n1 members.
-	 * Interesting will be how full-throttle normalising will rewrite using basic "QTF->QnTF" conversion
-	 */
-	if (app.opt_listSafe) {
-		// list all safe signatures
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			signature_t *pSignature = db.signatures + iSid;
-
-			if (pSignature->firstMember != 0 && (pSignature->flags & signature_t::SIGMASK_SAFE))
-				app.signatureLine(pSignature);
-		}
-	}
-	if (app.opt_listUnsafe) {
-		// list all signatures that are empty or unsafe
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			signature_t *pSignature = db.signatures + iSid;
-
-			if (pSignature->firstMember == 0 || !(pSignature->flags & signature_t::SIGMASK_SAFE))
-				app.signatureLine(pSignature);
-		}
-	}
-	/*
-	 * @date 2021-08-06 11:58:26
-	 * List signature still in use after `gendepreciate`
-	 */
-	if (app.opt_listUsed) {
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			signature_t *pSignature = db.signatures + iSid;
-
-			if (pSignature->firstMember != 0)
-				app.signatureLine(pSignature);
-		}
-	}
-	if (app.opt_listIncomplete) {
-		// list sigatures used for lookups but are not SAFE
-		for (uint32_t iSid = 1; iSid < db.numSignature; iSid++) {
-			signature_t *pSignature = db.signatures + iSid;
-
-			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
-				app.signatureLine(pSignature);
 		}
 	}
 
