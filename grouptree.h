@@ -837,28 +837,32 @@ struct groupTree_t {
 	 * Q/T/F can be higher than gid, which can happen when called recursively.
 	 * This shouldn't be a problem because list construction is busy and Q/T/F are used to reference the Cartesian product sources and not used for actual slot values.
 	 * 
+	 * @date 2021-11-25 18:20:00
+	 * 
+	 * Arguments may be (oudated) nodes, however, gid needs to be up-to-date
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = 0, unsigned depth = 0) {
 		depth++;
 		assert(depth < 30);
 
+		assert ((Q & ~IBIT) < this->ncount);
+		assert ((T & ~IBIT) < this->ncount);
+		assert ((F & ~IBIT) < this->ncount);
+
 		assert(gid == this->N[gid].gid);
 
-		printf("%.*sQ=%u%s T=%u%s F=%u%s\n",
+		printf("%.*sQ=%u%s T=%u%s F=%u%s G=%u\n",
 		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 		       Q & ~IBIT, (Q & IBIT) ? "~" : "",
 		       T & ~IBIT, (T & IBIT) ? "~" : "",
-		       F & ~IBIT, (F & IBIT) ? "~" : "");
+		       F & ~IBIT, (F & IBIT) ? "~" : "",
+		       gid);
 
 		/*
 	  	 * @date 2021-11-04 01:58:34
 		 * 
 		 * First step: Apply same normalisation as the database generators  
 		 */
-
-		assert ((Q & ~IBIT) < this->ncount);
-		assert ((T & ~IBIT) < this->ncount);
-		assert ((F & ~IBIT) < this->ncount);
 
 		/*
 		 * Fast test for endpoints
@@ -1042,7 +1046,7 @@ struct groupTree_t {
 
 		/*
 		 * Lookup if 1n9 already exists.
-		 * This is a fast test to find duplicates
+		 * This is a fast test to find simple duplicates
 		 */
 
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
@@ -1064,32 +1068,40 @@ struct groupTree_t {
 		// test if node already exists
 		uint32_t ix = this->lookupNode(tlSid, tlSlots);
 		if (this->nodeIndex[ix] != 0) {
+			// (possibly outdated) node already exists, test if same group
 			uint32_t nid = this->nodeIndex[ix];
 
-			if (gid == 0 || isSameGroup(gid, nid))
-				return nid; // node already exists
+			uint32_t latest = nid;
+			while (latest != this->N[latest].gid)
+				latest = this->N[latest].gid;
 
-			// merge groups
+			if (gid == 0 || gid == latest)
+				return nid; // groups are compatible
+
+			// merge groups lists
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			importGroup(gid, this->N[nid].gid, depth);
+			importGroup(gid, latest, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
-			// todo: need to rebuild, but delay that till top-level is finished
-			
+			// `importGroup()` must make node up-to-date 	
+			assert(gid == this->N[nid].gid);
+
 			return nid;
 		}
 
 		/* 
-		 * When adding a new node, check if it would be accepted by `addToCollection()`.
+		 * When adding a new node to current group, check if it would be rejected by `addToCollection()`.
 		 */
 		if (gid != 0) {
-			uint32_t id = orphanLesser(gid, tlSid, tlSlots);
-			if (id != 0) {
-				// yes, `id`=appreciated node
-				assert(gid == 0 || isSameGroup(gid, id));
+			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+				const groupNode_t *pNode = this->N + id;
 
-				// node has better replacement
-				return id;
+				if (pNode->sid == tlSid) {
+					if (this->compare(id, tlSid, tlSlots) <= 0) {
+						// list has best or argument is duplicate 
+						return id;
+					}
+				}
 			}
 		}
 
@@ -1175,8 +1187,21 @@ struct groupTree_t {
 						 * To prevent a recursive loop because this candidate is a lesser alternative, test that first
 						 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is lesser than `ab^/[a bcd^^]`
 						 */
-						if (gid != 0 && orphanLesser(gid, sid, finalSlots) != 0)
-							continue; // a better alternative was found (can safely continue as no changes have been made)
+						if (gid != 0) {
+							bool skip = false;
+							for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+								const groupNode_t *pNode = this->N + id;
+
+								if (pNode->sid == tlSid) {
+									if (this->compare(id, sid, finalSlots) <= 0) {
+										// list has best or argument is duplicate
+										skip = true;
+									}
+								}
+							}
+							if (skip)
+								continue; // a better alternative is already in the list
+						}
 
 						/*
 						 * @date 2021-11-08 00:00:19
@@ -1191,15 +1216,32 @@ struct groupTree_t {
 						 */
 
 						if (db.signatures[sid].size > 1) {
-							uint32_t expandGid = expandSignature(sid, finalSlots, gid, depth);
+							uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
 
 							// did it fold
-							if (expandGid == IBIT)
+							if (expand == IBIT)
 								continue; // yes, candidate severely outdated, silently ignore
 
-							gid         = expandGid;
+							// update gid	
+							gid = expand;
 							while (gid != this->N[gid].gid)
 								gid = this->N[gid].gid;
+						}
+
+						/*
+						 * It could be that groups were merged, outdating slots
+						 */
+						for (unsigned iSlot=0; iSlot<MAXSLOTS; iSlot++) {
+							uint32_t id = finalSlots[iSlot];
+							if (id == 0)
+								break;
+
+							if (id != this->N[id].gid) {
+								while (id != this->N[id].gid)
+									id = this->N[id].gid;
+								finalSlots[iSlot] = id;
+							}
+
 						}
 
 						/*
@@ -1231,8 +1273,6 @@ struct groupTree_t {
 						if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
 							first1n9 = nid;
 							assert(
-								sid == db.SID_ZERO ||
-								sid == db.SID_SELF ||
 								sid == db.SID_OR ||
 								sid == db.SID_GT ||
 								sid == db.SID_NE ||
@@ -1248,22 +1288,29 @@ struct groupTree_t {
 						 * 
 						 * NOTE: wrap above within a `do{}while()` so `continue` will update Q/T/F
 						 */
-					} while (0);
+					} while (false);
 
 					// detect group change
+					// this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
 					if (F != this->N[iF].gid) {
-						while (iF != this->N[iF].gid)
-							F = iF = this->N[iF].gid; // restart with new list
+						printf("%.*sRESTART-F\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
+						// find latest list
+						while (F != this->N[F].gid)
+							F = this->N[F].gid;
+						iF = F; // restart loop
 					}
 
 					// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
+					// node 0 is a single node list containing SID_ZERO.
 					iF = this->N[iF].next;
 				} while (iF != this->N[iF].gid);
 
 				// detect group change
 				if (Tu != this->N[iTu].gid) {
-					while (iTu != this->N[iTu].gid)
-						Tu = iTu = this->N[iTu].gid; // restart with new list
+					printf("%.*sRESTART-T\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
+					while (Tu != this->N[Tu].gid)
+						Tu = this->N[Tu].gid; // restart with new list
+					iTu = Tu; // restart loop
 				}
 
 				iTu = this->N[iTu].next;
@@ -1271,8 +1318,10 @@ struct groupTree_t {
 
 			// detect group change
 			if (Q != this->N[iQ].gid) {
-				while (iQ != this->N[iQ].gid)
-					Q = iQ = this->N[iQ].gid; // restart with new list
+				printf("%.*sRESTART-Q\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
+				while (Q != this->N[Q].gid)
+					Q = this->N[Q].gid; // restart with new list
+				iQ = Q; // restart loop
 			}
 
 			iQ = this->N[iQ].next;
@@ -1932,9 +1981,9 @@ struct groupTree_t {
 			}
 
 			// remember
+			pStack[numStack++] = id;
 			pMap[nextNode++] = id;
 			pActive[id] = thisVersion;
-			pStack[numStack++] = id;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -2317,9 +2366,9 @@ struct groupTree_t {
 			}
 
 			// remember
+			pStack[numStack++] = id;
 			pMap[nextNode++] = id;
 			pActive[id] = thisVersion;
-			pStack[numStack++] = id;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -2367,6 +2416,22 @@ struct groupTree_t {
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
 	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
+
+		assert(gid == this->N[gid].gid);
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+			assert(MAXSLOTS == 9);
+			assert(pSlots[0] == this->N[pSlots[0]].gid);
+			assert(pSlots[1] == this->N[pSlots[1]].gid);
+			assert(pSlots[2] == this->N[pSlots[2]].gid);
+			assert(pSlots[3] == this->N[pSlots[3]].gid);
+			assert(pSlots[4] == this->N[pSlots[4]].gid);
+			assert(pSlots[5] == this->N[pSlots[5]].gid);
+			assert(pSlots[6] == this->N[pSlots[6]].gid);
+			assert(pSlots[7] == this->N[pSlots[7]].gid);
+			assert(pSlots[8] == this->N[pSlots[8]].gid);
+		}
+
 		uint32_t ix = this->lookupNode(sid, pSlots);
 		uint32_t nid = this->nodeIndex[ix];
 
@@ -2374,23 +2439,19 @@ struct groupTree_t {
 		 * Test if node already exists
 		 */
 		if (nid != 0) {
-			// node already exists, test if same group
-			if (gid == 0 || this->N[nid].gid == gid)
-				return nid; // duplicate
+			uint32_t latest = nid;
+			while (latest != this->N[latest].gid)
+				latest = this->N[latest].gid;
+
+			if (gid == 0 || gid == latest)
+				return nid; // groups are compatible
 
 			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
 
-			// lhs(gid) is list header, rhs(nid) is a node, find its group 
-			uint32_t rhs = nid;
-			while (rhs != this->N[rhs].gid)
-				rhs = this->N[rhs].gid;
-
 			// merge groups lists
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			importGroup(gid, rhs, depth);
+			importGroup(gid, latest, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
-			assert(this->N[nid].gid == gid);
 
 			// return original, which should have relocated to a different group
 			return nid;
@@ -2475,7 +2536,8 @@ struct groupTree_t {
 	 */
 	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
-//		assert(newest < oldest);
+		assert(oldest >= this->nstart);
+		assert(newest > oldest);
 		assert(this->N[newest].gid == newest);
 		assert(this->N[oldest].gid == oldest);
 
