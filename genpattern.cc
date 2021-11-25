@@ -637,16 +637,20 @@ int main(int argc, char *argv[]) {
 	if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE)
 		fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), json_dumps(db.jsonInfo(NULL), JSON_PRESERVE_ORDER | JSON_COMPACT));
 
+	if (db.numSignature <= db.IDFIRST)
+		ctx.fatal("\n{\"error\":\"Missing signature section\",\"where\":\"%s:%s:%d\",\"database\":\"%s\"}\n",
+			  __FUNCTION__, __FILE__, __LINE__, app.arg_inputDatabase);
+
 	// prepare sections and indices for use
-	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX | database_t::ALLOCMASK_SWAPINDEX | database_t::ALLOCMASK_IMPRINTINDEX |
-			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX | database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
+	uint32_t sections = database_t::ALLOCMASK_SIGNATUREINDEX |
+			    database_t::ALLOCMASK_SWAPINDEX |
+			    database_t::ALLOCMASK_IMPRINTINDEX |
+			    database_t::ALLOCMASK_PATTERNFIRST | database_t::ALLOCMASK_PATTERNFIRSTINDEX |
+			    database_t::ALLOCMASK_PATTERNSECOND | database_t::ALLOCMASK_PATTERNSECONDINDEX;
 	if (db.numImprint <= db.IDFIRST)
 		sections |= database_t::ALLOCMASK_IMPRINT; // rebuild imprints only when missing
 		
 	unsigned rebuildIndices = app.prepareSections(db, app.arg_numNodes, sections);
-
-	if (db.numSignature <= db.IDFIRST)
-		ctx.fatal("Missing/empty signature section: %s\n", app.arg_inputDatabase);
 
 	/*
 	 * Finalise allocations and create database

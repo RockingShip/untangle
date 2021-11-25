@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-25 14:48:25 Changed: Updated metrics.
 2021-11-23 22:45:28 Changed: `gendepreciate`, Open database in new copy-on-write fashion.
 2021-11-23 22:04:16 Changed: `gensignature`, Generate (fast) list queries before generating indices. 
 2021-11-23 21:30:27 Changed: Textual fixups.
