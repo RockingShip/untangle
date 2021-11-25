@@ -1172,12 +1172,127 @@ struct groupTree_t {
 			unsigned iTu = Tu; do {
 				unsigned iF = F; do {
 					do {
+						/*
+						 * Normalise (test for folding), when this happens collapse/invalidate the whole group and forward to the folded result.
+						 * Requires temporary Q/T/F because loop iterators might change 
+						 */
+						uint32_t folded = IBIT; // indicate not-folded
+						uint32_t normQ, normTi, normTu, normF; 
+						if (Ti) {
+
+							if (iTu == 0) {
+								if (iQ == iF) {
+									// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+									folded = iQ;
+								} else if (iF == 0) {
+									// [ 0] a ? !0 : 0  ->  a
+									folded = iQ;
+								} else {
+									// [ 2] a ? !0 : b  -> "+" OR
+									normQ  = iQ;
+									normTi = Ti;
+									normTu = iTu;
+									normF  = iF;
+								}
+							} else if (iTu == iQ) {
+								if (iQ == iF) {
+									// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+									folded = 0;
+								} else if (iF == 0) {
+									// [ 3] a ? !a : 0  ->  0
+									folded = 0;
+								} else {
+									// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+									normQ  = iF;
+									normTi = Ti;
+									normTu = iTu;
+									normF  = 0;
+								}
+							} else {
+								if (iQ == iF) {
+									// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+									normQ  = iQ;
+									normTi = Ti;
+									normTu = iTu;
+									normF = 0;
+								} else {
+									// [ 6] a ? !b : 0  -> ">" greater-than
+									// [ 8] a ? !b : b  -> "^" not-equal
+									// [ 9] a ? !b : c  -> "!" QnTF
+									normQ  = iQ;
+									normTi = Ti;
+									normTu = iTu;
+									normF  = iF;
+								}
+							}
+
+						} else {
+
+							if (iTu == 0) {
+								if (iQ == iF) {
+									// [11] a ?  0 : a -> 0
+									folded = 0;
+								} else if (iF == 0) {
+									// [10] a ?  0 : 0 -> 0
+									assert(0); // already tested
+									folded = 0;
+								} else {
+									// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+									normQ  = iF;
+									normTi = IBIT;
+									normTu = iQ;
+									normF  = 0;
+								}
+							} else if (iQ == iTu) {
+								if (iQ == iF) {
+									// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+									assert(0); // already tested
+									folded = iQ;
+								} else if (iF == 0) {
+									// [13] a ?  a : 0 -> a
+									folded = iQ;
+								} else {
+									// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+									normQ  = iQ;
+									normTi = IBIT;
+									normTu = 0;
+									normF  = iF;
+								}
+							} else {
+								if (iQ == iF) {
+									// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+									normQ  = iQ;
+									normTi = Ti;
+									normTu = iTu;
+									normF  = 0;
+								} else {
+									// [16] a ?  b : 0             "&" and
+									// [18] a ?  b : b -> b        ALREADY TESTED		
+									// [19] a ?  b : c             "?" QTF
+									normQ  = iQ;
+									normTi = Ti;
+									normTu = iTu;
+									normF  = iF;
+								}
+							}
+						}
+						if (folded != IBIT) {
+							printf("FOLD %u %u\n", gid, folded);
+							
+							assert(folded >= this->nstart);
+							
+							if (gid == 0)
+								return folded;
+							
+							importGroup(gid, folded, depth);
+							return folded;
+						}
 
 						/*
 						 * Build slots and lookup signature
 						 */
 						uint32_t finalSlots[MAXSLOTS];
-						uint32_t sid = constructSlots(this->N + iQ, Ti, this->N + iTu, this->N + iF, finalSlots);
+						uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots);
 
 						if (sid == 0)
 							continue; // combo not found
@@ -1355,85 +1470,6 @@ struct groupTree_t {
 			memset(slotVersion, 0, this->maxNodes * sizeof(*slotVersion));
 
 			thisVersion = ++slotVersionNr;
-		}
-
-		const groupNode_t *pZero   = this->N + db.SID_ZERO;
-
-		if (Ti) {
-
-			if (pNodeT == pZero) {
-				if (pNodeQ == pNodeF) {
-					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-					return pNodeQ->gid;
-				} else if (pNodeF == pZero) {
-					// [ 0] a ? !0 : 0  ->  a
-					return pNodeQ->gid;
-				} else {
-					// [ 2] a ? !0 : b  -> "+" OR
-				}
-			} else if (pNodeT == pNodeQ) {
-				if (pNodeQ == pNodeF) {
-					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-					return pZero->gid;
-				} else if (pNodeF == pZero) {
-					// [ 3] a ? !a : 0  ->  0
-					return pZero->gid;
-				} else {
-					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-					pNodeQ = pNodeF;
-					pNodeF = pZero;
-				}
-			} else {
-				if (pNodeQ == pNodeF) {
-					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-					pNodeF = pZero;
-				} else {
-					// [ 6] a ? !b : 0  -> ">" greater-than
-					// [ 8] a ? !b : b  -> "^" not-equal
-					// [ 9] a ? !b : c  -> "!" QnTF
-				}
-			}
-
-		} else {
-
-			if (pNodeT == pZero) {
-				if (pNodeQ == pNodeF) {
-					// [11] a ?  0 : a -> 0
-					return pZero->gid;
-				} else if (pNodeF == pZero) {
-					// [10] a ?  0 : 0 -> 0
-					assert(0); // already tested
-					return pZero->gid;
-				} else {
-					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-					pNodeT = pNodeQ;
-					Ti     = IBIT;
-					pNodeQ = pNodeF;
-					pNodeF = pZero;
-				}
-			} else if (pNodeQ == pNodeT) {
-				if (pNodeQ == pNodeF) {
-					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-					assert(0); // already tested
-					return pNodeQ->gid;
-				} else if (pNodeF == pZero) {
-					// [13] a ?  a : 0 -> a
-					return pNodeQ->gid;
-				} else {
-					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-					pNodeT = pZero;
-					Ti     = IBIT;
-				}
-			} else {
-				if (pNodeQ == pNodeF) {
-					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-					pNodeF = pZero;
-				} else {
-					// [16] a ?  b : 0             "&" and
-					// [18] a ?  b : b -> b        ALREADY TESTED		
-					// [19] a ?  b : c             "?" QTF
-				}
-			}
 		}
 
 		/*

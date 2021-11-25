@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-25 17:52:39 (MAJOR) Fixed: `groupTree_t::constructSlots()`, was mixing nid/sid.
 2021-11-25 17:49:42 Changed: `groupTree_t::addNormalisedNode()`, Allow outdated nodes as arguments.
 2021-11-25 14:48:25 Changed: Updated metrics.
 2021-11-23 22:45:28 Changed: `gendepreciate`, Open database in new copy-on-write fashion.
