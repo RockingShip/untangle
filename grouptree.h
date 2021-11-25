@@ -3686,10 +3686,15 @@ struct groupTree_t {
 		 */
 		for (const char *pattern = pName; *pattern; pattern++) {
 
+			uint32_t Q, Tu, Ti, F;
+			
 			switch (*pattern) {
 			case '0': //
+				/*
+				 * Push zero
+				 */
 				pStack[numStack++] = 0;
-				break;
+				continue; // for
 
 				// @formatter:off
 			case '1': case '2': case '3':
@@ -3708,8 +3713,7 @@ struct groupTree_t {
 					ctx.fatal("[stack overflow]\n");
 
 				pStack[numStack++] = pMap[v];
-
-				break;
+				continue; // for
 			}
 
 				// @formatter:off
@@ -3736,8 +3740,7 @@ struct groupTree_t {
 					pStack[numStack++] = transformList[v];
 				else
 					pStack[numStack++] = v;
-				break;
-
+				continue; // for
 			}
 
 				// @formatter:off
@@ -3787,7 +3790,7 @@ struct groupTree_t {
 				} else {
 					ctx.fatal("[bad token '%c']\n", *pattern);
 				}
-				break;
+				continue; // for
 			}
 
 			case '+': {
@@ -3795,12 +3798,10 @@ struct groupTree_t {
 				if (numStack < 2)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				nid = addNormaliseNode(L, IBIT, R);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = pStack[--numStack];
+				Tu = 0;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '>': {
@@ -3808,12 +3809,10 @@ struct groupTree_t {
 				if (numStack < 2)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				nid = addNormaliseNode(L, R ^ IBIT, 0);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '^': {
@@ -3821,12 +3820,10 @@ struct groupTree_t {
 				if (numStack < 2)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				nid = addNormaliseNode(L, R ^ IBIT, R);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = pStack[--numStack];
+				Tu = F;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '!': {
@@ -3834,13 +3831,10 @@ struct groupTree_t {
 				if (numStack < 3)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t F = pStack[--numStack];
-				uint32_t T = pStack[--numStack];
-				uint32_t Q = pStack[--numStack];
-
-				nid = addNormaliseNode(Q, T ^ IBIT, F);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '&': {
@@ -3848,12 +3842,10 @@ struct groupTree_t {
 				if (numStack < 2)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t R = pStack[--numStack];
-				uint32_t L = pStack[--numStack];
-
-				nid = addNormaliseNode(L, R, 0);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '?': {
@@ -3861,13 +3853,10 @@ struct groupTree_t {
 				if (numStack < 3)
 					ctx.fatal("[stack underflow]\n");
 
-				uint32_t F = pStack[--numStack];
-				uint32_t T = pStack[--numStack];
-				uint32_t Q = pStack[--numStack];
-
-				nid = addNormaliseNode(Q, T, F);
-
-				pStack[numStack++] = pMap[nextNode++] = nid;
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
 				break;
 			}
 			case '~': {
@@ -3876,7 +3865,7 @@ struct groupTree_t {
 					ctx.fatal("[stack underflow]\n");
 
 				pStack[numStack - 1] ^= IBIT;
-				break;
+				continue; // for
 			}
 
 			case '/':
@@ -3890,8 +3879,31 @@ struct groupTree_t {
 			default:
 				ctx.fatal("[bad token '%c']\n", *pattern);
 			}
+			assert(numStack >= 0);
 
-			if (numStack > maxNodes)
+			/*
+			 * Only arrive here when Q/T/F have been set 
+			 */
+
+			/*
+			 * use the latest lists
+			 */
+
+			nid = addNormaliseNode(Q, Tu ^ Ti, F);
+
+			{
+				uint32_t id = nid;
+				while(id != this->N[id].gid)
+					id = this->N[id].gid;
+
+				printf("### %s\n", saveString(id).c_str());
+			}
+			
+			// remember
+			pStack[numStack++] = nid;
+			pMap[nextNode++] = nid;
+
+			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
 		}
 		if (numStack != 1)
