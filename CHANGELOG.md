@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-28 13:51:36 Added: `genpattern`, load file from stdin.
 2021-11-25 17:58:06 Changed: `groupTree_t::loadStringSafe()`, Modernise.
 2021-11-25 17:52:39 (MAJOR) Fixed: `groupTree_t::constructSlots()`, Was mixing nid/sid.
 2021-11-25 17:49:42 Changed: `groupTree_t::addNormalisedNode()`, Allow outdated nodes as arguments.

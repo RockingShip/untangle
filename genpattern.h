@@ -968,10 +968,15 @@ struct genpatternContext_t : dbtool_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Reading patterns from file\n", ctx.timeAsString());
 
-		FILE *f = fopen(this->opt_load, "r");
-		if (f == NULL)
-			ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
-				  this->opt_load, __FUNCTION__, __FILE__, __LINE__);
+		FILE *f;
+		if (strcmp(this->opt_load, "-") != 0) {
+			f = fopen(this->opt_load, "r");
+			if (f == NULL)
+				ctx.fatal("\n{\"error\":\"fopen('%s') failed\",\"where\":\"%s:%s:%d\",\"return\":\"%m\"}\n",
+					  this->opt_load, __FUNCTION__, __FILE__, __LINE__);
+		} else {
+			f = stdin;
+		}
 
 		// apply settings for `--window`
 		generator.windowLo = this->opt_windowLo;

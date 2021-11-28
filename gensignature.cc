@@ -262,7 +262,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --listsafe                      List safe signatures, for inclusion\n");
 		fprintf(stderr, "\t   --listunsafe                    List empty/unsafe signatures, for exclusion\n");
 		fprintf(stderr, "\t   --listused                      List used/non-empty signatures, for inclusion\n");
-		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --load=<file>                   Read candidates from file [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --markmixed                     Flag signatures that have pure with top-level mixed members\n");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --text[=1]                      Brief accepted `foundTree()` candidates\n");

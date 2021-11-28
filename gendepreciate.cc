@@ -186,7 +186,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
-		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --load=<file>                   Read candidates from file [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --lookupsafe                    Only lookup signatures are safe\n");
 		fprintf(stderr, "\t   --mode=<number>                 Operational mode [default=%u]\n", app.opt_mode);
 		fprintf(stderr, "\t-q --quiet                         Say less\n");

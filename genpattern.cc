@@ -107,7 +107,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --force                         Force overwriting of database if already exists\n");
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
-		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --load=<file>                   Read candidates from file (\"-\" = stdin) [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --text[=1]                      Brief accepted `foundTree()` candidates\n");
 		fprintf(stderr, "\t   --text=2                        Verbose accepted `foundTree()` candidates\n");
@@ -591,7 +591,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if (app.opt_load) {
+	if (app.opt_load && strcmp(app.opt_load, "-") != 0) {
 		struct stat sbuf;
 
 		if (stat(app.opt_load, &sbuf)) {

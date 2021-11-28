@@ -266,7 +266,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --listlookup                    List failed member lookups of `findheadtail()`\n");
-		fprintf(stderr, "\t   --load=<file>                   Read candidates from file instead of generating [default=%s]\n", app.opt_load ? app.opt_load : "");
+		fprintf(stderr, "\t   --load=<file>                   Read candidates from file [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --safe                          Consider safe members only\n");
 		fprintf(stderr, "\t   --text[=1]                      Brief accepted `foundTree()` candidates\n");
