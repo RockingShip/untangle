@@ -812,30 +812,20 @@ struct genpatternContext_t : dbtool_t {
 		/*
 		 * Add to database
 		 */
+		// todo: need explicit rdonly mode
+		bool allowWrite = this->arg_outputDatabase || this->opt_maxPatternFirst > pStore->numPatternFirst || this->opt_maxPatternSecond > pStore->numPatternSecond;
 
 		// lookup/create first
 		uint32_t ixFirst = pStore->lookupPatternFirst(sidQ, sidT, tidSlotT);
-		if (pStore->patternFirstIndex[ixFirst] == 0)
+		if (pStore->patternFirstIndex[ixFirst] == 0 && allowWrite)
 			pStore->patternFirstIndex[ixFirst] = pStore->addPatternFirst(sidQ, sidT, tidSlotT);
 		uint32_t idFirst = pStore->patternFirstIndex[ixFirst];
 
 		// lookup/create second
-		uint32_t        ixSecond = pStore->lookupPatternSecond(idFirst, sidF, tidSlotF);
-		uint32_t        idSecond;
-		patternSecond_t *patternSecond;
+		uint32_t ixSecond = idFirst ? pStore->lookupPatternSecond(idFirst, sidF, tidSlotF) : 0;
+		uint32_t idSecond = pStore->patternSecondIndex[ixSecond];
 
-		if (pStore->patternSecondIndex[ixSecond] == 0) {
-			pStore->patternSecondIndex[ixSecond] = pStore->addPatternSecond(idFirst, sidF, tidSlotF);
-
-			// new entry
-			idSecond      = pStore->patternSecondIndex[ixSecond];
-			patternSecond = pStore->patternsSecond + idSecond;
-
-			assert(sidR < (1 << 20));
-
-			patternSecond->sidR     = sidR;
-			patternSecond->tidSlotR = tidSlotR;
-
+		if (idSecond  == 0) {
 			if (opt_text == OPTTEXT_WON) {
 				/*
 				 * Construct tree containing sid/tid
@@ -848,11 +838,23 @@ struct genpatternContext_t : dbtool_t {
 
 				printf("%s\n", tree.saveString(tree.root));
 			}
+
+			if (allowWrite) {
+				idSecond = pStore->addPatternSecond(idFirst, sidF, tidSlotF);
+				pStore->patternSecondIndex[ixSecond] = idSecond;
+
+				// new entry
+				patternSecond_t *patternSecond = pStore->patternsSecond + idSecond;
+
+				assert(sidR < (1 << 20));
+
+				patternSecond->sidR     = sidR;
+				patternSecond->tidSlotR = tidSlotR;
+			}
+			
 		} else {
 			// verify duplicate
-			idSecond      = pStore->patternSecondIndex[ixSecond];
-			patternSecond = pStore->patternsSecond + idSecond;
-
+			patternSecond_t *patternSecond = pStore->patternsSecond + idSecond;
 			if (patternSecond->sidR != sidR || patternSecond->tidSlotR != tidSlotR) {
 				/*
 				 * @date 2021-10-25 19:29:56
