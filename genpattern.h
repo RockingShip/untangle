@@ -70,8 +70,6 @@ struct genpatternContext_t : dbtool_t {
 	unsigned   arg_numNodes;
 	/// @var {string} name of output database
 	const char *arg_outputDatabase;
-	/// @var {number} --fast, fast load patterns by calling `addPatternDatabase()` directly. 
-	unsigned   opt_fast;
 	/// @var {number} --force, force overwriting of database if already exists
 	unsigned   opt_force;
 	/// @var {number} Invoke generator for new candidates
@@ -1043,87 +1041,8 @@ struct genpatternContext_t : dbtool_t {
 			 * call `foundTreePattern()`
 			 */
 
-			if (!opt_fast) {
-				if (!foundTreePattern(tree, name, newPlaceholder, newEndpoint, newBackRef))
-					break;
-			} else {
-				if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-					int perSecond = ctx.updateSpeed();
-
-					if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) | skipDuplicate=%u | hash=%.3f %s",
-							ctx.timeAsString(), ctx.progress, perSecond,
-							pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
-							pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-							skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, name);
-					} else {
-						int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-
-						int etaH = eta / 3600;
-						eta %= 3600;
-						int etaM = eta / 60;
-						eta %= 60;
-						int etaS = eta;
-
-
-						fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numPatternFirst=%u(%.0f%%) numPatternSecond=%u(%.0f%%) |  skipDuplicate=%u | hash=%.3f %s",
-							ctx.timeAsString(), ctx.progress, perSecond, (ctx.progress - generator.windowLo) * 100.0 / (ctx.progressHi - generator.windowLo), etaH, etaM, etaS,
-							pStore->numPatternFirst, pStore->numPatternFirst * 100.0 / pStore->maxPatternFirst,
-							pStore->numPatternSecond, pStore->numPatternSecond * 100.0 / pStore->maxPatternSecond,
-							skipDuplicate, (double) ctx.cntCompare / ctx.cntHash, name);
-					}
-
-					if (ctx.restartTick) {
-						// passed a restart point
-						fprintf(stderr, "\n");
-						ctx.restartTick = 0;
-					}
-
-					ctx.tick = 0;
-				}
-
-				uint32_t R    = tree.root;
-				uint32_t tlQ  = tree.N[R].Q;
-				uint32_t tlTi = tree.N[R].T & IBIT;
-				uint32_t tlTu = tree.N[R].T & ~IBIT;
-				uint32_t tlF  = tree.N[R].F;
-
-				uint32_t sidR = 0, sidQ = 0, sidT = 0, sidF = 0;
-				uint32_t tidR = 0, tidQ = 0, tidT = 0, tidF = 0;
-
-				pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidR, &tidR, R);
-
-				if (tlQ < tinyTree_t::TINYTREE_NSTART) {
-					sidQ = fastLookupSid[tlQ];
-					tidQ = fastLookupTid[tlQ];
-				} else {
-					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidQ, &tidQ, tlQ);
-				}
-				if (tlTu < tinyTree_t::TINYTREE_NSTART) {
-					sidT = fastLookupSid[tlTu];
-					tidT = fastLookupTid[tlTu];
-				} else {
-					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidT, &tidT, tlTu);
-				}
-				if (tlTu != tlF) {
-					// ignore F double reference when T==F
-					if (tlF < tinyTree_t::TINYTREE_NSTART) {
-						sidF = fastLookupSid[tlF];
-						tidF = fastLookupTid[tlF];
-					} else {
-						pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sidF, &tidF, tlF);
-					}
-				}
-
-				if (tlTu == tlF) {
-					assert(tlTi);
-					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidT, tidT);
-				} else if (tlTi) {
-					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
-				} else {
-					addPatternToDatabase(name, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
-				}
-			}
+			if (!foundTreePattern(tree, name, newPlaceholder, newEndpoint, newBackRef))
+				break;
 
 			ctx.progress++;
 		}
