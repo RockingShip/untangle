@@ -562,87 +562,13 @@ struct genpatternContext_t : dbtool_t {
 		 * 
 		 * Point of NO return.
 		 * 
-		 * The structure in `treeR` has been identified as: sidR/tidR, sidQ/tidQ, sidT/tidT, sidF/tidF.
+		 * The structure in `treeR` has been identified as: sidR/tidR == sidQ/tidQ, sidT/tidT, sidF/tidF.
 		 */
-
-		/*
-		 * Convert tidR/tidQ/tidT/tidF such that `tidR=0`. 
-		 * One of the test patterns used: "bcd?bca?>"
-		 */
-		{
-			char reverse[MAXSLOTS + 1];
-
-			// determine inverse transform to get from result to intermediate
-			const char *revRstr = pStore->revTransformNames[tidR];
-			const char *fwdQstr = pStore->fwdTransformNames[tidQ];
-			const char *fwdTstr = pStore->fwdTransformNames[tidT];
-			const char *fwdFstr = pStore->fwdTransformNames[tidF];
-
-			// reverse the transforms
-			for (int i = 0; i < MAXSLOTS; i++)
-				reverse[i] = revRstr[fwdQstr[i] - 'a'];
-			reverse[pStore->signatures[sidQ].numPlaceholder] = 0;
-			tidQ = pStore->lookupFwdTransform(reverse);
-
-			for (int i = 0; i < MAXSLOTS; i++)
-				reverse[i] = revRstr[fwdTstr[i] - 'a'];
-			reverse[pStore->signatures[sidT].numPlaceholder] = 0;
-			tidT = pStore->lookupFwdTransform(reverse);
-
-			for (int i = 0; i < MAXSLOTS; i++)
-				reverse[i] = revRstr[fwdFstr[i] - 'a'];
-			reverse[pStore->signatures[sidF].numPlaceholder] = 0;
-			tidF = pStore->lookupFwdTransform(reverse);
-
-			tidR = 0;
-		}
-
-		/*
-		 * Sid-swap endpoints as the run-time would do
-		 */
-		tidQ = dbtool_t::sidSwapTid(*pStore, sidQ, tidQ, pStore->fwdTransformNames);
-		tidT = dbtool_t::sidSwapTid(*pStore, sidT, tidT, pStore->fwdTransformNames);
-		tidF = dbtool_t::sidSwapTid(*pStore, sidF, tidF, pStore->fwdTransformNames);
-
-		/*
-		 * Validate
-		 */
-		if (ctx.flags & ctx.MAGICMASK_PARANOID) {
-			char       name[tinyTree_t::TINYTREE_NAMELEN * 3 + 1 + 1]; // for 3 trees and final operator
-			unsigned   nameLen = 0;
-			tinyTree_t tree(ctx);
-
-			tree.loadStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
-			tree.saveString(tree.root, name + nameLen, NULL);
-			nameLen = strlen(name);
-
-			tree.loadStringFast(pStore->signatures[sidT].name, pStore->fwdTransformNames[tidT]);
-			tree.saveString(tree.root, name + nameLen, NULL);
-			nameLen = strlen(name);
-
-			tree.loadStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
-			tree.saveString(tree.root, name + nameLen, NULL);
-			nameLen = strlen(name);
-
-			name[nameLen++] = (tlTi) ? '!' : '?';
-			name[nameLen]   = 0;
-
-			tree.loadStringFast(name);
-
-			uint32_t sid = 0;
-			uint32_t tid = 0;
-			pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
-
-			assert(sid == sidR);
-			assert(tid == 0);
-
-//			printf("./eval \"%s\" \"%s\"\n", name, pStore->signatures[sidR].name);
-		}
 
 		if (tlTi)
-			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF);
+			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT ^ IBIT, tidT, sidF, tidF, tidR);
 		else
-			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF);
+			this->addPatternToDatabase(pNameR, sidR, sidQ, tidQ, sidT, tidT, sidF, tidF, tidR);
 
 		return true;
 	}
@@ -656,8 +582,12 @@ struct genpatternContext_t : dbtool_t {
 	 * `groupTree_t` does not scan trees for pattern matches but is a collection of prime structures that are Cartesian product.
 	 * First step is the Cartesian product between Q and T.
 	 * Second step are the ound combos cross-multiplied with F.
+	 * 
+	 * @date 2021-11-28 22:58:49
+	 * 
+	 * Due to a fixed encoding flaw, `tidR` is needed to extract the result from the detector slots. 
 	 */
-	uint32_t /*__attribute__((optimize("O0")))*/ addPatternToDatabase(const char *pNameR, uint32_t sidR, uint32_t sidQ, uint32_t tidQ, uint32_t sidT, uint32_t tidT, uint32_t sidF, uint32_t tidF) {
+	uint32_t /*__attribute__((optimize("O0")))*/ addPatternToDatabase(const char *pNameR, uint32_t sidR, uint32_t sidQ, uint32_t tidQ, uint32_t sidT, uint32_t tidT, uint32_t sidF, uint32_t tidF, uint32_t tidR) {
 		assert(!(sidR & IBIT));
 		assert(!(sidQ & IBIT));
 		assert(!(sidF & IBIT));
@@ -794,6 +724,37 @@ struct genpatternContext_t : dbtool_t {
 		tidSlotF = dbtool_t::sidSwapTid(*pStore, sidF, tidSlotF, pStore->fwdTransformNames);
 
 		/*
+		 * @date 2021-11-29 17:37:53
+		 * 
+		 * The input has been broken down into `sidR/[slotsR]`
+		 * Here `slotsR` hold the input endpoints, in `groupTree_t` it holds group ID's.
+		 * 
+		 * Example:
+		 * Input: `def?bac?gah??` == `abc?de?f2gh??/43818:defbgach`
+		 * 
+		 * slotsR=[d e f b a c g h]
+		 * slotsQ=[a b c]
+		 * slotsT=[d e f]
+		 * slotsF=[g e h]
+		 * 
+		 * The reverse transform of `slotsR` is `451:defbacgh` and used to extract the final slot values.
+		 * However, that would be true if the input is normalised, which it is not.
+		 * The final slot values should be ordered as `sidR`: 3498:defbgach.
+		 * 
+		 * Create an extraction tid and store that in the record
+		 */
+
+		char     slotsExtract[MAXSLOTS + 1];
+		unsigned numPlaceHolder = pStore->signatures[sidR].numPlaceholder;
+
+		for (unsigned iSlot = 0; iSlot < numPlaceHolder; iSlot++) {
+			slotsExtract[iSlot] = pStore->fwdTransformNames[tidSlotR][(unsigned)(pStore->fwdTransformNames[tidR][iSlot] - 'a')];
+		}
+		slotsExtract[numPlaceHolder] = 0;
+
+		uint32_t tidExtract = pStore->lookupFwdTransform(slotsExtract);
+		
+		/*
 		 * @date 2021-10-21 23:45:02
 		 * The result slots can have swapped placeholders
 		 * 
@@ -805,7 +766,7 @@ struct genpatternContext_t : dbtool_t {
 		 * @date 2021-10-25 15:36:47
 		 * There should be a total of 4 calls to `sidSwapTid()`.
 		 */
-		tidSlotR = dbtool_t::sidSwapTid(*pStore, sidR, tidSlotR, pStore->revTransformNames);
+		tidExtract = dbtool_t::sidSwapTid(*pStore, sidR, tidExtract, pStore->fwdTransformNames);
 
 		/*
 		 * Add to database
@@ -835,6 +796,14 @@ struct genpatternContext_t : dbtool_t {
 				tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT & IBIT) ? IBIT : 0), tlF);
 
 				printf("%s\n", tree.saveString(tree.root));
+
+
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+					uint32_t tmpSid, tmpTid;
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &tmpSid, &tmpTid);
+					assert(tmpSid == sidR);
+					assert(tmpTid == tidR);
+				}
 			}
 
 			if (allowWrite) {
@@ -847,13 +816,13 @@ struct genpatternContext_t : dbtool_t {
 				assert(sidR < (1 << 20));
 
 				patternSecond->sidR     = sidR;
-				patternSecond->tidSlotR = tidSlotR;
+				patternSecond->tidSlotR = tidExtract;
 			}
 			
 		} else {
 			// verify duplicate
 			patternSecond_t *patternSecond = pStore->patternsSecond + idSecond;
-			if (patternSecond->sidR != sidR || patternSecond->tidSlotR != tidSlotR) {
+			if (patternSecond->sidR != sidR || patternSecond->tidSlotR != tidExtract) {
 				/*
 				 * @date 2021-10-25 19:29:56
 				 * Be very verbose.
@@ -870,7 +839,7 @@ struct genpatternContext_t : dbtool_t {
 					patternSecond->sidR, pStore->signatures[patternSecond->sidR].name,
 					sidR, pStore->signatures[sidR].name,
 					patternSecond->tidSlotR, pStore->signatures[patternSecond->sidR].numPlaceholder, pStore->fwdTransformNames[patternSecond->tidSlotR],
-					tidSlotR, pStore->signatures[sidR].numPlaceholder, pStore->fwdTransformNames[tidSlotR],
+					tidExtract, pStore->signatures[sidR].numPlaceholder, pStore->fwdTransformNames[tidExtract],
 
 					sidQ, pStore->signatures[sidQ].name,
 					tidQ, pStore->signatures[sidQ].numPlaceholder, pStore->fwdTransformNames[tidQ],
@@ -899,7 +868,7 @@ struct genpatternContext_t : dbtool_t {
 				 * All alternatives should and must be identical in creating `groupNode_t::slots[]` 
 				 */
 				assert(patternSecond->sidR == sidR);
-				assert(patternSecond->tidSlotR == tidSlotR);
+				assert(patternSecond->tidSlotR == tidExtract);
 			}
 
 			skipDuplicate++;
