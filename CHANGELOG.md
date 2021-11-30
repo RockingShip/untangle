@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-11-30 15:18:59 Added: `patternSecond_t`, added `power`.
 2021-11-29 18:47:12 (MAJOR) Fixed: `genpattern`, it was an error to convert to `tid=` BEFORE determining tidT+tidF.
 2021-11-29 18:43:18 Deleted: `genpattern --fast`, No noticeable speed difference.
 2021-11-28 14:02:24 Changed: `genpattern`, Better handling of read-only mode (no output database).

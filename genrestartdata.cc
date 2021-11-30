@@ -313,7 +313,7 @@ struct genrestartdataContext_t : callable_t {
 		printf("#ifndef _RESTARTDATA_H\n");
 		printf("#define _RESTARTDATA_H\n");
 		printf("\n");
-		printf("#include <metrics.h>\n");
+		printf("#include \"metrics.h\"\n");
 		printf("\n");
 
 		// make static so it is initially zero

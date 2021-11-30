@@ -405,7 +405,10 @@ struct context_t {
 			return 4294967291; // overflow
 
 		// increase with given percent
-		return (unsigned) (n + (n / 100 * percent));
+		if (n < 4294967291 / 1000)
+			return (unsigned) (n + (n * percent / 100)); // better rounding
+		else
+			return (unsigned) (n + (n / 100 * percent)); // overflow protected
 	}
 
 	/**

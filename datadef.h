@@ -383,13 +383,14 @@ struct __attribute__((__packed__)) patternFirst_t {
 
 // NOTE: 1175043464 entries [17.8G data + 7.1G index, ratio=1.5]
 struct __attribute__((__packed__)) patternSecond_t {
-	unsigned idFirst  :27; // key - reference to `patternFirst_t`
-	unsigned sidF     :20; // key - id of sidF
-	unsigned tidSlotF :19; // key - add F to reassembly slots (row)
+	unsigned idFirst    :27; // key - reference to `patternFirst_t`
+	unsigned sidF       :20; // key - id of sidF
+	unsigned tidSlotF   :19; // key - add F to reassembly slots (row)
         // 64bit align
-	unsigned sidR     :20; // data - sidR
-	unsigned tidSlotR :19; // data - extract R from reassembly slots (col)
-        // total 105 bits (14 bytes)
+	unsigned sidR       :20; // data - sidR
+	unsigned tidExtract :19; // data - extract R from reassembly slots (col)
+	unsigned power      : 3; // data - difference `pattern.size - signature.size`
+        // total 108 bits (14 bytes)
 };
 
 #endif
