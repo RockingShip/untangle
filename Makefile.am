@@ -195,7 +195,7 @@ validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for detector patterns
 ##
 
-PROGRAMS_PART5 = genpattern geval
+PROGRAMS_PART5 = genpattern geval glookup
 EXTRA_PART5 =
 
 # @date 2021-11-02 22:32:07
@@ -205,3 +205,7 @@ geval_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-10-17 17:51:31
 genpattern_SOURCES = genpattern.cc genpattern.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genpattern_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2021-11-26 23:18:07
+glookup_SOURCES = glookup.cc database.h datadef.h dbtool.h context.h tinytree.h basetree.h grouptree.h
+glookup_LDADD = $(LDADD) $(AM_LDADD)
