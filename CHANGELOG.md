@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-01 00:50:02 Changed: `genpattern`, Optimised name construction for ``--text`.
 2021-11-30 15:25:41 Added: `glookup`.
 2021-11-30 15:18:59 Added: `patternSecond_t`, Added `power`.
 2021-11-29 18:47:12 (MAJOR) Fixed: `genpattern`, It was an error to convert to `tid=` BEFORE determining tidT+tidF.

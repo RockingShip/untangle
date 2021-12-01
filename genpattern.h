@@ -171,7 +171,7 @@ struct genpatternContext_t : dbtool_t {
 			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 				char name[2] = {(char) ('a' + iSlot), 0};
 
-				uint32_t ix = pStore->lookupSignature("a");
+				ix = pStore->lookupSignature("a");
 				fastLookupSid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->signatureIndex[ix];
 				fastLookupTid[tinyTree_t::TINYTREE_KSTART + iSlot] = pStore->lookupFwdTransform(name);
 				assert(fastLookupSid[tinyTree_t::TINYTREE_KSTART] != 0);
@@ -655,9 +655,6 @@ struct genpatternContext_t : dbtool_t {
 			       pNameR);
 		}
 
-		if (strcmp(pNameR, "abc?def?geh??") == 0)
-			printf(".");
-		
 		/*
 		 * Slot population as `groupTree_t` would do
 		 */
@@ -824,8 +821,13 @@ struct genpatternContext_t : dbtool_t {
 				tinyTree_t tree(ctx);
 				uint32_t   tlQ = tree.addStringFast(pStore->signatures[sidQ].name, pStore->fwdTransformNames[tidQ]);
 				uint32_t   tlT = tree.addStringFast(pStore->signatures[sidT & ~IBIT].name, pStore->fwdTransformNames[tidT]);
-				uint32_t   tlF = tree.addStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
-				tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT & IBIT) ? IBIT : 0), tlF);
+				if ((sidT ^ IBIT) == sidF && tidSlotT == tidSlotF) {
+					// NOTE: `addStringFast()` does not detect duplicates
+					tree.root = tree.addBasicNode(tlQ, tlT ^ IBIT, tlT);
+				} else {
+					uint32_t tlF = tree.addStringFast(pStore->signatures[sidF].name, pStore->fwdTransformNames[tidF]);
+					tree.root = tree.addBasicNode(tlQ, tlT ^ ((sidT & IBIT) ? IBIT : 0), tlF);
+				}
 
 				/*
 				 * @date 2021-11-28 15:08:00
@@ -865,7 +867,7 @@ struct genpatternContext_t : dbtool_t {
 			patternSecond_t *patternSecond = pStore->patternsSecond + idSecond;
 
 			// update `min(power)`
-			if (patternSecond->power > power)
+			if ((int) patternSecond->power > power)
 				patternSecond->power = power;
 
 			if (patternSecond->sidR != sidR || patternSecond->tidExtract != tidExtract) {
