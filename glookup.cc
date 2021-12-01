@@ -309,27 +309,29 @@ struct glookupContext_t {
 
 		unsigned tidExtract = pStore->lookupFwdTransform(extractSlots);
 
-		printf(" | sidR=%u tidExtract=%u:%.*s --> %s/%u:%.*s",
+		printf(" | sidR=%u tidExtract=%u:%.*s power:%u --> %s/%u:%.*s",
 		       pSecond->sidR,
 		       pSecond->tidExtract, numPlaceholder, pExtractTransform,
+		       pSecond->power,
 		       pStore->signatures[pSecond->sidR].name,
 		       tidExtract, pStore->signatures[pSecond->sidR].numPlaceholder, pStore->fwdTransformNames[tidExtract]);
 
 		printf("\n");
-
-		unsigned cnt = 0;
-		for (unsigned i = pStore->IDFIRST; i < pStore->numPatternSecond; i++) {
-			const patternSecond_t *pSecond = pStore->patternsSecond + i;
-			if (pSecond->sidR >= 1 && pSecond->power == 1)
-				cnt++;
-		}
-		printf("%u %u\n", cnt, pStore->numPatternSecond - cnt);
 
 #if 0
 		/*
 		 * Scratch area
 		 */
 		
+		unsigned cntPower[8] = {0};
+
+		for (unsigned i = pStore->IDFIRST; i < pStore->numPatternSecond; i++) {
+			const patternSecond_t *pSecond = pStore->patternsSecond + i;
+			if (pSecond->sidR >= 1)
+				cntPower[pSecond->power]++;
+		}
+		printf("cntPower=[%u,%u,%u,%u,%u,%u,%u,%u]\n", cntPower[0], cntPower[1], cntPower[2], cntPower[3], cntPower[4], cntPower[5], cntPower[6], cntPower[7]);
+
 		uint32_t theSid = pSecond->sidR;
 		for (unsigned i = pStore->IDFIRST; i < pStore->numPatternSecond; i++) {
 			const patternSecond_t *pSecond = pStore->patternsSecond + i;
