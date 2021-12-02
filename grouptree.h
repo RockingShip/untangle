@@ -1084,12 +1084,12 @@ struct groupTree_t {
 				return nid; // groups are compatible
 
 			// merge groups lists
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 			importGroup(gid, latest, depth);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// `importGroup()` must make node up-to-date 	
 			assert(gid == this->N[nid].gid);
+
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
 			// return node
 			return nid;
@@ -1303,13 +1303,15 @@ struct groupTree_t {
 						}
 						if (folded != IBIT) {
 							printf("FOLD %u %u\n", gid, folded);
-							
+
 							assert(folded >= this->nstart);
-							
+
 							if (gid == IBIT)
 								return folded;
-							
+
 							importGroup(gid, folded, depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
 							return folded;
 						}
 
@@ -1358,8 +1360,9 @@ struct groupTree_t {
 
 						if (db.signatures[sid].size > 1) {
 							uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
-							// did it fold
+							// did something fold
 							if (expand == IBIT)
 								continue; // yes, candidate severely outdated, silently ignore
 
@@ -1391,10 +1394,11 @@ struct groupTree_t {
 
 						uint32_t oldCount = this->ncount;
 
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 						uint32_t nid = addToCollection(sid, finalSlots, gid, depth);
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
+						assert(nid != IBIT);
+						
 						// update current group id to that of head of list
 						gid = nid;
 						while (gid != this->N[gid].gid)
@@ -1431,8 +1435,11 @@ struct groupTree_t {
 						 */
 					} while (false);
 
-					// detect group change
-					// this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
+					/*
+					 * detect iterator-group change
+					 * this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
+					 */
+
 					if (F != this->N[iF].gid) {
 						printf("%.*sRESTART-F\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
 						// find latest list
@@ -1468,8 +1475,16 @@ struct groupTree_t {
 			iQ = this->N[iQ].next;
 		} while (iQ != this->N[iQ].gid);
 
-		// The detector must detect at least one pattern
-		assert(first1n9);
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+		/*
+		 * Test if `first1n9` still exists
+		 */
+		assert(first1n9); // must exist
+		assert(gid == this->N[first1n9].gid); // must be latest
+		assert(gid != this->N[gid].next); // may not be empty 
+
+		// return node the represents arguments
 		return first1n9;
 #undef T
 	}
@@ -1726,7 +1741,7 @@ struct groupTree_t {
 			thisVersion = ++mapVersionNr;
 		}
 
-		// add slot entries, to detect endpoint collapses
+		// add gid to entries, to detect endpoint collapse
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			uint32_t id = pSlots[iSlot];
 			if (id == 0)
@@ -2085,8 +2100,6 @@ struct groupTree_t {
 		freeMap(pStack);
 		freeMap(pMap);
 		freeVersion(pActive);
-
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		return ret;
 	}
@@ -2547,9 +2560,7 @@ struct groupTree_t {
 			// merge groups lists
 			// NOTE: `depth=0` is considered an unexpected event: `updateGroup()` creating an updated node which already exists.
 			assert(depth != 0);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 			importGroup(gid, latest, depth);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// return original, which should have relocated to a different group
 			assert(gid == this->N[nid].gid);
@@ -2752,7 +2763,8 @@ struct groupTree_t {
 			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
 		return newest;
 	}
 
@@ -3031,7 +3043,7 @@ struct groupTree_t {
 	 * 
 	 * For debugging
 	 */
-	void validateTree(unsigned lineNr) {
+	void validateTree(unsigned lineNr, bool allowForward = false) {
 		uint32_t *pVersion   = allocVersion();
 		uint32_t thisVersion = ++mapVersionNr;
 		int      errors      = 0;
@@ -3097,7 +3109,8 @@ struct groupTree_t {
 							
 						if (pVersion[id] != thisVersion) {
 							// reference not defined
-							errors++;
+							if (!allowForward)
+								errors++;
 						} else if (id != this->N[id].gid) {
 							// reference orphaned
 							errors++;
@@ -3107,6 +3120,8 @@ struct groupTree_t {
 					// test if node folds
 					if (outdated) {
 						uint32_t nid = verifySignature(pNode->sid, pNode->slots);
+						printf("DO BETTER\n");
+						return;
 						assert(nid != IBIT); // todo: do better
 					}
 
