@@ -1524,37 +1524,50 @@ struct groupTree_t {
 					 * this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
 					 */
 
+					if (Q != this->N[iQ].gid) {
+						while (Q != this->N[Q].gid)
+							Q = this->N[Q].gid; // restart with new list
+						printf("%.*sRESTART-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+						iQ = this->N[Q].prev; // restart loop
+					}
+					if (Tu != this->N[iTu].gid) {
+						while (Tu != this->N[Tu].gid)
+							Tu = this->N[Tu].gid; // restart with new list
+						printf("%.*sRESTART-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+						iTu = this->N[Tu].prev; // restart loop
+					}
 					if (F != this->N[iF].gid) {
-						printf("%.*sRESTART-F\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
 						// find latest list
 						while (F != this->N[F].gid)
 							F = this->N[F].gid;
-						iF = F; // restart loop
+						printf("%.*sRESTART-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+						iF = this->N[F].prev; // restart loop
 					}
+					
+					// todo: iterator folding
+					assert(Q != Tu && Q != F);
+					assert(Ti != 0 || Tu != F);
+					
+					if (iQ == gid || iTu == gid || iF == gid) {
+						ctx.fatal("FATAL: Iterator group orphaned.");
+						assert(!"iQ == gid || iTu == gid || iF == gid\n");
+						// get pen and paper...
+						// good luck and enjoy...
+
+						// Return new node representing argument
+						assert(first1n9);
+						assert(gid == this->N[first1n9].gid);
+						return first1n9;
+					}
+						
 
 					// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 					// node 0 is a single node list containing SID_ZERO.
 					iF = this->N[iF].next;
 				} while (iF != this->N[iF].gid);
 
-				// detect group change
-				if (Tu != this->N[iTu].gid) {
-					printf("%.*sRESTART-T\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
-					while (Tu != this->N[Tu].gid)
-						Tu = this->N[Tu].gid; // restart with new list
-					iTu = Tu; // restart loop
-				}
-
 				iTu = this->N[iTu].next;
 			} while (iTu != this->N[iTu].gid);
-
-			// detect group change
-			if (Q != this->N[iQ].gid) {
-				printf("%.*sRESTART-Q\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t");
-				while (Q != this->N[Q].gid)
-					Q = this->N[Q].gid; // restart with new list
-				iQ = Q; // restart loop
-			}
 
 			iQ = this->N[iQ].next;
 		} while (iQ != this->N[iQ].gid);
