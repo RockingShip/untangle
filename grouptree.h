@@ -3061,9 +3061,10 @@ struct groupTree_t {
 					uint32_t selfSlots[MAXSLOTS] = {0}; // other slots are zeroed
 					assert(selfSlots[MAXSLOTS - 1] == 0);
 
+					selfSlots[0] = this->ncount;
 					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+					assert(newGid == this->N[newGid].slots[0]);
 					this->N[newGid].gid = newGid;
-					selfSlots[0] = newGid;
 
 					/*
 					 * Walk and update the list
@@ -3078,11 +3079,20 @@ struct groupTree_t {
 						exit(1);
 					}
 
-					// set to new group
-					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
-						this->N[iNode].gid = newGid;
+					// relocate to new group
+					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+						groupNode_t *pNode = this->N + iNode;
+
+						uint32_t prevId = pNode->prev;
+						unlinkNode(iNode);
+						linkNode(this->N[newGid].prev, iNode);
+						pNode->gid = newGid;
+						iNode = prevId;
+						
+					}
 
 					// let current group forward to new
+					assert(this->N[iGroup].next == iGroup); // group should be empty
 					this->N[iGroup].gid = newGid;
 					
 					// bump counter

@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 17:44:30 Fixed: `groupTree_t::updateGroups()`, Fixed incorrect way of relocating nodes to newer group.
 2021-12-02 17:42:11 Added: `context_t::DEBUGMASK_CARTESIAN`, To hide some tracking.
 2021-12-02 16:34:23 Fixed: groupTree_t::constructSlots()`, Forgot to sid-swap slots before lookup. 
 2021-12-02 14:33:55 Changed: `groupTree::addNormaliseNode()`, Better handling of group merging as effect of creating components.
