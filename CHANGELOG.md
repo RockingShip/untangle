@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 12:57:00 Fixed: `groupTree_t`, Allow `gid` to be zero.
 2021-12-01 11:54:06 Added: `glookup`, Forgot to display power.
 2021-12-01 00:50:02 Changed: `genpattern`, Optimised name construction for ``--text`.
 2021-11-30 15:25:41 Added: `glookup`.
@@ -38,7 +39,7 @@ TODO: genpattern list
 2021-11-16 21:06:51 Changed: `groupTree_t`, Be more node/gid aware.
 2021-11-16 20:43:38 Changed: `groupTree_t::constructSlots()`, Moved slot construction to a dedicated function.
 2021-11-13 15:59:25 Added: `groupTree_t::applySwapping()`, Apply signature based endpoint swapping.
-2021-11-13 15:59:25 Added: `groupTree_t::orphanLesser()`, Assist in choosing competing nodes during a group merge.
+2021-11-13 15:59:25 Added: `groupTree_t::orphanWorse()`, Assist in choosing competing nodes during a group merge.
 2021-11-13 15:59:25 Added: `groupTree_t::rebuildGroups()`, Resolve forward node references.
 2021-11-13 15:07:17 Added: `groupTree_t::expandSignature()`, Recreate node by applying/expanding it's signature.
 2021-11-11 12:02:35 Added: `groupTree_t::validateTree()`, Trees are starting to get complex. 

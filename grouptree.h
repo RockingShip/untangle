@@ -628,7 +628,7 @@ struct groupTree_t {
 	 * 
 	 * Add node to list
 	 */
-	inline void linkNode(uint32_t headId, uint32_t nodeId) {
+	inline void linkNode(uint32_t headId, uint32_t nodeId) const {
 
 		groupNode_t *pHead  = this->N + headId;
 		groupNode_t *pNode  = this->N + nodeId;
@@ -646,7 +646,7 @@ struct groupTree_t {
 	/*
 	 * @date 2021-11-10 00:38:00
 	 */
-	inline void unlinkNode(uint32_t nodeId) {
+	inline void unlinkNode(uint32_t nodeId) const {
 		groupNode_t *pNode = this->N + nodeId;
 
 		uint32_t    headId = pNode->prev;
@@ -676,7 +676,7 @@ struct groupTree_t {
 	 * 
 	 * todo: count the number of used `IDDELETED` and rebuild index when there are too many 
 	 */
-	inline uint32_t lookupNode(uint32_t sid, const uint32_t slots[]) {
+	inline uint32_t lookupNode(uint32_t sid, const uint32_t slots[]) const {
 		ctx.cntHash++;
 
 		// starting position
@@ -839,9 +839,9 @@ struct groupTree_t {
 	 * 
 	 * @date 2021-11-25 18:20:00
 	 * 
-	 * Arguments may be (oudated) nodes, however, gid needs to be up-to-date
+	 * Arguments may be (outdated) nodes, however, gid needs to be up-to-date
 	 */
-	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = 0, unsigned depth = 0) {
+	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = IBIT, unsigned depth = 0) {
 		depth++;
 		assert(depth < 30);
 
@@ -849,14 +849,16 @@ struct groupTree_t {
 		assert ((T & ~IBIT) < this->ncount);
 		assert ((F & ~IBIT) < this->ncount);
 
-		assert(gid == this->N[gid].gid);
+		assert(gid == IBIT || gid == this->N[gid].gid);
 
-		printf("%.*sQ=%u%s T=%u%s F=%u%s G=%u\n",
+		printf("%.*sQ=%u%s T=%u%s F=%u%s",
 		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 		       Q & ~IBIT, (Q & IBIT) ? "~" : "",
 		       T & ~IBIT, (T & IBIT) ? "~" : "",
-		       F & ~IBIT, (F & IBIT) ? "~" : "",
-		       gid);
+		       F & ~IBIT, (F & IBIT) ? "~" : "");
+		if (gid != IBIT)
+			printf(" G=%u", gid);
+		printf("\n");
 
 		/*
 	  	 * @date 2021-11-04 01:58:34
@@ -903,15 +905,18 @@ struct groupTree_t {
 		uint32_t Tu = T & ~IBIT;
 		uint32_t Ti = T & IBIT;
 
+// guard that T is not used directly		
+#define T @ 
+		
 		/*
 		 * use the latest lists
 		 */
 
-		while (this->N[Q].gid != Q)
+		while (Q != this->N[Q].gid)
 			Q = this->N[Q].gid;
-		while (this->N[Tu].gid != Tu)
+		while (Tu != this->N[Tu].gid)
 			Tu = this->N[Tu].gid;
-		while (this->N[F].gid != F)
+		while (F != this->N[F].gid)
 			F = this->N[F].gid;
 
 		/*
@@ -1075,7 +1080,7 @@ struct groupTree_t {
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
 
-			if (gid == 0 || gid == latest)
+			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
 			// merge groups lists
@@ -1086,23 +1091,29 @@ struct groupTree_t {
 			// `importGroup()` must make node up-to-date 	
 			assert(gid == this->N[nid].gid);
 
+			// return node
 			return nid;
 		}
 
 		/* 
-		 * When adding a new node to current group, check if it would be rejected by `addToCollection()`.
+		 * Before adding a new node to current group, check if it would be rejected (because it is worse than existing) by `addToCollection()`.
 		 */
-		if (gid != 0) {
+		if (gid != IBIT) {
+			// scan group for better sid
+			uint32_t hasBetter = IBIT;
 			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
 				const groupNode_t *pNode = this->N + id;
 
 				if (pNode->sid == tlSid) {
 					if (this->compare(id, tlSid, tlSlots) <= 0) {
-						// list has best or argument is duplicate 
-						return id;
+						// list has better or argument is duplicate 
+						hasBetter = id;
+						break;
 					}
 				}
 			}
+			if (hasBetter != IBIT)
+				return hasBetter;
 		}
 
 		/*
@@ -1173,8 +1184,22 @@ struct groupTree_t {
 				unsigned iF = F; do {
 					do {
 						/*
+						 * Analyse Q/T/F combo 
+						 */
+						
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+							// iterators must be in up-to-date lists
+							assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
+							assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
+							assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
+							assert(this->N[iQ].gid != gid);
+							assert(this->N[iTu].gid != gid);
+							assert(this->N[iF].gid != gid);
+						}
+
+						/*
 						 * Normalise (test for folding), when this happens collapse/invalidate the whole group and forward to the folded result.
-						 * Requires temporary Q/T/F because loop iterators might change 
+						 * Requires temporary Q/T/F because it might otherise change loop iterators. 
 						 */
 						uint32_t folded = IBIT; // indicate not-folded
 						uint32_t normQ, normTi, normTu, normF; 
@@ -1281,7 +1306,7 @@ struct groupTree_t {
 							
 							assert(folded >= this->nstart);
 							
-							if (gid == 0)
+							if (gid == IBIT)
 								return folded;
 							
 							importGroup(gid, folded, depth);
@@ -1299,23 +1324,24 @@ struct groupTree_t {
 
 						/*
 						 * @date 2021-11-16 16:22:03
-						 * To prevent a recursive loop because this candidate is a lesser alternative, test that first
-						 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is lesser than `ab^/[a bcd^^]`
+						 * To prevent a recursive loop because this candidate is a worse alternative, test that first
+						 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is worse than `ab^/[a bcd^^]`
 						 */
-						if (gid != 0) {
-							bool skip = false;
+						if (gid != IBIT) {
+							uint32_t hasBetter = IBIT;
 							for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
 								const groupNode_t *pNode = this->N + id;
 
-								if (pNode->sid == tlSid) {
+								if (pNode->sid == sid) {
 									if (this->compare(id, sid, finalSlots) <= 0) {
 										// list has best or argument is duplicate
-										skip = true;
+										hasBetter = id;
+										break;
 									}
 								}
 							}
-							if (skip)
-								continue; // a better alternative is already in the list
+							if (hasBetter != IBIT)
+								continue; // a better alternative is already in the list, silently ignore
 						}
 
 						/*
@@ -1344,9 +1370,9 @@ struct groupTree_t {
 						}
 
 						/*
-						 * It could be that groups were merged, outdating slots
+						 * It could be that groups were merged, update slots
 						 */
-						for (unsigned iSlot=0; iSlot<MAXSLOTS; iSlot++) {
+						for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 							uint32_t id = finalSlots[iSlot];
 							if (id == 0)
 								break;
@@ -1445,6 +1471,7 @@ struct groupTree_t {
 		// The detector must detect at least one pattern
 		assert(first1n9);
 		return first1n9;
+#undef T
 	}
 
 	/*
@@ -1489,7 +1516,7 @@ struct groupTree_t {
 		const signature_t *pSignature;
 
 		/*
-		 * Slot population as `fragmentTree_t` would do
+		 * Slot population as `groupTree_t` would do
 		 */
 
 		bool overflow = false;
@@ -1502,6 +1529,7 @@ struct groupTree_t {
 			assert(endpoint != 0);
 			
 			// get most up-to-date
+			assert (endpoint == this->N[endpoint].gid);
 			while (endpoint != this->N[endpoint].gid)
 				endpoint = this->N[endpoint].gid;
 
@@ -1521,6 +1549,7 @@ struct groupTree_t {
 			assert(endpoint != 0);
 			
 			// get most up-to-date
+			assert (endpoint == this->N[endpoint].gid);
 			while (endpoint != this->N[endpoint].gid)
 				endpoint = this->N[endpoint].gid;
 
@@ -1566,6 +1595,7 @@ struct groupTree_t {
 			assert(endpoint != 0);
 
 			// get most up-to-date
+			assert (endpoint == this->N[endpoint].gid);
 			while (endpoint != this->N[endpoint].gid)
 				endpoint = this->N[endpoint].gid;
 
@@ -1617,7 +1647,7 @@ struct groupTree_t {
 		 */
 
 		pSignature = db.signatures + pSecond->sidR;
-		const char *pTransformExtract = db.fwdTransformNames[pSecond->tidSlotR];
+		const char *pTransformExtract = db.fwdTransformNames[pSecond->tidExtract];
 
 		assert(nextSlot >= pSignature->numPlaceholder);
 
@@ -1674,6 +1704,9 @@ struct groupTree_t {
 
 		signature_t *pSignature = db.signatures + sid;
 
+		// group id must be latest
+		assert(gid == IBIT || gid == this->N[gid].gid);
+		
 		/*
 		 * init
 		 */
@@ -1681,7 +1714,7 @@ struct groupTree_t {
 		int      numStack = 0;
 		uint32_t nextNode = this->nstart;
 		uint32_t *pStack  = allocMap(); // evaluation stack
-		uint32_t *pMap    = allocMap(); // id of intermediates
+		uint32_t *pMap    = allocMap(); // node id of intermediates
 		uint32_t *pActive = allocVersion(); // collection of used id's
 
 		// bump versioned memory
@@ -1693,14 +1726,22 @@ struct groupTree_t {
 			thisVersion = ++mapVersionNr;
 		}
 
-		// add slot entries
+		// add slot entries, to detect endpoint collapses
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			uint32_t id = pSlots[iSlot];
 			if (id == 0)
 				break;
 
+			// update to latest
+			while (id != this->N[id].gid)
+				id = this->N[id].gid;
+				
 			pActive[id] = thisVersion;
 		}
+		
+		// add gid to detect short-circuit
+		if (gid != IBIT)
+			pActive[gid] = thisVersion;
 
 		/*
 		 * Load string
@@ -1842,6 +1883,9 @@ struct groupTree_t {
 			 */
 
 			// get latest group
+			assert (Q == this->N[Q].gid);
+			assert (Tu == this->N[Tu].gid);
+			assert (F == this->N[F].gid);
 			while (Q != this->N[Q].gid)
 				Q = this->N[Q].gid;
 			while (Tu != this->N[Tu].gid)
@@ -1993,21 +2037,28 @@ struct groupTree_t {
 				return IBIT;
 			}
 
-			uint32_t id;
+			uint32_t nid;
 			if (pattern[1]) {
-				id = addNormaliseNode(Q, Tu ^ Ti, F, 0, depth + 1);
+				nid = addNormaliseNode(Q, Tu ^ Ti, F, IBIT, depth + 1);
 			} else {
 				assert(numStack == 0);
-				id = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth + 1);
-			}
-			assert(id != db.SID_ZERO && id != db.SID_SELF);
 
-			// get latest
-			while (id != this->N[id].gid)
-				id = this->N[id].gid;
+				// NOTE: top-level, use same depth/indent as caller
+				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
+
+				// NOTE: last call, so no need to update gid
+			}
+
+			// update to latest
+			uint32_t latest = nid;
+			while (latest != this->N[latest].gid)
+				latest = this->N[latest].gid;
+
+			// The caller (c-product loop), already caught group collapses.
+			assert(latest != db.SID_ZERO && latest != db.SID_SELF);
 
 			// is it new
-			if (pActive[id] == thisVersion) {
+			if (pActive[latest] == thisVersion) {
 				// no
 //				assert(!"structure collapse");
 				freeMap(pStack);
@@ -2017,9 +2068,9 @@ struct groupTree_t {
 			}
 
 			// remember
-			pStack[numStack++] = id;
-			pMap[nextNode++] = id;
-			pActive[id] = thisVersion;
+			pStack[numStack++] = nid;
+			pMap[nextNode++]   = nid;
+			pActive[latest]    = thisVersion;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -2427,7 +2478,7 @@ struct groupTree_t {
 	 * @date 2021-11-05 03:09:35
 	 * 
 	 * Add a node to the group list
-	 * Create a new list if necessary (gid=0)
+	 * Create a new list if necessary (gid=IBIT)
 	 * Return id of list header 
 	 * 
 	 * Handle merging of lists if sit/slot combo already belongs to a different list
@@ -2447,13 +2498,13 @@ struct groupTree_t {
          * 
          * For final selection: nodes with highest layer and lowest slot entries
          * 
-         * if gid=0, create new group, otherwise add node to group
+         * if gid=IBIT, create new group, otherwise add node to group
          * return node id, which might change group
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
 	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
 
-		assert(gid == this->N[gid].gid);
+		assert(gid == IBIT || gid == this->N[gid].gid);
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert(MAXSLOTS == 9);
@@ -2466,6 +2517,15 @@ struct groupTree_t {
 			assert(pSlots[6] == this->N[pSlots[6]].gid);
 			assert(pSlots[7] == this->N[pSlots[7]].gid);
 			assert(pSlots[8] == this->N[pSlots[8]].gid);
+
+			assert(pSlots[1] == 0 || (pSlots[1] != pSlots[0]));
+			assert(pSlots[2] == 0 || (pSlots[2] != pSlots[0] && pSlots[2] != pSlots[1]));
+			assert(pSlots[3] == 0 || (pSlots[3] != pSlots[0] && pSlots[3] != pSlots[1] && pSlots[3] != pSlots[2]));
+			assert(pSlots[4] == 0 || (pSlots[4] != pSlots[0] && pSlots[4] != pSlots[1] && pSlots[4] != pSlots[2] && pSlots[4] != pSlots[3]));
+			assert(pSlots[5] == 0 || (pSlots[5] != pSlots[0] && pSlots[5] != pSlots[1] && pSlots[5] != pSlots[2] && pSlots[5] != pSlots[3] && pSlots[5] != pSlots[4]));
+			assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
+			assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
+			assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
 		}
 
 		uint32_t ix = this->lookupNode(sid, pSlots);
@@ -2479,17 +2539,20 @@ struct groupTree_t {
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
 
-			if (gid == 0 || gid == latest)
+			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
 			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
 
 			// merge groups lists
+			// NOTE: `depth=0` is considered an unexpected event: `updateGroup()` creating an updated node which already exists.
+			assert(depth != 0);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 			importGroup(gid, latest, depth);
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			// return original, which should have relocated to a different group
+			assert(gid == this->N[nid].gid);
 			return nid;
 		}
 
@@ -2497,10 +2560,10 @@ struct groupTree_t {
 		 * Optimise similars already in group list
 		 */
 		
-		if (gid != 0) {
+		if (gid != IBIT) {
 			/*
 			 * Check if sid already in group list
-			 * If present: Lowest gets onto the list, highest gets orphaned
+			 * If present: better gets onto the list, worse gets orphaned
 			 */
 			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
 				const groupNode_t *pNode = this->N + id;
@@ -2509,14 +2572,13 @@ struct groupTree_t {
 					assert(pNode->sid != db.SID_SELF);
 
 					/*
-					 * Choose the lowest of the two.
+					 * Which is better/worse
 					 */
 					int cmp = this->compare(id, sid, pSlots);
 					assert(cmp != 0);
 
 					if (cmp < 0) {
-						// list has lowest
-						// rollback is o avoid newly created node from being orphaned 
+						// list has better
 						return id;
 					}
 
@@ -2529,7 +2591,7 @@ struct groupTree_t {
 		 * Optionally create new group list plus header 
 		 */
 
-		if (gid == 0) {
+		if (gid == IBIT) {
 			/*
 			 * Start new group, never add SID_SELF nodes to index
 			 */
@@ -2651,7 +2713,7 @@ struct groupTree_t {
 		for (uint32_t iNode = this->N[oldest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode = this->N + iNode;
 
-			if (!orphanLesser(newest, pNode->sid, pNode->slots)) {
+			if (orphanWorse(newest, pNode->sid, pNode->slots) != IBIT) {
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				linkNode(this->N[newest].prev, iNode);
@@ -2884,32 +2946,32 @@ struct groupTree_t {
 	 * If the argument is found and worse, orphan it and return 0
 	 * If the argument is found and better return node id
 	 *
-	 *  if (orphanLesser(candidate) == 0)
+	 *  if (orphanWorse(candidate) == IBIT)
 	 *     ignoreCandidate();
 	 */
-	uint32_t orphanLesser(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
+	uint32_t orphanWorse(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
 
-		for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
-			const groupNode_t *pNode = this->N + id;
+		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			const groupNode_t *pNode = this->N + iNode;
 
 			if (pNode->sid == sid) {
 				/*
 				 * Choose the lowest of the two.
 				 */
-				int cmp = this->compare(id, sid, pSlots);
+				int cmp = this->compare(iNode, sid, pSlots);
 
 				if (cmp <= 0) {
 					// list has best or self 
-					return id;
+					return iNode;
 				}
 
 				// list has worse, orphan it
-				unlinkNode(id);
-				return 0;
+				unlinkNode(iNode);
+				return IBIT;
 			}
 		}
 
-		return 0;
+		return IBIT;
 	}
 
 	/*
@@ -2938,11 +3000,12 @@ struct groupTree_t {
 					bool needSwap = false;
 
 					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) > 0) {
+						int cmp = this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']);
+						if (cmp > 0) {
 							needSwap = true;
 							break;
 						}
-						if (this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']) < 0) {
+						if (cmp < 0) {
 							needSwap = false;
 							break;
 						}
@@ -2953,7 +3016,6 @@ struct groupTree_t {
 
 						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
 							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];
-
 						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
 							pSlots[i] = newSlots[i];
 
