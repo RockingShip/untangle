@@ -855,6 +855,10 @@ struct groupTree_t {
 	 * @date 2021-11-25 18:20:00
 	 * 
 	 * Arguments may be (outdated) nodes, however, gid needs to be up-to-date
+	 * 
+	 * @date 2021-11-30 22:49:34
+	 * 
+	 * Any folding/collapsing should occur as a side effect of merging groups.
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = IBIT, unsigned depth = 0) {
 		depth++;
@@ -1333,10 +1337,17 @@ struct groupTree_t {
 								}
 							}
 						}
+
+						/*
+						 * Folding implies a general node collapse into one of its components
+						 * This collapses the group as whole
+						 */
 						if (folded != IBIT) {
+							// folded to one of the iterators or zero.
+							
 							printf("FOLD %u %u\n", gid, folded);
 
-							assert(folded >= this->nstart);
+							assert(folded >= this->nstart); // todo: this should trigger but doesn't
 
 							uint32_t latest = folded;
 							while (latest != this->N[latest].gid)
@@ -1441,13 +1452,26 @@ struct groupTree_t {
 						 * This might (and most likely will) create many duplicates.
 						 */
 
+						uint32_t oldNumExpandMerged = this->numGroupMerged;
+
 						if (db.signatures[sid].size > 1) {
 							uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
+//							uint32_t expand = expandMember(sid, finalSlots, gid, depth);
 							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 							// did something fold
-							if (expand == IBIT)
-								continue; // yes, candidate severely outdated, silently ignore
+							if (expand == IBIT) {
+								// iterators should notice the collapse and restart with better alternatives 
+								// NOTE: if assert triggers, then current group should basically restart, possibly salvaging existing entries. 
+								if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid)
+									assert(0);
+
+								// group merging/folding might change current gid
+								while (gid != this->N[gid].gid)
+									gid = this->N[gid].gid;
+								
+								continue; // yes, silently ignore (and restart)
+							}
 
 							// update gid	
 							gid = expand;
@@ -1458,17 +1482,39 @@ struct groupTree_t {
 						/*
 						 * It could be that groups were merged, update slots
 						 */
-						for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-							uint32_t id = finalSlots[iSlot];
-							if (id == 0)
-								break;
+						if (oldNumExpandMerged != this->numGroupMerged) {
+							bool fold = false;
 
-							if (id != this->N[id].gid) {
-								while (id != this->N[id].gid)
-									id = this->N[id].gid;
-								finalSlots[iSlot] = id;
+							for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+								uint32_t id = finalSlots[iSlot];
+								if (id == 0)
+									break;
+
+								if (id != this->N[id].gid) {
+									assert(!"this should not happen");
+									while (id != this->N[id].gid)
+										id = this->N[id].gid;
+									finalSlots[iSlot] = id;
+								}
+
+								if (id == gid) {
+									assert(!"this should not happen");
+									fold = true;
+								}
 							}
 
+							// todo: should other nodes also be pruned?
+							/*
+							 * gid=`aabcd+++2?`
+							 * candidate = `(abcd+++) (bcd++) +`, which folds
+							 * candidate hold no information and should be silently ignored
+							 * in the process, it was detected that `aabcd+++2?`==`abcd+++`
+							 * however, now the `T` list equals gid, rendering all other candidates non-info.
+							 * 
+							 */
+							assert(!"test if/how happens"); // use pruneGroup
+							if (fold)
+								continue; // todo: should be `return` 
 						}
 
 						/*
@@ -1572,6 +1618,11 @@ struct groupTree_t {
 			iQ = this->N[iQ].next;
 		} while (iQ != this->N[iQ].gid);
 
+		/*
+		 * If anything got merged, prune stale nodes
+		 */
+		if (oldNumGroupMerged != this->numGroupMerged)
+			pruneGroup(gid);
 		
 		/*
 		 * Test if group merging triggers an update  

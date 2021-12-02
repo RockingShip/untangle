@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 14:33:55 Changed: `groupTree::addNormaliseNode()`, Better handling of group merging as effect of creating components.
 2021-12-02 14:30:01 Changed: `groupTree::addNormaliseNode()`, C-product iterators better detect group changes.
 2021-12-02 14:25:19 Added: `groupTree::importGroup()`, Forward reference friendly.
 2021-12-02 14:10:46 Added: `groupTree::pruneGroup()`, And renames/simplified `rebuildGroup()` to `updateGroup()`.
