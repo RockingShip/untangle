@@ -1737,6 +1737,10 @@ struct groupTree_t {
 		}
 		slotsT[pSignature->numPlaceholder] = 0;
 
+		// order slots
+		if (pSignature->swapId)
+			applySwapping(pSignature, slotsT);
+
 		// test for slot overflow
 		if (overflow)
 			return 0;
@@ -1782,6 +1786,10 @@ struct groupTree_t {
 			slotsF[iSlot] = (char) slotMap[endpoint];
 		}
 		slotsF[pSignature->numPlaceholder] = 0;
+
+		// order slots
+		if (pSignature->swapId)
+			applySwapping(pSignature, slotsF);
 
 		// test for slot overflow
 		if (overflow)
@@ -2048,9 +2056,6 @@ struct groupTree_t {
 			 */
 
 			// get latest group
-			assert (Q == this->N[Q].gid);
-			assert (Tu == this->N[Tu].gid);
-			assert (F == this->N[F].gid);
 			while (Q != this->N[Q].gid)
 				Q = this->N[Q].gid;
 			while (Tu != this->N[Tu].gid)
@@ -3164,6 +3169,59 @@ struct groupTree_t {
 
 					if (needSwap) {
 						uint32_t newSlots[MAXSLOTS];
+
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];
+						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
+							pSlots[i] = newSlots[i];
+
+						changed = true;
+					}
+				}
+			} while (changed);
+		}
+	}
+
+	/*
+	 * @date 2021-12-02 16:12:21
+	 * 
+	 * Apply signature based endpoint swapping to slots.
+	 * `char` version.
+	 */
+	void applySwapping(const signature_t *pSignature, char *pSlots) {
+		/*
+		 * Apply endpoint swapping
+		 */
+		if (pSignature->swapId) {
+			swap_t *pSwap = db.swaps + pSignature->swapId;
+
+			bool changed;
+			do {
+				changed = false;
+
+				for (unsigned iSwap = 0; iSwap < swap_t::MAXENTRY && pSwap->tids[iSwap]; iSwap++) {
+					unsigned tid = pSwap->tids[iSwap];
+
+					// get the transform string
+					const char *pTransformSwap = db.fwdTransformNames[tid];
+
+					// test if swap needed
+					bool needSwap = false;
+
+					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
+						int cmp = (int) pSlots[i] - (int) pSlots[pTransformSwap[i] - 'a'];
+						if (cmp > 0) {
+							needSwap = true;
+							break;
+						}
+						if (cmp < 0) {
+							needSwap = false;
+							break;
+						}
+					}
+
+					if (needSwap) {
+						char newSlots[MAXSLOTS];
 
 						for (unsigned i = 0; i < pSignature->numPlaceholder; i++)
 							newSlots[i] = pSlots[pTransformSwap[i] - 'a'];

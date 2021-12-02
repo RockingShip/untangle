@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 16:34:23 Fixed: groupTree_t::constructSlots()`, Forgot to sid-swap slots before lookup. 
 2021-12-02 14:33:55 Changed: `groupTree::addNormaliseNode()`, Better handling of group merging as effect of creating components.
 2021-12-02 14:30:01 Changed: `groupTree::addNormaliseNode()`, C-product iterators better detect group changes.
 2021-12-02 14:25:19 Added: `groupTree::importGroup()`, Forward reference friendly.
