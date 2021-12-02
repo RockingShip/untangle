@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 14:10:46 Added: `groupTree::pruneGroup()`, And renames/simplified `rebuildGroup()` to `updateGroup()`.
 2021-12-02 13:21:03 Added: `groupNode_t`, Add power for minimal layer requirements. 
 2021-12-02 13:12:38 Changed: `groupTree_t::validateTree()`, Allow forward references.
 2021-12-02 12:57:00 Fixed: `groupTree_t`, Allow `gid` to be zero.
@@ -42,7 +43,7 @@ TODO: genpattern list
 2021-11-16 20:43:38 Changed: `groupTree_t::constructSlots()`, Moved slot construction to a dedicated function.
 2021-11-13 15:59:25 Added: `groupTree_t::applySwapping()`, Apply signature based endpoint swapping.
 2021-11-13 15:59:25 Added: `groupTree_t::orphanWorse()`, Assist in choosing competing nodes during a group merge.
-2021-11-13 15:59:25 Added: `groupTree_t::rebuildGroups()`, Resolve forward node references.
+2021-11-13 15:59:25 Added: `groupTree_t::updateGroups()`, Resolve forward node references.
 2021-11-13 15:07:17 Added: `groupTree_t::expandSignature()`, Recreate node by applying/expanding it's signature.
 2021-11-11 12:02:35 Added: `groupTree_t::validateTree()`, Trees are starting to get complex. 
 2021-11-11 12:02:35 Changed: `groupTree_t::addNormalisedNode()`, Returns node id, which caller should promote to group id. 

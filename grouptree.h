@@ -216,6 +216,8 @@ struct groupTree_t {
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
+	
+	uint32_t                 numGroupMerged;	// global counter for group merges, to simplify detection of changes.	
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -271,7 +273,9 @@ struct groupTree_t {
 		// slots
 		slotMap(NULL),
 		slotVersion(NULL),
-		slotVersionNr(1)
+		slotVersionNr(1),
+		//
+		numGroupMerged(0)
 	{
 	}
 
@@ -320,7 +324,9 @@ struct groupTree_t {
 		// slots
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
-		slotVersionNr(1)
+		slotVersionNr(1),
+		//
+		numGroupMerged(0)
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -1092,8 +1098,14 @@ struct groupTree_t {
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
+			uint32_t oldNumGroupMerged = this->numGroupMerged;
+			
 			// merge groups lists
 			importGroup(gid, latest, depth);
+
+			// ripple effect of merging
+			if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+				updateGroups();
 
 			// `importGroup()` must make node up-to-date 	
 			assert(gid == this->N[nid].gid);
@@ -1186,6 +1198,17 @@ struct groupTree_t {
 		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
 
+		/*
+		 * Save group merge counter.
+		 * Creating intermediates will introduce forward references.
+		 * If value changed after loops AND top-level call, then resolve all forwards 
+		 */
+		uint32_t oldNumGroupMerged = this->numGroupMerged;
+		
+		/*
+		 * First 1n9 should be the one representing Q/T/F.
+		 * It is possible that group merging might consider this a worse alternative and orphan it.
+		 */
 		uint32_t first1n9 = 0;
 
 		unsigned iQ  = Q;  do {
@@ -1315,11 +1338,33 @@ struct groupTree_t {
 
 							assert(folded >= this->nstart);
 
-							if (gid == IBIT)
-								return folded;
+							uint32_t latest = folded;
+							while (latest != this->N[latest].gid)
+								latest = this->N[latest].gid;
 
-							importGroup(gid, folded, depth);
+							if (gid == IBIT || gid == latest) {
+								// Test if group merging triggers an update
+								if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+									updateGroups();
+
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+								// groups are compatible
+								return folded;
+							}
+
+							// merge and update
+							importGroup(gid, latest, depth);
+
+							if (depth == 1 && oldNumGroupMerged != this->numGroupMerged) {
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+								updateGroups();
+							}
+
 							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+							// `importGroup()` must make node up-to-date 	
+							assert(gid == this->N[folded].gid);
 
 							return folded;
 						}
@@ -1332,7 +1377,35 @@ struct groupTree_t {
 						uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots, &power);
 
 						if (sid == 0)
-							continue; // combo not found
+							continue; // combo not found, silently ignore
+
+						/*
+						 * Test for an endpoint collapse
+						 */
+						if (sid == db.SID_ZERO || sid == db.SID_SELF) {
+							if (gid != IBIT) {
+								uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
+
+								// orphan the group as whole
+								assert(gid == this->N[gid].gid);
+								this->N[gid].gid = endpoint;
+
+								// group becomes endpoint
+								gid = endpoint;
+
+								// consider this group merging
+								this->numGroupMerged++;
+							}
+
+							if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+								updateGroups();
+
+							// merge and update
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+							assert(gid == this->N[gid].gid);
+							return gid;
+						}
 
 						/*
 						 * @date 2021-11-16 16:22:03
@@ -1416,7 +1489,7 @@ struct groupTree_t {
 
 						if (this->ncount != oldCount) {
 							// if (ctx.opt_debug & ctx.DEBUG_ROW)
-							printf("%.*sgid:%u\tnid:%u\tQ:%u\tT:%u\tF:%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr:%u\n",
+							printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
 							       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 							       gid, nid,
 							       iQ, iTu, iF,
@@ -1485,6 +1558,13 @@ struct groupTree_t {
 
 			iQ = this->N[iQ].next;
 		} while (iQ != this->N[iQ].gid);
+
+		
+		/*
+		 * Test if group merging triggers an update  
+		 */
+		if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+			updateGroups();
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -1657,19 +1737,11 @@ struct groupTree_t {
 		patternSecond_t *pSecond = db.patternsSecond + idSecond;
 
 		/*
-		 * test for collapse, (result is `0n9`)
-		 * NOTE: it seems that `expandSignature()` mitigates this scenario 
-		 */
-		if (pSecond->sidR == db.SID_ZERO) {
-			assert(!"SID_ZERO");
-		} else if (pSecond->sidR == db.SID_SELF) {
-			assert(!"SID_SELF");
-		}
-
-		/*
 		 * @date 2021-11-05 02:42:24
 		 * 
 		 * Fifth step: Extract result out of `slotsR[]` and apply signature based endpoint swapping
+		 * 
+		 * NOTE: sid can also be SID_ZERO/SID_SELF
 		 */
 
 		pSignature = db.signatures + pSecond->sidR;
@@ -2762,7 +2834,7 @@ struct groupTree_t {
 		 * rebuild groups to resolve forward references 
 		 */
 		// todo: delay rebuilding till the very end
-		rebuildGroups();
+		updateGroups();
 
 		// rebuilding creates new groups 
 		while (newest != this->N[newest].gid)
@@ -2771,7 +2843,7 @@ struct groupTree_t {
 		// display group
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
-			printf("%.*sG %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr:%u\n",
+			printf("%.*sG %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
 			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 			       pNode->gid, iNode,
 			       pNode->sid, db.signatures[pNode->sid].name,
@@ -2785,183 +2857,168 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-12-01 17:51:02
+	 * 
+	 * Prune a group.
+	 * Update all nodes to latest group id, remove all nodes that fold.
+	 * NOTE: does not detect endpoint collapses.
+	 * 
+	 * return `true` is any node does a forward reference
+	 */
+	bool pruneGroup(uint32_t iGroup) {
+
+		bool     groupForward = false;
+		uint32_t *pVersion    = allocVersion();
+
+		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			const groupNode_t *pNode = this->N + iNode;
+
+			printf("P gid=%u\tnid=%u\t%u:%s/[",
+			       pNode->gid, iNode,
+			       pNode->sid, db.signatures[pNode->sid].name);
+
+			bool nodeOutdated = false; // group is outdated, and gets renewed
+			bool nodeForward = false; // node does forward reference
+			bool nodeFolded = false; // node has folded, and get removed
+			uint32_t newSlots[MAXSLOTS]; // updated slots
+
+			uint32_t thisVersion = ++mapVersionNr;
+			assert(thisVersion != 0);
+			pVersion[iGroup] = thisVersion;
+
+			// check node
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+				uint32_t id = pNode->slots[iSlot];
+				if (id == 0)
+					break;
+
+				if (iSlot != 0)
+					putchar(' '); // delimiter
+				printf("%u", id);
+
+				if (id != this->N[id].gid) {
+					if (!nodeOutdated) {
+						// prepare `newSlots`
+						for (unsigned j = 0; j < iSlot; j++)
+							newSlots[j] = pNode->slots[j];
+						for (unsigned j = iSlot; j < MAXSLOTS; j++)
+							newSlots[j] = 0;
+						nodeOutdated = true;
+					}
+
+					// get latest
+					while (id != this->N[id].gid)
+						id = this->N[id].gid;
+
+					printf("<outdated:new=%u>", id);
+
+					newSlots[iSlot] = id;
+				}
+
+				if (pVersion[id] == thisVersion) {
+					// node has folded
+					nodeFolded = true;
+					printf("<fold>");
+				} else if (id > iGroup) {
+					// node has forward reference 
+					nodeForward = true;
+					printf("<forward>");
+				}
+			}
+
+			printf("]");
+
+			if (nodeFolded) {
+				// orphan if folded
+				unlinkNode(iNode);
+				printf("<orphaned>");
+			} else if (nodeOutdated) {
+				// update if changed
+				// orphan old first so it will be used to determine better/worse
+				unlinkNode(iNode);
+				// add updated node
+				// NOTE: `depth` is only used when node already exists (which it should not)
+				assert(pNode->gid == iGroup);
+				// todo: maybe `addNode()` is a faster aternative
+				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/0);
+				printf("<new=%u>", newId);
+				assert(this->N[newId].gid == iGroup); // addToCollection might object
+			}
+			if (!nodeFolded && nodeForward) {
+				// node is active and does a forward reference
+				groupForward = true;
+			}
+
+			printf(" pwr=%u\n", pNode->power);
+		}
+
+		freeVersion(pVersion);
+		return groupForward;
+	}
+
+	/*
 	 * @date 2021-11-11 23:19:34
 	 * 
 	 * Rebuild groups that have nodes that have forward references
 	 */
-	void rebuildGroups(uint32_t forceGid = 0) {
+	void updateGroups(void) {
 
-		if (forceGid)
-			printf("REBUILD %u\n", forceGid);
-		else
-			printf("CHECK/REBUILD\n");
+		printf("UPDATE\n");
+
+
+		int loopCount = 0; // simple loop detection
 
 		/*
 		 * Walk through tree and search for outdated lists
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
+		 * NOTE: the dataset has been specifically designed/created to avoid loops, so the `for` will reach an end-condition 
 		 */
 		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			// find group headers
 			if (this->N[iGroup].gid == iGroup) {
 
-				// is list up-to-date
-				bool outdated = false;
+				// prune the group
+				bool hasForward = pruneGroup(iGroup);
 
-				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					const groupNode_t *pNode = this->N + iNode;
-
-					printf("C %u\t%u\t%u:%s/[",
-					       pNode->gid, iNode,
-					       pNode->sid, db.signatures[pNode->sid].name);
-
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-						uint32_t id = pNode->slots[iSlot];
-						if (id == 0)
-							break;
-
-						if (iSlot != 0)
-							putchar(' '); // delimiter
-						printf("%u", id);
-
-						if (id != this->N[id].gid) {
-							outdated = true;
-							if (id == forceGid)
-								printf("<forced:new=%u>", this->N[id].gid);
-							else
-								printf("<outdated:new=%u>", this->N[id].gid);
-						}
-					}
-
-					putchar(']');
-
-					if (iGroup == forceGid) {
-						outdated = true;
-						printf("<forced>");
-					}
-
-					putchar('\n');
-
-					if (outdated)
-						break;
-				}
-
-				/*
-				 * Group list is outdated, update
-				 */
-				if (outdated) {
+				// relocate to new group if it had a forward reference
+				if (hasForward) {
 					/*
 					 * create new list header
 					 */
-					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
+					uint32_t selfSlots[MAXSLOTS] = {0}; // other slots are zeroed
 					assert(selfSlots[MAXSLOTS - 1] == 0);
 
 					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 					this->N[newGid].gid = newGid;
+					selfSlots[0] = newGid;
 
 					/*
-					 * Walk and update the list, relocating or orphaning nodes
+					 * Walk and update the list
 					 */
 
 					printf("REBUILD %u->%u\n", iGroup, newGid);
 
 					// breakpoint after displaying above line
-					static int loopCount;
 					if (loopCount++ > 20) {
 						printf("LOOP\n");
 						validateTree(0);
 						exit(1);
 					}
 
+					// set to new group
+					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next)
+						this->N[iNode].gid = newGid;
 
-					char delimiter = 0;
-
-					printf("nodes:");
-					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-						groupNode_t *pNode    = this->N + iNode;
-						bool        nodeDated = false;
-
-						for (unsigned iSlot = 0; iSlot < MAXSLOTS && !nodeDated; iSlot++) {
-							uint32_t id = pNode->slots[iSlot];
-							if (id == 0)
-								break;
-
-							if (id != this->N[id].gid) {
-								nodeDated = true;
-								break;
-							}
-						}
-
-						// display delimiter
-						if (delimiter)
-							putchar(delimiter);
-						delimiter = ',';
-
-						if (nodeDated) {
-							// create new node
-							uint32_t newSlots[MAXSLOTS] = {0}; // other slots are zeroed
-							assert(newSlots[MAXSLOTS - 1] == 0);
-
-							for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-								uint32_t id = pNode->slots[iSlot];
-								if (id == 0)
-									break;
-
-								while (id != this->N[id].gid)
-									id = this->N[id].gid;
-
-								newSlots[iSlot] = id;
-							}
-
-							// create new replacement
-							uint32_t newNid = this->newNode(pNode->sid, newSlots, /*power*/ 0);
-							this->N[newNid].gid =  newGid;
-
-							// add to list
-							linkNode(this->N[newGid].prev, newNid);
-
-							// add to index
-							uint32_t ix = this->lookupNode(pNode->sid, newSlots);
-							assert(ix != 0);
-
-							this->N[newNid].hashIX     = ix;
-							this->nodeIndex[ix]        = newNid;
-							this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-							// let old node forward to replacement, which will forward to replacement header
-							pNode->gid = newNid;
-
-							printf("%u->%u", iNode, newNid);
-						} else {
-							// remember position next node in list
-							uint32_t iNextNode = pNode->next;
-
-							// unlink old node (invalidating next position)
-							unlinkNode(iNode);
-
-							// link to new list
-							linkNode(this->N[newGid].prev, iNode);
-
-							// part of new list
-							pNode->gid = newGid;
-
-							printf("%u", iNode);
-
-							// reposition
-							iNode = this->N[iNextNode].prev;
-						}
-					}
-
-					printf("\n"); // end-of-list
-
-					/*
-					 * Let old and head (containing all the orphans) forward to new 
-					 */
+					// let current group forward to new
 					this->N[iGroup].gid = newGid;
+					
+					// bump counter
+					this->numGroupMerged++;
 				}
 			}
 		}
 
-		printf("/REBUILD\n");
+		printf("/UPDATE\n");
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 	}
