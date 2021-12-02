@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 14:25:19 Added: `groupTree::importGroup()`, Forward reference friendly.
 2021-12-02 14:10:46 Added: `groupTree::pruneGroup()`, And renames/simplified `rebuildGroup()` to `updateGroup()`.
 2021-12-02 13:21:03 Added: `groupNode_t`, Add power for minimal layer requirements. 
 2021-12-02 13:12:38 Changed: `groupTree_t::validateTree()`, Allow forward references.

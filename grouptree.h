@@ -2732,9 +2732,8 @@ struct groupTree_t {
 	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
 		assert(oldest >= this->nstart);
-		assert(newest > oldest);
-		assert(this->N[newest].gid == newest);
-		assert(this->N[oldest].gid == oldest);
+		assert(newest == this->N[newest].gid);
+		assert(oldest == this->N[oldest].gid);
 
 		/*
 		 * Flood-fill who uses oldest
@@ -2779,8 +2778,9 @@ struct groupTree_t {
 		}
 
 		/*
-		 * Orphan all references to older
+		 * Orphan all nodes with references to older (they now contain non-info)
 		 */
+		bool orphanedAll = true;
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode = this->N + iNode;
 
@@ -2801,7 +2801,19 @@ struct groupTree_t {
 				unlinkNode(iNode);
 				pNode->gid = newest;
 				iNode = prevId;
+			} else {
+				orphanedAll = false;
 			}
+		}
+
+		freeVersion(pVersion);
+
+		/*
+		 * If everything was orphaned, then group became redundant
+		 */
+		if (orphanedAll) {
+			this->N[newest].gid = oldest;
+			return oldest;
 		}
 
 		/*
@@ -2810,7 +2822,8 @@ struct groupTree_t {
 		for (uint32_t iNode = this->N[oldest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode = this->N + iNode;
 
-			if (orphanWorse(newest, pNode->sid, pNode->slots) != IBIT) {
+			if (orphanWorse(newest, pNode->sid, pNode->slots) == IBIT) {
+				// node is better
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				linkNode(this->N[newest].prev, iNode);
@@ -2824,21 +2837,10 @@ struct groupTree_t {
 		 */
 		this->N[oldest].gid = newest;
 
-		freeVersion(pVersion);
 
 		printf("%.*sMERGE %u -> %u\n",
 		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 		       oldest, newest);
-
-		/*
-		 * rebuild groups to resolve forward references 
-		 */
-		// todo: delay rebuilding till the very end
-		updateGroups();
-
-		// rebuilding creates new groups 
-		while (newest != this->N[newest].gid)
-			newest = this->N[newest].gid;
 
 		// display group
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
