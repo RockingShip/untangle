@@ -79,6 +79,14 @@ struct groupNode_t {
 	 * Unused entries should always be zero.
 	 */
 	uint32_t slots[MAXSLOTS];
+
+	/*
+	 * The size reduction of the database lookup.  
+	 * `pattern.size - signature.size `
+	 */
+	uint32_t power;
+
+
 };
 
 /*
@@ -720,7 +728,7 @@ struct groupTree_t {
 	 *
 	 * Create a new node
 	 */
-	inline uint32_t newNode(uint32_t sid, const uint32_t slots[]) {
+	inline uint32_t newNode(uint32_t sid, const uint32_t slots[], uint32_t power) {
 		uint32_t nid = this->ncount++;
 
 		assert(nid < maxNodes);
@@ -752,6 +760,7 @@ struct groupTree_t {
 		pNode->prev = nid;
 		pNode->hashIX = 0xffffffff;
 		pNode->sid    = sid;
+		pNode->power  = power;
 
 		pNode->slots[0] = slots[0];
 		pNode->slots[1] = slots[1];
@@ -1319,7 +1328,8 @@ struct groupTree_t {
 						 * Build slots and lookup signature
 						 */
 						uint32_t finalSlots[MAXSLOTS];
-						uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots);
+						uint32_t power;
+						uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots, &power);
 
 						if (sid == 0)
 							continue; // combo not found
@@ -1394,7 +1404,7 @@ struct groupTree_t {
 
 						uint32_t oldCount = this->ncount;
 
-						uint32_t nid = addToCollection(sid, finalSlots, gid, depth);
+						uint32_t nid = addToCollection(sid, finalSlots, gid, power, depth);
 						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 						assert(nid != IBIT);
@@ -1406,12 +1416,13 @@ struct groupTree_t {
 
 						if (this->ncount != oldCount) {
 							// if (ctx.opt_debug & ctx.DEBUG_ROW)
-							printf("%.*sgid:%u\tnid:%u\tQ:%u\tT:%u\tF:%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+							printf("%.*sgid:%u\tnid:%u\tQ:%u\tT:%u\tF:%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr:%u\n",
 							       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 							       gid, nid,
 							       iQ, iTu, iF,
 							       sid, db.signatures[sid].name,
-							       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8]);
+							       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
+							       power);
 						}
 
 						// remember first `1n9` (which should always be the first combo created)
@@ -1496,7 +1507,7 @@ struct groupTree_t {
 	 * Ti must be 0/IBIT and may flip within this function
 	 * Return sid+pFinal or 0 if no match found
 	 */
-	uint32_t constructSlots(const groupNode_t *pNodeQ, uint32_t Ti, const groupNode_t *pNodeT, const groupNode_t *pNodeF, uint32_t *pFinal) {
+	uint32_t constructSlots(const groupNode_t *pNodeQ, uint32_t Ti, const groupNode_t *pNodeT, const groupNode_t *pNodeF, uint32_t *pFinal, uint32_t *pPower) {
 
 		/*
 		 * @date 2021-11-05 01:32:20
@@ -1682,6 +1693,9 @@ struct groupTree_t {
 		 */
 		if (pSignature->swapId)
 			applySwapping(pSignature, pFinal);
+		
+		// don't forget power
+		*pPower = pSecond->power;
 
 		return pSecond->sidR;
 	}
@@ -2515,7 +2529,7 @@ struct groupTree_t {
          * return node id, which might change group
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
-	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, unsigned depth) {
+	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, uint32_t power, unsigned depth) {
 
 		assert(gid == IBIT || gid == this->N[gid].gid);
 
@@ -2609,7 +2623,7 @@ struct groupTree_t {
 			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
-			gid = this->newNode(db.SID_SELF, selfSlots);
+			gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 			this->N[gid].gid = gid;
 		}
 
@@ -2618,7 +2632,7 @@ struct groupTree_t {
 		 */
 
 		// create node
-		nid = this->newNode(sid, pSlots);
+		nid = this->newNode(sid, pSlots, power);
 		groupNode_t *pNode = this->N + nid;
 
 		// add to list, keep it simple, SID_SELF is always first of list
@@ -2754,13 +2768,15 @@ struct groupTree_t {
 		while (newest != this->N[newest].gid)
 			newest = this->N[newest].gid;
 
+		// display group
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
-			printf("%.*sM %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
+			printf("%.*sG %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr:%u\n",
 			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 			       pNode->gid, iNode,
 			       pNode->sid, db.signatures[pNode->sid].name,
-			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
+			       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
+			       pNode->power);
 		}
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
@@ -2839,7 +2855,7 @@ struct groupTree_t {
 					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
 					assert(selfSlots[MAXSLOTS - 1] == 0);
 
-					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots);
+					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 					this->N[newGid].gid = newGid;
 
 					/*
@@ -2897,7 +2913,7 @@ struct groupTree_t {
 							}
 
 							// create new replacement
-							uint32_t newNid = this->newNode(pNode->sid, newSlots);
+							uint32_t newNid = this->newNode(pNode->sid, newSlots, /*power*/ 0);
 							this->N[newNid].gid =  newGid;
 
 							// add to list

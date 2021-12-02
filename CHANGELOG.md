@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-02 13:21:03 Added: `groupNode_t`, Add power for minimal layer requirements. 
 2021-12-02 13:12:38 Changed: `groupTree_t::validateTree()`, Allow forward references.
 2021-12-02 12:57:00 Fixed: `groupTree_t`, Allow `gid` to be zero.
 2021-12-01 11:54:06 Added: `glookup`, Forgot to display power.
