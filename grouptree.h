@@ -870,14 +870,16 @@ struct groupTree_t {
 
 		assert(gid == IBIT || gid == this->N[gid].gid);
 
-		printf("%.*sQ=%u%s T=%u%s F=%u%s",
-		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-		       Q & ~IBIT, (Q & IBIT) ? "~" : "",
-		       T & ~IBIT, (T & IBIT) ? "~" : "",
-		       F & ~IBIT, (F & IBIT) ? "~" : "");
-		if (gid != IBIT)
-			printf(" G=%u", gid);
-		printf("\n");
+		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
+			printf("%.*sQ=%u%s T=%u%s F=%u%s",
+			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+			       Q & ~IBIT, (Q & IBIT) ? "~" : "",
+			       T & ~IBIT, (T & IBIT) ? "~" : "",
+			       F & ~IBIT, (F & IBIT) ? "~" : "");
+			if (gid != IBIT)
+				printf(" G=%u", gid);
+			printf("\n");
+		}
 
 		/*
 	  	 * @date 2021-11-04 01:58:34

@@ -111,6 +111,7 @@ struct context_t {
 		DEBUGFLAG_COMPARE           = 0,	// Display the intermediate steps in `baseTree_t::compare()`
 		DEBUGFLAG_REWRITE           = 1,	// Display the intermediate steps in `baseTree_t::rewriteNode()`
 		DEBUGFLAG_EXPLAIN           = 2,	// Display the intermediate steps in `baseTree_t::addNormaliseNode()`
+		DEBUGFLAG_CARTESIAN         = 3,	// Display the raw Cartesian products.
 
 		// un-common or internal flags go from high to low
 		DEBUGFLAG_GENERATOR_TABS    = 30,	// Disable `generatorTree_t::callFoundTree()`. When generator hits a restart point invoke callback.
@@ -119,6 +120,7 @@ struct context_t {
 		DEBUGMASK_COMPARE           = 1 << DEBUGFLAG_COMPARE,
 		DEBUGMASK_REWRITE           = 1 << DEBUGFLAG_REWRITE,
 		DEBUGMASK_EXPLAIN           = 1 << DEBUGFLAG_EXPLAIN,
+		DEBUGMASK_CARTESIAN         = 1 << DEBUGFLAG_CARTESIAN,
 		DEBUGMASK_GENERATOR_TABS    = 1 << DEBUGFLAG_GENERATOR_TABS,
 		DEBUGMASK_METRICS_RATIO     = 1 << DEBUGFLAG_METRICS_RATIO,
 		// @formatter:on
