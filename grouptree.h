@@ -644,6 +644,10 @@ struct groupTree_t {
 	 */
 	inline void linkNode(uint32_t headId, uint32_t nodeId) const {
 
+		assert(headId != nodeId);
+		assert(headId >= this->nstart);
+		assert(nodeId >= this->nstart);
+		
 		groupNode_t *pHead  = this->N + headId;
 		groupNode_t *pNode  = this->N + nodeId;
 
@@ -3104,11 +3108,15 @@ struct groupTree_t {
 
 			if (nodeFolded) {
 				// orphan if folded
+				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				printf("<orphaned>");
+				iNode = prevId;
 			} else if (nodeOutdated) {
 				// update if changed
-				// orphan old first so it will be used to determine better/worse
+				uint32_t prevId = pNode->prev;
+
+				// orphan old first so it will not be used to determine better/worse
 				unlinkNode(iNode);
 				// add updated node
 				// NOTE: `depth` is only used when node already exists (which it should not)
@@ -3117,6 +3125,8 @@ struct groupTree_t {
 				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/0);
 				printf("<new=%u>", newId);
 				assert(this->N[newId].gid == iGroup); // addToCollection might object
+
+				iNode = prevId;
 			}
 			if (!nodeFolded && nodeForward) {
 				// node is active and does a forward reference
