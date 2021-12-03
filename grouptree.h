@@ -1223,418 +1223,439 @@ struct groupTree_t {
 		 * If value changed after loops AND top-level call, then resolve all forwards 
 		 */
 		uint32_t oldNumGroupMerged = this->numGroupMerged;
-		
+
 		/*
 		 * First 1n9 should be the one representing Q/T/F.
 		 * It is possible that group merging might consider this a worse alternative and orphan it.
 		 */
 		uint32_t first1n9 = 0;
 
-		unsigned iQ  = Q;  do {
-			unsigned iTu = Tu; do {
-				unsigned iF = F; do {
-					do {
-						/*
-						 * Analyse Q/T/F combo 
-						 */
-						
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) {
-							// iterators must be in up-to-date lists
-							assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
-							assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
-							assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
-							assert(this->N[iQ].gid != gid);
-							assert(this->N[iTu].gid != gid);
-							assert(this->N[iF].gid != gid);
-						}
+		/*
+		 * All nodes of the list need to be processed
+		 * With `for` the node containing the end-condition is skipped.
+		 * `while{}do()` evaluates the condition after the iteration, allowing all nodes to be iterated.
+		 * Iterators can change groups as effect of group merging.
+		 * iQ/iTu/iF are the iterator nodes for the Cartesian product.  
+		 * Q/T/F are considered iterator group id's.
+		 * Group changes invalidates positioning, iterators need to start at the beginning of their new lists.
+		 * 
+		 */
+		unsigned iQ  = Q;
+		unsigned iTu = Tu;
+		unsigned iF = F;
+		for (;;) {
+			do {
+				/*
+				 * Analyse Q/T/F combo 
+				 */
+				
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+					// iterators must be in up-to-date lists
+					assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
+					assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
+					assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
+					assert(this->N[iQ].gid != gid);
+					assert(this->N[iTu].gid != gid);
+					assert(this->N[iF].gid != gid);
+				}
 
-						/*
-						 * Normalise (test for folding), when this happens collapse/invalidate the whole group and forward to the folded result.
-						 * Requires temporary Q/T/F because it might otherise change loop iterators. 
-						 */
-						uint32_t folded = IBIT; // indicate not-folded
-						uint32_t normQ, normTi, normTu, normF; 
-						if (Ti) {
+				/*
+				 * Normalise (test for folding), when this happens collapse/invalidate the whole group and forward to the folded result.
+				 * Requires temporary Q/T/F because it might otherise change loop iterators. 
+				 */
+				uint32_t folded = IBIT; // indicate not-folded
+				uint32_t normQ, normTi, normTu, normF; 
+				if (Ti) {
 
-							if (iTu == 0) {
-								if (iQ == iF) {
-									// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-									folded = iQ;
-								} else if (iF == 0) {
-									// [ 0] a ? !0 : 0  ->  a
-									folded = iQ;
-								} else {
-									// [ 2] a ? !0 : b  -> "+" OR
-									normQ  = iQ;
-									normTi = Ti;
-									normTu = iTu;
-									normF  = iF;
-								}
-							} else if (iTu == iQ) {
-								if (iQ == iF) {
-									// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-									folded = 0;
-								} else if (iF == 0) {
-									// [ 3] a ? !a : 0  ->  0
-									folded = 0;
-								} else {
-									// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-									normQ  = iF;
-									normTi = Ti;
-									normTu = iTu;
-									normF  = 0;
-								}
-							} else {
-								if (iQ == iF) {
-									// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-									normQ  = iQ;
-									normTi = Ti;
-									normTu = iTu;
-									normF = 0;
-								} else {
-									// [ 6] a ? !b : 0  -> ">" greater-than
-									// [ 8] a ? !b : b  -> "^" not-equal
-									// [ 9] a ? !b : c  -> "!" QnTF
-									normQ  = iQ;
-									normTi = Ti;
-									normTu = iTu;
-									normF  = iF;
-								}
-							}
-
+					if (iTu == 0) {
+						if (iQ == iF) {
+							// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+							folded = iQ;
+						} else if (iF == 0) {
+							// [ 0] a ? !0 : 0  ->  a
+							folded = iQ;
 						} else {
+							// [ 2] a ? !0 : b  -> "+" OR
+							normQ  = iQ;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = iF;
+						}
+					} else if (iTu == iQ) {
+						if (iQ == iF) {
+							// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+							folded = 0;
+						} else if (iF == 0) {
+							// [ 3] a ? !a : 0  ->  0
+							folded = 0;
+						} else {
+							// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+							normQ  = iF;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = 0;
+						}
+					} else {
+						if (iQ == iF) {
+							// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+							normQ  = iQ;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = 0;
+						} else {
+							// [ 6] a ? !b : 0  -> ">" greater-than
+							// [ 8] a ? !b : b  -> "^" not-equal
+							// [ 9] a ? !b : c  -> "!" QnTF
+							normQ  = iQ;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = iF;
+						}
+					}
 
-							if (iTu == 0) {
-								if (iQ == iF) {
-									// [11] a ?  0 : a -> 0
-									folded = 0;
-								} else if (iF == 0) {
-									// [10] a ?  0 : 0 -> 0
-									assert(0); // already tested
-									folded = 0;
-								} else {
-									// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-									normQ  = iF;
-									normTi = IBIT;
-									normTu = iQ;
-									normF  = 0;
-								}
-							} else if (iQ == iTu) {
-								if (iQ == iF) {
-									// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-									assert(0); // already tested
-									folded = iQ;
-								} else if (iF == 0) {
-									// [13] a ?  a : 0 -> a
-									folded = iQ;
-								} else {
-									// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-									normQ  = iQ;
-									normTi = IBIT;
-									normTu = 0;
-									normF  = iF;
-								}
-							} else {
-								if (iQ == iF) {
-									// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-									normQ  = iQ;
-									normTi = Ti;
-									normTu = iTu;
-									normF  = 0;
-								} else {
-									// [16] a ?  b : 0             "&" and
-									// [18] a ?  b : b -> b        ALREADY TESTED		
-									// [19] a ?  b : c             "?" QTF
-									normQ  = iQ;
-									normTi = Ti;
-									normTu = iTu;
-									normF  = iF;
-								}
+				} else {
+
+					if (iTu == 0) {
+						if (iQ == iF) {
+							// [11] a ?  0 : a -> 0
+							folded = 0;
+						} else if (iF == 0) {
+							// [10] a ?  0 : 0 -> 0
+							assert(0); // already tested
+							folded = 0;
+						} else {
+							// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+							normQ  = iF;
+							normTi = IBIT;
+							normTu = iQ;
+							normF  = 0;
+						}
+					} else if (iQ == iTu) {
+						if (iQ == iF) {
+							// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+							assert(0); // already tested
+							folded = iQ;
+						} else if (iF == 0) {
+							// [13] a ?  a : 0 -> a
+							folded = iQ;
+						} else {
+							// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+							normQ  = iQ;
+							normTi = IBIT;
+							normTu = 0;
+							normF  = iF;
+						}
+					} else {
+						if (iQ == iF) {
+							// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+							normQ  = iQ;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = 0;
+						} else {
+							// [16] a ?  b : 0             "&" and
+							// [18] a ?  b : b -> b        ALREADY TESTED		
+							// [19] a ?  b : c             "?" QTF
+							normQ  = iQ;
+							normTi = Ti;
+							normTu = iTu;
+							normF  = iF;
+						}
+					}
+				}
+
+				/*
+				 * Folding implies a general node collapse into one of its components
+				 * This collapses the group as whole
+				 */
+				if (folded != IBIT) {
+					// folded to one of the iterators or zero.
+					
+					printf("FOLD %u %u\n", gid, folded);
+
+					assert(folded >= this->nstart); // todo: this should trigger but doesn't
+
+					uint32_t latest = folded;
+					while (latest != this->N[latest].gid)
+						latest = this->N[latest].gid;
+
+					if (gid == IBIT || gid == latest) {
+						// Test if group merging triggers an update
+						if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+							updateGroups();
+
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+						// groups are compatible
+						return folded;
+					}
+
+					// merge and update
+					importGroup(gid, latest, depth);
+
+					if (depth == 1 && oldNumGroupMerged != this->numGroupMerged) {
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						updateGroups();
+					}
+
+					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+					// `importGroup()` must make node up-to-date 	
+					assert(gid == this->N[folded].gid);
+
+					return folded;
+				}
+
+				/*
+				 * Build slots and lookup signature
+				 */
+				uint32_t finalSlots[MAXSLOTS];
+				uint32_t power;
+				uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots, &power);
+
+				if (sid == 0)
+					continue; // combo not found, silently ignore
+
+				/*
+				 * Test for an endpoint collapse
+				 */
+				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
+					if (gid != IBIT) {
+						uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
+
+						// orphan the group as whole
+						assert(gid == this->N[gid].gid);
+						this->N[gid].gid = endpoint;
+
+						// group becomes endpoint
+						gid = endpoint;
+
+						// consider this group merging
+						this->numGroupMerged++;
+					}
+
+					if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
+						updateGroups();
+
+					// merge and update
+					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+
+					assert(gid == this->N[gid].gid);
+					return gid;
+				}
+
+				/*
+				 * @date 2021-11-16 16:22:03
+				 * To prevent a recursive loop because this candidate is a worse alternative, test that first
+				 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is worse than `ab^/[a bcd^^]`
+				 */
+				if (gid != IBIT) {
+					uint32_t hasBetter = IBIT;
+					for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
+						const groupNode_t *pNode = this->N + id;
+
+						if (pNode->sid == sid) {
+							if (this->compare(id, sid, finalSlots) <= 0) {
+								// list has best or argument is duplicate
+								hasBetter = id;
+								break;
 							}
 						}
+					}
+					if (hasBetter != IBIT)
+						continue; // a better alternative is already in the list, silently ignore
+				}
 
-						/*
-						 * Folding implies a general node collapse into one of its components
-						 * This collapses the group as whole
-						 */
-						if (folded != IBIT) {
-							// folded to one of the iterators or zero.
-							
-							printf("FOLD %u %u\n", gid, folded);
+				/*
+				 * @date 2021-11-08 00:00:19
+				 * 
+				 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
+				 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
+				 * 
+				 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
+				 * implicitly creating better ordered components.
+				 * 
+				 * This might (and most likely will) create many duplicates. It might even return gid.
+				 */
 
-							assert(folded >= this->nstart); // todo: this should trigger but doesn't
+				uint32_t oldNumExpandMerged = this->numGroupMerged;
 
-							uint32_t latest = folded;
-							while (latest != this->N[latest].gid)
-								latest = this->N[latest].gid;
+				if (db.signatures[sid].size > 1) {
+					uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
+//					uint32_t expand = expandMember(sid, finalSlots, gid, depth);
+					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
-							if (gid == IBIT || gid == latest) {
-								// Test if group merging triggers an update
-								if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-									updateGroups();
+					// did something fold
+					if (expand == IBIT) {
+						// iterators should notice the collapse and restart with better alternatives 
+						// NOTE: if assert triggers, then current group should basically restart, possibly salvaging existing entries. 
+						if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid)
+							assert(0);
 
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-								// groups are compatible
-								return folded;
-							}
-
-							// merge and update
-							importGroup(gid, latest, depth);
-
-							if (depth == 1 && oldNumGroupMerged != this->numGroupMerged) {
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-								updateGroups();
-							}
-
-							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-							// `importGroup()` must make node up-to-date 	
-							assert(gid == this->N[folded].gid);
-
-							return folded;
-						}
-
-						/*
-						 * Build slots and lookup signature
-						 */
-						uint32_t finalSlots[MAXSLOTS];
-						uint32_t power;
-						uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots, &power);
-
-						if (sid == 0)
-							continue; // combo not found, silently ignore
-
-						/*
-						 * Test for an endpoint collapse
-						 */
-						if (sid == db.SID_ZERO || sid == db.SID_SELF) {
-							if (gid != IBIT) {
-								uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
-
-								// orphan the group as whole
-								assert(gid == this->N[gid].gid);
-								this->N[gid].gid = endpoint;
-
-								// group becomes endpoint
-								gid = endpoint;
-
-								// consider this group merging
-								this->numGroupMerged++;
-							}
-
-							if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-								updateGroups();
-
-							// merge and update
-							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-							assert(gid == this->N[gid].gid);
-							return gid;
-						}
-
-						/*
-						 * @date 2021-11-16 16:22:03
-						 * To prevent a recursive loop because this candidate is a worse alternative, test that first
-						 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is worse than `ab^/[a bcd^^]`
-						 */
-						if (gid != IBIT) {
-							uint32_t hasBetter = IBIT;
-							for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
-								const groupNode_t *pNode = this->N + id;
-
-								if (pNode->sid == sid) {
-									if (this->compare(id, sid, finalSlots) <= 0) {
-										// list has best or argument is duplicate
-										hasBetter = id;
-										break;
-									}
-								}
-							}
-							if (hasBetter != IBIT)
-								continue; // a better alternative is already in the list, silently ignore
-						}
-
-						/*
-						 * @date 2021-11-08 00:00:19
-						 * 
-						 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
-						 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
-						 * 
-						 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
-						 * implicitly creating better ordered components.
-						 * 
-						 * This might (and most likely will) create many duplicates.
-						 */
-
-						uint32_t oldNumExpandMerged = this->numGroupMerged;
-
-						if (db.signatures[sid].size > 1) {
-							uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
-//							uint32_t expand = expandMember(sid, finalSlots, gid, depth);
-							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
-
-							// did something fold
-							if (expand == IBIT) {
-								// iterators should notice the collapse and restart with better alternatives 
-								// NOTE: if assert triggers, then current group should basically restart, possibly salvaging existing entries. 
-								if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid)
-									assert(0);
-
-								// group merging/folding might change current gid
-								while (gid != this->N[gid].gid)
-									gid = this->N[gid].gid;
-								
-								continue; // yes, silently ignore (and restart)
-							}
-
-							// update gid	
-							gid = expand;
-							while (gid != this->N[gid].gid)
-								gid = this->N[gid].gid;
-						}
-
-						/*
-						 * It could be that groups were merged, update slots
-						 */
-						if (oldNumExpandMerged != this->numGroupMerged) {
-							bool fold = false;
-
-							for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-								uint32_t id = finalSlots[iSlot];
-								if (id == 0)
-									break;
-
-								if (id != this->N[id].gid) {
-									assert(!"this should not happen");
-									while (id != this->N[id].gid)
-										id = this->N[id].gid;
-									finalSlots[iSlot] = id;
-								}
-
-								if (id == gid) {
-									assert(!"this should not happen");
-									fold = true;
-								}
-							}
-
-							// todo: should other nodes also be pruned?
-							/*
-							 * gid=`aabcd+++2?`
-							 * candidate = `(abcd+++) (bcd++) +`, which folds
-							 * candidate hold no information and should be silently ignored
-							 * in the process, it was detected that `aabcd+++2?`==`abcd+++`
-							 * however, now the `T` list equals gid, rendering all other candidates non-info.
-							 * 
-							 */
-							assert(!"test if/how happens"); // use pruneGroup
-							if (fold)
-								continue; // todo: should be `return` 
-						}
-
-						/*
-						 * Add final sid/slot to collection
-						 */
-
-						uint32_t oldCount = this->ncount;
-
-						uint32_t nid = addToCollection(sid, finalSlots, gid, power, depth);
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
-
-						assert(nid != IBIT);
-						
-						// update current group id to that of head of list
-						gid = nid;
+						// group merging/folding might change current gid
 						while (gid != this->N[gid].gid)
 							gid = this->N[gid].gid;
-
-						if (this->ncount != oldCount) {
-							// if (ctx.opt_debug & ctx.DEBUG_ROW)
-							printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
-							       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-							       gid, nid,
-							       iQ, iTu, iF,
-							       sid, db.signatures[sid].name,
-							       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-							       power);
-						}
-
-						// remember first `1n9` (which should always be the first combo created)
-						if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
-							first1n9 = nid;
-							assert(
-								sid == db.SID_OR ||
-								sid == db.SID_GT ||
-								sid == db.SID_NE ||
-								sid == db.SID_AND ||
-								sid == db.SID_QNTF ||
-								sid == db.SID_QTF
-							);
-						}
-
-						/*
-						 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
-						 * It could be that `addToCollection()` orphaned iQ/iTu/iF
-						 * 
-						 * NOTE: wrap above within a `do{}while()` so `continue` will update Q/T/F
-						 */
-					} while (false);
-
-					/*
-					 * detect iterator-group change
-					 * this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
-					 */
-
-					if (Q != this->N[iQ].gid) {
-						while (Q != this->N[Q].gid)
-							Q = this->N[Q].gid; // restart with new list
-						printf("%.*sRESTART-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
-						iQ = this->N[Q].prev; // restart loop
-					}
-					if (Tu != this->N[iTu].gid) {
-						while (Tu != this->N[Tu].gid)
-							Tu = this->N[Tu].gid; // restart with new list
-						printf("%.*sRESTART-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
-						iTu = this->N[Tu].prev; // restart loop
-					}
-					if (F != this->N[iF].gid) {
-						// find latest list
-						while (F != this->N[F].gid)
-							F = this->N[F].gid;
-						printf("%.*sRESTART-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
-						iF = this->N[F].prev; // restart loop
-					}
-					
-					// todo: iterator folding
-					assert(Q != Tu && Q != F);
-					assert(Ti != 0 || Tu != F);
-					
-					if (iQ == gid || iTu == gid || iF == gid) {
-						ctx.fatal("FATAL: Iterator group orphaned.");
-						assert(!"iQ == gid || iTu == gid || iF == gid\n");
-						// get pen and paper...
-						// good luck and enjoy...
-
-						// Return new node representing argument
-						assert(first1n9);
-						assert(gid == this->N[first1n9].gid);
-						return first1n9;
-					}
 						
+						continue; // yes, silently ignore (and restart)
+					}
 
-					// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
-					// node 0 is a single node list containing SID_ZERO.
-					iF = this->N[iF].next;
-				} while (iF != this->N[iF].gid);
+					// update gid	
+					gid = expand;
+					while (gid != this->N[gid].gid)
+						gid = this->N[gid].gid;
+				}
 
-				iTu = this->N[iTu].next;
-			} while (iTu != this->N[iTu].gid);
+				/*
+				 * It could be that groups were merged, update slots
+				 */
+				if (oldNumExpandMerged != this->numGroupMerged) {
+					bool fold = false;
+
+					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+						uint32_t id = finalSlots[iSlot];
+						if (id == 0)
+							break;
+
+						if (id != this->N[id].gid) {
+							assert(!"this should not happen");
+							while (id != this->N[id].gid)
+								id = this->N[id].gid;
+							finalSlots[iSlot] = id;
+						}
+
+						if (id == gid) {
+							assert(!"this should not happen");
+							fold = true;
+						}
+					}
+
+					// todo: should other nodes also be pruned?
+					/*
+					 * gid=`aabcd+++2?`
+					 * candidate = `(abcd+++) (bcd++) +`, which folds
+					 * candidate hold no information and should be silently ignored
+					 * in the process, it was detected that `aabcd+++2?`==`abcd+++`
+					 * however, now the `T` list equals gid, rendering all other candidates non-info.
+					 * 
+					 */
+					assert(!"test if/how happens"); // use pruneGroup
+					if (fold)
+						continue; // todo: should be `return` 
+				}
+
+				/*
+				 * Add final sid/slot to collection
+				 */
+
+				uint32_t oldCount = this->ncount;
+
+				uint32_t nid = addToCollection(sid, finalSlots, gid, power, depth);
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
+
+				assert(nid != IBIT);
+				
+				// update current group id to that of head of list
+				gid = nid;
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
+
+				if (this->ncount != oldCount) {
+					// if (ctx.opt_debug & ctx.DEBUG_ROW)
+					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
+					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+					       gid, nid,
+					       iQ, iTu, iF,
+					       sid, db.signatures[sid].name,
+					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
+					       power);
+				}
+
+				// remember first `1n9` (which should always be the first combo created)
+				if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
+					first1n9 = nid;
+					assert(
+						sid == db.SID_OR ||
+						sid == db.SID_GT ||
+						sid == db.SID_NE ||
+						sid == db.SID_AND ||
+						sid == db.SID_QNTF ||
+						sid == db.SID_QTF
+					);
+				}
+
+				/*
+				 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
+					 * It could be that `addToCollection()` merged Q/Tu/F into another group
+				 * 
+				 * NOTE: wrap above within a `do{}while()` so `continue` will update Q/T/F
+				 */
+			} while (false);
+
+			/*
+			 * detect iterator-group change
+			 * this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
+			 */
+
+			assert(gid == this->N[gid].gid);
+
+			// test for total collapse
+			if (gid < this->nstart)
+				break;
+
+			if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid) {
+				if (Q != this->N[iQ].gid) {
+					while (Q != this->N[Q].gid)
+						Q = this->N[Q].gid; // restart with new list
+					printf("%.*sRESTART-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+					iQ = Q; // restart loop
+				}
+				if (Tu != this->N[iTu].gid) {
+					while (Tu != this->N[Tu].gid)
+						Tu = this->N[Tu].gid; // restart with new list
+					printf("%.*sRESTART-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+					iTu = Tu; // restart loop
+				}
+				if (F != this->N[iF].gid) {
+					while (F != this->N[F].gid)
+						F = this->N[F].gid;
+					printf("%.*sRESTART-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+					iF = F; // restart loop
+				}
+
+				/*
+				 * Test for iterator collapsing
+				 * When happens, all further iterations will fold and be silently ignored
+				 */
+				if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
+					break; // collapsed
+
+				continue;
+			}
+
+			// test for iterator collapse
+			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
+				break; // collapsed
+
+			// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
+			// node 0 is a single node list containing SID_ZERO.
+
+			iF = this->N[iF].next;
+			if (iF != this->N[iF].gid)
+				continue;
+
+			iTu = this->N[iTu].next;
+			if (iTu != this->N[iTu].gid)
+				continue;
 
 			iQ = this->N[iQ].next;
-		} while (iQ != this->N[iQ].gid);
+			if (iQ != this->N[iQ].gid)
+				continue;
+
+			break;
+		}
 
 		/*
-		 * If anything got merged, prune stale nodes
+		 * prune stale nodes
 		 */
 		if (oldNumGroupMerged != this->numGroupMerged)
 			pruneGroup(gid);
@@ -1651,8 +1672,6 @@ struct groupTree_t {
 		 * Test if `first1n9` still exists
 		 */
 		assert(first1n9); // must exist
-		assert(gid == this->N[first1n9].gid); // must be latest
-		assert(gid != this->N[gid].next); // may not be empty 
 
 		// return node the represents arguments
 		return first1n9;

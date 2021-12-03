@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-03 17:57:38 Fixed: `groupTree::addNormaliseNode()`, Redesigned c-product to better handle changing iterator groups.
 2021-12-03 17:54:21 Fixed: `groupTree::addNormaliseNode()`, Sid-swap top-level slots before lookup.
 2021-12-02 17:44:30 Fixed: `groupTree_t::updateGroups()`, Fixed incorrect way of relocating nodes to newer group.
 2021-12-02 17:42:11 Added: `context_t::DEBUGMASK_CARTESIAN`, To hide some tracking.
