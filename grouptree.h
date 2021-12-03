@@ -2734,6 +2734,7 @@ struct groupTree_t {
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+			assert(gid == this->N[gid].slots[0]);
 			this->N[gid].gid = gid;
 		}
 
@@ -2982,9 +2983,10 @@ struct groupTree_t {
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
 
-			printf("P gid=%u\tnid=%u\t%u:%s/[",
-			       pNode->gid, iNode,
-			       pNode->sid, db.signatures[pNode->sid].name);
+			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE)
+				printf("P gid=%u\tnid=%u\t%u:%s/[",
+				       pNode->gid, iNode,
+				       pNode->sid, db.signatures[pNode->sid].name);
 
 			bool nodeOutdated = false; // group is outdated, and gets renewed
 			bool nodeForward = false; // node does forward reference
@@ -3003,7 +3005,7 @@ struct groupTree_t {
 
 				if (iSlot != 0)
 					putchar(' '); // delimiter
-				printf("%u", id);
+				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("%u", id);
 
 				if (id != this->N[id].gid) {
 					if (!nodeOutdated) {
@@ -3019,7 +3021,7 @@ struct groupTree_t {
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 
-					printf("<outdated:new=%u>", id);
+					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<outdated:new=%u>", id);
 
 					newSlots[iSlot] = id;
 				}
@@ -3027,21 +3029,21 @@ struct groupTree_t {
 				if (pVersion[id] == thisVersion) {
 					// node has folded
 					nodeFolded = true;
-					printf("<fold>");
+					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<fold>");
 				} else if (id > iGroup) {
 					// node has forward reference 
 					nodeForward = true;
-					printf("<forward>");
+					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<forward>");
 				}
 			}
 
-			printf("]");
+			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("]");
 
 			if (nodeFolded) {
 				// orphan if folded
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
-				printf("<orphaned>");
+				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<orphaned>");
 				iNode = prevId;
 			} else if (nodeOutdated) {
 				// update if changed
@@ -3054,7 +3056,7 @@ struct groupTree_t {
 				assert(pNode->gid == iGroup);
 				// todo: maybe `addNode()` is a faster aternative
 				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/0);
-				printf("<new=%u>", newId);
+				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
 				assert(this->N[newId].gid == iGroup); // addToCollection might object
 
 				iNode = prevId;
@@ -3064,7 +3066,7 @@ struct groupTree_t {
 				groupForward = true;
 			}
 
-			printf(" pwr=%u\n", pNode->power);
+			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf(" pwr=%u\n", pNode->power);
 		}
 
 		freeVersion(pVersion);
@@ -3100,10 +3102,9 @@ struct groupTree_t {
 					/*
 					 * create new list header
 					 */
-					uint32_t selfSlots[MAXSLOTS] = {0}; // other slots are zeroed
+					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
 					assert(selfSlots[MAXSLOTS - 1] == 0);
 
-					selfSlots[0] = this->ncount;
 					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 					assert(newGid == this->N[newGid].slots[0]);
 					this->N[newGid].gid = newGid;
@@ -4215,13 +4216,18 @@ struct groupTree_t {
 			 */
 
 			nid = addNormaliseNode(Q, Tu ^ Ti, F);
+			printf("### %s\n", saveString(nid).c_str());
 
-			{
-				uint32_t id = nid;
-				while(id != this->N[id].gid)
-					id = this->N[id].gid;
-
-				printf("### %s\n", saveString(id).c_str());
+			uint32_t latest = nid;
+			while (latest != this->N[latest].gid)
+				latest = this->N[latest].gid;
+			for (uint32_t iNode = this->N[latest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+				printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
+				       pNode->gid, iNode,
+				       pNode->sid, db.signatures[pNode->sid].name,
+				       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
+				       pNode->power);
 			}
 			
 			// remember
