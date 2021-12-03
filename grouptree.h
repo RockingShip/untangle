@@ -2834,9 +2834,28 @@ struct groupTree_t {
 	 */
 	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
-		assert(oldest >= this->nstart);
+		assert(newest >= this->nstart);
 		assert(newest == this->N[newest].gid);
 		assert(oldest == this->N[oldest].gid);
+
+		// relocate nodes
+		if (oldest < this->ncount) {
+			// total group collapse
+			for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+
+				uint32_t prevId = pNode->prev;
+				unlinkNode(iNode);
+				pNode->gid = oldest;
+				iNode = prevId;
+
+			}
+
+			// let current group forward to new
+			this->N[newest].gid = oldest;
+			
+			return oldest;
+		}
 
 		/*
 		 * Flood-fill who uses oldest
@@ -2852,16 +2871,62 @@ struct groupTree_t {
 
 		pVersion[oldest] = thisVersion;
 
-		// flood-fill references
-		for (uint32_t iGroup = oldest + 1; iGroup < this->ncount; iGroup++) {
+		/*
+		 * Runtime example for `abc^^`
+		 * gid=21, latest=23
+		 * 
+		 * gid 12:
+		 *   N[12] = a/[12]
+		 *   N[13] = ab^/[3 4]
+		 * gid 14:
+		 *   N[14] = a/[14]
+		 *   N[15] = ab^/[2 12]
+		 *   N[16] = abc^^/[2 3 4]
+		 * gid 21:   <--- gid
+		 *   N[21] = a/[21]
+		 *   N[22] = ab^/[3 14] 
+		 *   N[25] = abc!/[3 14 23]  <--- candidate cyclic reference, needs pruning
+		 *   N[26] = abcd^!/[3 14 2 4]
+		 * gid 23:   <--- latest
+		 *   N[23] = a/[23]
+		 *   N[24] = ab^/[2 4]
+		 *   
+		 *   NOTE: N[25] will be orphaned
+		 *   NOTE: N[22] (babc^^^) will be obsoleted by N[24] (ac^) (same sid)
+		 * 
+		 * Final state:
+		    * gid 21:
+		 *   N[21] = a/[21]
+		 *   N[26] = abcd^!/[3 14 2 4]
+		 *   N[24] = ab^/[2 4]
+		 * orphans redirecting to gid 21:
+		 *   N[23] = a/[23]
+		 *   N[22] = ab^/[3 14] 
+		 *   N[25] = abc!/[3 14 23]
+		 */
+
+		/*
+		 * @date 2021-12-02 23:30:13
+		 * NOTE: forward references are possible 
+		 */
+
+		// flood-fill, start with `oldest` and flag everything referencing the fill
+		bool changed;
+		do {
+			changed = false;
+			for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			bool found = false;
 
 			if (iGroup != this->N[iGroup].gid)
-				continue;
+					continue; // not start of list
+				if (pVersion[iGroup] == thisVersion)
+					continue; // already processed 
 
+				// process nodes of group	
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				const groupNode_t *pNode = this->N + iNode;
 
+					// examine references
 				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 					uint32_t id = pNode->slots[iSlot];
 					if (id == 0)
@@ -2876,9 +2941,13 @@ struct groupTree_t {
 					break;
 			}
 
-			if (found)
+				if (found) {
+					// mark processed
 				pVersion[iGroup] = thisVersion;
+					changed = true;
 		}
+			}
+		} while (changed);
 
 		/*
 		 * Orphan all nodes with references to older (they now contain non-info)
@@ -2887,7 +2956,7 @@ struct groupTree_t {
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode = this->N + iNode;
 
-			bool found = true;
+			bool found = false;
 			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
 				if (id == 0)
