@@ -1078,13 +1078,26 @@ struct groupTree_t {
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
 
-		// set slots
+		// set (and order) slots
 		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
+			if (Q < F) {
 			tlSlots[0] = Q;
 			tlSlots[1] = F;
-		} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
+			} else {
+				tlSlots[0] = F;
+				tlSlots[1] = Q;
+			}
+		} else if (tlSid == db.SID_GT) {
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
+		} else if (tlSid == db.SID_AND) {
+			if (Q < Tu) {
+			tlSlots[0] = Q;
+			tlSlots[1] = Tu;
+			} else {
+				tlSlots[0] = Tu;
+				tlSlots[1] = Q;
+			}
 		} else {
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
