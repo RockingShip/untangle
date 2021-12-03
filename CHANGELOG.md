@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-03 18:34:47 Changed: `groupTree_t::updateGroups()`, As optimisation, supply lowest from which scanning starts.
 2021-12-02 14:10:46 Fixed: `groupTree::pruneGroup()`, Harden iterators against `unlink()`.
 2021-12-03 18:09:07 Changed: `groupTree::importGroup()`, Make aware of full-collapse and forward references. 
 2021-12-03 17:57:38 Fixed: `groupTree::addNormaliseNode()`, Redesigned c-product to better handle changing iterator groups.

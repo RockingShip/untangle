@@ -217,8 +217,6 @@ struct groupTree_t {
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
 	
-	uint32_t                 numGroupMerged;	// global counter for group merges, to simplify detection of changes.	
-
 	/**
 	 * @date 2021-06-13 00:01:50
 	 *
@@ -273,9 +271,7 @@ struct groupTree_t {
 		// slots
 		slotMap(NULL),
 		slotVersion(NULL),
-		slotVersionNr(1),
-		//
-		numGroupMerged(0)
+		slotVersionNr(1)
 	{
 	}
 
@@ -324,9 +320,7 @@ struct groupTree_t {
 		// slots
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
-		slotVersionNr(1),
-		//
-		numGroupMerged(0)
+		slotVersionNr(1)
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -1121,17 +1115,16 @@ struct groupTree_t {
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
-			uint32_t oldNumGroupMerged = this->numGroupMerged;
-			
 			// merge groups lists
 			importGroup(gid, latest, depth);
 
 			// ripple effect of merging
-			if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-				updateGroups();
-
-			// `importGroup()` must make node up-to-date 	
-			assert(gid == this->N[nid].gid);
+			if (depth == 1) {
+				if (gid < latest)
+					updateGroups(gid);
+				else
+					updateGroups(latest);
+			}
 
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -1226,7 +1219,7 @@ struct groupTree_t {
 		 * Creating intermediates will introduce forward references.
 		 * If value changed after loops AND top-level call, then resolve all forwards 
 		 */
-		uint32_t oldNumGroupMerged = this->numGroupMerged;
+		uint32_t oldCount = this->ncount;
 
 		/*
 		 * First 1n9 should be the one representing Q/T/F.
@@ -1383,30 +1376,18 @@ struct groupTree_t {
 					while (latest != this->N[latest].gid)
 						latest = this->N[latest].gid;
 
-					if (gid == IBIT || gid == latest) {
-						// Test if group merging triggers an update
-						if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-							updateGroups();
-
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-						// groups are compatible
-						return folded;
-					}
-
+					if (gid != IBIT && gid != latest) {
 					// merge and update
 					importGroup(gid, latest, depth);
-
-					if (depth == 1 && oldNumGroupMerged != this->numGroupMerged) {
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-						updateGroups();
+						if (depth == 1)
+							updateGroups(oldCount);
 					}
 
+					// Test if group merging triggers an update
+					if (depth == 1)
+						updateGroups(oldCount);
+
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-					// `importGroup()` must make node up-to-date 	
-					assert(gid == this->N[folded].gid);
-
 					return folded;
 				}
 
@@ -1424,28 +1405,18 @@ struct groupTree_t {
 				 * Test for an endpoint collapse
 				 */
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
-					if (gid != IBIT) {
-						uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
+					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
-						// orphan the group as whole
-						assert(gid == this->N[gid].gid);
-						this->N[gid].gid = endpoint;
+					if (gid != IBIT)
+						importGroup(gid, endpoint, depth);
 
-						// group becomes endpoint
-						gid = endpoint;
-
-						// consider this group merging
-						this->numGroupMerged++;
-					}
-
-					if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-						updateGroups();
+					if (depth == 1)
+						updateGroups(oldCount);
 
 					// merge and update
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
-					assert(gid == this->N[gid].gid);
-					return gid;
+					return endpoint;
 				}
 
 				/*
@@ -1482,8 +1453,6 @@ struct groupTree_t {
 				 * This might (and most likely will) create many duplicates. It might even return gid.
 				 */
 
-				uint32_t oldNumExpandMerged = this->numGroupMerged;
-
 				if (db.signatures[sid].size > 1) {
 					uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
 //					uint32_t expand = expandMember(sid, finalSlots, gid, depth);
@@ -1507,51 +1476,23 @@ struct groupTree_t {
 					gid = expand;
 					while (gid != this->N[gid].gid)
 						gid = this->N[gid].gid;
-				}
 
-				/*
-				 * It could be that groups were merged, update slots
-				 */
-				if (oldNumExpandMerged != this->numGroupMerged) {
-					bool fold = false;
+					// test for full-collapse 
+					if (gid < this->nstart) {
+						if (depth == 1)
+							updateGroups(oldCount);
 
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-						uint32_t id = finalSlots[iSlot];
-						if (id == 0)
-							break;
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
-						if (id != this->N[id].gid) {
-							assert(!"this should not happen");
-							while (id != this->N[id].gid)
-								id = this->N[id].gid;
-							finalSlots[iSlot] = id;
+						return expand;
 						}
-
-						if (id == gid) {
-							assert(!"this should not happen");
-							fold = true;
-						}
-					}
-
-					// todo: should other nodes also be pruned?
-					/*
-					 * gid=`aabcd+++2?`
-					 * candidate = `(abcd+++) (bcd++) +`, which folds
-					 * candidate hold no information and should be silently ignored
-					 * in the process, it was detected that `aabcd+++2?`==`abcd+++`
-					 * however, now the `T` list equals gid, rendering all other candidates non-info.
-					 * 
-					 */
-					assert(!"test if/how happens"); // use pruneGroup
-					if (fold)
-						continue; // todo: should be `return` 
 				}
 
 				/*
 				 * Add final sid/slot to collection
 				 */
 
-				uint32_t oldCount = this->ncount;
+				uint32_t oldCount2 = this->ncount;
 
 				uint32_t nid = addToCollection(sid, finalSlots, gid, power, depth);
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
@@ -1563,7 +1504,7 @@ struct groupTree_t {
 				while (gid != this->N[gid].gid)
 					gid = this->N[gid].gid;
 
-				if (this->ncount != oldCount) {
+				if (nid >= oldCount2) {
 					// if (ctx.opt_debug & ctx.DEBUG_ROW)
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
 					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
@@ -1661,14 +1602,13 @@ struct groupTree_t {
 		/*
 		 * prune stale nodes
 		 */
-		if (oldNumGroupMerged != this->numGroupMerged)
 			pruneGroup(gid);
 		
 		/*
 		 * Test if group merging triggers an update  
 		 */
-		if (depth == 1 && oldNumGroupMerged != this->numGroupMerged)
-			updateGroups();
+		if (depth == 1)
+			updateGroups(oldCount);
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -3145,7 +3085,7 @@ struct groupTree_t {
 	 * 
 	 * Rebuild groups that have nodes that have forward references
 	 */
-	void updateGroups(void) {
+	void updateGroups(uint32_t firstGid) {
 
 		printf("UPDATE\n");
 
@@ -3157,7 +3097,7 @@ struct groupTree_t {
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
 		 * NOTE: the dataset has been specifically designed/created to avoid loops, so the `for` will reach an end-condition 
 		 */
-		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+		for (uint32_t iGroup = firstGid; iGroup < this->ncount; iGroup++) {
 			// find group headers
 			if (this->N[iGroup].gid == iGroup) {
 
@@ -3205,9 +3145,6 @@ struct groupTree_t {
 					// let current group forward to new
 					assert(this->N[iGroup].next == iGroup); // group should be empty
 					this->N[iGroup].gid = newGid;
-					
-					// bump counter
-					this->numGroupMerged++;
 				}
 			}
 		}
