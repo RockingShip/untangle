@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-03 18:38:59 Changed: `groupTree_t::expandSignature()`, Accept top-level node folding into gid (it is intentional).
 2021-12-03 18:34:47 Changed: `groupTree_t::updateGroups()`, As optimisation, supply lowest from which scanning starts.
 2021-12-02 14:10:46 Fixed: `groupTree::pruneGroup()`, Harden iterators against `unlink()`.
 2021-12-03 18:09:07 Changed: `groupTree::importGroup()`, Make aware of full-collapse and forward references. 

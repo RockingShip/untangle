@@ -1890,10 +1890,6 @@ struct groupTree_t {
 			pActive[id] = thisVersion;
 		}
 		
-		// add gid to detect short-circuit
-		if (gid != IBIT)
-			pActive[gid] = thisVersion;
-
 		/*
 		 * Load string
 		 */
@@ -2176,9 +2172,8 @@ struct groupTree_t {
 			}
 
 			// have operands folded?
-			if (cSid == 0) {
+			if (cSid == 0 || Q == gid || Tu == gid || F == gid) {
 				// yes
-//				assert(!"if this folds, then group should collapse");
 				freeMap(pStack);
 				freeMap(pMap);
 				freeVersion(pActive);
@@ -2188,6 +2183,8 @@ struct groupTree_t {
 			uint32_t nid;
 			if (pattern[1]) {
 				nid = addNormaliseNode(Q, Tu ^ Ti, F, IBIT, depth + 1);
+				
+				// if intermediate folds to a slot entry, then it's a collapse
 			} else {
 				assert(numStack == 0);
 
@@ -2195,6 +2192,7 @@ struct groupTree_t {
 				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
 
 				// NOTE: last call, so no need to update gid
+				// NODE: if nid is a slot or gid, then it's an endpoint collapse  
 			}
 
 			// update to latest
@@ -2202,13 +2200,9 @@ struct groupTree_t {
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
 
-			// The caller (c-product loop), already caught group collapses.
-			assert(latest != db.SID_ZERO && latest != db.SID_SELF);
-
-			// is it new
+			// is it old (fold)
 			if (pActive[latest] == thisVersion) {
-				// no
-//				assert(!"structure collapse");
+				// yes
 				freeMap(pStack);
 				freeMap(pMap);
 				freeVersion(pActive);
@@ -2228,7 +2222,6 @@ struct groupTree_t {
 
 		// release and return
 		uint32_t ret = pStack[0];
-		assert(ret >= this->nstart);
 
 		freeMap(pStack);
 		freeMap(pMap);
@@ -2695,8 +2688,6 @@ struct groupTree_t {
 			assert(depth != 0);
 			importGroup(gid, latest, depth);
 
-			// return original, which should have relocated to a different group
-			assert(gid == this->N[nid].gid);
 			return nid;
 		}
 
