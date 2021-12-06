@@ -125,6 +125,18 @@ struct groupTree_t {
 	/*
 	 * Constants for 
 	 */
+	
+	/**
+	 * Part of the core algorithm in detecting identical groups, is to expand nodes based on signature members.
+	 * Members are considered the minimal collection of structures and their components to reach all signature id's.
+	 * Recursively expanding structures turns out to escalate and requires some form of dampening.
+	 *
+ 	 * @constant {number} DEFAULT_MAXDEPTH
+	 */
+	#if !defined(GROUPTREE_DEFAULT_MAXDEPTH)
+	#define GROUPTREE_DEFAULT_MAXDEPTH 6
+	#endif
+	 
 	/**
 	 * The maximum number of nodes a writable tree can hold is indicated with the `--maxnode=n` option.
 	 * When saving, trees become read-only and are shrink to fit.
@@ -152,6 +164,7 @@ struct groupTree_t {
 	#endif
 
 	enum {
+		DEFAULT_MAXDEPTH = GROUPTREE_DEFAULT_MAXDEPTH,
 		DEFAULT_MAXNODE = GROUPTREE_DEFAULT_MAXNODE,
 		MAXPOOLARRAY = GROUPTREE_MAXPOOLARRAY
 	};
@@ -183,6 +196,7 @@ struct groupTree_t {
 	uint32_t                 flags;                 // creation constraints
 	uint32_t                 allocFlags;            // memory constraints
 	uint32_t                 system;                // node of balanced system
+	unsigned		 maxDepth;		// Max node expansion depth
 	// primary fields
 	uint32_t                 kstart;                // first input key id.
 	uint32_t                 ostart;                // first output key id.
@@ -239,6 +253,7 @@ struct groupTree_t {
 		flags(0),
 		allocFlags(0),
 		system(0),
+		maxDepth(DEFAULT_MAXNODE),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -288,6 +303,7 @@ struct groupTree_t {
 		flags(flags),
 		allocFlags(0),
 		system(0),
+		maxDepth(DEFAULT_MAXNODE),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -1466,7 +1482,7 @@ struct groupTree_t {
 				 * This might (and most likely will) create many duplicates. It might even return gid.
 				 */
 
-				if (db.signatures[sid].size > 1) {
+				if (db.signatures[sid].size > 1 && depth < this->maxDepth) {
 					uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
 //					uint32_t expand = expandMember(db.signatures[sid].firstMember, finalSlots, gid, depth);
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references

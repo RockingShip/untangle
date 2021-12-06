@@ -79,8 +79,8 @@ struct gevalContext_t {
 	uint32_t opt_flagsSet;
 	/// @var {number} header flags
 	uint32_t opt_flagsClr;
-	/// @var {number} --force, force overwriting of outputs if already exists
-	unsigned opt_force;
+	/// @var {number} --maxdepth, Maximum node expansion depth for `groupTree_t`.
+	unsigned opt_maxDepth;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 	/// @var {number} --normalise, display names as normalised with transforms
@@ -96,7 +96,7 @@ struct gevalContext_t {
 		opt_dataSize     = QUADPERFOOTPRINT; // compatible with `footprint_t::QUADPERFOOTPRINT`
 		opt_flagsSet     = 0;
 		opt_flagsClr     = 0;
-		opt_force        = 0;
+		opt_maxDepth     = groupTree_t::DEFAULT_MAXDEPTH;
 		opt_maxNode      = groupTree_t::DEFAULT_MAXNODE;
 		opt_normalise    = 0;
 		opt_seed         = 0x20210609;
@@ -206,6 +206,8 @@ struct gevalContext_t {
 		uint32_t nstart = estart;
 
 		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
+		// Apply defaults
+		pTree->maxDepth = this->opt_maxDepth;
 
 		/*
 		 * Setup key/root names
@@ -513,14 +515,14 @@ void usage(char *argv[], bool verbose) {
 	if (verbose) {
 		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
 		fprintf(stderr, "\t   --explain\n");
-		fprintf(stderr, "\t   --force\n");
-		fprintf(stderr, "\t-n --normalise  Display pattern as: normalised/transform\n");
-		fprintf(stderr, "\t-t --numtests=<seconds> [default=%d]\n", app.opt_dataSize);
-		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
-		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t   --seed=n     Random seed to generate evaluator test pattern. [Default=%u]\n", app.opt_seed);
-		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t-n --normalise             Display pattern as: normalised/transform\n");
+		fprintf(stderr, "\t-t --numtests=<seconds>    [default=%d]\n", app.opt_dataSize);
+		fprintf(stderr, "\t   --maxdeph=<number>      Maximum node expansion depth [default=%d]\n", app.opt_maxDepth);
+		fprintf(stderr, "\t   --maxnode=<number>      Maximum tree nodes [default=%d]\n", app.opt_maxNode);
+		fprintf(stderr, "\t-q --quiet                 Say less\n");
+		fprintf(stderr, "\t   --seed=n                Random seed to generate evaluator test pattern. [Default=%u]\n", app.opt_seed);
+		fprintf(stderr, "\t-v --verbose               Say more\n");
+		fprintf(stderr, "\t   --timer=<seconds>       [default=%d]\n", ctx.opt_timer);
 
 		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", ctx.flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
 		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", ctx.flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
@@ -547,7 +549,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP     = 1, LO_DEBUG, LO_EXPLAIN, LO_FORCE, LO_MAXNODE, LO_SEED, LO_TIMER,
+			LO_HELP     = 1, LO_DEBUG, LO_EXPLAIN, LO_MAXDEPTH, LO_MAXNODE, LO_SEED, LO_TIMER,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_DATASIZE = 't', LO_NORMALISE = 'n', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -558,8 +560,8 @@ int main(int argc, char *argv[]) {
 			{"datasize",    1, 0, LO_DATASIZE},
 			{"debug",       1, 0, LO_DEBUG},
 			{"explain",     0, 0, LO_EXPLAIN},
-			{"force",       0, 0, LO_FORCE},
 			{"help",        0, 0, LO_HELP},
+			{"maxdepth",    1, 0, LO_MAXDEPTH},
 			{"maxnode",     1, 0, LO_MAXNODE},
 			{"normalise",   0, 0, LO_NORMALISE},
 			{"quiet",       2, 0, LO_QUIET},
@@ -617,12 +619,12 @@ int main(int argc, char *argv[]) {
 		case LO_EXPLAIN:
 			ctx.opt_debug |= context_t::DEBUGMASK_EXPLAIN;
 			break;
-		case LO_FORCE:
-			app.opt_force++;
-			break;
 		case LO_HELP:
 			usage(argv, true);
 			exit(0);
+		case LO_MAXDEPTH:
+			app.opt_maxDepth = (unsigned) strtoul(optarg, NULL, 10);
+			break;
 		case LO_MAXNODE:
 			app.opt_maxNode = (unsigned) strtoul(optarg, NULL, 10);
 			break;
