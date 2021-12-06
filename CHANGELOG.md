@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-06 14:09:42 Added: `groupTree_t::expandMembers()`, Controlled sub-structure creation.
 2021-12-06 13:55:23 Fixed: `groupTree_t::addToCollection()`, Orphan worst when adding a better node.
 2021-12-06 13:50:34 Changed: `groupTree_t::validateTree()`, Test slot uniqueness.
 2021-12-06 13:34:39 Fixed: `groupTree::addNormaliseNode()`, Sid-swap top-level in fallback code.
@@ -34,7 +35,7 @@ TODO: genpattern list
 2021-12-02 13:12:38 Changed: `groupTree_t::validateTree()`, Allow forward references.
 2021-12-02 12:57:00 Fixed: `groupTree_t`, Allow `gid` to be zero.
 2021-12-01 11:54:06 Added: `glookup`, Forgot to display power.
-2021-12-01 00:50:02 Changed: `genpattern`, Optimised name construction for ``--text`.
+2021-12-01 00:50:02 Changed: `genpattern`, Optimised name construction for `--text`.
 2021-11-30 15:25:41 Added: `glookup`.
 2021-11-30 15:18:59 Added: `patternSecond_t`, Added `power`.
 2021-11-29 18:47:12 (MAJOR) Fixed: `genpattern`, It was an error to convert to `tid=` BEFORE determining tidT+tidF.

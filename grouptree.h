@@ -1468,7 +1468,7 @@ struct groupTree_t {
 
 				if (db.signatures[sid].size > 1) {
 					uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
-//					uint32_t expand = expandMember(sid, finalSlots, gid, depth);
+//					uint32_t expand = expandMember(db.signatures[sid].firstMember, finalSlots, gid, depth);
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 					// did something fold
@@ -1519,13 +1519,13 @@ struct groupTree_t {
 
 				if (nid >= oldCount2) {
 					// if (ctx.opt_debug & ctx.DEBUG_ROW)
-					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
+					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 					       gid, nid,
 					       iQ, iTu, iF,
 					       sid, db.signatures[sid].name,
 					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-					       power);
+					       db.signatures[sid].size, power);
 				}
 
 				// remember first `1n9` (which should always be the first combo created)
@@ -1744,10 +1744,10 @@ struct groupTree_t {
 		assert(tidSlotT != IBIT);
 
 		uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
-		if (db.patternFirstIndex[ixFirst] == 0)
-			return 0; // not found
-
 		uint32_t idFirst = db.patternFirstIndex[ixFirst];
+
+		if (idFirst == 0)
+			return 0; // not found
 
 		/*
 		 * Add `F` to slots
@@ -1794,9 +1794,11 @@ struct groupTree_t {
 		assert(tidSlotF != IBIT);
 
 		uint32_t ixSecond = db.lookupPatternSecond(idFirst, pNodeF->sid, tidSlotF);
-		if (db.patternSecondIndex[ixSecond] == 0)
+		uint32_t idSecond = db.patternSecondIndex[ixSecond];
+
+		if (idSecond == 0)
 			return 0; // not found
-		uint32_t        idSecond = db.patternSecondIndex[ixSecond];
+
 		patternSecond_t *pSecond = db.patternsSecond + idSecond;
 
 		/*
@@ -1864,7 +1866,7 @@ struct groupTree_t {
 	 *   - merge and prune groups when alternatives are detected.
 	 *   - create intermediate components
 	 */
-	uint32_t expandSignature(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
+	uint32_t __attribute__((used)) expandSignature(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
 
 		signature_t *pSignature = db.signatures + sid;
 
@@ -2200,6 +2202,403 @@ struct groupTree_t {
 				// if intermediate folds to a slot entry, then it's a collapse
 			} else {
 				assert(numStack == 0);
+
+				// NOTE: top-level, use same depth/indent as caller
+				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
+
+				// NOTE: last call, so no need to update gid
+				// NODE: if nid is a slot or gid, then it's an endpoint collapse  
+			}
+
+			// update to latest
+			uint32_t latest = nid;
+			while (latest != this->N[latest].gid)
+				latest = this->N[latest].gid;
+
+			// is it old (fold)
+			if (pActive[latest] == thisVersion) {
+				// yes
+				freeMap(pStack);
+				freeMap(pMap);
+				freeVersion(pActive);
+				return IBIT;
+			}
+
+			// remember
+			pStack[numStack++] = nid;
+			pMap[nextNode++]   = nid;
+			pActive[latest]    = thisVersion;
+
+			if ((unsigned) numStack > maxNodes)
+				ctx.fatal("[stack overflow]\n");
+		}
+		if (numStack != 1)
+			ctx.fatal("[stack not empty]\n");
+
+		// release and return
+		uint32_t ret = pStack[0];
+
+		freeMap(pStack);
+		freeMap(pMap);
+		freeVersion(pActive);
+
+		return ret;
+	}
+
+	/*
+	 * @date 2021-12-03 19:54:05
+	 */
+	uint32_t __attribute__((used)) expandMember(uint32_t mid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
+
+		assert(mid != 0);
+
+		member_t *pMember            = db.members + mid;
+		const char *pMemberTransform = db.revTransformNames[pMember->tid];
+
+//		signature_t *pSignature = db.signatures + sid;
+
+		assert(pMember->numPlaceholder == db.signatures[pMember->sid].numPlaceholder);
+
+		// group id must be latest
+		assert(gid == IBIT || gid == this->N[gid].gid);
+
+		/*
+		 * init
+		 */
+
+		int      numStack = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap(); // evaluation stack
+		uint32_t *pMap    = allocMap(); // node id of intermediates
+		uint32_t *pActive = allocVersion(); // collection of used id's
+
+		// bump versioned memory
+		uint32_t thisVersion = ++mapVersionNr;
+		if (thisVersion == 0) {
+			// version overflow, clear
+			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
+
+			thisVersion = ++mapVersionNr;
+		}
+
+		// add gid to entries, to detect endpoint collapse
+		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+			uint32_t id = pSlots[iSlot];
+			if (id == 0)
+				break;
+
+			// update to latest
+			while (id != this->N[id].gid)
+				id = this->N[id].gid;
+
+			pActive[id] = thisVersion;
+		}
+
+		/*
+		 * Load string
+		 */
+//		printf("M %u:%s\n", mid, pMember->name);
+		for (const char *pattern = pMember->name; *pattern; pattern++) {
+
+			uint32_t Q, Tu, Ti, F;
+
+			switch (*pattern) {
+			case '0': //
+				/*
+				 * Push zero
+				 */
+				pStack[numStack++] = 0;
+				continue; // for
+
+				// @formatter:off
+			case '1': case '2': case '3':
+			case '4': case '5': case '6':
+			case '7': case '8': case '9':
+				// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				if (v < this->nstart || v >= nextNode)
+					ctx.fatal("[node out of range: %d]\n", v);
+				if ((unsigned) numStack >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				pStack[numStack++] = pMap[v];
+				continue; // for
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = (*pattern - 'a');
+
+				if (v >= pMember->numPlaceholder)
+					ctx.fatal("[endpoint out of range: %d]\n", v);
+				if ((unsigned) numStack >= this->ncount)
+					ctx.fatal("[stack overflow]\n");
+
+				// apply member transform
+				v = (pMemberTransform[v] - 'a');
+
+				pStack[numStack++] = pSlots[v];
+				continue; // for
+
+			}
+
+			case '+': {
+				// OR (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = 0;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = F;
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+				if (numStack < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = IBIT;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+				if (numStack < 2)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = 0;
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+				if (numStack < 3)
+					ctx.fatal("[stack underflow]\n");
+
+				F  = pStack[--numStack];
+				Tu = pStack[--numStack];
+				Ti = 0;
+				Q  = pStack[--numStack];
+				break;
+			}
+			default:
+				ctx.fatal("[bad token '%c']\n", *pattern);
+			} // end-switch
+			assert(numStack >= 0);
+
+			/*
+			 * Only arrive here when Q/T/F have been set 
+			 */
+
+			/*
+			 * use the latest lists
+			 */
+
+			// get latest group
+			while (Q != this->N[Q].gid)
+				Q = this->N[Q].gid;
+			while (Tu != this->N[Tu].gid)
+				Tu = this->N[Tu].gid;
+			while (F != this->N[F].gid)
+				F = this->N[F].gid;
+
+			/*
+			 * Perform normalisation
+			 */
+			uint32_t cSid		  = 0; // 0=error/folded
+			uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
+			assert(cSlots[MAXSLOTS - 1] == 0);
+
+			/*
+			 * Level 2 normalisation: single node rewrites
+			 *
+			 * appreciated:
+			 *
+			 *  [ 0] a ? !0 : 0  ->  a
+			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
+			 *  [ 2] a ? !0 : b                  "+" or
+			 *  [ 3] a ? !a : 0  ->  0
+			 *  [ 4] a ? !a : a  ->  a ? !a : 0
+			 *  [ 5] a ? !a : b  ->  b ? !a : b
+			 *  [ 6] a ? !b : 0                  ">" greater-than
+			 *  [ 7] a ? !b : a  ->  a ? !b : 0
+			 *  [ 8] a ? !b : b                  "^" not-equal
+			 *  [ 9] a ? !b : c                  "!" QnTF
+			 *
+			 * depreciated:
+			 *  [10] a ?  0 : 0 -> 0
+			 *  [11] a ?  0 : a -> 0
+			 *  [12] a ?  0 : b -> b ? !a : 0
+			 *  [13] a ?  a : 0 -> a
+			 *  [14] a ?  a : a -> a ?  a : 0
+			 *  [15] a ?  a : b -> a ? !0 : b
+			 *  [16] a ?  b : 0                  "&" and
+			 *  [17] a ?  b : a -> a ?  b : 0
+			 *  [18] a ?  b : b -> b
+			 *  [19] a ?  b : c                  "?" QTF
+			 *
+			  * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
+			  *
+			 */
+
+			if (Q == 0) {
+				// level-1 fold
+				cSid = 0;
+			} else if (Ti) {
+				if (Tu == 0) {
+					if (Q == F) {
+						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
+						cSid = 0;
+					} else if (F == 0) {
+						// [ 0] a ? !0 : 0  ->  a
+						cSid = 0;
+					} else {
+						// [ 2] a ? !0 : b  -> "+" OR
+						cSid = db.SID_OR;
+					}
+				} else if (Q == Tu) {
+					if (Q == F) {
+						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
+						cSid = 0;
+					} else if (F == 0) {
+						// [ 3] a ? !a : 0  ->  0
+						cSid = 0;
+					} else {
+						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						Q = F;
+						F = 0;
+						cSid = db.SID_GT;
+					}
+				} else {
+					if (Q == F) {
+						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
+						F = 0;
+						cSid = db.SID_GT;
+					} else {
+						if (F == 0) {
+							// [ 6] a ? !b : 0  -> ">" greater-than
+							cSid = db.SID_GT;
+						} else if (Tu == F) {
+							// [ 8] a ? !b : b  -> "^" not-equal/xor
+							cSid = db.SID_NE;
+						} else {
+							// [ 9] a ? !b : c  -> "!" QnTF
+							cSid = db.SID_QNTF;
+						}
+					}
+				}
+
+			} else {
+
+				if (Tu == 0) {
+					if (Q == F) {
+						// [11] a ?  0 : a -> 0
+						cSid = 0;
+					} else if (F == 0) {
+						// [10] a ?  0 : 0 -> 0
+						cSid = 0;
+					} else {
+						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+						Tu = Q;
+						Ti = IBIT;
+						Q = F;
+						F = 0;
+						cSid = db.SID_GT;
+					}
+				} else if (Q == Tu) {
+					if (Q == F) {
+						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
+						cSid = 0;
+					} else if (F == 0) {
+						// [13] a ?  a : 0 -> a
+						cSid = 0;
+					} else {
+						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
+						Tu = 0;
+						Ti = IBIT;
+						cSid = db.SID_OR;
+					}
+				} else {
+					if (Q == F) {
+						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
+						F = 0;
+						cSid = db.SID_AND;
+					} else {
+						if (F == 0) {
+							// [16] a ?  b : 0             "&" and
+							cSid = db.SID_AND;
+						} else {
+							// [18] a ?  b : b -> b        ALREADY TESTED		
+							// [19] a ?  b : c             "?" QTF
+							cSid = db.SID_QTF;
+						}
+					}
+				}
+			}
+
+			// have operands folded?
+			if (cSid == 0 || Q == gid || Tu == gid || F == gid) {
+				// yes
+				freeMap(pStack);
+				freeMap(pMap);
+				freeVersion(pActive);
+				return IBIT;
+			}
+
+			uint32_t nid;
+			if (pattern[1]) {
+				nid = addNormaliseNode(Q, Tu ^ Ti, F, IBIT, depth + 1);
+
+				// if intermediate folds to a slot entry, then it's a collapse
+			} else {
+				assert(numStack == 0);
+
+				// gid might have been outdated
+				while (gid != this->N[gid].gid)
+					gid = this->N[gid].gid;
 
 				// NOTE: top-level, use same depth/indent as caller
 				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
