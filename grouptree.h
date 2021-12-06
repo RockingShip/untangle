@@ -1560,24 +1560,48 @@ struct groupTree_t {
 			if (gid < this->nstart)
 				break;
 
-			if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid) {
+			bool changed = false;
+			
 				if (Q != this->N[iQ].gid) {
-					while (Q != this->N[Q].gid)
-						Q = this->N[Q].gid; // restart with new list
-					printf("%.*sRESTART-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
-					iQ = Q; // restart loop
+				while (iQ != this->N[iQ].gid)
+					iQ = this->N[iQ].gid; // restart with new list
+				printf("%.*sJUMP-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+				Q = iQ; // restart loop
+				changed = true;
+			} else if (iQ == this->N[iQ].next && iQ> this->nstart) {
+				while (iQ != this->N[iQ].gid)
+					iQ = this->N[iQ].gid; // restart with new list
+				printf("%.*sORPHAN-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+				Q = iQ; // restart loop
+				changed = true;
 				}
+
 				if (Tu != this->N[iTu].gid) {
-					while (Tu != this->N[Tu].gid)
-						Tu = this->N[Tu].gid; // restart with new list
-					printf("%.*sRESTART-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
-					iTu = Tu; // restart loop
+				while (iTu != this->N[iTu].gid)
+					iTu = this->N[iTu].gid; // restart with new list
+				printf("%.*sJUMP-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+				Tu = iTu; // restart loop
+				changed = true;
+			} else if (iTu == this->N[iTu].next && iTu> this->nstart) {
+				while (iTu != this->N[iTu].gid)
+					iTu = this->N[iTu].gid; // restart with new list
+				printf("%.*sORPHAN-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+				Tu = iTu; // restart loop
+				changed = true;
 				}
+				
 				if (F != this->N[iF].gid) {
-					while (F != this->N[F].gid)
-						F = this->N[F].gid;
-					printf("%.*sRESTART-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
-					iF = F; // restart loop
+				while (iF != this->N[iF].gid)
+					iF = this->N[iF].gid;
+				printf("%.*sJUMP-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+				F = iF; // restart loop
+				changed = true;
+			} else if (iF == this->N[iF].next && iF> this->nstart) {
+				while (iF != this->N[iF].gid)
+					iF = this->N[iF].gid;
+				printf("%.*sORPHAN-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+				F = iF;
+				changed = true;
 				}
 
 				/*
@@ -1587,12 +1611,9 @@ struct groupTree_t {
 				if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
 					break; // collapsed
 
+			if (changed)	
 				continue;
-			}
 
-			// test for iterator collapse
-			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
-				break; // collapsed
 
 			// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 			// node 0 is a single node list containing SID_ZERO.

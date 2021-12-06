@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-06 14:13:52 Fixed: `groupTree::addNormaliseNode()`, Guard c-product iterators against jumps to orphans.
 2021-12-06 14:09:42 Added: `groupTree_t::expandMembers()`, Controlled sub-structure creation.
 2021-12-06 13:55:23 Fixed: `groupTree_t::addToCollection()`, Orphan worst when adding a better node.
 2021-12-06 13:50:34 Changed: `groupTree_t::validateTree()`, Test slot uniqueness.

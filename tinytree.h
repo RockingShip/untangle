@@ -2449,7 +2449,6 @@ struct tinyTree_t {
 
 		unsigned nameLen  = 0;
 
-
 		if ((id & ~IBIT) < TINYTREE_NSTART) {
 			if (pSkin) {
 				if ((id & ~IBIT) == 0) {
