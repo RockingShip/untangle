@@ -1194,11 +1194,24 @@ struct groupTree_t {
 
 			// set sid/slots
 			if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
+				if (Q < F) {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = F;
-			} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
+				} else {
+					pNode->slots[0] = F;
+					pNode->slots[1] = Q;
+				}
+			} else if (tlSid == db.SID_GT) {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = Tu;
+			} else if (tlSid == db.SID_AND) {
+				if (Q < Tu) {
+				pNode->slots[0] = Q;
+				pNode->slots[1] = Tu;
+				} else {
+					pNode->slots[0] = Tu;
+					pNode->slots[1] = Q;
+				}
 			} else {
 				pNode->slots[0] = Q;
 				pNode->slots[1] = Tu;
