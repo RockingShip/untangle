@@ -1991,6 +1991,7 @@ struct groupTree_t {
 	 *   - there should be a group for every signature node (ids should be unique)
 	 *   - merge and prune groups when alternatives are detected.
 	 *   - create intermediate components
+	 *   - And component referencing `gid` is considered a collapse to self.
 	 */
 	uint32_t __attribute__((used)) expandSignature(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
 
@@ -2030,6 +2031,8 @@ struct groupTree_t {
 				
 			pActive[id] = thisVersion;
 		}
+		// only op-level may reference `gid`
+		pActive[gid] = thisVersion;
 		
 		/*
 		 * Load string
@@ -2342,7 +2345,8 @@ struct groupTree_t {
 				latest = this->N[latest].gid;
 
 			// is it old (fold)
-			if (pActive[latest] == thisVersion) {
+			// NOTE: exclude top-level reference to gid (that is expected)
+			if (pActive[latest] == thisVersion && !(pattern[1] == 0 && latest == gid)) {
 				// yes
 				freeMap(pStack);
 				freeMap(pMap);

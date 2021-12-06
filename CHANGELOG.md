@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-06 16:45:22 Fixed: `groupTree_t::expandSignatures()`, Folding is components refer to self.
 2021-12-06 16:41:22 Changed: `groupTree::addNormaliseNode()`, Alternative approach to top-level ordering.
 2021-12-06 14:38:24 Added: `groupTree_t::maxDepth`, To restrict node expansions.
 2021-12-06 14:13:52 Fixed: `groupTree::addNormaliseNode()`, Guard c-product iterators against jumps to orphans.
