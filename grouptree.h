@@ -970,7 +970,7 @@ struct groupTree_t {
 
 // guard that T is not used directly		
 #define T @ 
-		
+
 		/*
 		 * use the latest lists
 		 */
@@ -3156,8 +3156,31 @@ struct groupTree_t {
 		bool     groupForward = false;
 		uint32_t *pVersion    = allocVersion();
 
+		/*
+		 * first scan for layer powers 
+		 */
+		unsigned pwr[8] = {0};
+
+		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			const groupNode_t *pNode         = this->N + iNode;
+			switch(db.signatures[pNode->sid].size) {
+			case 0: if (pwr[0] < pNode->power) pwr[0] = pNode->power;
+			case 1: if (pwr[1] < pNode->power) pwr[1] = pNode->power;
+			case 2: if (pwr[2] < pNode->power) pwr[2] = pNode->power;
+			case 3: if (pwr[3] < pNode->power) pwr[3] = pNode->power;
+			case 4: if (pwr[4] < pNode->power) pwr[4] = pNode->power;
+			case 5: if (pwr[5] < pNode->power) pwr[5] = pNode->power;
+			case 6: if (pwr[6] < pNode->power) pwr[6] = pNode->power;
+			case 7: if (pwr[7] < pNode->power) pwr[7] = pNode->power;
+				break;
+			default:
+				assert(0);
+			}
+		}
+		
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode = this->N + iNode;
+			unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE)
 				printf("P gid=%u\tnid=%u\t%u:%s/[",
@@ -3173,34 +3196,33 @@ struct groupTree_t {
 			assert(thisVersion != 0);
 			pVersion[iGroup] = thisVersion;
 
-			// check node
-			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+			if (pNode->power < pwr[db.signatures[pNode->sid].size]) {
+				// orphan if weak
+				uint32_t prevId = pNode->prev;
+				unlinkNode(iNode);
+				iNode = prevId;
+				continue;
+			}
+				
+			// check references
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
-				if (id == 0)
-					break;
 
-				if (iSlot != 0)
-					putchar(' '); // delimiter
+				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE && iSlot != 0) putchar(' '); // delimiter
 				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("%u", id);
 
 				if (id != this->N[id].gid) {
-					if (!nodeOutdated) {
-						// prepare `newSlots`
-						for (unsigned j = 0; j < iSlot; j++)
-							newSlots[j] = pNode->slots[j];
-						for (unsigned j = iSlot; j < MAXSLOTS; j++)
-							newSlots[j] = 0;
-						nodeOutdated = true;
-					}
+					nodeOutdated = true;
 
 					// get latest
 					while (id != this->N[id].gid)
 						id = this->N[id].gid;
 
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<outdated:new=%u>", id);
+					assert(id != 0);
 
-					newSlots[iSlot] = id;
 				}
+				newSlots[iSlot] = id;
 
 				if (pVersion[id] == thisVersion) {
 					// node has folded
@@ -3211,6 +3233,11 @@ struct groupTree_t {
 					nodeForward = true;
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<forward>");
 				}
+			}
+			if (nodeOutdated) {
+				// zero-fill
+				for (unsigned j = numPlaceholder; j < MAXSLOTS; j++)
+					newSlots[j] = 0;
 			}
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("]");
@@ -3245,6 +3272,9 @@ struct groupTree_t {
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf(" pwr=%u\n", pNode->power);
 		}
 
+		// may not orphan all nodes
+		assert(iGroup != this->N[iGroup].next);
+
 		freeVersion(pVersion);
 		return groupForward;
 	}
@@ -3258,6 +3288,7 @@ struct groupTree_t {
 
 		printf("UPDATE\n");
 
+		firstGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`. 
 
 		int loopCount = 0; // simple loop detection
 
