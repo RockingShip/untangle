@@ -2350,12 +2350,14 @@ struct groupTree_t {
 					int cmp = this->compare(id, sid, pSlots);
 					assert(cmp != 0);
 
-					if (cmp < 0) {
-						// list has better
+					if (cmp <= 0) {
+						// list has better/same
 						return id;
+					} else {
+						// list is worse, orphan
+						unlinkNode(id);
+						break;
 					}
-
-					break;
 				}
 			}
 		}

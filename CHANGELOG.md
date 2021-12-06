@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-06 13:55:23 Fixed: `groupTree_t::addToCollection()`, Orphan worst when adding a better node.
 2021-12-06 13:50:34 Changed: `groupTree_t::validateTree()`, Test slot uniqueness.
 2021-12-06 13:34:39 Fixed: `groupTree::addNormaliseNode()`, Sid-swap top-level in fallback code.
 2021-12-06 13:28:12 Added: `groupTree_t::saveStringNode()`, Displaying nodes based on their sid structure. 
