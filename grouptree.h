@@ -2244,389 +2244,6 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-11-19 19:21:13
-	 * 
-	 * Verify sid/slots to determine if they have collapsed, assuming `expandSignature()` created them.
-	 * return IBIT if signature folded
-	 */
-	uint32_t verifySignature(uint32_t sid, const uint32_t *pSlots) {
-
-		signature_t *pSignature = db.signatures + sid;
-
-		/*
-		 * init
-		 */
-
-		int      numStack = 0;
-		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap(); // evaluation stack
-		uint32_t *pMap    = allocMap(); // id of intermediates
-		uint32_t *pActive = allocVersion(); // collection of used id's
-
-		// bump versioned memory
-		uint32_t thisVersion = ++mapVersionNr;
-		if (thisVersion == 0) {
-			// version overflow, clear
-			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
-
-			thisVersion = ++mapVersionNr;
-		}
-
-		// add slot entries
-		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-			uint32_t id = pSlots[iSlot];
-			if (id == 0)
-				break;
-
-			pActive[id] = thisVersion;
-		}
-		
-		/*
-		 * Load string
-		 */
-		for (const char *pattern = pSignature->name; *pattern; pattern++) {
-
-			uint32_t Q, Tu, Ti, F;
-			
-			switch (*pattern) {
-			case '0': //
-				/*
-				 * Push zero
-				 */
-				pStack[numStack++] = 0;
-				continue; // for
-
-				// @formatter:off
-			case '1': case '2': case '3':
-			case '4': case '5': case '6':
-			case '7': case '8': case '9':
-				// @formatter:on
-			{
-				/*
-				 * Push back-reference
-				 */
-				uint32_t v = nextNode - (*pattern - '0');
-
-				if (v < this->nstart || v >= nextNode)
-					ctx.fatal("[node out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
-
-				pStack[numStack++] = pMap[v];
-				continue; // for
-			}
-
-				// @formatter:off
-			case 'a': case 'b': case 'c': case 'd':
-			case 'e': case 'f': case 'g': case 'h':
-			case 'i': case 'j': case 'k': case 'l':
-			case 'm': case 'n': case 'o': case 'p':
-			case 'q': case 'r': case 's': case 't':
-			case 'u': case 'v': case 'w': case 'x':
-			case 'y': case 'z':
-				// @formatter:on
-			{
-				/*
-				 * Push endpoint
-				 */
-				uint32_t v = (*pattern - 'a');
-
-				if (v >= pSignature->numPlaceholder)
-					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
-
-				pStack[numStack++] = pSlots[v];
-				continue; // for
-
-			}
-
-			case '+': {
-				// OR (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = pStack[--numStack];
-				Tu = 0;
-				Ti = IBIT;
-				Q  = pStack[--numStack];
-				break;
-			}
-			case '>': {
-				// GT (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = IBIT;
-				Q  = pStack[--numStack];
-				break;
-			}
-			case '^': {
-				// XOR/NE (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = pStack[--numStack];
-				Tu = F;
-				Ti = IBIT;
-				Q  = pStack[--numStack];
-				break;
-			}
-			case '!': {
-				// QnTF (appreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = IBIT;
-				Q  = pStack[--numStack];
-				break;
-			}
-			case '&': {
-				// AND (depreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = 0;
-				Q  = pStack[--numStack];
-				break;
-			}
-			case '?': {
-				// QTF (depreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
-
-				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = 0;
-				Q  = pStack[--numStack];
-				break;
-			}
-			default:
-				ctx.fatal("[bad token '%c']\n", *pattern);
-			} // end-switch
-			assert(numStack >= 0);
-
-			/*
-			 * Only arrive here when Q/T/F have been set 
-			 */
-
-			/*
-			 * use the latest lists
-			 */
-
-			while (Q != this->N[Q].gid)
-				Q = this->N[Q].gid;
-			while (Tu != this->N[Tu].gid)
-				Tu = this->N[Tu].gid;
-			while (F != this->N[F].gid)
-				F = this->N[F].gid;
-
-			/*
-			 * Perform normalisation
-			 */
-			uint32_t cSid		  = 0; // 0=error/folded
-			uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
-			assert(cSlots[MAXSLOTS - 1] == 0);
-
-			/*
-			 * Level 2 normalisation: single node rewrites
-			 *
-			 * appreciated:
-			 *
-			 *  [ 0] a ? !0 : 0  ->  a
-			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
-			 *  [ 2] a ? !0 : b                  "+" or
-			 *  [ 3] a ? !a : 0  ->  0
-			 *  [ 4] a ? !a : a  ->  a ? !a : 0
-			 *  [ 5] a ? !a : b  ->  b ? !a : b
-			 *  [ 6] a ? !b : 0                  ">" greater-than
-			 *  [ 7] a ? !b : a  ->  a ? !b : 0
-			 *  [ 8] a ? !b : b                  "^" not-equal
-			 *  [ 9] a ? !b : c                  "!" QnTF
-			 *
-			 * depreciated:
-			 *  [10] a ?  0 : 0 -> 0
-			 *  [11] a ?  0 : a -> 0
-			 *  [12] a ?  0 : b -> b ? !a : 0
-			 *  [13] a ?  a : 0 -> a
-			 *  [14] a ?  a : a -> a ?  a : 0
-			 *  [15] a ?  a : b -> a ? !0 : b
-			 *  [16] a ?  b : 0                  "&" and
-			 *  [17] a ?  b : a -> a ?  b : 0
-			 *  [18] a ?  b : b -> b
-			 *  [19] a ?  b : c                  "?" QTF
-			 *
-			  * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
-			  *
-			 */
-
-			if (Q == 0) {
-				// level-1 fold
-				cSid = 0;
-			} else if (Ti) {
-				if (Tu == 0) {
-					if (Q == F) {
-						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
-						// [ 0] a ? !0 : 0  ->  a
-						cSid = 0;
-					} else {
-						// [ 2] a ? !0 : b  -> "+" OR
-						cSid = db.SID_OR;
-					}
-				} else if (Q == Tu) {
-					if (Q == F) {
-						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						cSid = 0;
-					} else if (F == 0) {
-						// [ 3] a ? !a : 0  ->  0
-						cSid = 0;
-					} else {
-						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Q = F;
-						F = 0;
-						cSid = db.SID_GT;
-					}
-				} else {
-					if (Q == F) {
-						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-						F = 0;
-						cSid = db.SID_GT;
-					} else {
-						if (F == 0) {
-							// [ 6] a ? !b : 0  -> ">" greater-than
-							cSid = db.SID_GT;
-						} else if (Tu == F) {
-							// [ 8] a ? !b : b  -> "^" not-equal/xor
-							cSid = db.SID_NE;
-						} else {
-							// [ 9] a ? !b : c  -> "!" QnTF
-							cSid = db.SID_QNTF;
-						}
-					}
-				}
-
-			} else {
-
-				if (Tu == 0) {
-					if (Q == F) {
-						// [11] a ?  0 : a -> 0
-						cSid = 0;
-					} else if (F == 0) {
-						// [10] a ?  0 : 0 -> 0
-						cSid = 0;
-					} else {
-						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Tu = Q;
-						Ti = IBIT;
-						Q = F;
-						F = 0;
-						cSid = db.SID_GT;
-					}
-				} else if (Q == Tu) {
-					if (Q == F) {
-						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
-						// [13] a ?  a : 0 -> a
-						cSid = 0;
-					} else {
-						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-						Tu = 0;
-						Ti = IBIT;
-						cSid = db.SID_OR;
-					}
-				} else {
-					if (Q == F) {
-						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-						F = 0;
-						cSid = db.SID_AND;
-					} else {
-						if (F == 0) {
-							// [16] a ?  b : 0             "&" and
-							cSid = db.SID_AND;
-						} else {
-							// [18] a ?  b : b -> b        ALREADY TESTED		
-							// [19] a ?  b : c             "?" QTF
-							cSid = db.SID_QTF;
-						}
-					}
-				}
-			}
-
-			// have operands folded?
-			if (cSid == 0) {
-				// yes	
-				freeMap(pStack);
-				freeMap(pMap);
-				freeVersion(pActive);
-				return IBIT;
-			}
-			
-			/*
-			 * Lookup if 1n9 exists.
-			 */
-
-			// set slots
-			if (cSid == db.SID_OR || cSid == db.SID_NE) {
-				cSlots[0] = Q;
-				cSlots[1] = F;
-			} else if (cSid == db.SID_GT || cSid == db.SID_AND) {
-				cSlots[0] = Q;
-				cSlots[1] = Tu;
-			} else {
-				cSlots[0] = Q;
-				cSlots[1] = Tu;
-				cSlots[2] = F;
-			}
-
-			// test if node already exists
-			uint32_t ix  = this->lookupNode(cSid, cSlots);
-			uint32_t id = this->nodeIndex[ix]; // 0 if not found
-
-			// get latest
-			while (id != this->N[id].gid)
-				id = this->N[id].gid;
-			
-			// does id exist and is it new
-			if (id == 0 || pActive[id] == thisVersion) {
-				// no
-				freeMap(pStack);
-				freeMap(pMap);
-				freeVersion(pActive);
-				return IBIT;
-			}
-
-			// remember
-			pStack[numStack++] = id;
-			pMap[nextNode++] = id;
-			pActive[id] = thisVersion;
-
-			if ((unsigned) numStack > maxNodes)
-				ctx.fatal("[stack overflow]\n");
-		}
-		if (numStack != 1)
-			ctx.fatal("[stack not empty]\n");
-
-		// release and return
-		uint32_t ret = pStack[0];
-		assert(ret >= this->nstart);
-		
-		freeMap(pStack);
-		freeMap(pMap);
-		freeVersion(pActive);
-
-		return ret;
-	}
-
-	/*
 	 * @date 2021-11-05 03:09:35
 	 * 
 	 * Add a node to the group list
@@ -2678,6 +2295,16 @@ struct groupTree_t {
 			assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
 			assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
 			assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
+
+			assert(gid != pSlots[0]);
+			assert(gid != pSlots[1]);
+			assert(gid != pSlots[2]);
+			assert(gid != pSlots[3]);
+			assert(gid != pSlots[4]);
+			assert(gid != pSlots[5]);
+			assert(gid != pSlots[6]);
+			assert(gid != pSlots[7]);
+			assert(gid != pSlots[8]);
 		}
 
 		uint32_t ix = this->lookupNode(sid, pSlots);
@@ -2693,8 +2320,6 @@ struct groupTree_t {
 
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
-
-			printf("%s %s\n", this->saveString(gid).c_str(), this->saveString(N[nid].gid).c_str());
 
 			// merge groups lists
 			// NOTE: `depth=0` is considered an unexpected event: `updateGroup()` creating an updated node which already exists.
@@ -2783,9 +2408,13 @@ struct groupTree_t {
 	 */
 	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
+		assert(newest != oldest);
 		assert(newest >= this->nstart);
 		assert(newest == this->N[newest].gid);
 		assert(oldest == this->N[oldest].gid);
+
+		printf("importgroup=1 ./eval \"%s\" \"%s\"\n", this->saveString(newest).c_str(), this->saveString(N[oldest].gid).c_str());
+
 
 		// relocate nodes
 		if (oldest < this->ncount) {
@@ -2803,6 +2432,7 @@ struct groupTree_t {
 			// let current group forward to new
 			this->N[newest].gid = oldest;
 			
+			assert(oldest < this->nstart || oldest != this->N[oldest].next);
 			return oldest;
 		}
 
@@ -2934,6 +2564,7 @@ struct groupTree_t {
 		 */
 		if (orphanedAll) {
 			this->N[newest].gid = oldest;
+			assert(oldest < this->nstart || oldest != this->N[oldest].next);
 			return oldest;
 		}
 
@@ -2976,6 +2607,7 @@ struct groupTree_t {
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
+		assert(newest < this->nstart || newest != this->N[newest].next);
 		return newest;
 	}
 
@@ -3326,23 +2958,23 @@ struct groupTree_t {
 			pVersion[iKey] = thisVersion;
 		}
 
+		// check orphans
+		for (uint32_t iNode = this->nstart; iNode < this->ncount; iNode++) {
+			const groupNode_t *pNode = this->N + iNode;
+			
+			if (pNode->next == iNode && iNode == pNode->gid )
+				assert(0);
+			
+			if (pNode->gid != this->N[pNode->gid].gid && pNode->next != iNode)
+				assert(0);
+		}
+		
 		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			// find group headers
 			if (this->N[iGroup].gid == iGroup) {
 
 				// does group have `1n9`
 				bool has1n9 = false;
-				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					const groupNode_t *pNode = this->N + iNode;
-
-					// ignore lists under construction
-					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF) {
-						has1n9 = true;
-						break;
-					}
-				}
-				if (!has1n9)
-					errors++;
 				
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
@@ -3356,7 +2988,12 @@ struct groupTree_t {
 					if (pVersion[iNode] == thisVersion)
 						errors++;
 
-					bool outdated = false;
+					// is it `1n9`
+					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
+						has1n9 = true;
+
+					uint32_t newSlots[MAXSLOTS] = {0};
+
 					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
 						if (id == 0)
@@ -3364,32 +3001,40 @@ struct groupTree_t {
 
 						// update
 						if (id != this->N[id].gid) {
-							outdated = true;
 							while (id != this->N[id].gid)
 								id = this->N[id].gid;
+						}
+							
+						if (id == iGroup) {
+							// self-reference to group 
+							errors++;
 						}
 							
 						if (pVersion[id] != thisVersion) {
 							// reference not defined
 							if (!allowForward)
 								errors++;
-						} else if (id != this->N[id].gid) {
-							// reference orphaned
-							errors++;
 						}
 					}
 					
-					// test if node folds
-					if (outdated) {
-						uint32_t nid = verifySignature(pNode->sid, pNode->slots);
-						printf("DO BETTER\n");
-						return;
-						assert(nid != IBIT); // todo: do better
-					}
+					// test slots are unique
+					assert(newSlots[1] == 0 || (newSlots[1] != newSlots[0]));
+					assert(newSlots[2] == 0 || (newSlots[2] != newSlots[0] && newSlots[2] != newSlots[1]));
+					assert(newSlots[3] == 0 || (newSlots[3] != newSlots[0] && newSlots[3] != newSlots[1] && newSlots[3] != newSlots[2]));
+					assert(newSlots[4] == 0 || (newSlots[4] != newSlots[0] && newSlots[4] != newSlots[1] && newSlots[4] != newSlots[2] && newSlots[4] != newSlots[3]));
+					assert(newSlots[5] == 0 || (newSlots[5] != newSlots[0] && newSlots[5] != newSlots[1] && newSlots[5] != newSlots[2] && newSlots[5] != newSlots[3] && newSlots[5] != newSlots[4]));
+					assert(newSlots[6] == 0 || (newSlots[6] != newSlots[0] && newSlots[6] != newSlots[1] && newSlots[6] != newSlots[2] && newSlots[6] != newSlots[3] && newSlots[6] != newSlots[4] && newSlots[6] != newSlots[5]));
+					assert(newSlots[7] == 0 || (newSlots[7] != newSlots[0] && newSlots[7] != newSlots[1] && newSlots[7] != newSlots[2] && newSlots[7] != newSlots[3] && newSlots[7] != newSlots[4] && newSlots[7] != newSlots[5] && newSlots[7] != newSlots[6]));
+					assert(newSlots[8] == 0 || (newSlots[8] != newSlots[0] && newSlots[8] != newSlots[1] && newSlots[8] != newSlots[2] && newSlots[8] != newSlots[3] && newSlots[8] != newSlots[4] && newSlots[8] != newSlots[5] && newSlots[8] != newSlots[6] && newSlots[8] != newSlots[7]));
+
 
 					// mark node found
 					pVersion[iNode] = thisVersion;
 				}
+
+				// each group needs at least one `1n9`
+				if (!has1n9)
+					errors++;
 
 				// test double defined
 				if (pVersion[iGroup] == thisVersion)
@@ -3466,8 +3111,14 @@ struct groupTree_t {
 
 						printf("%u", pNode->slots[iSlot]);
 
-						if (pVersion[id] != thisVersion) {
+						if (id == iGroup) {
+							// slots reference own group
+							printf("<ERROR:gid=self>");
+						} else if (pVersion[id] != thisVersion) {
 							// reference not defined
+							if (id == this->N[id].gid)
+								printf("<FORWARD>");
+							else
 							printf("<MISSING>");
 						} else if (id != this->N[id].gid) {
 							// reference orphaned
