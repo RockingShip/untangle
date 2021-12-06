@@ -3524,17 +3524,20 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-11-04 01:15:46
-	 *
-	 * Export a sub-tree with a given head id as siting.
-	 * Optionally endpoint normalised with a separate transform.
-	 * Return string is static allocated
+	 * @date 2021-12-06 13:12:41
 	 * 
-	 * NOTE: Tree is expressed in terms of 1n9 nodes
-	 * NOTE: `std::string` usage exception because this is NOT speed critical code AND strings can become gigantically large
+	 * Display a node.
+	 * If a list header, find first `1n9` of groups and expand then in a Q/T/F manner
+	 * If a node, rebuild sid and replace endpoints with expanded slot entries (which always reference groups)
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
 
+		if (this->N[id].sid != db.SID_SELF) {
+			// requesting a specific node 
+			assert(pTransform == NULL);
+			return saveStringNode(id);
+		} 
+		
 		// get latest gid
 		uint32_t gid = id & ~IBIT;
 		while (gid != this->N[gid].gid)
@@ -3612,7 +3615,7 @@ struct groupTree_t {
 			// get latest
 			while (curr != this->N[curr].gid)
 				curr = this->N[curr].gid;
-			
+
 			assert(curr != 0);
 
 			// if endpoint then emit
@@ -3801,6 +3804,191 @@ struct groupTree_t {
 		freeVersion(pVersion);
 
 		return name;
+	}
+	
+	/*
+	 * @date  2021-12-04 20:12:48
+	 * 
+	 * Expensive version of `saveString()` that decodes the node instead of its group.
+	 * Node sid is used to expand slots entries using `saveStringGroup()`.
+	 * There identical sub-structures across slots are not detected or compacted.
+	 * Separate components with spaces.
+	 */
+	std::string saveStringNode(uint32_t nid) {
+
+		uint32_t latest = nid;
+		while (latest != this->N[latest].gid)
+			latest = this->N[latest].gid;
+		
+		groupNode_t *pNode = this->N + nid;
+		signature_t *pSignature = db.signatures + pNode->sid;
+
+		// state storage for postfix notation
+		std::string stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
+		int         numStack        = 0;
+		uint32_t    nextNode        = tinyTree_t::TINYTREE_NSTART; // next visual node
+		std::string beenWhat[tinyTree_t::TINYTREE_NEND]; // track id's of display operators.
+
+		// walk through the notation until end or until placeholder/skin separator
+		for (const char *pCh = pSignature->name; *pCh; pCh++) {
+
+			switch (*pCh) {
+			case '0':
+				stack[numStack++] = "0";
+				break;
+			case 'a': case 'b': case 'c':
+			case 'd': case 'e': case 'f':
+			case 'g': case 'h': case 'i':
+				stack[numStack++] = saveString(pNode->slots[(int) (*pCh - 'a')]);
+				break;
+			case '1': case '2': case '3':
+			case '4': case '5': case '6':
+			case '7': case '8': case '9':
+				stack[numStack++] = beenWhat[nextNode - (*pCh - '0')];
+				break;
+
+			case '+': {
+				// OR (appreciated)
+
+				// pop operands
+				std::string R = stack[--numStack]; // right hand side
+				std::string L = stack[--numStack]; // left hand side
+
+				// create operator
+				L += ' ';
+				L += R;
+				L += '+';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = L;
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+
+				//pop operands
+				std::string R = stack[--numStack]; // right hand side
+				std::string L = stack[--numStack]; // left hand side
+
+				// create operator
+				L += ' ';
+				L += R;
+				L += '>';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = L;
+				break;
+			}
+			case '^': {
+				// NE/XOR (appreciated)
+
+				//pop operands
+				std::string R = stack[--numStack]; // right hand side
+				std::string L = stack[--numStack]; // left hand side
+
+				// create operator
+				L += ' ';
+				L += R;
+				L += '^';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = L;
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+
+				// pop operands
+				std::string F = stack[--numStack];
+				std::string T = stack[--numStack];
+				std::string Q = stack[--numStack];
+
+				// create operator
+				Q += ' ';
+				Q += T;
+				Q += ' ';
+				Q += F;
+				Q += '!';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = Q;
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+
+				// pop operands
+				std::string R = stack[--numStack]; // right hand side
+				std::string L = stack[--numStack]; // left hand side
+
+				// create operator
+				L += ' ';
+				L += R;
+				L += '&';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = L;
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+
+				// pop operands
+				std::string F = stack[--numStack];
+				std::string T = stack[--numStack];
+				std::string Q = stack[--numStack];
+
+				// create operator
+				Q += ' ';
+				Q += T;
+				Q += ' ';
+				Q += F;
+				Q += '?';
+
+				// push
+				stack[numStack++] = beenWhat[nextNode++] = Q;
+				break;
+			}
+			case '~': {
+				// NOT (support)
+
+				// invert top-of-stack
+				stack[numStack - 1] += '~';
+				break;
+			}
+
+			case '/':
+				// skip delimiter
+				while (pCh[1])
+					pCh++;
+				break;
+			}
+		}
+		assert (numStack == 1);
+
+		// return root of name
+		return stack[numStack - 1];
+	}
+
+	/*
+	 * @date 2021-12-06 13:30:28 
+	 * For debugging
+	 */
+	std::string __attribute__((used)) dumpGroup(uint32_t gid) {
+		while(gid != this->N[gid].gid)
+			gid = this->N[gid].gid;
+		
+		assert(gid == this->N[gid].gid);
+
+		std::string   ret = "./eval";
+		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			ret += " \"";
+			ret += saveStringNode(iNode);
+			ret += "\"";
+		}
+
+		printf("%s\n", ret.c_str());
+		return ret;
 	}
 
 	/*
@@ -4216,11 +4404,13 @@ struct groupTree_t {
 			 */
 
 			nid = addNormaliseNode(Q, Tu ^ Ti, F);
-			printf("### %s\n", saveString(nid).c_str());
 
 			uint32_t latest = nid;
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
+
+			printf("### %s\n", saveString(latest).c_str());
+
 			for (uint32_t iNode = this->N[latest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 				printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
