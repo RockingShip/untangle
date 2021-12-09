@@ -1626,7 +1626,7 @@ struct groupTree_t {
 						continue; // yes, silently ignore (and restart)
 					}
 
-					// update gid	
+					// update to latest gid
 					gid = expand;
 					while (gid != this->N[gid].gid)
 						gid = this->N[gid].gid;
@@ -1727,48 +1727,48 @@ struct groupTree_t {
 				break;
 
 			bool changed = false;
-			
-				if (Q != this->N[iQ].gid) {
+
+			if (Q != this->N[iQ].gid) {
 				while (iQ != this->N[iQ].gid)
 					iQ = this->N[iQ].gid; // restart with new list
 				printf("%.*sJUMP-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
-				Q = iQ; // restart loop
+				Q       = iQ; // restart loop
 				changed = true;
-			} else if (iQ == this->N[iQ].next && iQ> this->nstart) {
+			} else if (iQ == this->N[iQ].next && iQ >= this->nstart) {
 				while (iQ != this->N[iQ].gid)
 					iQ = this->N[iQ].gid; // restart with new list
 				printf("%.*sORPHAN-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
-				Q = iQ; // restart loop
+				Q       = iQ; // restart loop
 				changed = true;
-				}
+			}
 
-				if (Tu != this->N[iTu].gid) {
+			if (Tu != this->N[iTu].gid) {
 				while (iTu != this->N[iTu].gid)
 					iTu = this->N[iTu].gid; // restart with new list
 				printf("%.*sJUMP-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
-				Tu = iTu; // restart loop
+				Tu      = iTu; // restart loop
 				changed = true;
-			} else if (iTu == this->N[iTu].next && iTu> this->nstart) {
+			} else if (iTu == this->N[iTu].next && iTu >= this->nstart) {
 				while (iTu != this->N[iTu].gid)
 					iTu = this->N[iTu].gid; // restart with new list
 				printf("%.*sORPHAN-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
-				Tu = iTu; // restart loop
+				Tu      = iTu; // restart loop
 				changed = true;
-				}
-				
-				if (F != this->N[iF].gid) {
+			}
+
+			if (F != this->N[iF].gid) {
 				while (iF != this->N[iF].gid)
 					iF = this->N[iF].gid;
 				printf("%.*sJUMP-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
-				F = iF; // restart loop
+				F       = iF; // restart loop
 				changed = true;
-			} else if (iF == this->N[iF].next && iF> this->nstart) {
+			} else if (iF == this->N[iF].next && iF >= this->nstart) {
 				while (iF != this->N[iF].gid)
 					iF = this->N[iF].gid;
 				printf("%.*sORPHAN-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
-				F = iF;
+				F       = iF;
 				changed = true;
-				}
+			}
 
 			/*
 			 * Test for iterator collapsing

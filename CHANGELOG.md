@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-09 18:29:14 Fixed: `groupTree::addNormaliseNode()`, c-product iterator orphan detection.
 2021-12-09 17:52:50 Fixed: `groupTree_t::pruneGroup()`, Update slots, orphan forwarding and renamed to `scrubGroup()`. 
 2021-12-09 17:50:33 Fixed: `groupTree_t`, Better detection self-collapse.
 2021-12-09 17:28:44 Changed: `groupTree_t`, Unroll `MAXSLOTS` by using `numPlaceholder`.
