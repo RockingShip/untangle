@@ -3244,6 +3244,9 @@ struct groupTree_t {
 					nodeForward = true;
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<forward>");
 				}
+
+				newSlots[iSlot] = id;
+				pVersion->mem[id] = thisVersion;
 			}
 			if (nodeOutdated) {
 				// zero-fill
@@ -3693,9 +3696,6 @@ struct groupTree_t {
 					}
 
 					printf("]\n");
-
-					// mark node found
-					pVersion->mem[iNode] = thisVersion;
 				}
 
 				// test double defined
