@@ -2018,8 +2018,9 @@ struct groupTree_t {
 	 */
 	uint32_t __attribute__((used)) expandSignature(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
 
-		signature_t *pSignature = db.signatures + sid;
-
+		signature_t *pSignature    = db.signatures + sid;
+		unsigned    numPlaceholder = pSignature->numPlaceholder;
+		
 		// group id must be latest
 		assert(gid == IBIT || gid == this->N[gid].gid);
 		
@@ -2037,10 +2038,8 @@ struct groupTree_t {
 		uint32_t thisVersion = pActive->nextVersion();
 
 		// add gid to entries, to detect endpoint collapse
-		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 			uint32_t id = pSlots[iSlot];
-			if (id == 0)
-				break;
 
 			// update to latest
 			while (id != this->N[id].gid)
@@ -2399,12 +2398,9 @@ struct groupTree_t {
 
 		assert(mid != 0);
 
-		member_t *pMember            = db.members + mid;
+		member_t   *pMember          = db.members + mid;
+		unsigned   numPlaceholder    = db.signatures[pMember->sid].numPlaceholder;
 		const char *pMemberTransform = db.revTransformNames[pMember->tid];
-
-//		signature_t *pSignature = db.signatures + sid;
-
-		assert(pMember->numPlaceholder == db.signatures[pMember->sid].numPlaceholder);
 
 		// group id must be latest
 		assert(gid == IBIT || gid == this->N[gid].gid);
@@ -2423,10 +2419,8 @@ struct groupTree_t {
 		uint32_t thisVersion = pActive->nextVersion();
 
 		// add gid to entries, to detect endpoint collapse
-		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 			uint32_t id = pSlots[iSlot];
-			if (id == 0)
-				break;
 
 			// update to latest
 			while (id != this->N[id].gid)
@@ -2954,7 +2948,6 @@ struct groupTree_t {
 
 		printf("importgroup=1 ./eval \"%s\" \"%s\"\n", this->saveString(newest).c_str(), this->saveString(N[oldest].gid).c_str());
 
-
 		// relocate nodes
 		if (oldest < this->ncount) {
 			// total group collapse
@@ -3036,13 +3029,12 @@ struct groupTree_t {
 
 				// process nodes of group	
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					const groupNode_t *pNode = this->N + iNode;
+					const groupNode_t *pNode         = this->N + iNode;
+					unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 					// examine references
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
-						if (id == 0)
-							break;
 
 						// does it touch flood
 						if (pVersion->mem[id] == thisVersion) {
@@ -3068,13 +3060,12 @@ struct groupTree_t {
 		 */
 		bool orphanedAll = true;
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t *pNode = this->N + iNode;
+			groupNode_t *pNode         = this->N + iNode;
+			unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			bool found = false;
-			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
-				if (id == 0)
-					break;
 
 				if (pVersion->mem[id] == thisVersion) {
 					found = true;
@@ -3614,7 +3605,6 @@ struct groupTree_t {
 
 					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
-						assert (id != 0);
 
 						// update
 						if (id != this->N[id].gid) {
@@ -3622,8 +3612,8 @@ struct groupTree_t {
 								id = this->N[id].gid;
 						}
 							
-						if (id == iGroup) {
-							// self-reference to group 
+						if (id == iGroup || id == 0) {
+							// self-reference to group or full-collapse 
 							errors++;
 						}
 							
@@ -3708,6 +3698,7 @@ struct groupTree_t {
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					const groupNode_t *pNode = this->N + iNode;
+					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 					// test double defined
 					if (pVersion->mem[iNode] == thisVersion)
@@ -3723,10 +3714,8 @@ struct groupTree_t {
 
 					char delimiter = 0;
 
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
-						if (id == 0)
-							break;
 
 						if (delimiter)
 							putchar(delimiter);
@@ -3741,10 +3730,12 @@ struct groupTree_t {
 						if (latest != id)
 							printf("(%u)", latest);
 
-
 						if (latest == iGroup) {
-							// slots reference own group
+							// slots references own group
 							printf("<ERROR:gid=self>");
+						} else if (latest == 0) {
+							// slots references zero
+							printf("<ERROR:gid=zero>");
 						} else if (!allowForward) {
 							if (id != latest) {
 								// reference orphaned
