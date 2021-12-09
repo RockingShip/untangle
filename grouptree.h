@@ -1176,6 +1176,14 @@ struct groupTree_t {
 		}
 
 		/*
+		 * Test if arguments full-collapse
+		 */
+		if (Q == gid || Tu == gid || F == gid) {
+			// yes
+			return gid;
+		}
+
+		/*
 		 * Lookup if 1n9 already exists.
 		 * This is a fast test to find simple duplicates
 		 */
@@ -1529,7 +1537,24 @@ struct groupTree_t {
 					continue; // combo not found, silently ignore
 
 				unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
-				
+
+				// test for self-collapse
+				bool hasSelf = false;
+				for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = finalSlots[iSlot];
+					assert (id != 0);
+					
+					if (id == gid) {
+						hasSelf = true;
+						break;
+					}
+				}
+
+				if (hasSelf) {
+					printf("construct collapse\n");
+					continue; //collapse to self reference, silently ignore
+				}
+
 				/*
 				 * Test for an endpoint collapse
 				 */
@@ -1619,16 +1644,27 @@ struct groupTree_t {
 					/*
 					 * Group merging might have outdated slots
 					 */
+					bool hasSelf = false;
 					for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = finalSlots[iSlot];
 						assert (id != 0);
 
 						if (id != this->N[id].gid) {
+							// get latest
 							while (id != this->N[id].gid)
 								id = this->N[id].gid;
+							// is it self
+							if (id == gid) {
+								hasSelf = true;
+								break;
+							}
+							// update slot
 							finalSlots[iSlot] = id;
 						}
 					}
+
+					if (hasSelf)
+						continue; //collapse to self reference, silently ignore
 				}
 
 				/*
@@ -1734,12 +1770,12 @@ struct groupTree_t {
 				changed = true;
 				}
 
-				/*
-				 * Test for iterator collapsing
-				 * When happens, all further iterations will fold and be silently ignored
-				 */
-				if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
-					break; // collapsed
+			/*
+			 * Test for iterator collapsing
+			 * When happens, all further iterations will fold and be silently ignored
+			 */
+			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
+				break; // collapsed
 
 			if (changed)
 				continue;
@@ -1851,6 +1887,12 @@ struct groupTree_t {
 				slotMap[endpoint]     = 'a' + nextSlot; // assign new placeholder
 				slotsR[nextSlot]      = endpoint; // put endpoint in result
 				nextSlot++;
+			} else {
+				/*
+				 * @date 2021-12-09 03:02:42
+				 * duplicate latest ids in Q
+				 */
+				return 0;
 			}
 		}
 
@@ -1888,10 +1930,16 @@ struct groupTree_t {
 
 		/*
 		 * Lookup `patternFirst`
+		 * 
+		 * @date 2021-12-09 03:04:00
+		 * Instead of doing complicated to detect duplicate latest in T, just check if the transform is valid
 		 */
 
 		uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
-		assert(tidSlotT != IBIT);
+		if (tidSlotT == IBIT) {
+			// invalid slots
+			return 0;
+		}
 
 		uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
 		uint32_t idFirst = db.patternFirstIndex[ixFirst];
@@ -1940,7 +1988,10 @@ struct groupTree_t {
 		 */
 
 		uint32_t tidSlotF = db.lookupFwdTransform(slotsF);
-		assert(tidSlotF != IBIT);
+		if (tidSlotF == IBIT) {
+			// invalid slots
+			return 0;
+		}
 
 		uint32_t ixSecond = db.lookupPatternSecond(idFirst, pNodeF->sid, tidSlotF);
 		uint32_t idSecond = db.patternSecondIndex[ixSecond];
@@ -2020,7 +2071,7 @@ struct groupTree_t {
 
 		signature_t *pSignature    = db.signatures + sid;
 		unsigned    numPlaceholder = pSignature->numPlaceholder;
-		
+
 		// group id must be latest
 		assert(gid == IBIT || gid == this->N[gid].gid);
 		
@@ -2807,7 +2858,8 @@ struct groupTree_t {
 	 */
 	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, uint32_t power, unsigned depth) {
 
-		assert(gid == IBIT || gid == this->N[gid].gid);
+		assert(sid != db.SID_SELF); // headers need to be created directly, because they may not be indexed
+		assert(gid == IBIT || gid == this->N[gid].gid); // gid must be latest
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 			assert(MAXSLOTS == 9);
@@ -2956,9 +3008,9 @@ struct groupTree_t {
 
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
-				pNode->gid = oldest;
 				iNode = prevId;
-
+				// forward to newer
+				pNode->gid = oldest;
 			}
 
 			// let current group forward to new
@@ -3036,6 +3088,10 @@ struct groupTree_t {
 					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
 
+						// get latest
+						while (id != this->N[id].gid)
+							id = this->N[id].gid;
+							
 						// does it touch flood
 						if (pVersion->mem[id] == thisVersion) {
 							// yes
@@ -3066,6 +3122,10 @@ struct groupTree_t {
 			bool found = false;
 			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
+
+				// get latest
+				while (id != this->N[id].gid)
+					id = this->N[id].gid;
 
 				if (pVersion->mem[id] == thisVersion) {
 					found = true;
@@ -3214,8 +3274,8 @@ struct groupTree_t {
 		}
 		
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			const groupNode_t *pNode = this->N + iNode;
-			unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+			const groupNode_t *pNode         = this->N + iNode;
+			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE)
 				printf("P gid=%u\tnid=%u\t%u:%s/[",
