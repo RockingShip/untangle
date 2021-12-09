@@ -3027,37 +3027,39 @@ struct groupTree_t {
 		do {
 			changed = false;
 			for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
-			bool found = false;
+				bool found = false;
 
-			if (iGroup != this->N[iGroup].gid)
+				if (iGroup != this->N[iGroup].gid)
 					continue; // not start of list
 				if (pVersion->mem[iGroup] == thisVersion)
 					continue; // already processed 
 
 				// process nodes of group	
-			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				const groupNode_t *pNode = this->N + iNode;
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					const groupNode_t *pNode = this->N + iNode;
 
 					// examine references
-				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-					uint32_t id = pNode->slots[iSlot];
-					if (id == 0)
-						break;
+					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						if (id == 0)
+							break;
 
-					if (pVersion->mem[id] == thisVersion) {
-						found = true;
-						break;
+						// does it touch flood
+						if (pVersion->mem[id] == thisVersion) {
+							// yes
+							found = true;
+							break;
+						}
 					}
+					if (found)
+						break;
 				}
-				if (found)
-					break;
-			}
 
 				if (found) {
 					// mark processed
 					pVersion->mem[iGroup] = thisVersion;
 					changed = true;
-		}
+				}
 			}
 		} while (changed);
 
@@ -3329,68 +3331,104 @@ struct groupTree_t {
 	 * 
 	 * Rebuild groups that have nodes that have forward references
 	 */
-	void updateGroups(uint32_t firstGid) {
+	void updateGroups(uint32_t startGid) {
 
 		printf("UPDATE\n");
 
-		firstGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`. 
+		startGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`.
 
-		int loopCount = 0; // simple loop detection
+		uint32_t firstGid = startGid;
+		uint32_t lastGid  = this->ncount;
 
 		/*
 		 * Walk through tree and search for outdated lists
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
 		 * NOTE: the dataset has been specifically designed/created to avoid loops, so the `for` will reach an end-condition 
 		 */
-		for (uint32_t iGroup = firstGid; iGroup < this->ncount; iGroup++) {
-			// find group headers
-			if (this->N[iGroup].gid == iGroup) {
+		while (firstGid != lastGid) {
 
-				// prune the group
-				bool hasForward = pruneGroup(iGroup);
-
-				// relocate to new group if it had a forward reference
-				if (hasForward) {
-					/*
-					 * create new list header
-					 */
-					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
-					assert(selfSlots[MAXSLOTS - 1] == 0);
-
-					uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
-					assert(newGid == this->N[newGid].slots[0]);
-					this->N[newGid].gid = newGid;
+			for (uint32_t iGroup = firstGid; iGroup < lastGid; iGroup++) {
+				// find group headers
+				if (this->N[iGroup].gid == iGroup) {
 
 					/*
-					 * Walk and update the list
+					 * Update changed and remove obsoleted nodes.
+					 * Returns true if group has forward references
 					 */
+					bool hasForward = pruneGroup(iGroup);
 
-					printf("REBUILD %u->%u\n", iGroup, newGid);
+					// relocate to new group if it had a forward reference
+					if (hasForward) {
+						/*
+						 * create new list header
+						 */
+						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
+						assert(selfSlots[MAXSLOTS - 1] == 0);
 
-					// breakpoint after displaying above line
-					if (loopCount++ > 20) {
-						printf("LOOP\n");
-						validateTree(0);
-						exit(1);
+						uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+						assert(newGid == this->N[newGid].slots[0]);
+						this->N[newGid].gid = newGid;
+
+						/*
+						 * Walk and update the list
+						 */
+
+						printf("REBUILD %u->%u\n", iGroup, newGid);
+
+						// relocate to new group
+						for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+							groupNode_t *pNode = this->N + iNode;
+
+							uint32_t prevId = pNode->prev;
+							unlinkNode(iNode);
+							linkNode(this->N[newGid].prev, iNode);
+							pNode->gid = newGid;
+							iNode = prevId;
+						}
+
+						// let current group forward to new
+						assert(this->N[iGroup].next == iGroup); // group should be empty
+						this->N[iGroup].gid = newGid;
 					}
-
-					// relocate to new group
-					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-						groupNode_t *pNode = this->N + iNode;
-
-						uint32_t prevId = pNode->prev;
-						unlinkNode(iNode);
-						linkNode(this->N[newGid].prev, iNode);
-						pNode->gid = newGid;
-						iNode = prevId;
-						
-					}
-
-					// let current group forward to new
-					assert(this->N[iGroup].next == iGroup); // group should be empty
-					this->N[iGroup].gid = newGid;
 				}
 			}
+
+			if (this->ncount - lastGid == lastGid - firstGid) {
+				/*
+				 * firstGid..lastGid produced lastGid..ncount
+				 * orphan and erase all forward references from firstGid
+				 * But only from non-1n9 nodes, as a 1n9-loop is still considered an error
+				 */
+				unsigned      cntRemoved = 0;
+				for (uint32_t iNode      = firstGid; iNode < this->ncount; iNode++) {
+					groupNode_t *pNode = this->N + iNode;
+
+					if (pNode->sid == db.SID_SELF)
+						continue; // skip list headers
+					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
+						continue; // skip 1n9
+
+					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+
+						if (id > this->N[id].gid) {
+							cntRemoved++;
+							// unlink 
+							unlinkNode(iNode);
+							// erase
+							memset(pNode, 0, sizeof(*pNode));
+							break;
+						}
+					}
+				}
+
+				assert (cntRemoved != 0);
+			}
+
+			firstGid = lastGid;
+			lastGid  = this->ncount;
 		}
 
 		printf("/UPDATE\n");

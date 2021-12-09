@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-09 17:03:02 Changed: `groupTree_t::updateGroups()`, Harden against infinite forward unrolling. 
 2021-12-09 16:52:23 Changed: `groupTree_t::validateTree()`, Harden against missing `0n9`/`1n9`.
 2021-12-09 16:37:07 Changed: `groupTree_t::compare()`, Take into account group-id forwarding, drop `orphanWorse()` and replace with `findSid()`. 
 2021-12-09 15:41:02 Fixed: `groupTree_t` Versioned memory usage. (2 distinct changed).
