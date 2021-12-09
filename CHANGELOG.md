@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-09 16:37:07 Changed: `groupTree_t::compare()`, Take into account group-id forwarding, drop `orphanWorse()` and replace with `findSid()`. 
 2021-12-09 15:41:02 Fixed: `groupTree_t` Versioned memory usage. (2 distinct changed).
 2021-12-09 15:34:15 Added: `groupTree_t::versionMemory_t`, Need to keep current version number bound to vector.
 2021-12-06 16:48:40 Added: `groupTree_t::pruneGroup()`, Remove weak nodes that have insufficient power.

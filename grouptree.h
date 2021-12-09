@@ -638,11 +638,6 @@ struct groupTree_t {
 	 */
 	int compare(uint32_t lhs, uint32_t sidRhs, const uint32_t *pSlotsRhs) {
 
-		if (lhs < this->nstart) {
-			// endpoint is always lover
-			return -1;
-		}
-
 		if (this->N[lhs].sid < sidRhs) {
 			return -1;
 		} else if (this->N[lhs].sid > sidRhs) {
@@ -650,28 +645,26 @@ struct groupTree_t {
 		}
 
 		/*
-		 * SID_SELF needs special handling or it will recurse on itself 
-		 */
-		if (this->N[lhs].sid == db.SID_SELF) {
-			if (this->N[lhs].slots[0] < pSlotsRhs[0]) {
-				return -1;
-			} else if (this->N[lhs].slots[0] > pSlotsRhs[0]) {
-				return +1;
-			} else {
-				return 0;
-			}
-		}
-
-		/*
 		 * simple compare
 		 * todo: cache results
 		 */
-		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
+		unsigned numPlaceholder = db.signatures[sidRhs].numPlaceholder;
 
-		for (unsigned iSlot=0; iSlot<pSignature->numPlaceholder; iSlot++) {
-			int ret = this->compare(this->N[lhs].slots[iSlot], this, pSlotsRhs[iSlot]);
-			if (ret != 0)
-				return ret;
+		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+			// get latest L
+			uint32_t latestL = this->N[lhs].slots[iSlot];
+			while (latestL != this->N[latestL].gid)
+				latestL = this->N[latestL].gid;
+
+			// get latest R
+			uint32_t latestR = pSlotsRhs[iSlot];
+			while (latestR != this->N[latestR].gid)
+				latestR = this->N[latestR].gid;
+			
+			// is there a difference
+			int cmp = (int)latestL - (int)latestR;
+			if (cmp != 0)
+				return cmp;
 		}
 
 		return 0;
@@ -1604,7 +1597,7 @@ struct groupTree_t {
 						// group merging/folding might change current gid
 						while (gid != this->N[gid].gid)
 							gid = this->N[gid].gid;
-						
+
 						continue; // yes, silently ignore (and restart)
 					}
 
@@ -1621,8 +1614,8 @@ struct groupTree_t {
 						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
 						return expand;
-						}
-					
+					}
+
 					/*
 					 * Group merging might have outdated slots
 					 */
@@ -1748,7 +1741,7 @@ struct groupTree_t {
 				if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid)
 					break; // collapsed
 
-			if (changed)	
+			if (changed)
 				continue;
 
 
@@ -2879,50 +2872,43 @@ struct groupTree_t {
 		/*
 		 * Optimise similars already in group list
 		 */
-		
-		if (gid != IBIT) {
-			/*
-			 * Check if sid already in group list
-			 * If present: better gets onto the list, worse gets orphaned
-			 */
-			for (uint32_t id = this->N[gid].next; id != this->N[id].gid; id = this->N[id].next) {
-				const groupNode_t *pNode = this->N + id;
 
-				if (pNode->sid == sid) {
-					assert(pNode->sid != db.SID_SELF);
-
-					/*
-					 * Which is better/worse
-					 */
-					int cmp = this->compare(id, sid, pSlots);
-					assert(cmp != 0);
-
-					if (cmp <= 0) {
-						// list has better/same
-						return id;
-					} else {
-						// list is worse, orphan
-						unlinkNode(id);
-						break;
-					}
-				}
-			}
-		}
-
-		/*
-		 * Optionally create new group list plus header 
-		 */
+		// when set, this is the orphaned old node that needs an updated gid
+		uint32_t oldNid = IBIT;
 
 		if (gid == IBIT) {
 			/*
 			 * Start new group, never add SID_SELF nodes to index
 			 */
+
 			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 			assert(gid == this->N[gid].slots[0]);
 			this->N[gid].gid = gid;
+
+		} else {
+			/*
+			 * Check if sid already in group list
+			 * If present: better gets returned, worse gets orphaned
+			 */
+
+			// find sid
+			oldNid = findSid(gid, sid);
+			if (oldNid != IBIT) {
+				int cmp = this->compare(oldNid, sid, pSlots);
+				if (cmp < 0) {
+					// oldNid is better, return
+					return oldNid;
+				} else if (cmp > 0) {
+					// arguments are better, orphan and patch forwarding later
+					unlinkNode(oldNid);
+				} else {
+					// identical, should have been found by `lookupNode()`
+					assert(0);
+				}
+			}
 		}
 
 		/*
@@ -2933,16 +2919,20 @@ struct groupTree_t {
 		nid = this->newNode(sid, pSlots, power);
 		groupNode_t *pNode = this->N + nid;
 
-		// add to list, keep it simple, SID_SELF is always first of list
+		// set group
 		pNode->gid = gid;
 
-		// add node to list
-		linkNode(gid, nid);
+		// let orphaned forward to newer
+		if (oldNid != IBIT)
+			this->N[oldNid].gid = nid;
 
 		// add node to index
 		pNode->hashIX              = ix;
 		this->nodeIndex[ix]        = nid;
 		this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+		// add node to list
+		linkNode(this->N[gid].prev, nid);
 
 		return nid;
 	}
@@ -3091,10 +3081,18 @@ struct groupTree_t {
 			}
 
 			if (found) {
+				// collapse, orphan
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
-				pNode->gid = newest;
 				iNode = prevId;
+				// NOTE: this will become an orphaned node forwarding to its latest group 
+				// forward to latest (which it already does)
+				pNode->gid = newest;
+				/*
+				 * @date 2021-12-07 21:48:01
+				 * It has been found that this could be a `1n9`.
+				 * todo: work on statagy
+				 */
 			} else {
 				orphanedAll = false;
 			}
@@ -3112,19 +3110,51 @@ struct groupTree_t {
 		}
 
 		/*
-		 * Inherit all that are considered new/better
+		 * Inherit all that are considered new/better, orphan if not
 		 */
 		for (uint32_t iNode = this->N[oldest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode = this->N + iNode;
 
-			if (orphanWorse(newest, pNode->sid, pNode->slots) == IBIT) {
-				// node is better
-				uint32_t prevId = pNode->prev;
-				unlinkNode(iNode);
+			// unlink first before deciding to orphan/inherit
+			uint32_t prevId = pNode->prev;
+			unlinkNode(iNode);
+			// forward to latest
+			pNode->gid = newest;
+
+			// find sid
+			uint32_t nid = findSid(newest, pNode->sid);
+			if (nid == IBIT) {
+				// node has unknown sid, inherit (gid already set)
 				linkNode(this->N[newest].prev, iNode);
-				pNode->gid = newest;
-				iNode = prevId;
+			} else {
+				// nid=newest, pNode=oldest
+				int cmp = this->compare(nid, pNode->sid, pNode->slots);
+
+				/*
+				 * @date 2021-12-07 23:37:59
+				 * in case of a draw, choose the last created, which has updated slot ids
+				 */
+				if (cmp == 0)
+					cmp = (int) iNode - (int) nid;
+
+				if (cmp < 0) {
+					// nid (newest) is better, leave older orphaned
+					// orphan forwards to newer
+					pNode->gid = nid;
+				} else if (cmp > 0) {
+					// pNode (older) is better, orphan nid (newer), inherit older
+					unlinkNode(nid);
+					// forward to latest (which it already does)
+					this->N[nid].gid = newest;
+					// inherit pNode (gid already set)
+					linkNode(this->N[newest].prev, iNode);
+				} else {
+					// identical
+					assert(0);
+				}
 			}
+
+			iNode = prevId;
 		}
 
 		/*
@@ -3212,6 +3242,7 @@ struct groupTree_t {
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				iNode = prevId;
+				// leave gid untouched as there is no alternative.
 				continue;
 			}
 				
@@ -3366,38 +3397,15 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-11-13 01:41:11
+	 * @date  2021-12-07 14:17:36
 	 * 
-	 * Sids need to be unique in group lists
-	 * If the argument is not found return 0
-	 * If the argument is found and worse, orphan it and return 0
-	 * If the argument is found and better return node id
-	 *
-	 *  if (orphanWorse(candidate) == IBIT)
-	 *     ignoreCandidate();
+	 * Find within group a node with given sid (for sid merging)
 	 */
-	uint32_t orphanWorse(uint32_t gid, uint32_t sid, const uint32_t *pSlots) {
-
+	inline uint32_t findSid(uint32_t gid, uint32_t sid) const {
 		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			const groupNode_t *pNode = this->N + iNode;
-
-			if (pNode->sid == sid) {
-				/*
-				 * Choose the lowest of the two.
-				 */
-				int cmp = this->compare(iNode, sid, pSlots);
-
-				if (cmp <= 0) {
-					// list has best or self 
-					return iNode;
-				}
-
-				// list has worse, orphan it
-				unlinkNode(iNode);
-				return IBIT;
-			}
+			if (this->N[iNode].sid == sid)
+				return iNode;
 		}
-
 		return IBIT;
 	}
 
