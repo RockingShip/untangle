@@ -2999,7 +2999,7 @@ struct groupTree_t {
 		printf("importgroup=1 ./eval \"%s\" \"%s\"\n", this->saveString(newest).c_str(), this->saveString(N[oldest].gid).c_str());
 
 		// relocate nodes
-		if (oldest < this->ncount) {
+		if (oldest < this->nstart) {
 			// total group collapse
 			for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
