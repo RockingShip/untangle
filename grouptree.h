@@ -1803,7 +1803,7 @@ struct groupTree_t {
 		 * prune stale nodes
 		 */
 		if (gid >= this->nstart)
-			pruneGroup(gid);
+			scrubGroup(gid);
 		
 		/*
 		 * Test if group merging triggers an update  
@@ -2908,8 +2908,6 @@ struct groupTree_t {
 				return nid; // groups are compatible
 
 			// merge groups lists
-			// NOTE: `depth=0` is considered an unexpected event: `updateGroup()` creating an updated node which already exists.
-			assert(depth != 0);
 			importGroup(gid, latest, depth);
 
 			return nid;
@@ -3067,17 +3065,17 @@ struct groupTree_t {
 		 * NOTE: forward references are possible 
 		 */
 
-		// flood-fill, start with `oldest` and flag everything referencing the fill
+		// flood-fill, start with `oldest` and flag everything referencing the flood
 		bool changed;
 		do {
 			changed = false;
 			for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
-				bool found = false;
-
 				if (iGroup != this->N[iGroup].gid)
 					continue; // not start of list
 				if (pVersion->mem[iGroup] == thisVersion)
 					continue; // already processed 
+
+				bool found = false;
 
 				// process nodes of group	
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
@@ -3112,7 +3110,8 @@ struct groupTree_t {
 		} while (changed);
 
 		/*
-		 * Orphan all nodes with references to older (they now contain non-info)
+		 * Orphan all latest nodes with references to older (they now contain non-info)
+		 * NOTE: any reference to self will collapse to `a/[self]` which is the group header and always present
 		 */
 		bool orphanedAll = true;
 		for (uint32_t iNode = this->N[newest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
@@ -3246,7 +3245,7 @@ struct groupTree_t {
 	 * 
 	 * return `true` is any node does a forward reference
 	 */
-	bool pruneGroup(uint32_t iGroup) {
+	bool scrubGroup(uint32_t iGroup) {
 
 		bool            groupForward = false;
 		versionMemory_t *pVersion    = allocVersion();
@@ -3274,8 +3273,8 @@ struct groupTree_t {
 		}
 		
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			const groupNode_t *pNode         = this->N + iNode;
-			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+			groupNode_t *pNode         = this->N + iNode;
+			unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE)
 				printf("P gid=%u\tnid=%u\t%u:%s/[",
@@ -3317,6 +3316,8 @@ struct groupTree_t {
 					assert(id != 0);
 
 				}
+				
+				// remember for later
 				newSlots[iSlot] = id;
 
 				if (pVersion->mem[id] == thisVersion) {
@@ -3348,19 +3349,32 @@ struct groupTree_t {
 				iNode = prevId;
 			} else if (nodeOutdated) {
 				// update if changed
+
+				// orphan outdated node to make things easier for `addToCollection()`.
 				uint32_t prevId = pNode->prev;
-
-				// orphan old first so it will not be used to determine better/worse
 				unlinkNode(iNode);
-				// add updated node
-				// NOTE: `depth` is only used when node already exists (which it should not)
-				assert(pNode->gid == iGroup);
-				// todo: maybe `addNode()` is a faster aternative
-				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/0);
-				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
-				assert(this->N[newId].gid == iGroup); // addToCollection might object
-
 				iNode = prevId;
+
+				// todo: maybe `addNode()` is a faster alternative
+				// NOTE: depth may not be "2" (negative indentation) and may not be "1" (triggers updateGroup)
+				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/2);
+				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
+
+				assert(newId != IBIT); // may not be rejected
+
+				// let orphaned forward to new node
+				pNode->gid = newId;
+				
+				uint32_t latest = newId;
+				while (latest != this->N[latest].gid)
+					latest = this->N[latest].gid;
+
+				// did groups merge
+				if (latest != iGroup) {
+					printf("JUMP1 latest=%u %u iGroup=%u %u\n", latest, this->N[latest].gid, iGroup, this->N[iGroup].gid);
+					// set `iNode` to self, will auto increment 
+					iNode = iGroup = latest;
+				}
 			}
 			if (!nodeFolded && nodeForward) {
 				// node is active and does a forward reference
@@ -3368,6 +3382,8 @@ struct groupTree_t {
 			}
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf(" pwr=%u\n", pNode->power);
+
+			assert(iNode != this->N[iNode].next); // current may not be orphaned
 		}
 
 		// may not orphan all nodes
@@ -3406,7 +3422,7 @@ struct groupTree_t {
 					 * Update changed and remove obsoleted nodes.
 					 * Returns true if group has forward references
 					 */
-					bool hasForward = pruneGroup(iGroup);
+					bool hasForward = scrubGroup(iGroup);
 
 					// relocate to new group if it had a forward reference
 					if (hasForward) {

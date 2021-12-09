@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-09 17:52:50 Fixed: `groupTree_t::pruneGroup()`, Update slots, orphan forwarding and renamed to `scrubGroup()`. 
 2021-12-09 17:50:33 Fixed: `groupTree_t`, Better detection self-collapse.
 2021-12-09 17:28:44 Changed: `groupTree_t`, Unroll `MAXSLOTS` by using `numPlaceholder`.
 2021-12-09 17:03:02 Changed: `groupTree_t::updateGroups()`, Harden against infinite forward unrolling. 
