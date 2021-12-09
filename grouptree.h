@@ -3550,11 +3550,13 @@ struct groupTree_t {
 			if (this->N[iGroup].gid == iGroup) {
 
 				// does group have `1n9`
-				bool has1n9 = false;
+				unsigned cnt0n9 = 0;
+				unsigned cnt1n9 = 0;
 				
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					const groupNode_t *pNode = this->N + iNode;
+					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 					// test correct group (for broken group management)
 					if (pNode->gid != iGroup)
@@ -3565,15 +3567,16 @@ struct groupTree_t {
 						errors++;
 
 					// is it `1n9`
+					if (pNode->sid == db.SID_SELF)
+						cnt0n9++;
 					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
-						has1n9 = true;
+						cnt1n9++;
 
 					uint32_t newSlots[MAXSLOTS] = {0};
 
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
-						if (id == 0)
-							break;
+						assert (id != 0);
 
 						// update
 						if (id != this->N[id].gid) {
@@ -3609,7 +3612,9 @@ struct groupTree_t {
 				}
 
 				// each group needs at least one `1n9`
-				if (!has1n9)
+				if (cnt0n9 != 0)
+					errors++;
+				if (cnt1n9 == 0)
 					errors++;
 
 				// test double defined
@@ -3641,23 +3646,26 @@ struct groupTree_t {
 
 				// may not be empty
 				if(this->N[iGroup].next == iGroup) {
-					printf("GID %d EMPTY\n", iGroup);
+					printf("<GID %d EMPTY>\n", iGroup);
 					continue;
 				}
 				
 				// does group have `1n9`
-				bool has1n9 = false;
+				unsigned cnt0n9 = 0;
+				unsigned cnt1n9 = 0;
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					const groupNode_t *pNode = this->N + iNode;
 
 					// ignore lists under construction
-					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF) {
-						has1n9 = true;
-						break;
-					}
+					if (pNode->sid == db.SID_SELF)
+						cnt0n9++;
+					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
+						cnt1n9++;
 				}
-				if (!has1n9)
-					printf("<MISSING-1N9 gid=%u>\n", iGroup);
+				if (cnt0n9 != 0)
+					printf("<COUNT-0N9 gid=%u, cnt=%u>\n", iGroup, cnt0n9);
+				if (cnt1n9 == 0)
+					printf("<COUNT-1N9 gid=%u, cnt=%u>\n", iGroup, cnt1n9);
 
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
@@ -3686,20 +3694,28 @@ struct groupTree_t {
 							putchar(delimiter);
 						delimiter = ' ';
 
-						printf("%u", pNode->slots[iSlot]);
+						printf("%u", id);
 
-						if (id == iGroup) {
+						uint32_t latest = id;
+						while (latest != this->N[latest].gid)
+							latest = this->N[latest].gid;
+
+						if (latest != id)
+							printf("(%u)", latest);
+
+
+						if (latest == iGroup) {
 							// slots reference own group
 							printf("<ERROR:gid=self>");
-						} else if (pVersion->mem[id] != thisVersion) {
-							// reference not defined
-							if (id == this->N[id].gid)
-								printf("<FORWARD>");
-							else
-							printf("<MISSING>");
-						} else if (id != this->N[id].gid) {
-							// reference orphaned
-							printf("<ERROR:gid=%u>", this->N[id].gid);
+						} else if (!allowForward) {
+							if (id != latest) {
+								// reference orphaned
+								printf("<OUTDATED>");
+							}
+							if (pVersion->mem[latest] != thisVersion) {
+								// reference not defined
+								printf("<MISSING>");
+							}
 						}
 					}
 
