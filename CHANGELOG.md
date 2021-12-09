@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-09 15:34:15 Added: `groupTree_t::versionMemory_t`, Need to keep current version number bound to vector.
 2021-12-06 16:48:40 Added: `groupTree_t::pruneGroup()`, Remove weak nodes that have insufficient power.
 2021-12-06 16:45:22 Fixed: `groupTree_t::expandSignatures()`, Folding is components refer to self.
 2021-12-06 16:41:22 Changed: `groupTree::addNormaliseNode()`, Alternative approach to top-level ordering.

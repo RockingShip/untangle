@@ -90,6 +90,37 @@ struct groupNode_t {
 };
 
 /*
+ * @date 2021-12-06 15:08:00
+ *
+ * Versioned memory is a vector where each entry has an associated version number.
+ * Any entry not matching the current version is considered "default value".
+ * This structure holds the version meta data.
+ * All values must be less-equal than the current version.
+ */
+struct versionMemory_t {
+	uint32_t version;	// Current version
+	uint32_t numMemory;	// Number of elements
+	uint32_t mem[];		// vector (size allocated on demand)
+
+	/*
+	 * Bump the next version number
+	 */
+	uint32_t nextVersion(void) {
+		// bump
+		++version;
+
+		// clear version map when wraparound
+		if (version == 0) {
+			::memset(mem, 0, numMemory * sizeof mem[0]);
+			++version;
+		}
+		
+		return version;
+	}
+
+};
+
+/*
  * The database file header
  */
 struct groupTreeHeader_t {
@@ -224,8 +255,7 @@ struct groupTree_t {
 	unsigned                 numPoolMap;            // Number of node-id pools in use
 	uint32_t                 **pPoolMap;            // Pool of available node-id maps
 	unsigned                 numPoolVersion;        // Number of version-id pools in use
-	uint32_t                 **pPoolVersion;        // Pool of available version-id maps
-	uint32_t                 mapVersionNr;          // Version number
+	versionMemory_t          **pPoolVersion;        // Pool of available version-id maps
 	// slots, for `addNormaliseNode()` because of too many exit points
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
@@ -282,7 +312,6 @@ struct groupTree_t {
 		pPoolMap(NULL),
 		numPoolVersion(0),
 		pPoolVersion(NULL),
-		mapVersionNr(0),
 		// slots
 		slotMap(NULL),
 		slotVersion(NULL),
@@ -331,8 +360,7 @@ struct groupTree_t {
 		numPoolMap(0),
 		pPoolMap((uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
 		numPoolVersion(0),
-		pPoolVersion((uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
-		mapVersionNr(0),
+		pPoolVersion((versionMemory_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
 		// slots
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
@@ -498,15 +526,17 @@ struct groupTree_t {
 	 *
 	 * @return {uint32_t*} - Uninitialised map for versioned memory id's
 	 */
-	uint32_t *allocVersion(void) {
-		uint32_t *pVersion;
+	versionMemory_t *allocVersion(void) {
+		versionMemory_t *pVersion;
 
 		if (numPoolVersion > 0) {
 			// get first free version map
 			pVersion = pPoolVersion[--numPoolVersion];
 		} else {
 			// allocate new map
-			pVersion = (uint32_t *) ctx.myAlloc("groupTree_t::versionMap", maxNodes, sizeof *pVersion);
+			pVersion = (versionMemory_t *) ctx.myAlloc("groupTree_t::versionMap", maxNodes + sizeof(versionMemory_t), sizeof(*pVersion));
+			pVersion->version   = 0;
+			pVersion->numMemory = maxNodes;
 		}
 
 		return pVersion;
@@ -519,7 +549,7 @@ struct groupTree_t {
 	 *
 	 * @param {uint32_t*} pMap
 	 */
-	void freeVersion(uint32_t *&pVersion) {
+	void freeVersion(versionMemory_t *&pVersion) {
 		if (numPoolVersion >= MAXPOOLARRAY)
 			ctx.fatal("context.h:MAXPOOLARRAY too small\n");
 
@@ -2004,20 +2034,14 @@ struct groupTree_t {
 		 * init
 		 */
 
-		int      numStack = 0;
-		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap(); // evaluation stack
-		uint32_t *pMap    = allocMap(); // node id of intermediates
-		uint32_t *pActive = allocVersion(); // collection of used id's
+		int             numStack = 0;
+		uint32_t        nextNode = this->nstart;
+		uint32_t        *pStack  = allocMap(); // evaluation stack
+		uint32_t        *pMap    = allocMap(); // node id of intermediates
+		versionMemory_t *pActive = allocVersion(); // collection of used id's
 
 		// bump versioned memory
-		uint32_t thisVersion = ++mapVersionNr;
-		if (thisVersion == 0) {
-			// version overflow, clear
-			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
-
-			thisVersion = ++mapVersionNr;
-		}
+		uint32_t thisVersion = pActive->nextVersion();
 
 		// add gid to entries, to detect endpoint collapse
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
@@ -2029,10 +2053,10 @@ struct groupTree_t {
 			while (id != this->N[id].gid)
 				id = this->N[id].gid;
 				
-			pActive[id] = thisVersion;
+			pActive->mem[id] = thisVersion;
 		}
 		// only op-level may reference `gid`
-		pActive[gid] = thisVersion;
+		pActive->mem[gid] = thisVersion;
 		
 		/*
 		 * Load string
@@ -2346,7 +2370,7 @@ struct groupTree_t {
 
 			// is it old (fold)
 			// NOTE: exclude top-level reference to gid (that is expected)
-			if (pActive[latest] == thisVersion && !(pattern[1] == 0 && latest == gid)) {
+			if (pActive->mem[latest] == thisVersion && !(pattern[1] == 0 && latest == gid)) {
 				// yes
 				freeMap(pStack);
 				freeMap(pMap);
@@ -2355,9 +2379,9 @@ struct groupTree_t {
 			}
 
 			// remember
-			pStack[numStack++] = nid;
-			pMap[nextNode++]   = nid;
-			pActive[latest]    = thisVersion;
+			pStack[numStack++]   = nid;
+			pMap[nextNode++]     = nid;
+			pActive->mem[latest] = thisVersion;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -2396,20 +2420,14 @@ struct groupTree_t {
 		 * init
 		 */
 
-		int      numStack = 0;
-		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap(); // evaluation stack
-		uint32_t *pMap    = allocMap(); // node id of intermediates
-		uint32_t *pActive = allocVersion(); // collection of used id's
+		int             numStack = 0;
+		uint32_t        nextNode = this->nstart;
+		uint32_t        *pStack  = allocMap(); // evaluation stack
+		uint32_t        *pMap    = allocMap(); // node id of intermediates
+		versionMemory_t *pActive = allocVersion(); // collection of used id's
 
 		// bump versioned memory
-		uint32_t thisVersion = ++mapVersionNr;
-		if (thisVersion == 0) {
-			// version overflow, clear
-			memset(pActive, 0, this->maxNodes * sizeof(*pActive));
-
-			thisVersion = ++mapVersionNr;
-		}
+		uint32_t thisVersion = pActive->nextVersion();
 
 		// add gid to entries, to detect endpoint collapse
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
@@ -2421,7 +2439,7 @@ struct groupTree_t {
 			while (id != this->N[id].gid)
 				id = this->N[id].gid;
 
-			pActive[id] = thisVersion;
+			pActive->mem[id] = thisVersion;
 		}
 
 		/*
@@ -2743,7 +2761,7 @@ struct groupTree_t {
 				latest = this->N[latest].gid;
 
 			// is it old (fold)
-			if (pActive[latest] == thisVersion) {
+			if (pActive->mem[latest] == thisVersion) {
 				// yes
 				freeMap(pStack);
 				freeMap(pMap);
@@ -2752,9 +2770,9 @@ struct groupTree_t {
 			}
 
 			// remember
-			pStack[numStack++] = nid;
-			pMap[nextNode++]   = nid;
-			pActive[latest]    = thisVersion;
+			pStack[numStack++]   = nid;
+			pMap[nextNode++]     = nid;
+			pActive->mem[latest] = thisVersion;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -2970,16 +2988,10 @@ struct groupTree_t {
 		/*
 		 * Flood-fill who uses oldest
 		 */
-		uint32_t *pVersion   = allocVersion();
-		uint32_t thisVersion = ++mapVersionNr;
+		versionMemory_t *pVersion   = allocVersion();
+		uint32_t thisVersion = pVersion->nextVersion();
 
-		// clear version map when wraparound
-		if (thisVersion == 0) {
-			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
-			thisVersion = ++mapVersionNr;
-		}
-
-		pVersion[oldest] = thisVersion;
+		pVersion->mem[oldest] = thisVersion;
 
 		/*
 		 * Runtime example for `abc^^`
@@ -3029,7 +3041,7 @@ struct groupTree_t {
 
 			if (iGroup != this->N[iGroup].gid)
 					continue; // not start of list
-				if (pVersion[iGroup] == thisVersion)
+				if (pVersion->mem[iGroup] == thisVersion)
 					continue; // already processed 
 
 				// process nodes of group	
@@ -3042,7 +3054,7 @@ struct groupTree_t {
 					if (id == 0)
 						break;
 
-					if (pVersion[id] == thisVersion) {
+					if (pVersion->mem[id] == thisVersion) {
 						found = true;
 						break;
 					}
@@ -3053,7 +3065,7 @@ struct groupTree_t {
 
 				if (found) {
 					// mark processed
-				pVersion[iGroup] = thisVersion;
+					pVersion->mem[iGroup] = thisVersion;
 					changed = true;
 		}
 			}
@@ -3072,7 +3084,7 @@ struct groupTree_t {
 				if (id == 0)
 					break;
 
-				if (pVersion[id] == thisVersion) {
+				if (pVersion->mem[id] == thisVersion) {
 					found = true;
 					break;
 				}
@@ -3153,8 +3165,8 @@ struct groupTree_t {
 	 */
 	bool pruneGroup(uint32_t iGroup) {
 
-		bool     groupForward = false;
-		uint32_t *pVersion    = allocVersion();
+		bool            groupForward = false;
+		versionMemory_t *pVersion    = allocVersion();
 
 		/*
 		 * first scan for layer powers 
@@ -3192,9 +3204,8 @@ struct groupTree_t {
 			bool nodeFolded = false; // node has folded, and get removed
 			uint32_t newSlots[MAXSLOTS]; // updated slots
 
-			uint32_t thisVersion = ++mapVersionNr;
-			assert(thisVersion != 0);
-			pVersion[iGroup] = thisVersion;
+			uint32_t thisVersion = pVersion->nextVersion();
+			pVersion->mem[iGroup] = thisVersion;
 
 			if (pNode->power < pwr[db.signatures[pNode->sid].size]) {
 				// orphan if weak
@@ -3224,7 +3235,7 @@ struct groupTree_t {
 				}
 				newSlots[iSlot] = id;
 
-				if (pVersion[id] == thisVersion) {
+				if (pVersion->mem[id] == thisVersion) {
 					// node has folded
 					nodeFolded = true;
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<fold>");
@@ -3498,24 +3509,18 @@ struct groupTree_t {
 	 * For debugging
 	 */
 	void validateTree(unsigned lineNr, bool allowForward = false) {
-		uint32_t *pVersion   = allocVersion();
-		uint32_t thisVersion = ++mapVersionNr;
-		int      errors      = 0;
+		versionMemory_t *pVersion   = allocVersion();
+		uint32_t        thisVersion = pVersion->nextVersion();
+		int             errors      = 0;
 
 		if (lineNr == 0)
 			errors++;
-
-		// clear version map when wraparound
-		if (thisVersion == 0) {
-			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
-			thisVersion = ++mapVersionNr;
-		}
 
 		// mark endpoints as defined
 		for (uint32_t iKey = 0; iKey < this->nstart; iKey++) {
 			assert(this->N[iKey].gid == iKey);
 			assert(this->N[iKey].next == iKey);
-			pVersion[iKey] = thisVersion;
+			pVersion->mem[iKey] = thisVersion;
 		}
 
 		// check orphans
@@ -3545,7 +3550,7 @@ struct groupTree_t {
 						errors++;
 
 					// test double defined (for broken linked lists)
-					if (pVersion[iNode] == thisVersion)
+					if (pVersion->mem[iNode] == thisVersion)
 						errors++;
 
 					// is it `1n9`
@@ -3570,7 +3575,7 @@ struct groupTree_t {
 							errors++;
 						}
 							
-						if (pVersion[id] != thisVersion) {
+						if (pVersion->mem[id] != thisVersion) {
 							// reference not defined
 							if (!allowForward)
 								errors++;
@@ -3589,7 +3594,7 @@ struct groupTree_t {
 
 
 					// mark node found
-					pVersion[iNode] = thisVersion;
+					pVersion->mem[iNode] = thisVersion;
 				}
 
 				// each group needs at least one `1n9`
@@ -3597,11 +3602,11 @@ struct groupTree_t {
 					errors++;
 
 				// test double defined
-				if (pVersion[iGroup] == thisVersion)
+				if (pVersion->mem[iGroup] == thisVersion)
 					errors++;
 
 				// mark header found
-				pVersion[iGroup] = thisVersion;
+				pVersion->mem[iGroup] = thisVersion;
 			}
 		}
 
@@ -3613,16 +3618,11 @@ struct groupTree_t {
 		printf("INVALIDTREE at line %u\n", lineNr);
 
 		// bump version
-		thisVersion = ++mapVersionNr;
-
-		if (thisVersion == 0) {
-			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
-			thisVersion = ++mapVersionNr;
-		}
+		thisVersion = pVersion->nextVersion();
 
 		// mark endpoints as defined
 		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
-			pVersion[iKey] = thisVersion;
+			pVersion->mem[iKey] = thisVersion;
 
 		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			// find group headers
@@ -3653,7 +3653,7 @@ struct groupTree_t {
 					const groupNode_t *pNode = this->N + iNode;
 
 					// test double defined
-					if (pVersion[iNode] == thisVersion)
+					if (pVersion->mem[iNode] == thisVersion)
 						printf("<DOUBLE nid=%u>", iNode);
 
 					// test correct group
@@ -3680,7 +3680,7 @@ struct groupTree_t {
 						if (id == iGroup) {
 							// slots reference own group
 							printf("<ERROR:gid=self>");
-						} else if (pVersion[id] != thisVersion) {
+						} else if (pVersion->mem[id] != thisVersion) {
 							// reference not defined
 							if (id == this->N[id].gid)
 								printf("<FORWARD>");
@@ -3695,15 +3695,15 @@ struct groupTree_t {
 					printf("]\n");
 
 					// mark node found
-					pVersion[iNode] = thisVersion;
+					pVersion->mem[iNode] = thisVersion;
 				}
 
 				// test double defined
-				if (pVersion[iGroup] == thisVersion)
+				if (pVersion->mem[iGroup] == thisVersion)
 					printf("<DOUBLE gid=%u>", iGroup);
 
 				// mark header found
-				pVersion[iGroup] = thisVersion;
+				pVersion->mem[iGroup] = thisVersion;
 			}
 		}
 
@@ -3818,19 +3818,13 @@ struct groupTree_t {
 			return name;
 		}
 
-		uint32_t nextPlaceholder = this->kstart;
-		uint32_t nextNode        = this->nstart;
-		uint32_t *pStack         = allocMap();
-		uint32_t *pMap           = allocMap();
-		uint32_t *pVersion       = allocVersion();
-		uint32_t thisVersion     = ++mapVersionNr;
-		uint32_t numStack        = 0; // top of stack
-
-		// clear version map when wraparound
-		if (thisVersion == 0) {
-			::memset(pVersion, 0, maxNodes * sizeof *pVersion);
-			thisVersion = ++mapVersionNr;
-		}
+		uint32_t        nextPlaceholder = this->kstart;
+		uint32_t        nextNode        = this->nstart;
+		uint32_t        *pStack         = allocMap();
+		uint32_t        *pMap           = allocMap();
+		versionMemory_t *pVersion       = allocVersion();
+		uint32_t        thisVersion     = pVersion->nextVersion();
+		uint32_t        numStack        = 0; // top of stack
 
 		// starting point
 		pStack[numStack++] = latest;
@@ -3854,8 +3848,8 @@ struct groupTree_t {
 					value = curr - this->kstart;
 				} else {
 					// placeholder
-					if (pVersion[curr] != thisVersion) {
-						pVersion[curr] = thisVersion;
+					if (pVersion->mem[curr] != thisVersion) {
+						pVersion->mem[curr] = thisVersion;
 						pMap[curr]     = nextPlaceholder++;
 
 						value = curr - this->kstart;
@@ -3957,9 +3951,9 @@ struct groupTree_t {
 				F = this->N[F].gid;
 				
 			// determine if node already handled
-			if (pVersion[curr] != thisVersion) {
+			if (pVersion->mem[curr] != thisVersion) {
 				// first time
-				pVersion[curr] = thisVersion;
+				pVersion->mem[curr] = thisVersion;
 				pMap[curr]     = 0;
 
 				// push id so it visits again after expanding
@@ -4803,7 +4797,7 @@ struct groupTree_t {
 		history       = (uint32_t *) (rawData + fileHeader->offHistory);
 		// pools
 		pPoolMap      = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap));
-		pPoolVersion  = (uint32_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
+		pPoolVersion  = (versionMemory_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion));
 		// slots
 		slotMap       = allocMap();
 		slotVersion   = allocMap(); // allocate as node-id map because of local version numbering
@@ -4983,19 +4977,13 @@ struct groupTree_t {
 
 			}
 		} else {
-			uint32_t *pStack     = allocMap();
-			uint32_t *pVersion   = allocVersion();
-			uint32_t thisVersion = ++mapVersionNr;
-
-			// clear version map when wraparound
-			if (thisVersion == 0) {
-				::memset(pVersion, 0, maxNodes * sizeof *pVersion);
-				thisVersion = ++mapVersionNr;
-			}
+			uint32_t        *pStack     = allocMap();
+			versionMemory_t *pVersion   = allocVersion();
+			uint32_t        thisVersion = pVersion->nextVersion();
 
 			// output keys
 			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				pVersion[iKey] = thisVersion;
+				pVersion->mem[iKey] = thisVersion;
 				pMap[iKey]     = iKey;
 
 				// get remapped
