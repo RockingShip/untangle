@@ -1223,9 +1223,9 @@ struct groupTree_t {
 			// ripple effect of merging
 			if (depth == 1) {
 				if (gid < latest)
-					updateGroups(gid);
+					updateGroups(gid, depth);
 				else
-					updateGroups(latest);
+					updateGroups(latest, depth);
 			}
 
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
@@ -1515,12 +1515,12 @@ struct groupTree_t {
 					// merge and update
 					importGroup(gid, latest, depth);
 						if (depth == 1)
-							updateGroups(oldCount);
+							updateGroups(oldCount, depth);
 					}
 
 					// Test if group merging triggers an update
 					if (depth == 1)
-						updateGroups(oldCount);
+						updateGroups(oldCount, depth);
 
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 					return folded;
@@ -1565,7 +1565,7 @@ struct groupTree_t {
 						importGroup(gid, endpoint, depth);
 
 					if (depth == 1)
-						updateGroups(oldCount);
+						updateGroups(oldCount, depth);
 
 					// merge and update
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
@@ -1634,7 +1634,7 @@ struct groupTree_t {
 					// test for full-collapse 
 					if (gid < this->nstart) {
 						if (depth == 1)
-							updateGroups(oldCount);
+							updateGroups(oldCount, depth);
 
 						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -1709,7 +1709,7 @@ struct groupTree_t {
 
 				/*
 				 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
-					 * It could be that `addToCollection()` merged Q/Tu/F into another group
+				 * It could be that `addToCollection()` merged Q/Tu/F into another group
 				 * 
 				 * NOTE: wrap above within a `do{}while()` so `continue` will update Q/T/F
 				 */
@@ -1731,13 +1731,13 @@ struct groupTree_t {
 			if (Q != this->N[iQ].gid) {
 				while (iQ != this->N[iQ].gid)
 					iQ = this->N[iQ].gid; // restart with new list
-				printf("%.*sJUMP-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+				printf("%.*sREDIRECT-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", Q, iQ);
 				Q       = iQ; // restart loop
 				changed = true;
 			} else if (iQ == this->N[iQ].next && iQ >= this->nstart) {
 				while (iQ != this->N[iQ].gid)
 					iQ = this->N[iQ].gid; // restart with new list
-				printf("%.*sORPHAN-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iQ, Q);
+				printf("%.*sORPHAN-Q %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", Q, iQ);
 				Q       = iQ; // restart loop
 				changed = true;
 			}
@@ -1745,13 +1745,13 @@ struct groupTree_t {
 			if (Tu != this->N[iTu].gid) {
 				while (iTu != this->N[iTu].gid)
 					iTu = this->N[iTu].gid; // restart with new list
-				printf("%.*sJUMP-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+				printf("%.*sREDIRECT-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", Tu, iTu);
 				Tu      = iTu; // restart loop
 				changed = true;
 			} else if (iTu == this->N[iTu].next && iTu >= this->nstart) {
 				while (iTu != this->N[iTu].gid)
 					iTu = this->N[iTu].gid; // restart with new list
-				printf("%.*sORPHAN-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iTu, Tu);
+				printf("%.*sORPHAN-T %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", Tu, iTu);
 				Tu      = iTu; // restart loop
 				changed = true;
 			}
@@ -1759,13 +1759,13 @@ struct groupTree_t {
 			if (F != this->N[iF].gid) {
 				while (iF != this->N[iF].gid)
 					iF = this->N[iF].gid;
-				printf("%.*sJUMP-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+				printf("%.*sREDIRECT-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", F, iF);
 				F       = iF; // restart loop
 				changed = true;
 			} else if (iF == this->N[iF].next && iF >= this->nstart) {
 				while (iF != this->N[iF].gid)
 					iF = this->N[iF].gid;
-				printf("%.*sORPHAN-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", iF, F);
+				printf("%.*sORPHAN-F %u -> %u\n", depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t", F, iF);
 				F       = iF;
 				changed = true;
 			}
@@ -1803,13 +1803,13 @@ struct groupTree_t {
 		 * prune stale nodes
 		 */
 		if (gid >= this->nstart)
-			scrubGroup(gid);
+			scrubGroup(gid, depth);
 		
 		/*
 		 * Test if group merging triggers an update  
 		 */
 		if (depth == 1)
-			updateGroups(oldCount);
+			updateGroups(oldCount, depth);
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -3245,7 +3245,7 @@ struct groupTree_t {
 	 * 
 	 * return `true` is any node does a forward reference
 	 */
-	bool scrubGroup(uint32_t iGroup) {
+	bool scrubGroup(uint32_t gid, unsigned depth) {
 
 		bool            groupForward = false;
 		versionMemory_t *pVersion    = allocVersion();
@@ -3255,7 +3255,7 @@ struct groupTree_t {
 		 */
 		unsigned pwr[8] = {0};
 
-		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			const groupNode_t *pNode         = this->N + iNode;
 			switch(db.signatures[pNode->sid].size) {
 			case 0: if (pwr[0] < pNode->power) pwr[0] = pNode->power;
@@ -3272,7 +3272,7 @@ struct groupTree_t {
 			}
 		}
 		
-		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			groupNode_t *pNode         = this->N + iNode;
 			unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
@@ -3287,7 +3287,7 @@ struct groupTree_t {
 			uint32_t newSlots[MAXSLOTS]; // updated slots
 
 			uint32_t thisVersion = pVersion->nextVersion();
-			pVersion->mem[iGroup] = thisVersion;
+			pVersion->mem[gid] = thisVersion;
 
 			if (pNode->power < pwr[db.signatures[pNode->sid].size]) {
 				// orphan if weak
@@ -3324,7 +3324,7 @@ struct groupTree_t {
 					// node has folded
 					nodeFolded = true;
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<fold>");
-				} else if (id > iGroup) {
+				} else if (id > gid) {
 					// node has forward reference 
 					nodeForward = true;
 					if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<forward>");
@@ -3370,12 +3370,13 @@ struct groupTree_t {
 					latest = this->N[latest].gid;
 
 				// did groups merge
-				if (latest != iGroup) {
-					printf("JUMP1 latest=%u %u iGroup=%u %u\n", latest, this->N[latest].gid, iGroup, this->N[iGroup].gid);
+				if (latest != gid) {
+					printf("JUMP1 latest=%u %u iGroup=%u %u\n", latest, this->N[latest].gid, gid, this->N[gid].gid);
 					// set `iNode` to self, will auto increment 
-					iNode = iGroup = latest;
+					iNode = gid = latest;
 				}
 			}
+
 			if (!nodeFolded && nodeForward) {
 				// node is active and does a forward reference
 				groupForward = true;
@@ -3387,7 +3388,7 @@ struct groupTree_t {
 		}
 
 		// may not orphan all nodes
-		assert(iGroup != this->N[iGroup].next);
+		assert(gid != this->N[gid].next);
 
 		freeVersion(pVersion);
 		return groupForward;
@@ -3398,7 +3399,7 @@ struct groupTree_t {
 	 * 
 	 * Rebuild groups that have nodes that have forward references
 	 */
-	void updateGroups(uint32_t startGid) {
+	void updateGroups(uint32_t startGid, unsigned depth) {
 
 		printf("UPDATE\n");
 
@@ -3422,7 +3423,7 @@ struct groupTree_t {
 					 * Update changed and remove obsoleted nodes.
 					 * Returns true if group has forward references
 					 */
-					bool hasForward = scrubGroup(iGroup);
+					bool hasForward = scrubGroup(iGroup, depth);
 
 					// relocate to new group if it had a forward reference
 					if (hasForward) {

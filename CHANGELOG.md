@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-10 13:40:38 Added: `groupTree_t`, more `depth`.
 2021-12-09 18:34:11 `groupTree::importGroup()`, Incorrect test for endpoint. 
 2021-12-09 18:29:14 Fixed: `groupTree::addNormaliseNode()`, c-product iterator orphan detection.
 2021-12-09 17:52:50 Fixed: `groupTree_t::pruneGroup()`, Update slots, orphan forwarding and renamed to `scrubGroup()`. 
