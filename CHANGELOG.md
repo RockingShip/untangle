@@ -11,6 +11,19 @@ TODO: genpattern list
 
 ## [Unreleased]
 
+## 2021-12-10 14:16:35 [Version 2.12.0]
+
+This version greatly focuses on `groupTree_t` where nodes are collections of signature/member based structures.  
+Simply put, `baseTree_t` is `1n9-only` (Q/T/F) whereas `groupTree_t` is signature id based.   
+It is still incomplete, and the pending changes need a baseline for comparison.  
+Structural consistency is operational, structure manipulation still work-in-progress, structural integrity is questionable.   
+Unfinished actions:  
+ - Enhance `expandMembers()` to instance signature group members creating fractal trees with minimal and fully connecting/overlapping structures.  
+ - Enhance `saveString()` to handle sid/slot based nodes complexer than `1n9`.  
+ - Delay `importGroup()` as merging of groups plays havoc with list iterators.  
+ - Enhance `updateGroup()` to only scan tree changes.  
+ - Throttle logging.  
+ 
 ```
 2021-12-10 13:40:38 Added: `groupTree_t`, more `depth`.
 2021-12-09 18:34:11 `groupTree::importGroup()`, Incorrect test for endpoint. 
@@ -36,7 +49,7 @@ TODO: genpattern list
 2021-12-02 17:42:11 Added: `context_t::DEBUGMASK_PRUNE`, To hide some tracking.
 2021-12-03 18:38:59 Changed: `groupTree_t::expandSignature()`, Accept top-level node folding into gid (it is intentional).
 2021-12-03 18:34:47 Changed: `groupTree_t::updateGroups()`, As optimisation, supply lowest from which scanning starts.
-2021-12-02 14:10:46 Fixed: `groupTree::pruneGroup()`, Harden iterators against `unlink()`.
+2021-12-02 14:10:46 Fixed: `groupTree::scrubGroups()`, Harden iterators against `unlinkNode()`.
 2021-12-03 18:09:07 Changed: `groupTree::importGroup()`, Make aware of full-collapse and forward references. 
 2021-12-03 17:57:38 Fixed: `groupTree::addNormaliseNode()`, Redesigned c-product to better handle changing iterator groups.
 2021-12-03 17:54:21 Fixed: `groupTree::addNormaliseNode()`, Sid-swap top-level slots before lookup.
@@ -46,7 +59,7 @@ TODO: genpattern list
 2021-12-02 14:33:55 Changed: `groupTree::addNormaliseNode()`, Better handling of group merging as effect of creating components.
 2021-12-02 14:30:01 Changed: `groupTree::addNormaliseNode()`, C-product iterators better detect group changes.
 2021-12-02 14:25:19 Added: `groupTree::importGroup()`, Forward reference friendly.
-2021-12-02 14:10:46 Added: `groupTree::pruneGroup()`, And renames/simplified `rebuildGroup()` to `updateGroup()`.
+2021-12-02 14:10:46 Added: `groupTree::scrubGroup()`, And renames/simplified `rebuildGroup()` to `updateGroup()`.
 2021-12-02 13:21:03 Added: `groupNode_t`, Add power for minimal layer requirements. 
 2021-12-02 13:12:38 Changed: `groupTree_t::validateTree()`, Allow forward references.
 2021-12-02 12:57:00 Fixed: `groupTree_t`, Allow `gid` to be zero.
@@ -589,7 +602,8 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.11.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.12.0...HEAD
+[Version 2.12.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.11.0...v2.12.0
 [Version 2.11.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.10.0...v2.11.0
 [Version 2.10.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.9.0...v2.10.0
 [Version 2.9.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.8.0...v2.9.0

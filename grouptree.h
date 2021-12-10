@@ -1363,7 +1363,7 @@ struct groupTree_t {
 				 * Requires temporary Q/T/F because it might otherwise change loop iterators. 
 				 */
 				uint32_t folded = IBIT; // indicate not-folded
-				uint32_t normQ, normTi, normTu, normF; 
+				uint32_t normQ = 0, normTi = 0, normTu = 0, normF = 0; 
 				if (Ti) {
 
 					if (iTu == 0) {
@@ -4741,10 +4741,10 @@ struct groupTree_t {
 				// separator between pattern/transform
 				while (pattern[1])
 					pattern++;
-				break;
+				continue; // for
 			case ' ':
 				// skip spaces
-				break;
+				continue; // for
 			default:
 				ctx.fatal("[bad token '%c']\n", *pattern);
 			}

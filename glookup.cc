@@ -322,7 +322,26 @@ struct glookupContext_t {
 		/*
 		 * Scratch area
 		 */
+
+		unsigned cntPower[8] = {0};
+
+		for (unsigned i = pStore->IDFIRST; i < pStore->numPatternSecond; i++) {
+			const patternSecond_t *pSecond = pStore->patternsSecond + i;
+			const patternFirst_t *pFirst = pStore->patternsFirst + pSecond->idFirst;
+			if (pSecond->sidR >= 1)
+				cntPower[pSecond->power]++;
+			if (pSecond->power == 5)
+				printf("%u %u %u %u %u %u\n",
+				       pFirst->sidQ,
+				       pFirst->sidTu,
+				       pFirst->sidTj,
+				       pSecond->sidF,
+				       pSecond->sidR,
+				       pSecond->tidExtract);
+		}
 		
+		printf("cntPower=[%u,%u,%u,%u,%u,%u,%u,%u]\n", cntPower[0], cntPower[1], cntPower[2], cntPower[3], cntPower[4], cntPower[5], cntPower[6], cntPower[7]);
+
 		unsigned cntPower[8] = {0};
 
 		for (unsigned i = pStore->IDFIRST; i < pStore->numPatternSecond; i++) {

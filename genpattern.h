@@ -608,7 +608,7 @@ struct genpatternContext_t : dbtool_t {
 	 * Second step are the found combos cross-multiplied with F.
 	 * `tidR` is data, just like `power`. 
 	 * `groupTree_t::constructSlots()` uses `tidR` to instantiate group nodes as `tidR=0`. 
-	 * `groupTree_t::addNormalisedNode()` uses `power` to prune group lists. 
+	 * `groupTree_t::addNormaliseNode()` uses `power` to prune group lists. 
 	 * 
 	 * @date 2021-11-28 22:58:49
 	 * 
