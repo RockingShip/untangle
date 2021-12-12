@@ -1694,18 +1694,9 @@ struct groupTree_t {
 					       db.signatures[sid].size, power);
 				}
 
-				// remember first `1n9` (which should always be the first combo created)
-				if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F) {
+				// remember first `1n9` (which should be the first combo created) for return value
+				if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F)
 					first1n9 = nid;
-					assert(
-						sid == db.SID_OR ||
-						sid == db.SID_GT ||
-						sid == db.SID_NE ||
-						sid == db.SID_AND ||
-						sid == db.SID_QNTF ||
-						sid == db.SID_QTF
-					);
-				}
 
 				/*
 				 * Merging groups change Q/T/F headers, possibly invalidating loop end conditions.
@@ -2406,7 +2397,11 @@ struct groupTree_t {
 				// NODE: if nid is a slot or gid, then it's an endpoint collapse  
 			}
 
-			// update to latest
+			// update gid to latest
+			while (gid != this->N[gid].gid)
+				gid = this->N[gid].gid;
+				
+			// update node to latest, to determine it's gid
 			uint32_t latest = nid;
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
@@ -3140,11 +3135,6 @@ struct groupTree_t {
 				// NOTE: this will become an orphaned node forwarding to its latest group 
 				// forward to latest (which it already does)
 				pNode->gid = newest;
-				/*
-				 * @date 2021-12-07 21:48:01
-				 * It has been found that this could be a `1n9`.
-				 * todo: work on statagy
-				 */
 			} else {
 				orphanedAll = false;
 			}
@@ -3467,8 +3457,8 @@ struct groupTree_t {
 				 * orphan and erase all forward references from firstGid
 				 * But only from non-1n9 nodes, as a 1n9-loop is still considered an error
 				 */
-				unsigned      cntRemoved = 0;
-				for (uint32_t iNode      = firstGid; iNode < this->ncount; iNode++) {
+				unsigned cntRemoved = 0;
+				for (uint32_t iNode = firstGid; iNode < this->ncount; iNode++) {
 					groupNode_t *pNode = this->N + iNode;
 
 					if (pNode->sid == db.SID_SELF)
@@ -3492,6 +3482,33 @@ struct groupTree_t {
 					}
 				}
 
+				/*
+				 * Second round, this time removing `1n9`
+				 */
+				if (cntRemoved == 0) {
+					for (uint32_t iNode = firstGid; iNode < this->ncount; iNode++) {
+						groupNode_t *pNode = this->N + iNode;
+
+						if (pNode->sid == db.SID_SELF)
+							continue; // skip list headers
+
+						unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+							uint32_t id = pNode->slots[iSlot];
+
+							if (id > this->N[id].gid) {
+								cntRemoved++;
+								// unlink 
+								unlinkNode(iNode);
+								// erase
+								memset(pNode, 0, sizeof(*pNode));
+								break;
+							}
+						}
+					}
+				}
+				
 				assert (cntRemoved != 0);
 			}
 
@@ -3655,10 +3672,6 @@ struct groupTree_t {
 			// find group headers
 			if (this->N[iGroup].gid == iGroup) {
 
-				// does group have `1n9`
-				unsigned cnt0n9 = 0;
-				unsigned cnt1n9 = 0;
-				
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					const groupNode_t *pNode = this->N + iNode;
@@ -3671,12 +3684,6 @@ struct groupTree_t {
 					// test double defined (for broken linked lists)
 					if (pVersion->mem[iNode] == thisVersion)
 						errors++;
-
-					// is it `1n9`
-					if (pNode->sid == db.SID_SELF)
-						cnt0n9++;
-					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
-						cnt1n9++;
 
 					uint32_t newSlots[MAXSLOTS] = {0};
 
@@ -3716,12 +3723,6 @@ struct groupTree_t {
 					pVersion->mem[iNode] = thisVersion;
 				}
 
-				// each group needs at least one `1n9`
-				if (cnt0n9 != 0)
-					errors++;
-				if (cnt1n9 == 0)
-					errors++;
-
 				// test double defined
 				if (pVersion->mem[iGroup] == thisVersion)
 					errors++;
@@ -3754,23 +3755,6 @@ struct groupTree_t {
 					printf("<GID %d EMPTY>\n", iGroup);
 					continue;
 				}
-				
-				// does group have `1n9`
-				unsigned cnt0n9 = 0;
-				unsigned cnt1n9 = 0;
-				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					const groupNode_t *pNode = this->N + iNode;
-
-					// ignore lists under construction
-					if (pNode->sid == db.SID_SELF)
-						cnt0n9++;
-					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
-						cnt1n9++;
-				}
-				if (cnt0n9 != 0)
-					printf("<COUNT-0N9 gid=%u, cnt=%u>\n", iGroup, cnt0n9);
-				if (cnt1n9 == 0)
-					printf("<COUNT-1N9 gid=%u, cnt=%u>\n", iGroup, cnt1n9);
 
 				// is list up-to-date
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {

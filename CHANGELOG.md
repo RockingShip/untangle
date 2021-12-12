@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-12 18:27:28 Removed: Requirement to have at least one `1n9` per `groupTree_t` group list.
 2021-12-12 12:45:13 Changed: Redesigned `groupTree_t::saveString()` to make it independent of `1n9` nodes.
 ```
 
