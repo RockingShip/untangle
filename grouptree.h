@@ -3884,445 +3884,214 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-12-06 13:12:41
+	 * @date 2021-12-12 12:24:22
 	 * 
-	 * Display a node.
-	 * If a list header, find first `1n9` of groups and expand then in a Q/T/F manner
-	 * If a node, rebuild sid and replace endpoints with expanded slot entries (which always reference groups)
+	 * Export/serialize a tree as string.
+	 * This is a wrapper around `saveStringNode`, which is recursive, and handles allocation of shared resources.
+	 * 
+	 * NOTE: id/references are as-is and not updated to latest
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
 
-		if (this->N[id].sid != db.SID_SELF) {
-			// requesting a specific node 
-			assert(pTransform == NULL);
-			return saveStringNode(id);
-		} 
+		uint32_t        nextPlaceholder  = this->kstart;	// next placeholder for `pTransform`
+		uint32_t        nextExportNodeId = this->nstart;	// next nodeId for exported name
+		uint32_t        *pMap            = allocMap();		// maps internal to exported node id 
+		versionMemory_t *pVersion        = allocVersion();	// version data for `pMap`.
+		std::string     name;
+
+		// bump version number
+		pVersion->nextVersion();
 		
-		// get latest gid
-		uint32_t latest = id & ~IBIT;
-		while (latest != this->N[latest].gid)
-			latest = this->N[latest].gid;
-
-		std::string name;
-
-		/*
-		 * Endpoints are simple
-		 */
-		if (latest < this->nstart) {
-			if (pTransform) {
-				pTransform->clear();
-				if (latest == 0) {
-					name += '0';
-				} else {
-					uint32_t value = latest - this->kstart;
-
-					if (value < 26) {
-						*pTransform += (char) ('a' + value);
-					} else {
-						encodePrefix(*pTransform, value / 26);
-						*pTransform += (char) ('a' + (value % 26));
-					}
-
-					name += 'a';
-				}
-
-			} else {
-				if (latest == 0) {
-					name += '0';
-				} else {
-					uint32_t value = latest - this->kstart;
-					if (value < 26) {
-						name += (char) ('a' + value);
-					} else {
-						encodePrefix(name, value / 26);
-						name += (char) ('a' + (value % 26));
-					}
-				}
-			}
-
-
-			// test for invert
-			if (id & IBIT)
-				name += '~';
-
-			return name;
-		}
-
-		uint32_t        nextPlaceholder = this->kstart;
-		uint32_t        nextNode        = this->nstart;
-		uint32_t        *pStack         = allocMap();
-		uint32_t        *pMap           = allocMap();
-		versionMemory_t *pVersion       = allocVersion();
-		uint32_t        thisVersion     = pVersion->nextVersion();
-		uint32_t        numStack        = 0; // top of stack
-
-		// starting point
-		pStack[numStack++] = latest;
-
-		do {
-			// pop stack
-			uint32_t curr = pStack[--numStack];
-
-			// get latest
-			while (curr != this->N[curr].gid)
-				curr = this->N[curr].gid;
-
-			assert(curr != 0);
-
-			// if endpoint then emit
-			if (curr < this->nstart) {
-				uint32_t value;
-
-				if (!pTransform) {
-					// endpoint
-					value = curr - this->kstart;
-				} else {
-					// placeholder
-					if (pVersion->mem[curr] != thisVersion) {
-						pVersion->mem[curr] = thisVersion;
-						pMap[curr]     = nextPlaceholder++;
-
-						value = curr - this->kstart;
-						if (value < 26) {
-							*pTransform += (char) ('a' + value);
-						} else {
-							encodePrefix(*pTransform, value / 26);
-							*pTransform += (char) ('a' + (value % 26));
-						}
-					}
-
-					value = pMap[curr] - this->kstart;
-				}
-
-				// convert id to (prefixed) letter
-				if (value < 26) {
-					name += (char) ('a' + value);
-				} else {
-					encodePrefix(name, value / 26);
-					name += (char) ('a' + (value % 26));
-				}
-
-				continue;
-			}
-
-			/*
-			 * First node in group list is SID_SELF,
-			 * Second node is 1n9
-			 */
-
-			// find group headers
-			assert(this->N[curr].gid == curr); // must be header
-			assert(this->N[curr].next != curr); // may not be empty
-
-			// top-level components	
-			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
-
-			// walk through group list in search of a `1n9` node
-			for (uint32_t iNode = this->N[curr].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				const groupNode_t *pNode = this->N + iNode;
-
-				if (pNode->sid == db.SID_OR) {
-					Q  = pNode->slots[0];
-					Tu = 0;
-					Ti = IBIT;
-					F  = pNode->slots[1];
-					break;
-				} else if (pNode->sid == db.SID_GT) {
-					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
-					Ti = IBIT;
-					F  = 0;
-					break;
-				} else if (pNode->sid == db.SID_NE) {
-					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
-					Ti = IBIT;
-					F  = pNode->slots[1];
-					break;
-				} else if (pNode->sid == db.SID_AND) {
-					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
-					Ti = 0;
-					F  = 0;
-					break;
-				} else if (pNode->sid == db.SID_QNTF) {
-					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
-					Ti = IBIT;
-					F  = pNode->slots[2];
-					break;
-				} else if (pNode->sid == db.SID_QTF) {
-					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
-					Ti = 0;
-					F  = pNode->slots[2];
-					break;
-				}
-			}
-			if (Q == 0) {
-				for (uint32_t iNode = this->N[curr].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-					const groupNode_t *pNode = this->N + iNode;
-					printf("E %u\t%u\t%u:%s/[%u %u %u %u %u %u %u %u %u]\n",
-					       pNode->gid, iNode,
-					       pNode->sid, db.signatures[pNode->sid].name,
-					       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8]);
-				}
-
-				ctx.fatal("\n{\"error\":\"group misses 1n9\",\"where\":\"%s:%s:%d\",\"gid\":%u}\n",
-					  __FUNCTION__, __FILE__, __LINE__, curr);
-			}
-
-			// slots may be outdated
-			while (Q != this->N[Q].gid)
-				Q = this->N[Q].gid;
-			while (Tu != this->N[Tu].gid)
-				Tu = this->N[Tu].gid;
-			while (F != this->N[F].gid)
-				F = this->N[F].gid;
-				
-			// determine if node already handled
-			if (pVersion->mem[curr] != thisVersion) {
-				// first time
-				pVersion->mem[curr] = thisVersion;
-				pMap[curr]     = 0;
-
-				// push id so it visits again after expanding
-				pStack[numStack++] = curr;
-
-				// push non-zero endpoints
-				if (F >= this->kstart)
-					pStack[numStack++] = F;
-				if (Tu != F && Tu >= this->kstart)
-					pStack[numStack++] = Tu;
-				if (Q >= this->kstart)
-					pStack[numStack++] = Q;
-
-				assert(numStack < maxNodes);
-
-			} else if (pMap[curr] == 0) {
-				// node complete, output operator
-				pMap[curr] = nextNode++;
-
-				if (Ti) {
-					if (Tu == 0) {
-						// OR Q?!0:F
-						name += '+';
-					} else if (F == 0) {
-						// GT Q?!T:0
-						name += '>';
-					} else if (F == Tu) {
-						// NE Q?!F:F
-						name += '^';
-					} else {
-						// QnTF Q?!T:F
-						name += '!';
-					}
-				} else {
-					if (Tu == 0) {
-						// LT Q?0:F
-						name += '<';
-					} else if (F == 0) {
-						// AND Q?T:0
-						name += '&';
-					} else if (F == Tu) {
-						// SELF Q?F:F
-						assert(!"Q?F:F");
-					} else {
-						// QTF Q?T:F
-						name += '?';
-					}
-				}
-
-			} else {
-				// back-reference to previous node
-				uint32_t dist = nextNode - pMap[curr];
-
-				// convert id to (prefixed) back-link
-				if (dist < 10) {
-					name += (char) ('0' + dist);
-				} else {
-					encodePrefix(name, dist / 10);
-					name += (char) ('0' + (dist % 10));
-				}
-			}
-
-		} while (numStack > 0);
-
-		assert(nextPlaceholder <= this->nstart);
+		// call core code
+		saveStringNode(id & ~IBIT, nextExportNodeId, name, pVersion, pMap, pTransform, nextPlaceholder);
 
 		// test for inverted-root
 		if (id & IBIT)
 			name += '~';
 
 		freeMap(pMap);
-		freeMap(pStack);
 		freeVersion(pVersion);
 
+		// return name
 		return name;
 	}
-	
-	/*
-	 * @date  2021-12-04 20:12:48
+
+	/**
+	 * @date 2021-12-12 12:24:22
 	 * 
-	 * Expensive version of `saveString()` that decodes the node instead of its group.
-	 * Node sid is used to expand slots entries using `saveStringGroup()`.
-	 * There identical sub-structures across slots are not detected or compacted.
-	 * Separate components with spaces.
+	 * Called by `saveString()` do serialize a tree node.
+	 * 
+	 * @param {uint32_t}  nid              - Id of node to export
+	 * @param {string}    exportName       - Output being constructed
+	 * @param {uint32_t&} nextExportNodeId - Next external node id to be assigned
+	 * @param {versionMemory_t*} pVersion  - Version info for `pMap`
+	 * @param {uint32_t*} pMap             - The external node id for internal nodes.
+	 * @param {uint32_t*} pTransform       - Endpoints for transform placeholders [DISABLED WHEN NULL]
+	 * @param {uint32_t&} nextPlaceholder  - Next `pTransform` placeholder to be assigned
 	 */
-	std::string saveStringNode(uint32_t nid) {
+	void saveStringNode(uint32_t nid, uint32_t &nextExportNodeId, std::string &exportName, versionMemory_t *pVersion, uint32_t *pMap, std::string *pTransform, uint32_t &nextPlaceholder) {
 
-		uint32_t latest = nid;
-		while (latest != this->N[latest].gid)
-			latest = this->N[latest].gid;
+		// caller did `nextVersion()`, get (that) current version 
+		uint32_t thisVersion = pVersion->version;
+
+		/*
+		 * Nodes for the exported structure described by this node. (analogue to `tinyTree_t::N[]`) 
+		 * It contains node id's of the exported tree. 
+		 * WARNING: To reduce recursive scope storage, the first node starts at 0 (instead of nstart).
+		 */
+		uint32_t localNodes[tinyTree_t::TINYTREE_MAXNODES];
 		
-		groupNode_t *pNode = this->N + nid;
-		signature_t *pSignature = db.signatures + pNode->sid;
+		/*
+		 * Number of active nodes in `localNode[]`.
+		 * WARNING: Initial value is 0 because `localNode[]` starts at 0 (instead of nstart).
+		 */
+		unsigned nextLocalNodeId = 0;
 
-		// state storage for postfix notation
-		std::string stack[tinyTree_t::TINYTREE_MAXSTACK]; // there are 3 operands per per opcode
-		int         numStack        = 0;
-		uint32_t    nextNode        = tinyTree_t::TINYTREE_NSTART; // next visual node
-		std::string beenWhat[tinyTree_t::TINYTREE_NEND]; // track id's of display operators.
+		/*
+		 * First node in group list is SID_SELF
+		 */
 
-		// walk through the notation until end or until placeholder/skin separator
-		for (const char *pCh = pSignature->name; *pCh; pCh++) {
+		// list header is non-info. Skip to next node
+		if (this->N[nid].sid == db.SID_SELF) {
+			if (1) {
+				// favour first node in list (most likely `1n9`), mostly shorter names, but deeper recursion
+				nid = this->N[nid].next;
+			} else {
+				// favour last  node in list,(most likely `4n9`), may create longer names but less deeper recursion
+				nid = this->N[nid].prev;
+			}
+			assert (this->N[nid].sid != db.SID_SELF);
+		}
 
-			switch (*pCh) {
-			case '0':
-				stack[numStack++] = "0";
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = db.signatures[this->N[nid].sid].name; *pattern; pattern++) {
+
+			switch (*pattern) {
+			case '0': //
+				exportName += '0';
 				break;
-			case 'a': case 'b': case 'c':
-			case 'd': case 'e': case 'f':
-			case 'g': case 'h': case 'i':
-				stack[numStack++] = saveString(pNode->slots[(int) (*pCh - 'a')]);
-				break;
+
+				// @formatter:off
 			case '1': case '2': case '3':
 			case '4': case '5': case '6':
 			case '7': case '8': case '9':
-				stack[numStack++] = beenWhat[nextNode - (*pCh - '0')];
-				break;
+				// @formatter:on
+			{
+				/*
+				 * Push-back reference
+				 */
+				// get node of local structure
+				uint32_t v = nextLocalNodeId - (*pattern - '0');
+				assert(v >= 0 && v < tinyTree_t::TINYTREE_MAXNODES);
 
-			case '+': {
-				// OR (appreciated)
+				// determine distance as export would see it
+				uint32_t dist = nextExportNodeId - localNodes[v];
 
-				// pop operands
-				std::string R = stack[--numStack]; // right hand side
-				std::string L = stack[--numStack]; // left hand side
-
-				// create operator
-				L += ' ';
-				L += R;
-				L += '+';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = L;
-				break;
-			}
-			case '>': {
-				// GT (appreciated)
-
-				//pop operands
-				std::string R = stack[--numStack]; // right hand side
-				std::string L = stack[--numStack]; // left hand side
-
-				// create operator
-				L += ' ';
-				L += R;
-				L += '>';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = L;
-				break;
-			}
-			case '^': {
-				// NE/XOR (appreciated)
-
-				//pop operands
-				std::string R = stack[--numStack]; // right hand side
-				std::string L = stack[--numStack]; // left hand side
-
-				// create operator
-				L += ' ';
-				L += R;
-				L += '^';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = L;
-				break;
-			}
-			case '!': {
-				// QnTF (appreciated)
-
-				// pop operands
-				std::string F = stack[--numStack];
-				std::string T = stack[--numStack];
-				std::string Q = stack[--numStack];
-
-				// create operator
-				Q += ' ';
-				Q += T;
-				Q += ' ';
-				Q += F;
-				Q += '!';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = Q;
-				break;
-			}
-			case '&': {
-				// AND (depreciated)
-
-				// pop operands
-				std::string R = stack[--numStack]; // right hand side
-				std::string L = stack[--numStack]; // left hand side
-
-				// create operator
-				L += ' ';
-				L += R;
-				L += '&';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = L;
-				break;
-			}
-			case '?': {
-				// QTF (depreciated)
-
-				// pop operands
-				std::string F = stack[--numStack];
-				std::string T = stack[--numStack];
-				std::string Q = stack[--numStack];
-
-				// create operator
-				Q += ' ';
-				Q += T;
-				Q += ' ';
-				Q += F;
-				Q += '?';
-
-				// push
-				stack[numStack++] = beenWhat[nextNode++] = Q;
-				break;
-			}
-			case '~': {
-				// NOT (support)
-
-				// invert top-of-stack
-				stack[numStack - 1] += '~';
+				// convert (prefixed) back-link
+				if (dist < 10) {
+					exportName += (char) ('0' + dist);
+				} else {
+					encodePrefix(exportName, dist / 10);
+					exportName += (char) ('0' + (dist % 10));
+				}
 				break;
 			}
 
-			case '/':
-				// skip delimiter
-				while (pCh[1])
-					pCh++;
+				// @formatter:off
+			case 'a': case 'b': case 'c': 
+			case 'd': case 'e': case 'f':
+			case 'g': case 'h': case 'i':
+			case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o':
+			case 'p': case 'q': case 'r':
+			case 's': case 't': case 'u':
+			case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+			{
+				// get node id of export
+				uint32_t gid = this->N[nid].slots[(unsigned) (*pattern - 'a')];
+				
+				// if endpoint then emit
+				if (gid < this->nstart) {
+					uint32_t value;
+
+					if (!pTransform) {
+						// endpoint
+						value = gid - this->kstart;
+					} else {
+						// placeholder
+						if (pVersion->mem[gid] != thisVersion) {
+							pVersion->mem[gid] = thisVersion;
+							pMap[gid]          = nextPlaceholder++;
+
+							value = gid - this->kstart;
+							if (value < 26) {
+								*pTransform += (char) ('a' + value);
+							} else {
+								encodePrefix(*pTransform, value / 26);
+								*pTransform += (char) ('a' + (value % 26));
+							}
+						}
+
+						value = pMap[gid] - this->kstart;
+					}
+
+					// convert id to (prefixed) letter
+					if (value < 26) {
+						exportName += (char) ('a' + value);
+					} else {
+						encodePrefix(exportName, value / 26);
+						exportName += (char) ('a' + (value % 26));
+					}
+
+					continue;
+				}
+
+				// determine if node already handled
+				if (pVersion->mem[gid] != thisVersion) {
+					// first time
+
+					// Call recursive
+					saveStringNode(gid, nextExportNodeId, exportName, pVersion, pMap, pTransform, nextPlaceholder);
+
+					// link internal to external node id
+					pVersion->mem[gid] = thisVersion;
+					pMap[gid]          = nextExportNodeId - 1; // last *assigned* nodeId 
+
+				} else {
+					// back-reference to earlier node
+					uint32_t dist = nextExportNodeId - pMap[gid];
+
+					// convert id to (prefixed) back-link
+					if (dist < 10) {
+						exportName += (char) ('0' + dist);
+					} else {
+						encodePrefix(exportName, dist / 10);
+						exportName += (char) ('0' + (dist % 10));
+					}
+				}
+
 				break;
+
+			}
+
+			case '+': case '>': case '^': case '!':
+			case '&': case '?': {
+				// output operator
+				exportName += *pattern;
+				
+				// assign it an external node id
+				localNodes[nextLocalNodeId++] = nextExportNodeId++;
+				break;
+			}
+
+			default:
+				assert(0);
 			}
 		}
-		assert (numStack == 1);
-
-		// return root of name
-		return stack[numStack - 1];
 	}
 
 	/*
@@ -4338,7 +4107,7 @@ struct groupTree_t {
 		std::string   ret = "./eval";
 		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			ret += " \"";
-			ret += saveStringNode(iNode);
+			ret += saveString(iNode);
 			ret += "\"";
 		}
 

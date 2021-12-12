@@ -923,7 +923,7 @@ struct generator_t {
 					// flag operator done
 					beenWhat[curr] = nextNode++;
 				} else {
-					// back-reference to previous node
+					// back-reference to earlier node
 
 					unsigned backref = nextNode - beenWhat[curr];
 					assert(backref <= 9);

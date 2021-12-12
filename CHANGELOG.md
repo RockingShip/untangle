@@ -11,13 +11,21 @@ TODO: genpattern list
 
 ## [Unreleased]
 
+```
+2021-12-12 12:45:13 Changed: Redesigned `groupTree_t::saveString()` to make it independent of `1n9` nodes.
+```
+
 ## 2021-12-10 14:16:35 [Version 2.12.0]
 
 This version greatly focuses on `groupTree_t` where nodes are collections of signature/member based structures.  
 Simply put, `baseTree_t` is `1n9-only` (Q/T/F) whereas `groupTree_t` is signature id based.   
 It is still incomplete, and the pending changes need a baseline for comparison.  
 Structural consistency is operational, structure manipulation still work-in-progress, structural integrity is questionable.   
+NOTE: if `geval` fails, add `--depth=0`.  
+
 Unfinished actions:  
+
+ - Minimum `power` based scrubbing.  
  - Enhance `expandMembers()` to instance signature group members creating fractal trees with minimal and fully connecting/overlapping structures.  
  - Enhance `saveString()` to handle sid/slot based nodes complexer than `1n9`.  
  - Delay `importGroup()` as merging of groups plays havoc with list iterators.  

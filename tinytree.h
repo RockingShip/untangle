@@ -2576,7 +2576,7 @@ struct tinyTree_t {
 				}
 
 			} else {
-				// back-reference to previous node
+				// back-reference to earlier node
 
 				uint32_t backref = nextNode - beenWhat[curr];
 				assert(backref <= 9);

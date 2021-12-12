@@ -3271,7 +3271,7 @@ struct baseTree_t {
 				}
 
 			} else {
-				// back-reference to previous node
+				// back-reference to earlier node
 				uint32_t dist = nextNode - pMap[curr];
 
 				// convert id to (prefixed) back-link
