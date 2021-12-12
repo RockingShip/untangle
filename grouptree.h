@@ -3951,8 +3951,12 @@ struct groupTree_t {
 		 * First node in group list is SID_SELF
 		 */
 
+		// update to latest only for orphaned groups
+		while (nid >= this->nstart && nid == this->N[nid].next)
+			nid = this->N[nid].gid;
+
 		// list header is non-info. Skip to next node
-		if (this->N[nid].sid == db.SID_SELF) {
+		if (nid >= this->nstart && this->N[nid].sid == db.SID_SELF) {
 			if (1) {
 				// favour first node in list (most likely `1n9`), mostly shorter names, but deeper recursion
 				nid = this->N[nid].next;
