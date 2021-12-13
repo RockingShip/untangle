@@ -1347,7 +1347,7 @@ struct groupTree_t {
 				/*
 				 * Analyse Q/T/F combo 
 				 */
-				
+
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 					// iterators must be in up-to-date lists
 					assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
@@ -1502,7 +1502,7 @@ struct groupTree_t {
 				 */
 				if (folded != IBIT) {
 					// folded to one of the iterators or zero.
-					
+
 					printf("FOLD %u %u\n", gid, folded);
 
 					assert(folded >= this->nstart); // todo: this should trigger but doesn't
@@ -1543,7 +1543,7 @@ struct groupTree_t {
 				for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 					uint32_t id = finalSlots[iSlot];
 					assert (id != 0);
-					
+
 					if (id == gid) {
 						hasSelf = true;
 						break;
@@ -1680,6 +1680,17 @@ struct groupTree_t {
 				while (latest != this->N[latest].gid)
 					latest = this->N[latest].gid;
 
+				if (nid == oldCount2) {
+					// if (ctx.opt_debug & ctx.DEBUG_ROW)
+					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+					       latest, nid,
+					       iQ, iTu, iF,
+					       sid, db.signatures[sid].name,
+					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
+					       db.signatures[sid].size, power);
+				}
+
 				if (gid == IBIT) {
 					gid = latest;
 				} else if (gid != this->N[latest].gid) {
@@ -1694,17 +1705,6 @@ struct groupTree_t {
 				gid = nid;
 				while (gid != this->N[gid].gid)
 					gid = this->N[gid].gid;
-
-				if (nid >= oldCount2) {
-					// if (ctx.opt_debug & ctx.DEBUG_ROW)
-					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
-					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-					       gid, nid,
-					       iQ, iTu, iF,
-					       sid, db.signatures[sid].name,
-					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-					       db.signatures[sid].size, power);
-				}
 
 				// remember first `1n9` (which should be the first combo created) for return value
 				if (first1n9 == 0 && iQ == Q && iTu == Tu && iF == F)
