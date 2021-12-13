@@ -1673,11 +1673,23 @@ struct groupTree_t {
 
 				uint32_t oldCount2 = this->ncount;
 
-				uint32_t nid = addToCollection(sid, finalSlots, gid, power, depth);
+				uint32_t nid = addToCollection(sid, finalSlots, gid, power);
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
-				assert(nid != IBIT);
-				
+				uint32_t latest = nid;
+				while (latest != this->N[latest].gid)
+					latest = this->N[latest].gid;
+
+				if (gid == IBIT) {
+					gid = latest;
+				} else if (gid != this->N[latest].gid) {
+					// merge groups lists
+					importGroup(gid, latest, depth);
+					
+					while (latest != this->N[latest].gid)
+						latest = this->N[latest].gid;
+				}
+
 				// update current group id to that of head of list
 				gid = nid;
 				while (gid != this->N[gid].gid)
@@ -2851,7 +2863,7 @@ struct groupTree_t {
          * return node id, which might change group
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
-	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, uint32_t power, unsigned depth) {
+	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, uint32_t power) {
 
 		assert(sid != db.SID_SELF); // headers need to be created directly, because they may not be indexed
 		assert(gid == IBIT || gid == this->N[gid].gid); // gid must be latest
@@ -2894,19 +2906,8 @@ struct groupTree_t {
 		/*
 		 * Test if node already exists
 		 */
-		if (nid != 0) {
-			uint32_t latest = nid;
-			while (latest != this->N[latest].gid)
-				latest = this->N[latest].gid;
-
-			if (gid == IBIT || gid == latest)
-				return nid; // groups are compatible
-
-			// merge groups lists
-			importGroup(gid, latest, depth);
-
+		if (nid != 0)
 			return nid;
-		}
 
 		/*
 		 * Optimise similars already in group list
@@ -2984,12 +2985,16 @@ struct groupTree_t {
 	 * 
 	 * NOTE: until optimised, both lists are orphaned 
 	 */
-	uint32_t importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
+	void importGroup(uint32_t newest, uint32_t oldest, unsigned depth) {
 
-		assert(newest != oldest);
+		// something to do?
+		if (oldest == newest)
+			return; // no
+
 		assert(newest >= this->nstart);
 		assert(newest == this->N[newest].gid);
 		assert(oldest == this->N[oldest].gid);
+
 
 		printf("importgroup=1 ./eval \"%s\" \"%s\"\n", this->saveString(newest).c_str(), this->saveString(N[oldest].gid).c_str());
 
@@ -3010,7 +3015,7 @@ struct groupTree_t {
 			this->N[newest].gid = oldest;
 			
 			assert(oldest < this->nstart || oldest != this->N[oldest].next);
-			return oldest;
+			return;
 		}
 
 		/*
@@ -3148,7 +3153,7 @@ struct groupTree_t {
 		if (orphanedAll) {
 			this->N[newest].gid = oldest;
 			assert(oldest < this->nstart || oldest != this->N[oldest].next);
-			return oldest;
+			return;
 		}
 
 		/*
@@ -3223,7 +3228,6 @@ struct groupTree_t {
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
 		assert(newest < this->nstart || newest != this->N[newest].next);
-		return newest;
 	}
 
 	/*
@@ -3345,20 +3349,27 @@ struct groupTree_t {
 				unlinkNode(iNode);
 				iNode = prevId;
 
-				// todo: maybe `addNode()` is a faster alternative
-				// NOTE: depth may not be "2" (negative indentation) and may not be "1" (triggers updateGroup)
-				uint32_t newId = addToCollection(pNode->sid, newSlots, pNode->gid, pNode->power, /*depth*/2);
+				uint32_t newId = addToCollection(pNode->sid, newSlots, gid, pNode->power);
 				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
 
-				assert(newId != IBIT); // may not be rejected
-
-				// let orphaned forward to new node
-				pNode->gid = newId;
-				
 				uint32_t latest = newId;
 				while (latest != this->N[latest].gid)
 					latest = this->N[latest].gid;
 
+				// does node belong to different group
+				if (gid != this->N[latest].gid) {
+					// yes, merge groups
+					importGroup(gid, latest, depth);
+					
+					uint32_t latest = gid;
+					while (latest != this->N[latest].gid)
+						latest = this->N[latest].gid;
+
+				}
+
+				// let orphaned forward to new node
+				pNode->gid = newId;
+				
 				// did groups merge
 				if (latest != gid) {
 					printf("JUMP1 latest=%u %u iGroup=%u %u\n", latest, this->N[latest].gid, gid, this->N[gid].gid);
