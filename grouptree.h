@@ -1221,12 +1221,8 @@ struct groupTree_t {
 			importGroup(gid, latest, depth);
 
 			// ripple effect of merging
-			if (depth == 1) {
-				if (gid < latest)
-					updateGroups(gid, depth);
-				else
-					updateGroups(latest, depth);
-			}
+			if (depth == 1)
+				updateGroups(depth);
 
 			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -1315,13 +1311,6 @@ struct groupTree_t {
 		 * 
 		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
-
-		/*
-		 * Save group merge counter.
-		 * Creating intermediates will introduce forward references.
-		 * If value changed after loops AND top-level call, then resolve all forwards 
-		 */
-		uint32_t oldCount = this->ncount;
 
 		/*
 		 * First 1n9 should be the one representing Q/T/F.
@@ -1515,12 +1504,12 @@ struct groupTree_t {
 					// merge and update
 					importGroup(gid, latest, depth);
 						if (depth == 1)
-							updateGroups(oldCount, depth);
+							updateGroups(depth);
 					}
 
 					// Test if group merging triggers an update
 					if (depth == 1)
-						updateGroups(oldCount, depth);
+						updateGroups(depth);
 
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 					return folded;
@@ -1565,7 +1554,7 @@ struct groupTree_t {
 						importGroup(gid, endpoint, depth);
 
 					if (depth == 1)
-						updateGroups(oldCount, depth);
+						updateGroups(depth);
 
 					// merge and update
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
@@ -1634,7 +1623,7 @@ struct groupTree_t {
 					// test for full-collapse 
 					if (gid < this->nstart) {
 						if (depth == 1)
-							updateGroups(oldCount, depth);
+							updateGroups(depth);
 
 						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -1671,7 +1660,7 @@ struct groupTree_t {
 				 * Add final sid/slot to collection
 				 */
 
-				uint32_t oldCount2 = this->ncount;
+				uint32_t oldCount = this->ncount;
 
 				uint32_t nid = addToCollection(sid, finalSlots, gid, power);
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
@@ -1680,7 +1669,7 @@ struct groupTree_t {
 				while (latest != this->N[latest].gid)
 					latest = this->N[latest].gid;
 
-				if (nid == oldCount2) {
+				if (nid == oldCount) {
 					// if (ctx.opt_debug & ctx.DEBUG_ROW)
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
@@ -1812,7 +1801,7 @@ struct groupTree_t {
 		 * Test if group merging triggers an update  
 		 */
 		if (depth == 1)
-			updateGroups(oldCount, depth);
+			updateGroups(depth);
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
@@ -3400,11 +3389,11 @@ struct groupTree_t {
 	 * 
 	 * Rebuild groups that have nodes that have forward references
 	 */
-	void updateGroups(uint32_t startGid, unsigned depth) {
+	void updateGroups(unsigned depth) {
 
 		printf("UPDATE\n");
 
-		startGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`.
+		uint32_t startGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`.
 
 		uint32_t firstGid = startGid;
 		uint32_t lastGid  = this->ncount;

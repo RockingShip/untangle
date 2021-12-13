@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-13 20:25:05 Removed: Change how `groupTree_t::updateGroups()` determines its starting position, thus dropping `oldCount`.
 2021-12-13 20:10:39 Fixed: Relocate call to `GroupTree_t::import()` from `groupTree_t::addToCollection()` to its caller. 
 2021-12-13 20:10:39 Changed: Relocate call to `GroupTree_t::import()` from `groupTree_t::addToCollection()` to its caller. 
 2021-12-12 18:27:28 Removed: Requirement to have at least one `1n9` per `groupTree_t` group list.
