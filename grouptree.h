@@ -2,6 +2,24 @@
 #define _GROUPTREE_H
 
 /*
+ * Terminology used:
+ * 
+ * Folding:
+ * 	Single-node with multiple (identical) references that can be eliminated.
+ * Collapse:
+ *	Multi-node structures with references that can be optimised to form smaller structures
+ * Self-collapse:
+ * 	Structures with direct or indirect references to the group it participates in.
+ * 	These all collapse to `a/[self]` which is the group header and always present
+ * Endpoint-collapse
+ * 	Structures with multiple references that optimise to a single reference.
+ * 	This also causes the group it participates in to collapse to that reference.
+ * Entrypoint-collapse:
+ * 	Special variant of an endpoint-collapse referencingone of the entry points (id < nstart).
+ * 	
+ */
+
+/*
  *	This file is part of Untangle, Information in fractal structures.
  *	Copyright (C) 2017-2021, xyzzy@rockingship.org
  *
@@ -474,6 +492,18 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2021-12-13 02:35:12
+	 * 
+	 * Update id to latest group id
+	 * NOTE: id=IBIT means group under construction
+	 */
+	inline uint32_t updateToLatest(uint32_t id) const {
+		while (id != IBIT && id != this->N[id].gid)
+			id = this->N[id].gid;
+		return id;
+	}
+	
+	/*
 	 * Pool management
 	 */
 
@@ -848,33 +878,6 @@ struct groupTree_t {
 		return nid;
 	}
 
-	/*
-	 * @date 2021-11-10 01:26:25
-	 */
-	inline void deleteNode(uint32_t nodeId) {
-		groupNode_t *pNode = this->N + nodeId;
-
-		// remove from index
-		if (pNode->hashIX != 0xffffffff)
-			this->nodeIndex[pNode->hashIX] = db.IDDELETED;
-
-		// unlink
-		unlinkNode(nodeId);
-
-		// zero data
-		memset(pNode, 0, sizeof(*pNode));
-	}
-
-	/*
-	 * @date 2021-05-13 00:30:42
-	 *
-	 * lookup/create a restriction-free, unmodified node
-	 */
-	inline uint32_t addNode(uint32_t Q, uint32_t T, uint32_t F) {
-		assert(!"placeholder");
-		return 0;
-	}
-
 	/**
 	 * @date 2021-08-13 13:33:13
 	 *
@@ -972,8 +975,8 @@ struct groupTree_t {
 			uint32_t savT = T;
 
 			Q ^= IBIT;
-			T = F;
-			F = savT;
+			T             = F;
+			F             = savT;
 		}
 		if (Q == 0) {
 			// "0?T:F" -> "F"
@@ -992,7 +995,7 @@ struct groupTree_t {
 		uint32_t Ti = T & IBIT;
 
 // guard that T is not used directly		
-#define T @ 
+#define T @
 
 		/*
 		 * use the latest lists
@@ -1001,12 +1004,9 @@ struct groupTree_t {
 		// gid must be latest
 		assert(gid == IBIT || gid == this->N[gid].gid);
 
-		while (Q != this->N[Q].gid)
-			Q = this->N[Q].gid;
-		while (Tu != this->N[Tu].gid)
-			Tu = this->N[Tu].gid;
-		while (F != this->N[F].gid)
-			F = this->N[F].gid;
+		Q  = updateToLatest(Q);
+		Tu = updateToLatest(Tu);
+		F  = updateToLatest(F);
 
 		// may not be empty
 		assert(Q < this->nstart || Q != this->N[Q].next);
@@ -1052,11 +1052,9 @@ struct groupTree_t {
 			// as you might notice, once `Ti` is set, it stays set
 
 			if (Tu == 0) {
-				if (Q == F) {
-					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-					return Q;
-				} else if (F == 0) {
+				if (Q == F || F == 0) {
 					// [ 0] a ? !0 : 0  ->  a
+					// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
 					return Q;
 				} else {
 					// [ 2] a ? !0 : b  -> "+" OR
@@ -1064,61 +1062,54 @@ struct groupTree_t {
 					// swap
 					if (Q > F) {
 						uint32_t savQ = Q;
-						Q = F;
-						F = savQ;
+						Q             = F;
+						F             = savQ;
 					}
 				}
 			} else if (Q == Tu) {
-				if (Q == F) {
-					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-					return 0;
-				} else if (F == 0) {
+				if (Q == F || F == 0) {
 					// [ 3] a ? !a : 0  ->  0
+					// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
 					return 0;
 				} else {
 					// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-					Q = F;
-					F = 0;
+					// WARNING: Converted LESS-THAN
+					Q     = F;
+					F     = 0;
 					tlSid = db.SID_GT;
 				}
 			} else {
-				if (Q == F) {
+				if (Q == F || F == 0) {
+					// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-					F = 0;
+					F     = 0;
 					tlSid = db.SID_GT;
-				} else {
-					if (F == 0) {
-						// [ 6] a ? !b : 0  -> ">" greater-than
-						tlSid = db.SID_GT;
-					} else if (Tu == F) {
-						// [ 8] a ? !b : b  -> "^" not-equal/xor
-						tlSid = db.SID_NE;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q = F;
-							F = savQ;
-							Tu = savQ;
-						}
-					} else {
-						// [ 9] a ? !b : c  -> "!" QnTF
-						tlSid = db.SID_QNTF;
+				} else if (Tu == F) {
+					// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
+					tlSid = db.SID_NE;
+					// swap
+					if (Q > F) {
+						uint32_t savQ = Q;
+						Q             = F;
+						F             = savQ;
+						Tu            = savQ;
 					}
+				} else {
+					// [ 9] a ? !b : c  -> "!" QnTF
+					tlSid = db.SID_QNTF;
 				}
 			}
 
 		} else {
 
 			if (Tu == 0) {
-				if (Q == F) {
-					// [11] a ?  0 : a -> 0
-					return 0;
-				} else if (F == 0) {
+				if (Q == F || F == 0) {
 					// [10] a ?  0 : 0 -> 0
-					assert(0); // already tested
+					// [11] a ?  0 : a -> 0
 					return 0;
 				} else {
 					// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+					// WARNING: Converted LESS-THAN
 					Tu    = Q;
 					Ti    = IBIT;
 					Q     = F;
@@ -1126,12 +1117,9 @@ struct groupTree_t {
 					tlSid = db.SID_GT;
 				}
 			} else if (Q == Tu) {
-				if (Q == F) {
-					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-					assert(0); // already tested
-					return Q;
-				} else if (F == 0) {
+				if (Q == F || F == 0) {
 					// [13] a ?  a : 0 -> a
+					// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 					return Q;
 				} else {
 					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
@@ -1146,7 +1134,8 @@ struct groupTree_t {
 					}
 				}
 			} else {
-				if (Q == F) {
+				if (Q == F || F == 0) {
+					// [16] a ?  b : 0             "&" and
 					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 					F     = 0;
 					tlSid = db.SID_AND;
@@ -1156,21 +1145,12 @@ struct groupTree_t {
 						Q             = Tu;
 						Tu            = savQ;
 					}
+				} else if (Tu == F) {
+					// [18] a ?  b : b -> b        ENDPOINT
+					assert(0); // already tested
 				} else {
-					if (F == 0) {
-						// [16] a ?  b : 0             "&" and
-						tlSid = db.SID_AND;
-						// swap
-						if (Q > Tu) {
-							uint32_t savQ = Q;
-							Q             = Tu;
-							Tu            = savQ;
-						}
-					} else {
-						// [18] a ?  b : b -> b        ALREADY TESTED		
-						// [19] a ?  b : c             "?" QTF
-						tlSid = db.SID_QTF;
-					}
+					// [19] a ?  b : c             "?" QTF
+					tlSid = db.SID_QTF;
 				}
 			}
 		}
@@ -1351,16 +1331,14 @@ struct groupTree_t {
 				 * Normalise (test for folding), when this happens collapse/invalidate the whole group and forward to the folded result.
 				 * Requires temporary Q/T/F because it might otherwise change loop iterators. 
 				 */
-				uint32_t folded = IBIT; // indicate not-folded
+				uint32_t folded = IBIT;
 				uint32_t normQ = 0, normTi = 0, normTu = 0, normF = 0; 
 				if (Ti) {
 
 					if (iTu == 0) {
-						if (iQ == iF) {
-							// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-							folded = iQ;
-						} else if (iF == 0) {
+						if (iQ == iF || iF == 0) {
 							// [ 0] a ? !0 : 0  ->  a
+							// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
 							folded = iQ;
 						} else {
 							// [ 2] a ? !0 : b  -> "+" OR
@@ -1377,14 +1355,13 @@ struct groupTree_t {
 							}
 						}
 					} else if (iQ == iTu) {
-						if (iQ == iF) {
-							// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-							folded = 0;
-						} else if (iF == 0) {
+						if (iQ == iF || iF == 0) {
 							// [ 3] a ? !a : 0  ->  0
+							// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
 							folded = 0;
 						} else {
 							// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
+							// WARNING: Converted LESS-THAN
 							normQ  = iF;
 							normTi = Ti;
 							normTu = iTu;
@@ -1392,14 +1369,14 @@ struct groupTree_t {
 						}
 					} else {
 						if (iQ == iF || iF == 0) {
-							// [ 6] a ? !b : 0  ->  ">" greater-than
+							// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 							// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 							normQ  = iQ;
 							normTi = Ti;
 							normTu = iTu;
 							normF  = 0;
 						} else if (iTu == iF) {
-							// [ 8] a ? !b : b  -> "^" not-equal
+							// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
 							if (iQ < iF) {
 								normQ  = iQ;
 								normTi = IBIT;
@@ -1423,27 +1400,22 @@ struct groupTree_t {
 				} else {
 
 					if (iTu == 0) {
-						if (iQ == iF) {
-							// [11] a ?  0 : a -> 0
-							folded = 0;
-						} else if (iF == 0) {
+						if (iQ == iF || iF == 0) {
 							// [10] a ?  0 : 0 -> 0
-							assert(0); // already tested
+							// [11] a ?  0 : a -> 0
 							folded = 0;
 						} else {
 							// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
+							// WARNING: Converted LESS-THAN
 							normQ  = iF;
 							normTi = IBIT;
 							normTu = iQ;
 							normF  = 0;
 						}
 					} else if (iQ == iTu) {
-						if (iQ == iF) {
-							// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-							assert(0); // already tested
-							folded = iQ;
-						} else if (iF == 0) {
+						if (iQ == iF || iF == 0) {
 							// [13] a ?  a : 0 -> a
+							// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 							folded = iQ;
 						} else {
 							// [15] a ?  a : b -> a ? !0 : b -> "+" OR
@@ -1474,8 +1446,10 @@ struct groupTree_t {
 								normTu = iQ;
 								normF  = 0;
 							}
+						} else if (iTu == iF) {
+							// [18] a ?  b : b -> b        ENDPOINT
+							assert(0); // already tested
 						} else {
-							// [18] a ?  b : b -> b        ALREADY TESTED		
 							// [19] a ?  b : c             "?" QTF
 							normQ  = iQ;
 							normTi = Ti;
@@ -2071,22 +2045,22 @@ struct groupTree_t {
 		 * init
 		 */
 
-		int             numStack = 0;
+		unsigned        numStack    = 0;
 		uint32_t        nextNode = this->nstart;
 		uint32_t        *pStack  = allocMap(); // evaluation stack
 		uint32_t        *pMap    = allocMap(); // node id of intermediates
 		versionMemory_t *pActive = allocVersion(); // collection of used id's
+		uint32_t        thisVersion = pActive->nextVersion(); // bump versioned memory
 
-		// bump versioned memory
-		uint32_t thisVersion = pActive->nextVersion();
+		// component sid/slots
+		uint32_t cSid             = 0; // 0=error/folded
+		uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
+		assert(cSlots[MAXSLOTS - 1] == 0);
 
-		// add gid to entries, to detect endpoint collapse
+		// mark slots to test against to detect structure collapses
+		// intermediates must NOT be mentioned in this collection 
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-			uint32_t id = pSlots[iSlot];
-
-			// update to latest
-			while (id != this->N[id].gid)
-				id = this->N[id].gid;
+			uint32_t id = updateToLatest(pSlots[iSlot]);
 				
 			pActive->mem[id] = thisVersion;
 		}
@@ -2105,6 +2079,7 @@ struct groupTree_t {
 				/*
 				 * Push zero
 				 */
+				assert (numStack < maxNodes);
 				pStack[numStack++] = 0;
 				continue; // for
 
@@ -2119,11 +2094,9 @@ struct groupTree_t {
 				 */
 				uint32_t v = nextNode - (*pattern - '0');
 
-				if (v < this->nstart || v >= nextNode)
-					ctx.fatal("[node out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
+				assert (v >= this->nstart && v < nextNode);
 
+				assert (numStack < maxNodes);
 				pStack[numStack++] = pMap[v];
 				continue; // for
 			}
@@ -2143,11 +2116,9 @@ struct groupTree_t {
 				 */
 				uint32_t v = (*pattern - 'a');
 
-				if (v >= pSignature->numPlaceholder)
-					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
+				assert(v < numPlaceholder);
 
+				assert (numStack < maxNodes);
 				pStack[numStack++] = pSlots[v];
 				continue; // for
 
@@ -2155,8 +2126,7 @@ struct groupTree_t {
 
 			case '+': {
 				// OR (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
 				Tu = 0;
@@ -2166,8 +2136,7 @@ struct groupTree_t {
 			}
 			case '>': {
 				// GT (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = 0;
 				Tu = pStack[--numStack];
@@ -2177,8 +2146,7 @@ struct groupTree_t {
 			}
 			case '^': {
 				// XOR/NE (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
 				Tu = F;
@@ -2188,8 +2156,7 @@ struct groupTree_t {
 			}
 			case '!': {
 				// QnTF (appreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
 				Tu = pStack[--numStack];
@@ -2199,8 +2166,7 @@ struct groupTree_t {
 			}
 			case '&': {
 				// AND (depreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = 0;
 				Tu = pStack[--numStack];
@@ -2210,8 +2176,7 @@ struct groupTree_t {
 			}
 			case '?': {
 				// QTF (depreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
 				Tu = pStack[--numStack];
@@ -2220,9 +2185,8 @@ struct groupTree_t {
 				break;
 			}
 			default:
-				ctx.fatal("[bad token '%c']\n", *pattern);
+				assert(0);
 			} // end-switch
-			assert(numStack >= 0);
 
 			/*
 			 * Only arrive here when Q/T/F have been set 
@@ -2233,19 +2197,13 @@ struct groupTree_t {
 			 */
 
 			// get latest group
-			while (Q != this->N[Q].gid)
-				Q = this->N[Q].gid;
-			while (Tu != this->N[Tu].gid)
-				Tu = this->N[Tu].gid;
-			while (F != this->N[F].gid)
-				F = this->N[F].gid;
+			Q  = updateToLatest(Q);
+			Tu = updateToLatest(Tu);
+			F  = updateToLatest(F);
 
 			/*
 			 * Perform normalisation
 			 */
-			uint32_t cSid		  = 0; // 0=error/folded
-			uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
-			assert(cSlots[MAXSLOTS - 1] == 0);
 
 			/*
 			 * Level 2 normalisation: single node rewrites
@@ -2254,13 +2212,13 @@ struct groupTree_t {
 			 *
 			 *  [ 0] a ? !0 : 0  ->  a
 			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
-			 *  [ 2] a ? !0 : b                  "+" or
+			 *  [ 2] a ? !0 : b                  "+" OR
 			 *  [ 3] a ? !a : 0  ->  0
 			 *  [ 4] a ? !a : a  ->  a ? !a : 0
 			 *  [ 5] a ? !a : b  ->  b ? !a : b
-			 *  [ 6] a ? !b : 0                  ">" greater-than
+			 *  [ 6] a ? !b : 0                  ">" GREATER-THAN
 			 *  [ 7] a ? !b : a  ->  a ? !b : 0
-			 *  [ 8] a ? !b : b                  "^" not-equal
+			 *  [ 8] a ? !b : b                  "^" NOT-EQUAL/XOR
 			 *  [ 9] a ? !b : c                  "!" QnTF
 			 *
 			 * depreciated:
@@ -2270,7 +2228,7 @@ struct groupTree_t {
 			 *  [13] a ?  a : 0 -> a
 			 *  [14] a ?  a : a -> a ?  a : 0
 			 *  [15] a ?  a : b -> a ? !0 : b
-			 *  [16] a ?  b : 0                  "&" and
+			 *  [16] a ?  b : 0                  "&" AND
 			 *  [17] a ?  b : a -> a ?  b : 0
 			 *  [18] a ?  b : b -> b
 			 *  [19] a ?  b : c                  "?" QTF
@@ -2279,97 +2237,111 @@ struct groupTree_t {
 			  *
 			 */
 
+			// NOTE: `cSid = 0` means fold
 			if (Q == 0) {
 				// level-1 fold
 				cSid = 0;
 			} else if (Ti) {
 				if (Tu == 0) {
-					if (Q == F) {
-						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [ 0] a ? !0 : 0  ->  a
+						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
 						cSid = 0;
 					} else {
 						// [ 2] a ? !0 : b  -> "+" OR
 						cSid = db.SID_OR;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+						}
 					}
 				} else if (Q == Tu) {
-					if (Q == F) {
-						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [ 3] a ? !a : 0  ->  0
+						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
 						cSid = 0;
 					} else {
 						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Q = F;
-						F = 0;
+						// WARNING: Converted LESS-THAN
+						Q    = F;
+						F    = 0;
 						cSid = db.SID_GT;
 					}
 				} else {
-					if (Q == F) {
+					if (Q == F || F == 0) {
+						// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-						F = 0;
+						F    = 0;
 						cSid = db.SID_GT;
-					} else {
-						if (F == 0) {
-							// [ 6] a ? !b : 0  -> ">" greater-than
-							cSid = db.SID_GT;
-						} else if (Tu == F) {
-							// [ 8] a ? !b : b  -> "^" not-equal/xor
-							cSid = db.SID_NE;
-						} else {
-							// [ 9] a ? !b : c  -> "!" QnTF
-							cSid = db.SID_QNTF;
+					} else if (Tu == F) {
+						// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
+						cSid = db.SID_NE;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+							Tu            = savQ;
 						}
+					} else {
+						// [ 9] a ? !b : c  -> "!" QnTF
+						cSid = db.SID_QNTF;
 					}
 				}
 
 			} else {
 
 				if (Tu == 0) {
-					if (Q == F) {
-						// [11] a ?  0 : a -> 0
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [10] a ?  0 : 0 -> 0
+						// [11] a ?  0 : a -> 0
 						cSid = 0;
 					} else {
 						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Tu = Q;
-						Ti = IBIT;
-						Q = F;
-						F = 0;
+						// WARNING: Converted LESS-THAN
+						Tu   = Q;
+						Ti   = IBIT;
+						Q    = F;
+						F    = 0;
 						cSid = db.SID_GT;
 					}
 				} else if (Q == Tu) {
-					if (Q == F) {
-						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [13] a ?  a : 0 -> a
+						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 						cSid = 0;
 					} else {
 						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-						Tu = 0;
-						Ti = IBIT;
+						Tu   = 0;
+						Ti   = IBIT;
 						cSid = db.SID_OR;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+						}
 					}
 				} else {
-					if (Q == F) {
+					if (Q == F || F == 0) {
+						// [16] a ?  b : 0             "&" and
 						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-						F = 0;
+						F    = 0;
 						cSid = db.SID_AND;
-					} else {
-						if (F == 0) {
-							// [16] a ?  b : 0             "&" and
-							cSid = db.SID_AND;
-						} else {
-							// [18] a ?  b : b -> b        ALREADY TESTED		
-							// [19] a ?  b : c             "?" QTF
-							cSid = db.SID_QTF;
+						// swap
+						if (Q > Tu) {
+							uint32_t savQ = Q;
+							Q             = Tu;
+							Tu            = savQ;
 						}
+					} else if (Tu == F) {
+						// [18] a ?  b : b -> b        ENDPOINT
+						assert(0); // already tested
+					} else {
+						// [19] a ?  b : c             "?" QTF
+						cSid = db.SID_QTF;
 					}
 				}
 			}
@@ -2421,12 +2393,8 @@ struct groupTree_t {
 			pStack[numStack++]   = nid;
 			pMap[nextNode++]     = nid;
 			pActive->mem[latest] = thisVersion;
-
-			if ((unsigned) numStack > maxNodes)
-				ctx.fatal("[stack overflow]\n");
 		}
-		if (numStack != 1)
-			ctx.fatal("[stack not empty]\n");
+		assert(numStack == 1); // only result on stack
 
 		// release and return
 		uint32_t ret = pStack[0];
@@ -2456,22 +2424,22 @@ struct groupTree_t {
 		 * init
 		 */
 
-		int             numStack = 0;
+		unsigned             numStack = 0;
 		uint32_t        nextNode = this->nstart;
 		uint32_t        *pStack  = allocMap(); // evaluation stack
 		uint32_t        *pMap    = allocMap(); // node id of intermediates
 		versionMemory_t *pActive = allocVersion(); // collection of used id's
+		uint32_t thisVersion = pActive->nextVersion(); // bump versioned memory
 
-		// bump versioned memory
-		uint32_t thisVersion = pActive->nextVersion();
+		// component sid/slots
+		uint32_t cSid             = 0; // 0=error/folded
+		uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
+		assert(cSlots[MAXSLOTS - 1] == 0);
 
-		// add gid to entries, to detect endpoint collapse
+		// mark slots to test against to detect structure collapses
+		// intermediates must NOT be mentioned in this collection 
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-			uint32_t id = pSlots[iSlot];
-
-			// update to latest
-			while (id != this->N[id].gid)
-				id = this->N[id].gid;
+			uint32_t id = updateToLatest(pSlots[iSlot]);
 
 			pActive->mem[id] = thisVersion;
 		}
@@ -2489,6 +2457,7 @@ struct groupTree_t {
 				/*
 				 * Push zero
 				 */
+				assert (numStack < maxNodes);
 				pStack[numStack++] = 0;
 				continue; // for
 
@@ -2503,11 +2472,9 @@ struct groupTree_t {
 				 */
 				uint32_t v = nextNode - (*pattern - '0');
 
-				if (v < this->nstart || v >= nextNode)
-					ctx.fatal("[node out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
+				assert (v >= this->nstart && v < nextNode);
 
+				assert (numStack < maxNodes);
 				pStack[numStack++] = pMap[v];
 				continue; // for
 			}
@@ -2527,14 +2494,12 @@ struct groupTree_t {
 				 */
 				uint32_t v = (*pattern - 'a');
 
-				if (v >= pMember->numPlaceholder)
-					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if ((unsigned) numStack >= this->ncount)
-					ctx.fatal("[stack overflow]\n");
+				assert(v < numPlaceholder);
 
 				// apply member transform
 				v = (pMemberTransform[v] - 'a');
 
+				assert (numStack < maxNodes);
 				pStack[numStack++] = pSlots[v];
 				continue; // for
 
@@ -2542,8 +2507,7 @@ struct groupTree_t {
 
 			case '+': {
 				// OR (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
 				Tu = 0;
@@ -2553,8 +2517,7 @@ struct groupTree_t {
 			}
 			case '>': {
 				// GT (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = 0;
 				Tu = pStack[--numStack];
@@ -2564,8 +2527,7 @@ struct groupTree_t {
 			}
 			case '^': {
 				// XOR/NE (appreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
 				Tu = F;
@@ -2575,8 +2537,7 @@ struct groupTree_t {
 			}
 			case '!': {
 				// QnTF (appreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
 				Tu = pStack[--numStack];
@@ -2586,8 +2547,7 @@ struct groupTree_t {
 			}
 			case '&': {
 				// AND (depreciated)
-				if (numStack < 2)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 2);
 
 				F  = 0;
 				Tu = pStack[--numStack];
@@ -2597,8 +2557,7 @@ struct groupTree_t {
 			}
 			case '?': {
 				// QTF (depreciated)
-				if (numStack < 3)
-					ctx.fatal("[stack underflow]\n");
+				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
 				Tu = pStack[--numStack];
@@ -2607,9 +2566,8 @@ struct groupTree_t {
 				break;
 			}
 			default:
-				ctx.fatal("[bad token '%c']\n", *pattern);
+				assert(0);
 			} // end-switch
-			assert(numStack >= 0);
 
 			/*
 			 * Only arrive here when Q/T/F have been set 
@@ -2620,19 +2578,13 @@ struct groupTree_t {
 			 */
 
 			// get latest group
-			while (Q != this->N[Q].gid)
-				Q = this->N[Q].gid;
-			while (Tu != this->N[Tu].gid)
-				Tu = this->N[Tu].gid;
-			while (F != this->N[F].gid)
-				F = this->N[F].gid;
+			Q  = updateToLatest(Q);
+			Tu = updateToLatest(Tu);
+			F  = updateToLatest(F);
 
 			/*
 			 * Perform normalisation
 			 */
-			uint32_t cSid		  = 0; // 0=error/folded
-			uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
-			assert(cSlots[MAXSLOTS - 1] == 0);
 
 			/*
 			 * Level 2 normalisation: single node rewrites
@@ -2641,13 +2593,13 @@ struct groupTree_t {
 			 *
 			 *  [ 0] a ? !0 : 0  ->  a
 			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
-			 *  [ 2] a ? !0 : b                  "+" or
+			 *  [ 2] a ? !0 : b                  "+" OR
 			 *  [ 3] a ? !a : 0  ->  0
 			 *  [ 4] a ? !a : a  ->  a ? !a : 0
 			 *  [ 5] a ? !a : b  ->  b ? !a : b
-			 *  [ 6] a ? !b : 0                  ">" greater-than
+			 *  [ 6] a ? !b : 0                  ">" GREATER-THAN
 			 *  [ 7] a ? !b : a  ->  a ? !b : 0
-			 *  [ 8] a ? !b : b                  "^" not-equal
+			 *  [ 8] a ? !b : b                  "^" NOT-EQUAL/XOR
 			 *  [ 9] a ? !b : c                  "!" QnTF
 			 *
 			 * depreciated:
@@ -2657,7 +2609,7 @@ struct groupTree_t {
 			 *  [13] a ?  a : 0 -> a
 			 *  [14] a ?  a : a -> a ?  a : 0
 			 *  [15] a ?  a : b -> a ? !0 : b
-			 *  [16] a ?  b : 0                  "&" and
+			 *  [16] a ?  b : 0                  "&" AND
 			 *  [17] a ?  b : a -> a ?  b : 0
 			 *  [18] a ?  b : b -> b
 			 *  [19] a ?  b : c                  "?" QTF
@@ -2666,97 +2618,111 @@ struct groupTree_t {
 			  *
 			 */
 
+			// NOTE: `cSid = 0` means fold
 			if (Q == 0) {
 				// level-1 fold
 				cSid = 0;
 			} else if (Ti) {
 				if (Tu == 0) {
-					if (Q == F) {
-						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [ 0] a ? !0 : 0  ->  a
+						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
 						cSid = 0;
 					} else {
 						// [ 2] a ? !0 : b  -> "+" OR
 						cSid = db.SID_OR;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+						}
 					}
 				} else if (Q == Tu) {
-					if (Q == F) {
-						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [ 3] a ? !a : 0  ->  0
+						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
 						cSid = 0;
 					} else {
 						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Q = F;
-						F = 0;
+						// WARNING: Converted LESS-THAN
+						Q    = F;
+						F    = 0;
 						cSid = db.SID_GT;
 					}
 				} else {
-					if (Q == F) {
+					if (Q == F || F == 0) {
+						// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-						F = 0;
+						F    = 0;
 						cSid = db.SID_GT;
-					} else {
-						if (F == 0) {
-							// [ 6] a ? !b : 0  -> ">" greater-than
-							cSid = db.SID_GT;
-						} else if (Tu == F) {
-							// [ 8] a ? !b : b  -> "^" not-equal/xor
-							cSid = db.SID_NE;
-						} else {
-							// [ 9] a ? !b : c  -> "!" QnTF
-							cSid = db.SID_QNTF;
+					} else if (Tu == F) {
+						// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
+						cSid = db.SID_NE;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+							Tu            = savQ;
 						}
+					} else {
+						// [ 9] a ? !b : c  -> "!" QnTF
+						cSid = db.SID_QNTF;
 					}
 				}
 
 			} else {
 
 				if (Tu == 0) {
-					if (Q == F) {
-						// [11] a ?  0 : a -> 0
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [10] a ?  0 : 0 -> 0
+						// [11] a ?  0 : a -> 0
 						cSid = 0;
 					} else {
 						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						Tu = Q;
-						Ti = IBIT;
-						Q = F;
-						F = 0;
+						// WARNING: Converted LESS-THAN
+						Tu   = Q;
+						Ti   = IBIT;
+						Q    = F;
+						F    = 0;
 						cSid = db.SID_GT;
 					}
 				} else if (Q == Tu) {
-					if (Q == F) {
-						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						cSid = 0;
-					} else if (F == 0) {
+					if (Q == F || F == 0) {
 						// [13] a ?  a : 0 -> a
+						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
 						cSid = 0;
 					} else {
 						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-						Tu = 0;
-						Ti = IBIT;
+						Tu   = 0;
+						Ti   = IBIT;
 						cSid = db.SID_OR;
+						// swap
+						if (Q > F) {
+							uint32_t savQ = Q;
+							Q             = F;
+							F             = savQ;
+						}
 					}
 				} else {
-					if (Q == F) {
+					if (Q == F || F == 0) {
+						// [16] a ?  b : 0             "&" and
 						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-						F = 0;
+						F    = 0;
 						cSid = db.SID_AND;
-					} else {
-						if (F == 0) {
-							// [16] a ?  b : 0             "&" and
-							cSid = db.SID_AND;
-						} else {
-							// [18] a ?  b : b -> b        ALREADY TESTED		
-							// [19] a ?  b : c             "?" QTF
-							cSid = db.SID_QTF;
+						// swap
+						if (Q > Tu) {
+							uint32_t savQ = Q;
+							Q             = Tu;
+							Tu            = savQ;
 						}
+					} else if (Tu == F) {
+						// [18] a ?  b : b -> b        ENDPOINT
+						assert(0); // already tested
+					} else {
+						// [19] a ?  b : c             "?" QTF
+						cSid = db.SID_QTF;
 					}
 				}
 			}
@@ -2807,12 +2773,8 @@ struct groupTree_t {
 			pStack[numStack++]   = nid;
 			pMap[nextNode++]     = nid;
 			pActive->mem[latest] = thisVersion;
-
-			if ((unsigned) numStack > maxNodes)
-				ctx.fatal("[stack overflow]\n");
 		}
-		if (numStack != 1)
-			ctx.fatal("[stack not empty]\n");
+		assert(numStack == 1); // only result on stack
 
 		// release and return
 		uint32_t ret = pStack[0];
