@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-16 19:06:41 Changed: Split core of `groupTree_t::addNormaliseNode()` into `addBasicNode()`.
 2021-12-16 15:56:48 Fixed: Ordering of slots entries during construction.
 2021-12-13 20:25:05 Removed: Change how `groupTree_t::updateGroups()` determines its starting position, thus dropping `oldCount`.
 2021-12-13 20:10:39 Fixed: Relocate call to `GroupTree_t::import()` from `groupTree_t::addToCollection()` to its caller. 

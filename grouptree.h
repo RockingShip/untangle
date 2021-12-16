@@ -878,28 +878,6 @@ struct groupTree_t {
 		return nid;
 	}
 
-	/**
-	 * @date 2021-08-13 13:33:13
-	 *
-	 * Add a node to tree
-	 *
-	 * If the node already exists then use that.
-	 * Otherwise, add a node to tree if it has the expected node ID.
-	 * Otherwise, Something changed since the recursion was invoked, re-analyse
-	 *
-	 * @param {number} depth - Recursion depth
-	 * @param {number} expectId - Recursion end condition, the node id to be added
-	 * @param {groupTree_t*} pTree - Tree containing nodes
-	 * @param {number} Q - component
-	 * @param {number} T - component
-	 * @param {number} F - component
-	 * @param {unsigned*} pFailCount - null: apply changed, non-null: stay silent and count missing nodes (when nondryRun==true)
-	 * @return {number} newly created nodeId
-	 */
-	uint32_t addBasicNode(uint32_t Q, uint32_t T, uint32_t F, unsigned *pFailCount, unsigned depth) {
-		assert(!"placeholder");
-		return 0;
-	}
 
 	/*
 	 * @date 2021-11-04 00:44:47
@@ -907,53 +885,11 @@ struct groupTree_t {
 	 * lookup/create and normalise any combination of Q, T and F, inverted or not.
 	 * 
 	 * Returns main node id, which might be outdated as effect of internal rewriting.
-	 * 
-	 * NOTE: this function is called recursively: `addNormaliseNode()`/`expandSignature()`
-	 * NOTE: the return value may be inverted
-	 * NOTE: do NOT forget to update gid after calling this function
-	 * 
-	 * 	uint32_t nid = addNormaliseNode(q,t,f,gid);
-	 * 	gid = nid;
-	 * 	while (gid != this->N[gid].gid)
-	 *		gid = this->N[gid].gid;
-	 *		
-	 * @date 2021-11-18 17:07:55
-	 * 
-	 * Q/T/F can be higher than gid, which can happen when called recursively.
-	 * This shouldn't be a problem because list construction is busy and Q/T/F are used to reference the Cartesian product sources and not used for actual slot values.
-	 * 
-	 * @date 2021-11-25 18:20:00
-	 * 
-	 * Arguments may be (outdated) nodes, however, gid needs to be up-to-date
-	 * 
-	 * @date 2021-11-30 22:49:34
-	 * 
-	 * Any folding/collapsing should occur as a side effect of merging groups.
 	 */
-	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F, uint32_t gid = IBIT, unsigned depth = 0) {
-		depth++;
-		assert(depth < 30);
-
+	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F) {
 		assert ((Q & ~IBIT) < this->ncount);
 		assert ((T & ~IBIT) < this->ncount);
 		assert ((F & ~IBIT) < this->ncount);
-
-		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
-			printf("%.*sQ=%u%s T=%u%s F=%u%s",
-			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-			       Q & ~IBIT, (Q & IBIT) ? "~" : "",
-			       T & ~IBIT, (T & IBIT) ? "~" : "",
-			       F & ~IBIT, (F & IBIT) ? "~" : "");
-			if (gid != IBIT)
-				printf(" G=%u", gid);
-			printf("\n");
-		}
-
-		/*
-	  	 * @date 2021-11-04 01:58:34
-		 * 
-		 * First step: Apply same normalisation as the database generators  
-		 */
 
 		/*
 		 * Fast test for endpoints
@@ -975,8 +911,8 @@ struct groupTree_t {
 			uint32_t savT = T;
 
 			Q ^= IBIT;
-			T             = F;
-			F             = savT;
+			T = F;
+			F = savT;
 		}
 		if (Q == 0) {
 			// "0?T:F" -> "F"
@@ -987,22 +923,16 @@ struct groupTree_t {
 			// "Q?T:!F" -> "!(Q?!T:F)"
 			F ^= IBIT;
 			T ^= IBIT;
-			return addNormaliseNode(Q, T, F, gid, depth) ^ IBIT;
+			return addNormaliseNode(Q, T, F) ^ IBIT;
 		}
 
 		// split `T` into unsigned and invert-bit
 		uint32_t Tu = T & ~IBIT;
 		uint32_t Ti = T & IBIT;
 
-// guard that T is not used directly		
-#define T @
-
 		/*
 		 * use the latest lists
 		 */
-
-		// gid must be latest
-		assert(gid == IBIT || gid == this->N[gid].gid);
 
 		Q  = updateToLatest(Q);
 		Tu = updateToLatest(Tu);
@@ -1155,21 +1085,72 @@ struct groupTree_t {
 			}
 		}
 
-		/*
-		 * Test if arguments full-collapse
-		 */
-		if (Q == gid || Tu == gid || F == gid) {
-			// yes
-			return gid;
-		}
+		// update to latest
+		Q  = updateToLatest(Q);
+		Tu = updateToLatest(Tu);
+		F  = updateToLatest(F);
 
 		/*
-		 * Lookup if 1n9 already exists.
-		 * This is a fast test to find simple duplicates
+		 * call worker
 		 */
+		uint32_t ret = addBasicNode(IBIT, tlSid, Q, Tu, Ti, F, 0);
+		
+		return ret;
+	}
+
+	/**
+	 * @date 2021-08-13 13:33:13
+	 *
+	 * Add a node to tree
+	 *
+	 * NOTE: `addNormaliseNode()` can return IBIT to indicate a collapse, 
+	 *       this function returns IBIT to indicated an inverted result. 
+	 * NOTE: this function is called recursively from `expandSignature()`/expandMember()`.
+	 * NOTE: do NOT forget to update gid after calling this function
+	 * 
+	 * 	uint32_t nid = addBasicNode(gid,...);
+	 * 	gid = updateToLatest(gid);
+	 * 
+	 * Return value is one of:
+	 *   IBIT not set: node representing arguments
+	 *   IBIT^gid: self-collapse, silently ignore
+	 *   IBIT^id: group-collapse, gid has collapsed 
+	 *
+	 * @param {uint32_t} gid - group id to add node to. May be IBIT to create new group
+	 * @param {uint32_t} tlSid - `1n9` sid describing Q/T/F
+	 * @param {uint32_t} Q - component
+	 * @param {uint32_t} Tu - component
+	 * @param {uint32_t} Ti - T is inverted
+	 * @param {uint32_t} F - component
+	 * @param {unsigned} depth - Recursion depth
+	 * @return {number} newly created node Id, or IBIT when collapsed.
+	 */
+	uint32_t addBasicNode(uint32_t gid, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, unsigned depth) {
+		depth++;
+		assert(depth < 30);
+
+		// may not be empty
+		assert(Q < this->nstart || Q != this->N[Q].next);
+		assert(Tu < this->nstart || Tu != this->N[Tu].next);
+		assert(F < this->nstart || F != this->N[F].next);
+
+		// gid must be latest
+		assert(gid == IBIT || gid == this->N[gid].gid);
+
+		// arguments may not fold to gid
+		assert(Q != gid && Tu != gid && F != gid);
 
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
+
+		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
+			printf("%.*sQ=%u T=%u%s F=%u",
+			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+			       Q, Tu, Ti ? "~" : "", F);
+			if (gid != IBIT)
+				printf(" G=%u", gid);
+			printf("\n");
+		}
 
 		// set (and order) slots
 		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
@@ -1231,60 +1212,6 @@ struct groupTree_t {
 				return hasBetter;
 		}
 
-		/*
-		 * Fallback code and validation. 
-		 * Add QTF as single `1n9` node.
-		 */
-		if (0) {
-			/*
-			 * Emit list header
-			 */
-			uint32_t    gid    = this->ncount++;
-			groupNode_t *pNode = this->N + gid;
-
-			if (gid > maxNodes - 10) {
-				fprintf(stderr, "[OVERFLOW]\n");
-				printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
-				exit(1);
-			}
-
-			memset(pNode, 0, sizeof(*pNode));
-			pNode->gid  = gid;
-			pNode->next = pNode->prev = gid + 1; // link to next node
-			pNode->sid  = db.SID_SELF;
-			pNode->slots[0] = gid;
-
-			/*
-			 * Followed by top-level sid
-			 */
-
-			pNode = this->N + this->ncount++;
-
-			if (gid > maxNodes - 10) {
-				fprintf(stderr, "[OVERFLOW]\n");
-				printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
-				exit(1);
-			}
-
-			memset(pNode, 0, sizeof(*pNode));
-			pNode->gid  = gid;
-			pNode->next = pNode->prev = gid; // link to head (previous node)
-
-			// set sid/slots
-			if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
-				pNode->slots[0] = Q;
-				pNode->slots[1] = F;
-			} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
-				pNode->slots[0] = Q;
-				pNode->slots[1] = Tu;
-			} else {
-				pNode->slots[0] = Q;
-				pNode->slots[1] = Tu;
-				pNode->slots[2] = F;
-			}
-
-			return gid;
-		}
 
 		/*
 		 * @date 2021-11-04 02:08:51
@@ -1332,7 +1259,7 @@ struct groupTree_t {
 				 * Requires temporary Q/T/F because it might otherwise change loop iterators. 
 				 */
 				uint32_t folded = IBIT;
-				uint32_t normQ = 0, normTi = 0, normTu = 0, normF = 0; 
+				uint32_t normQ = 0, normTi = 0, normTu = 0, normF = 0;
 				if (Ti) {
 
 					if (iTu == 0) {
@@ -1344,13 +1271,13 @@ struct groupTree_t {
 							// [ 2] a ? !0 : b  -> "+" OR
 							if (iQ < iF) {
 								normQ  = iQ;
-								normTi = IBIT;
 								normTu = 0;
+								normTi = IBIT;
 								normF  = iF;
 							} else {
 								normQ  = iF;
-								normTi = IBIT;
 								normTu = 0;
+								normTi = IBIT;
 								normF  = iQ;
 							}
 						}
@@ -1363,8 +1290,8 @@ struct groupTree_t {
 							// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
 							// WARNING: Converted LESS-THAN
 							normQ  = iF;
-							normTi = Ti;
 							normTu = iTu;
+							normTi = Ti;
 							normF  = 0;
 						}
 					} else {
@@ -1372,27 +1299,27 @@ struct groupTree_t {
 							// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 							// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 							normQ  = iQ;
-							normTi = Ti;
 							normTu = iTu;
+							normTi = Ti;
 							normF  = 0;
 						} else if (iTu == iF) {
 							// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
 							if (iQ < iF) {
 								normQ  = iQ;
-								normTi = IBIT;
 								normTu = iF;
+								normTi = IBIT;
 								normF  = iF;
 							} else {
 								normQ  = iF;
-								normTi = IBIT;
 								normTu = iQ;
+								normTi = IBIT;
 								normF  = iQ;
 							}
 						} else {
 							// [ 9] a ? !b : c  -> "!" QnTF
 							normQ  = iQ;
-							normTi = Ti;
 							normTu = iTu;
+							normTi = Ti;
 							normF  = iF;
 						}
 					}
@@ -1408,8 +1335,8 @@ struct groupTree_t {
 							// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
 							// WARNING: Converted LESS-THAN
 							normQ  = iF;
-							normTi = IBIT;
 							normTu = iQ;
+							normTi = IBIT;
 							normF  = 0;
 						}
 					} else if (iQ == iTu) {
@@ -1421,13 +1348,13 @@ struct groupTree_t {
 							// [15] a ?  a : b -> a ? !0 : b -> "+" OR
 							if (iQ < iF) {
 								normQ  = iQ;
-								normTi = IBIT;
 								normTu = 0;
+								normTi = IBIT;
 								normF  = iF;
 							} else {
 								normQ  = iF;
-								normTi = IBIT;
 								normTu = 0;
+								normTi = IBIT;
 								normF  = iQ;
 							}
 						}
@@ -1437,13 +1364,13 @@ struct groupTree_t {
 							// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 							if (iQ < iF) {
 								normQ  = iQ;
-								normTi = 0;
 								normTu = iTu;
+								normTi = 0;
 								normF  = 0;
 							} else {
 								normQ  = iTu;
-								normTi = 0;
 								normTu = iQ;
+								normTi = 0;
 								normF  = 0;
 							}
 						} else if (iTu == iF) {
@@ -1452,8 +1379,8 @@ struct groupTree_t {
 						} else {
 							// [19] a ?  b : c             "?" QTF
 							normQ  = iQ;
-							normTi = Ti;
 							normTu = iTu;
+							normTi = Ti;
 							normF  = iF;
 						}
 					}
@@ -1475,8 +1402,8 @@ struct groupTree_t {
 						latest = this->N[latest].gid;
 
 					if (gid != IBIT && gid != latest) {
-					// merge and update
-					importGroup(gid, latest, depth);
+						// merge and update
+						importGroup(gid, latest, depth);
 						if (depth == 1)
 							updateGroups(depth);
 					}
@@ -1571,8 +1498,8 @@ struct groupTree_t {
 				 */
 
 				if (db.signatures[sid].size > 1 && depth < this->maxDepth) {
-					uint32_t expand = expandSignature(sid, finalSlots, gid, depth);
-//					uint32_t expand = expandMember(db.signatures[sid].firstMember, finalSlots, gid, depth);
+					uint32_t expand = expandSignature(gid, sid, finalSlots, depth);
+//					uint32_t expand = expandMember(gid, db.signatures[sid].firstMember, finalSlots, depth);
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 					// did something fold
@@ -1659,7 +1586,7 @@ struct groupTree_t {
 				} else if (gid != this->N[latest].gid) {
 					// merge groups lists
 					importGroup(gid, latest, depth);
-					
+
 					while (latest != this->N[latest].gid)
 						latest = this->N[latest].gid;
 				}
@@ -1770,7 +1697,7 @@ struct groupTree_t {
 		 */
 		if (gid >= this->nstart)
 			scrubGroup(gid, depth);
-		
+
 		/*
 		 * Test if group merging triggers an update  
 		 */
@@ -2033,7 +1960,7 @@ struct groupTree_t {
 	 *   - create intermediate components
 	 *   - And component referencing `gid` is considered a collapse to self.
 	 */
-	uint32_t __attribute__((used)) expandSignature(uint32_t sid, const uint32_t *pSlots, uint32_t gid, unsigned depth) {
+	uint32_t __attribute__((used)) expandSignature(uint32_t gid, uint32_t sid, const uint32_t *pSlots, unsigned depth) {
 
 		signature_t *pSignature    = db.signatures + sid;
 		unsigned    numPlaceholder = pSignature->numPlaceholder;
@@ -2357,14 +2284,14 @@ struct groupTree_t {
 
 			uint32_t nid;
 			if (pattern[1]) {
-				nid = addNormaliseNode(Q, Tu ^ Ti, F, IBIT, depth + 1);
+				nid = addBasicNode (IBIT, cSid, Q, Tu, Ti, F, depth + 1);
 				
 				// if intermediate folds to a slot entry, then it's a collapse
 			} else {
 				assert(numStack == 0);
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
+				nid = addBasicNode(gid, cSid, Q, Tu, Ti, F, depth);
 
 				// NOTE: last call, so no need to update gid
 				// NODE: if nid is a slot or gid, then it's an endpoint collapse  
@@ -2738,7 +2665,7 @@ struct groupTree_t {
 
 			uint32_t nid;
 			if (pattern[1]) {
-				nid = addNormaliseNode(Q, Tu ^ Ti, F, IBIT, depth + 1);
+				nid = addBasicNode(IBIT, cSid, Q, Tu, Ti, F, depth + 1);
 
 				// if intermediate folds to a slot entry, then it's a collapse
 			} else {
@@ -2749,7 +2676,7 @@ struct groupTree_t {
 					gid = this->N[gid].gid;
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addNormaliseNode(Q, Tu ^ Ti, F, gid, depth);
+				nid = addBasicNode(gid, cSid, Q, Tu, Ti, F, depth);
 
 				// NOTE: last call, so no need to update gid
 				// NODE: if nid is a slot or gid, then it's an endpoint collapse  

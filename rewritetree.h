@@ -172,8 +172,8 @@ struct rewriteTree_t : baseTree_t {
 			 * Construct T component
 			 */
 
-			uint32_t Ti = *T & IBIT;
 			uint32_t Tu = *T & ~IBIT;
+			uint32_t Ti = *T & IBIT;
 			unsigned tlT;
 
 			if (Tu < this->nstart) {

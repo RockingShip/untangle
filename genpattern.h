@@ -350,8 +350,8 @@ struct genpatternContext_t : dbtool_t {
 		// Get top-level QTF
 		uint32_t R    = treeR.root;
 		uint32_t tlQ  = treeR.N[R].Q;
-		uint32_t tlTi = treeR.N[R].T & IBIT;
 		uint32_t tlTu = treeR.N[R].T & ~IBIT;
+		uint32_t tlTi = treeR.N[R].T & IBIT;
 		uint32_t tlF  = treeR.N[R].F;
 
 		uint32_t sidR = 0, sidQ = 0, sidT = 0, sidF = 0;

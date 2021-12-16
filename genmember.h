@@ -1948,8 +1948,8 @@ struct genmemberContext_t : dbtool_t {
 
 			// @formatter:off
 			for (uint32_t F = 0; F < tinyTree_t::TINYTREE_NSTART; F++)
-			for (uint32_t Ti = 1; Ti < 2; Ti++)
 			for (uint32_t Tu = 0; Tu < tinyTree_t::TINYTREE_NSTART; Tu++)
+			for (uint32_t Ti = 1; Ti < 2; Ti++)
 			for (uint32_t Q = 0; Q < tinyTree_t::TINYTREE_NSTART; Q++) {
 			// @formatter:on
 
@@ -1999,8 +1999,8 @@ struct genmemberContext_t : dbtool_t {
 
 			// @formatter:off
 			for (uint32_t F = 0; F < tinyTree_t::TINYTREE_NSTART; F++)
-			for (uint32_t Ti = 1; Ti < 2; Ti++)
 			for (uint32_t Tu = 0; Tu < tinyTree_t::TINYTREE_NSTART; Tu++)
+			for (uint32_t Ti = 1; Ti < 2; Ti++)
 			for (uint32_t Q = 0; Q < tinyTree_t::TINYTREE_NSTART; Q++) {
 			// @formatter:on
 

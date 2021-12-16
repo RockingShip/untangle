@@ -1838,8 +1838,8 @@ struct tree_t {
 
 		// extract all parts of the node
 		unsigned T  = this->N[id].T;
-		unsigned Ti = T & IBIT; // non-zero if result of `T` should be inverted
 		unsigned Tu = T & ~IBIT; // index to `T` operand
+		unsigned Ti = T & IBIT; // non-zero if result of `T` should be inverted
 		unsigned Q  = this->N[id].Q;
 		unsigned F  = this->N[id].F;
 
