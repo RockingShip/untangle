@@ -1398,32 +1398,27 @@ struct groupTree_t {
 				}
 
 				/*
-				 * Folding implies a general node collapse into one of its components
+				 * Folding into an iterator is a full structural collapse
 				 * This collapses the group as whole
 				 */
 				if (folded != IBIT) {
 					// folded to one of the iterators or zero.
+					// iterator-collapse is group collapse
 
-					printf("FOLD %u %u\n", gid, folded);
+					assert(0); // todo: does this path get walked?
+					assert(folded >= this->nstart); // todo: this is just to detect if it actually happens, but strangely is doesn't
 
-					assert(folded >= this->nstart); // todo: this should trigger but doesn't
+					// is there a current group
+					if (gid != IBIT)
+						return IBIT ^ folded; // yes, let caller handle collapse to endpoint
 
-					uint32_t latest = folded;
-					while (latest != this->N[latest].gid)
-						latest = this->N[latest].gid;
+					// collapse and update
+					importGroup(gid, folded, pSidMap, pSidVersion, depth);
 
-					if (gid != IBIT && gid != latest) {
-						// merge and update
-						importGroup(gid, latest, pSidMap, pSidVersion, depth);
-						if (depth == 1)
-							updateGroups(depth);
-					}
-
-					// Test if group merging triggers an update
+					// resolve forward references
 					if (depth == 1)
 						updateGroups(depth);
 
-					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 					return folded;
 				}
 
@@ -1432,46 +1427,32 @@ struct groupTree_t {
 				 */
 				uint32_t finalSlots[MAXSLOTS];
 				uint32_t power;
-				uint32_t sid = constructSlots(this->N + normQ, normTi, this->N + normTu, this->N + normF, finalSlots, &power);
+				uint32_t sid = constructSlots(gid, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &power);
 
+				// combo not found or folded
 				if (sid == 0)
-					continue; // combo not found, silently ignore
+					continue; // yes, silently ignore
 
 				unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
 
-				// test for self-collapse
-				bool hasSelf = false;
-				for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-					uint32_t id = finalSlots[iSlot];
-					assert (id != 0);
-
-					if (id == gid) {
-						hasSelf = true;
-						break;
-					}
-				}
-
-				if (hasSelf) {
-					printf("construct collapse\n");
-					continue; //collapse to self reference, silently ignore
-				}
-
 				/*
-				 * Test for an endpoint collapse
+				 * Test for an endpoint collapse, which collapses the group as whole
 				 */
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
-					if (gid != IBIT)
-						importGroup(gid, endpoint, pSidMap, pSidVersion, depth);
+                                        // is there a current group
+                                        if (gid != IBIT)
+                                                return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
+ 
+                                        // collapse and update
+                                        importGroup(gid, endpoint, pSidMap, pSidVersion, depth);
 
-					if (depth == 1)
-						updateGroups(depth);
+                                        // resolve forward references
+                                        if (depth == 1)
+                                                updateGroups(depth);
 
-					// merge and update
-					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-
-					return endpoint;
+                                        return endpoint;
 				}
 
 				/*
@@ -1726,7 +1707,6 @@ struct groupTree_t {
 
 		// return node the represents arguments
 		return first1n9;
-#undef T
 	}
 
 	/*
@@ -1735,8 +1715,17 @@ struct groupTree_t {
 	 * Construct slots based on Q/T/F and find matching signature.
 	 * Ti must be 0/IBIT and may flip within this function
 	 * Return sid+pFinal or 0 if no match found
+	 * 
+	 * @param {uint32_t}     gid     - group id under construction (may be IBIT) any reference to this is considered a fold.collapse
+	 * @param {groupNode_t*} pNodeQ  - Q component of Cartesian product
+	 * @param {groupNode_t*} pNodeTu - Tu component of Cartesian product
+	 * @param {uint32_t}     Ti      - IBIT to indicate that Tu is inverted.
+	 * @param {groupNode_t*} pNodeF  - F component of Cartesian product
+	 * @param {uint32_t*}    pFinal  - Constructed slots ordered such that tid=0.
+	 * @param {uint32_t*}    pPower  - structure size difference between what was detected and the signature.
+	 * @return {uint32_t}            - signature id, 0 if none found or folded..
 	 */
-	uint32_t constructSlots(const groupNode_t *pNodeQ, uint32_t Ti, const groupNode_t *pNodeT, const groupNode_t *pNodeF, uint32_t *pFinal, uint32_t *pPower) {
+	uint32_t constructSlots(uint32_t gid, const groupNode_t *pNodeQ, const groupNode_t *pNodeT, uint32_t Ti, const groupNode_t *pNodeF, uint32_t *pFinal, uint32_t *pPower) {
 
 		/*
 		 * @date 2021-11-05 01:32:20
@@ -1766,7 +1755,7 @@ struct groupTree_t {
 		char        slotsF[MAXSLOTS + 1];
 		// resulting slots containing gid's
 		uint32_t    slotsR[MAXSLOTS];
-		// nodes already processed
+		// slotsR entries in use
 		unsigned    nextSlot = 0;
 		const signature_t *pSignature;
 
@@ -1774,18 +1763,16 @@ struct groupTree_t {
 		 * Slot population as `groupTree_t` would do
 		 */
 
-		bool overflow = false;
-
-		// NOTE: `slotQ` is always `tid=0`, so `slotsQ[]` is not needed
+		// NOTE: `slotsQ` is always `tid=0`, so `slotsQ[]` is not needed, load directly into `slotsR[]`.
 		pSignature = db.signatures + pNodeQ->sid;
 		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
-			uint32_t endpoint = pNodeQ->slots[iSlot];
+			uint32_t endpoint = updateToLatest(pNodeQ->slots[iSlot]);
 			assert(endpoint != 0);
 			
-			// get most up-to-date
-			while (endpoint != this->N[endpoint].gid)
-				endpoint = this->N[endpoint].gid;
+			// is it a collapse
+			if (endpoint == gid)
+				return 0; // yes
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
@@ -1796,7 +1783,8 @@ struct groupTree_t {
 			} else {
 				/*
 				 * @date 2021-12-09 03:02:42
-				 * duplicate latest ids in Q
+				 * duplicate id in Q
+				 * This because Q doesn't go through `lookupFwdTransform()` 
 				 */
 				return 0;
 			}
@@ -1805,18 +1793,17 @@ struct groupTree_t {
 		pSignature = db.signatures + pNodeT->sid;
 		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
-			uint32_t endpoint = pNodeT->slots[iSlot];
+			uint32_t endpoint = updateToLatest(pNodeT->slots[iSlot]);
 			assert(endpoint != 0);
 			
-			// get most up-to-date
-			while (endpoint != this->N[endpoint].gid)
-				endpoint = this->N[endpoint].gid;
+			// is it a collapse
+			if (endpoint == gid)
+				return 0; // yes
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
-				overflow = (nextSlot >= MAXSLOTS);
-				if (overflow)
-					break;
+				if (nextSlot >= MAXSLOTS)
+					return 0; // overflow
 				slotVersion[endpoint] = thisVersion;
 				slotMap[endpoint]     = 'a' + nextSlot;
 				slotsR[nextSlot]      = endpoint;
@@ -1830,10 +1817,6 @@ struct groupTree_t {
 		if (pSignature->swapId)
 			applySwapping(pSignature, slotsT);
 
-		// test for slot overflow
-		if (overflow)
-			return 0;
-
 		/*
 		 * Lookup `patternFirst`
 		 * 
@@ -1842,10 +1825,8 @@ struct groupTree_t {
 		 */
 
 		uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
-		if (tidSlotT == IBIT) {
-			// invalid slots
-			return 0;
-		}
+		if (tidSlotT == IBIT)
+			return 0; // invalid slots (duplicate entries)
 
 		uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
 		uint32_t idFirst = db.patternFirstIndex[ixFirst];
@@ -1863,15 +1844,14 @@ struct groupTree_t {
 			uint32_t endpoint = pNodeF->slots[iSlot];
 			assert(endpoint != 0);
 
-			// get most up-to-date
-			while (endpoint != this->N[endpoint].gid)
-				endpoint = this->N[endpoint].gid;
+			// is it a collapse
+			if (endpoint == gid)
+				return 0; // yes
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
-				overflow = (nextSlot >= MAXSLOTS);
-				if (overflow)
-					break;
+				if (nextSlot >= MAXSLOTS)
+					return 0; // overflow
 				slotVersion[endpoint] = thisVersion;
 				slotMap[endpoint]     = 'a' + nextSlot;
 				slotsR[nextSlot]      = endpoint;
@@ -1885,19 +1865,13 @@ struct groupTree_t {
 		if (pSignature->swapId)
 			applySwapping(pSignature, slotsF);
 
-		// test for slot overflow
-		if (overflow)
-			return 0;
-
 		/*
 		 * Lookup `patternSecond`
 		 */
 
 		uint32_t tidSlotF = db.lookupFwdTransform(slotsF);
-		if (tidSlotF == IBIT) {
-			// invalid slots
-			return 0;
-		}
+		if (tidSlotF == IBIT)
+			return 0; // invalid slots (duplicate entries)
 
 		uint32_t ixSecond = db.lookupPatternSecond(idFirst, pNodeF->sid, tidSlotF);
 		uint32_t idSecond = db.patternSecondIndex[ixSecond];
@@ -1926,8 +1900,10 @@ struct groupTree_t {
 
 		// extract
 
-		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++)
+		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			pFinal[iSlot] = slotsR[pTransformExtract[iSlot] - 'a'];
+			assert(pFinal[iSlot] != 0);
+		}
 		for (unsigned iSlot = pSignature->numPlaceholder; iSlot < MAXSLOTS; iSlot++)
 			pFinal[iSlot] = 0;
 
