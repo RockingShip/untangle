@@ -649,6 +649,7 @@ struct groupTree_t {
 		/*
 		 * simple compare
 		 * todo: cache results
+		 * todo: nesting may be dead-code
 		 */
 		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
 
@@ -666,34 +667,29 @@ struct groupTree_t {
 	 * 
 	 * variation that allows comparison with an anonymous node
 	 */
-	int compare(uint32_t lhs, uint32_t sidRhs, const uint32_t *pSlotsRhs) {
+	int compare(uint32_t lhs, uint32_t rhsSid, const uint32_t *rhsSlots) const {
+		const groupNode_t *pLhs = this->N + lhs;
 
-		if (this->N[lhs].sid < sidRhs) {
-			return -1;
-		} else if (this->N[lhs].sid > sidRhs) {
-			return +1;
-		}
+		// left-hand-side must be latest
+		assert(pLhs->gid == lhs);
+
+		int cmp = (int)pLhs->sid - (int)rhsSid;
+		if (cmp != 0)
+			return cmp;
 
 		/*
 		 * simple compare
-		 * todo: cache results
 		 */
-		unsigned numPlaceholder = db.signatures[sidRhs].numPlaceholder;
+		unsigned numPlaceholder = db.signatures[rhsSid].numPlaceholder;
 
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-			// get latest L
-			uint32_t latestL = this->N[lhs].slots[iSlot];
-			while (latestL != this->N[latestL].gid)
-				latestL = this->N[latestL].gid;
+			uint32_t rid = rhsSlots[iSlot];
 
-			// get latest R
-			uint32_t latestR = pSlotsRhs[iSlot];
-			while (latestR != this->N[latestR].gid)
-				latestR = this->N[latestR].gid;
+			// right-hand-side must be latest
+			assert(this->N[rid].gid == rid);
 			
 			// is there a difference
-			int cmp = (int)latestL - (int)latestR;
-			
+			cmp = (int)pLhs->slots[iSlot] - (int)rid;
 			if (cmp != 0)
 				return cmp;
 		}
@@ -1215,10 +1211,11 @@ struct groupTree_t {
 			// does group have a node with better sid?
 			if (pSidVersion->mem[tlSid] == pSidVersion->version) {
 				uint32_t nid = pSidMap[tlSid];
-				int cmp = this->compare(nid, tlSid, tlSlots);
+				uint32_t latest = updateToLatest(nid);
+				int cmp = this->compare(latest, tlSid, tlSlots);
 				
 				if (cmp < 0) {
-					// yes, existing is better
+					// existing is better
 					return nid;
 				} else if (cmp == 0) {
 					assert(0); // should have been detected
@@ -1486,15 +1483,14 @@ struct groupTree_t {
 					// does group have a node with better sid?
 					if (pSidVersion->mem[sid] == pSidVersion->version) {
 						uint32_t nid = pSidMap[sid];
-						int cmp = this->compare(nid, sid, finalSlots);
+						uint32_t latest = updateToLatest(nid);
+						int cmp = this->compare(latest, sid, finalSlots);
 						
 						if (cmp < 0) {
 							// yes, existing is better
 							continue; // silently ignore
 						} else if (cmp == 0) {
-							// already exists
-							// NOTE: `finalSlots[]` may have updated slots, however, that is a task handles by `resolveForward()`.
-							continue; // silently ignore
+							assert(0); // should have been detected
 						}
 					}
 				}
@@ -2832,7 +2828,8 @@ struct groupTree_t {
 			// find sid
 			if (pSidVersion->mem[sid] == pSidVersion->version) {
 				oldNid = pSidMap[sid];
-				int cmp = this->compare(oldNid, sid, pSlots);
+				uint32_t latest = updateToLatest(oldNid);
+				int cmp = this->compare(latest, sid, pSlots);
 
 				if (cmp < 0) {
 					// existing is better
@@ -2841,8 +2838,7 @@ struct groupTree_t {
 					// arguments are better, orphan and patch forwarding later
 					unlinkNode(oldNid);
 				} else {
-					// the older node (indexed by the lookup) is outdated
-					unlinkNode(oldNid);
+					assert(0); // should have been detected
 				}
 			}
 		}
@@ -3077,7 +3073,8 @@ struct groupTree_t {
 				pSidVersion->mem[pNode->sid] = pSidVersion->version;
 			} else {
 				uint32_t nid = pSidMap[pNode->sid];
-				int cmp = this->compare(nid, pNode->sid, pNode->slots);
+				uint32_t latest = updateToLatest(nid);
+				int cmp = this->compare(latest, pNode->sid, pNode->slots);
 				
 				if (cmp < 0) {
 					// nid (newest) is better, leave pNode (oldest) orphaned

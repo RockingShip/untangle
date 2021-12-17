@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-17 00:45:34 Changed: Simplified `groupTree_t::compare()` as it was too bloated. 
 2021-12-16 20:43:07 Added: Lookup index for all sids in `groupTree_t` group lists.
 2021-12-16 19:06:41 Changed: Split core of `groupTree_t::addNormaliseNode()` into `addBasicNode()`.
 2021-12-16 15:56:48 Fixed: Ordering of slots entries during construction.
