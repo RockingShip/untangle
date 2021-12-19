@@ -656,14 +656,16 @@ struct gensignatureContext_t : dbtool_t {
 		// create imprints for signature groups
 		ctx.progress++; // skip reserved
 		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
+			const signature_t *pSignature = pStore->signatures + iSid;
+
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
 				if (perSecond == 0 || ctx.progress > ctx.progressHi) {
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) | hash=%.3f",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) | numImprint=%u(%.0f%%) | hash=%.3f %s",
 						ctx.timeAsString(), ctx.progress, perSecond,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						(double) ctx.cntCompare / ctx.cntHash);
+						(double) ctx.cntCompare / ctx.cntHash, pSignature->name);
 				} else {
 					int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
 
@@ -673,16 +675,14 @@ struct gensignatureContext_t : dbtool_t {
 					eta %= 60;
 					int etaS = eta;
 
-					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) | hash=%.3f",
+					fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | numImprint=%u(%.0f%%) | hash=%.3f %s",
 						ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
 						pStore->numImprint, pStore->numImprint * 100.0 / pStore->maxImprint,
-						(double) ctx.cntCompare / ctx.cntHash);
+						(double) ctx.cntCompare / ctx.cntHash, pSignature->name);
 				}
 
 				ctx.tick = 0;
 			}
-
-			const signature_t *pSignature = pStore->signatures + iSid;
 
 			tree.loadStringFast(pSignature->name);
 
@@ -984,4 +984,91 @@ struct gensignatureContext_t : dbtool_t {
 
 	}
 
+	/*
+	 * @date 2021-12-18 19:12:54
+	 * 
+	 * Fold signatures when slots contain duplicates.
+	 * Determine the resulting signature id and how to rearrange slots accordingly.
+	 * Entry offset for first occurrence [0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
+	 * Add to offset for second occurrence [0, 1, 2, 3, 4, 5, 6, 7, 8]
+	 */
+	void updateFolding(void) {
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
+			fprintf(stderr, "[%s] Calculating signature folding\n", ctx.timeAsString());
+
+		pStore->signatures = (signature_t *) ctx.myAlloc("database_t::signatures", pStore->maxSignature, sizeof(*pStore->signatures));
+
+		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++) {
+			memset(pStore->signatures + iSid, 0, sizeof(*pStore->signatures));
+			memcpy(pStore->signatures + iSid, pStore->signatures + iSid, sizeof(*pStore->signatures));
+		}
+
+		tinyTree_t tree(ctx);
+
+		// reset ticker
+		ctx.setupSpeed(pStore->numSignature);
+		ctx.tick = 0;
+
+		ctx.progress++; // skip reserved
+		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++) {
+			signature_t *pSignature = pStore->signatures + iSid;
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+				int perSecond = ctx.updateSpeed();
+
+				int eta = (int) ((ctx.progressHi - ctx.progress) / perSecond);
+
+				int etaH = eta / 3600;
+				eta %= 3600;
+				int etaM = eta / 60;
+				eta %= 60;
+				int etaS = eta;
+
+				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d | hash=%.3f %s",
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS,
+					(double) ctx.cntCompare / ctx.cntHash, pSignature->name);
+
+				ctx.tick = 0;
+			}
+
+			// walk through all folding possibilities
+			unsigned iFold = 0;
+			for (uint32_t i = 0; i < pSignature->numPlaceholder - 1u; i++) {
+				for (uint32_t j = i + 1; j < pSignature->numPlaceholder; j++) {
+
+					// create initial slots
+					char slots[MAXSLOTS + 1];
+
+					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
+						slots[iSlot] = 'a' + iSlot;
+
+					slots[MAXSLOTS] = 0;
+
+					// create a duplicate
+					slots[j] = slots[i];
+
+					// load tree
+					tree.loadStringSafe(pSignature->name, slots);
+
+					// lookup sid/tid
+					uint32_t sid = 0, tid = 0;
+					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
+
+					assert(iFold < signature_t::MAXFOLDS);
+					pSignature->folds[iFold].sid = sid;
+					pSignature->folds[iFold].tid = tid;
+					
+					iFold++;
+				}
+			}
+
+			ctx.progress++;
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
+			fprintf(stderr, "\r\e[K");
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] Calculated signature folding\n", ctx.timeAsString());
+	}
 };

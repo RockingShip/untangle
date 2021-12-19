@@ -80,7 +80,7 @@
 #include "tinytree.h"
 
 /// @constant {number} FILE_MAGIC - Database version. Update this when either the file header or one of the structures change
-#define FILE_MAGIC        0x20210715
+#define FILE_MAGIC        0x20211218
 // NOTE: with next version, reposition `magic_sidCRC`
 // NOTE: with next version, add `idFirst`
 
@@ -99,16 +99,16 @@ struct fileHeader_t {
 	// environment metrics
 	uint32_t magic;                  // magic+version
 	uint32_t magic_flags;            // conditions it was created
+	uint32_t magic_idFirst;          // starting id for first record
 	uint32_t magic_maxSlots;
+	uint32_t magic_sidCRC;           // crc of signature names
 	uint32_t magic_sizeofSignature;
 	uint32_t magic_sizeofSwap;
-	uint32_t magic_sidCRC;           // crc of signature names
 	uint32_t magic_sizeofImprint;
 	uint32_t magic_sizeofPair;
 	uint32_t magic_sizeofMember;
 	uint32_t magic_sizeofPatternFirst;
 	uint32_t magic_sizeofPatternSecond;
-	uint32_t magic_sizeofGrow;
 
 	// Associative index interleaving (for Imprints)
 	uint32_t interleave;
@@ -122,8 +122,6 @@ struct fileHeader_t {
 	uint32_t signatureIndexSize;
 	uint32_t numSwap;
 	uint32_t swapIndexSize;
-	uint32_t numUnused;             // unused
-	uint32_t unusedIndexSize;       // unused
 	uint32_t numImprint;
 	uint32_t imprintIndexSize;
 	uint32_t numPair;
@@ -134,8 +132,6 @@ struct fileHeader_t {
 	uint32_t patternFirstIndexSize;
 	uint32_t numPatternSecond;
 	uint32_t patternSecondIndexSize;
-	uint32_t numGrow;
-	uint32_t growIndexSize;
 
 	// section offsets
 	uint64_t offFwdTransforms;
@@ -151,8 +147,6 @@ struct fileHeader_t {
 	uint64_t offSignatureIndex;
 	uint64_t offSwaps;
 	uint64_t offSwapIndex;
-	uint64_t offUnused;             // unused
-	uint64_t offUnusedIndex;        // unused
 	uint64_t offImprints;
 	uint64_t offImprintIndex;
 	uint64_t offpairs;
@@ -163,8 +157,6 @@ struct fileHeader_t {
 	uint64_t offPatternFirstIndex;
 	uint64_t offPatternSecond;
 	uint64_t offPatternSecondIndex;
-	uint64_t offGrows;
-	uint64_t offGrowIndex;
 
 	uint64_t offEnd;
 };
@@ -1593,6 +1585,7 @@ struct database_t {
 
 		fileHeader.magic                     = FILE_MAGIC;
 		fileHeader.magic_flags               = creationFlags;
+		fileHeader.magic_idFirst             = IDFIRST;
 		fileHeader.magic_maxSlots            = MAXSLOTS;
 		fileHeader.magic_sizeofSignature     = sizeof(signature_t);
 		fileHeader.magic_sizeofSwap          = sizeof(swap_t);

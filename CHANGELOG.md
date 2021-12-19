@@ -12,6 +12,8 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-18 23:55:16 Changed: database version to 0x20211218.
+2021-12-18 23:55:16 Added: Added slot folding outcomes to `signature_t`.
 2021-12-17 01:20:43 Added: `groupTree_t::constructSlots()` now group collapsing aware.
 2021-12-17 00:45:34 Changed: Simplified `groupTree_t::compare()` as it was too bloated. 
 2021-12-16 20:43:07 Added: Lookup index for all sids in `groupTree_t` group lists.

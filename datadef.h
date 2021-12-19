@@ -159,6 +159,9 @@ struct signature_t {
 	enum {
 		/// @constant {number} (numnode*3+1+1/*root invert*/) For 5n9 signatures (4n9 is default) that would be 18
 		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1),
+		/// @constant {number} Number of slot folding entryes
+		MAXFOLDS            = 36,
+		
 	};
 
 	enum {
@@ -209,6 +212,24 @@ struct signature_t {
 
 	/// @var {string} Display name of signature. With space for inverted root and terminator
 	char name[SIGNATURENAMELENGTH + 1];
+
+	/*
+ 	 * Lookup algorithm:
+	 * Entry offset for first occurrence [0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
+	 * Add to offset for second occurrence [0, 1, 2, 3, 4, 5, 6, 7, 8]
+	 */
+	
+	struct fold_t {
+		/// @var {number} Signature id after slots folded
+		uint32_t sid;
+
+		/// @var {number} Transform id to rebuild slots when folded
+		uint32_t tid;
+	};
+	
+	/// @var {number} results of slot folding
+	fold_t folds[MAXFOLDS];
+
 };
 
 /*

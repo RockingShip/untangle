@@ -1020,6 +1020,12 @@ int main(int argc, char *argv[]) {
 		}
 
 		/*
+		 * @date 2021-12-18 19:09:11
+		 * Before saving database, make sure the folding info is up-to-date
+		 */
+		app.updateFolding();
+
+		/*
 		 * @date 2021-10-24 10:54:53
 		 * Before saving database, make sure the swap section is up-to-date
 		 */
