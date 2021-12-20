@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-20 23:09:03 Changed: Redesigned group collision detection and merging.
 2021-12-20 01:02:21 Added: `groupTree_t::mergeGroups()` and `pGidRefCount[]`.
 2021-12-20 00:47:05 Changed: Restart `groupTree_t::addBasicNode()` when C-product iterators change. 
 2021-12-18 23:55:16 Changed: database version to 0x20211218.

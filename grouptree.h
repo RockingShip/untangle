@@ -8,14 +8,20 @@
  * 	Single-node with multiple (identical) references that can be eliminated.
  * Collapse:
  *	Multi-node structures with references that can be optimised to form smaller structures
- * Self-collapse:
+ * Self collapse:
  * 	Structures with direct or indirect references to the group it participates in.
  * 	These all collapse to `a/[self]` which is the group header and always present
- * Endpoint-collapse
+ * Endpoint collapse
  * 	Structures with multiple references that optimise to a single reference.
  * 	This also causes the group it participates in to collapse to that reference.
- * Entrypoint-collapse:
+ * Entrypoint collapse:
  * 	Special variant of an endpoint-collapse referencingone of the entry points (id < nstart).
+ * Active group:
+ * 	Group that has nodes and is non-redirecting. `this->N[gid].gid == gid`.
+ * Closed group:
+ *	Group which is being referenced and cannot be extended with new nodes. `this->pGidRefCount[gid] != 0`.
+ * Open Group:
+ * 	Group under construction  `this->pGidRefCount[gid] == 0`.
  * 	
  */
 
@@ -677,8 +683,8 @@ struct groupTree_t {
 	int compare(uint32_t lhs, uint32_t rhsSid, const uint32_t *rhsSlots) const {
 		const groupNode_t *pLhs = this->N + lhs;
 
-		// left-hand-side must be latest
-		assert(pLhs->gid == lhs);
+		// left-hand-side must be latest in latest group
+		assert(this->N[pLhs->gid].gid == pLhs->gid);
 
 		int cmp = (int)pLhs->sid - (int)rhsSid;
 		if (cmp != 0)
@@ -874,6 +880,9 @@ struct groupTree_t {
 			pGidRefCount[slots[iSlot]]++;
 		}
 
+		// correction, SID_SELF does not count or it will lock itself
+		if (sid == db.SID_SELF)
+			pGidRefCount[slots[0]]--;
 
 		return nid;
 	}
@@ -1092,23 +1101,24 @@ struct groupTree_t {
 
 		/*
 		 * allocate storage for `addBasicNode()`
-		 */ 
-		uint32_t *pSidMap            = allocMap();
+		 */
+		uint32_t        *pSidMap     = allocMap();
 		versionMemory_t *pSidVersion = allocVersion();
 		// bump version
 		pSidVersion->nextVersion();
+		pSidMap[db.SID_SELF] = 0; // clear sanity marker
 
 		/*
 		 * call worker
 		 */
 		uint32_t ret = addBasicNode(IBIT, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, 0);
-		
+
 		/*
 		 * Release storage
 		 */
 		freeMap(pSidMap);
 		freeVersion(pSidVersion);
-		
+
 		return ret;
 	}
 
@@ -1127,8 +1137,9 @@ struct groupTree_t {
 	 * 
 	 * Return value is one of:
 	 *   IBIT not set: node representing arguments
-	 *   IBIT^gid: self-collapse, silently ignore
-	 *   IBIT^id: group-collapse, gid has collapsed 
+	 *   IBIT^(IBIT-1): self-collapse, silently ignore
+	 *   IBIT^(IBIT-2): merged groups, restart
+	 *   IBIT^id: group has collapsed to id
 	 *
 	 * @param {uint32_t}         gid - group id to add node to. May be IBIT to create new group
 	 * @param {uint32_t}         tlSid - `1n9` sid describing Q/T/F
@@ -1145,13 +1156,21 @@ struct groupTree_t {
 		depth++;
 		assert(depth < 30);
 
+		// gidInitial is to remember if this is a recursive call
+		uint32_t gidInitial = gid;
+
+		// todo: tail recursion might result in interator folding
+		Q  = updateToLatest(Q);
+		Tu = updateToLatest(Tu);
+		F  = updateToLatest(F);
+
 		// may not be empty
 		assert(Q < this->nstart || Q != this->N[Q].next);
 		assert(Tu < this->nstart || Tu != this->N[Tu].next);
 		assert(F < this->nstart || F != this->N[F].next);
 
 		// gid must be latest
-		assert(gid == IBIT || gid == this->N[gid].gid);
+		assert(gid == IBIT || this->N[gid].gid == gid);
 
 		// arguments may not fold to gid
 		assert(Q != gid && Tu != gid && F != gid);
@@ -1185,14 +1204,17 @@ struct groupTree_t {
 		uint32_t ix = this->lookupNode(tlSid, tlSlots);
 		if (this->nodeIndex[ix] != 0) {
 			// (possibly outdated) node already exists, test if same group
-			uint32_t nid = this->nodeIndex[ix];
+			uint32_t nid    = this->nodeIndex[ix];
 			uint32_t latest = updateToLatest(nid);
 
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
 			// merge groups lists
-			importGroup(gid, latest, pSidMap, pSidVersion, depth);
+			mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
+
+			if (gidInitial != IBIT)
+				return IBIT ^ (IBIT - 2); // let caller restart
 
 			// ripple effect of merging
 			if (depth == 1)
@@ -1211,9 +1233,9 @@ struct groupTree_t {
 			// does group have a node with better sid?
 			if (pSidVersion->mem[tlSid] == pSidVersion->version) {
 				uint32_t nid = pSidMap[tlSid];
-				uint32_t latest = updateToLatest(nid);
-				int cmp = this->compare(latest, tlSid, tlSlots);
-				
+				assert(this->N[nid].gid == gid);
+				int cmp = this->compare(nid, tlSid, tlSlots);
+
 				if (cmp < 0) {
 					// existing is better
 					return nid;
@@ -1222,7 +1244,6 @@ struct groupTree_t {
 				}
 			}
 		}
-
 
 		/*
 		 * @date 2021-11-04 02:08:51
@@ -1247,7 +1268,7 @@ struct groupTree_t {
 		 */
 		unsigned iQ  = Q;
 		unsigned iTu = Tu;
-		unsigned iF = F;
+		unsigned iF  = F;
 		for (;;) {
 			do {
 				/*
@@ -1256,9 +1277,9 @@ struct groupTree_t {
 
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 					// iterators may not be orphaned
-					assert(this->N[iQ].next != iQ);
-					assert(this->N[iTu].next != iTu);
-					assert(this->N[iF].next != iF);
+					assert(iQ < this->nstart || this->N[iQ].next != iQ);
+					assert(iTu < this->nstart || this->N[iTu].next != iTu);
+					assert(iF < this->nstart || this->N[iF].next != iF);
 					// iterators may not be current group
 					assert(this->N[iQ].gid != gid);
 					assert(this->N[iTu].gid != gid);
@@ -1267,6 +1288,15 @@ struct groupTree_t {
 					assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
 					assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
 					assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
+
+					if (gid != IBIT) {
+						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
+							if (pSidVersion->mem[iSid] == pSidVersion->version) {
+								uint32_t nid = pSidMap[iSid];
+								assert(this->N[nid].gid == gid);
+							}
+						}
+					}
 				}
 
 				/*
@@ -1274,7 +1304,7 @@ struct groupTree_t {
 				 * Requires temporary Q/T/F because it might otherwise change loop iterators. 
 				 */
 				uint32_t folded = IBIT;
-				uint32_t normQ = 0, normTi = 0, normTu = 0, normF = 0;
+				uint32_t normQ  = 0, normTi = 0, normTu = 0, normF = 0;
 				if (Ti) {
 
 					if (iTu == 0) {
@@ -1413,10 +1443,11 @@ struct groupTree_t {
 					assert(folded >= this->nstart); // todo: this is just to detect if it actually happens, but strangely is doesn't
 
 					// is there a current group
-					if (gid != IBIT)
+					if (gidInitial != IBIT)
 						return IBIT ^ folded; // yes, let caller handle collapse to endpoint
 
 					// collapse and update
+					assert(0);
 					importGroup(gid, folded, pSidMap, pSidVersion, depth);
 
 					// resolve forward references
@@ -1445,18 +1476,29 @@ struct groupTree_t {
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
-                                        // is there a current group
-                                        if (gid != IBIT)
-                                                return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
- 
-                                        // collapse and update
-                                        importGroup(gid, endpoint, pSidMap, pSidVersion, depth);
+					// NOTE: endpoint is latest
 
-                                        // resolve forward references
-                                        if (depth == 1)
-                                                updateGroups(depth);
+					// is this called recursively?
+					if (gidInitial != IBIT)
+						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
-                                        return endpoint;
+					// collapse to endpoint and update
+					mergeGroups(gid, endpoint, pSidMap, pSidVersion, depth);
+
+					// resolve forward references
+					if (depth == 1)
+						updateGroups(depth);
+
+					return endpoint;
+				}
+
+				if (gid != IBIT) {
+					for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
+						if (pSidVersion->mem[iSid] == pSidVersion->version) {
+							uint32_t nid = pSidMap[iSid];
+							assert(this->N[nid].gid == gid);
+						}
+					}
 				}
 
 				/*
@@ -1468,17 +1510,39 @@ struct groupTree_t {
 					// does group have a node with better sid?
 					if (pSidVersion->mem[sid] == pSidVersion->version) {
 						uint32_t nid = pSidMap[sid];
-						uint32_t latest = updateToLatest(nid);
-						int cmp = this->compare(latest, sid, finalSlots);
-						
+						assert(this->N[nid].gid == gid);
+						int cmp = this->compare(nid, sid, finalSlots);
+
 						if (cmp < 0) {
 							// yes, existing is better
 							continue; // silently ignore
 						} else if (cmp == 0) {
-							assert(0); // should have been detected
+							// duplicate (which is processed and added to sid lookup) detected
+							continue; // silently ignore
 						}
 					}
 				}
+
+				/*
+				 * General idea:
+				 * 
+				 * node is old and no current group:
+				 *      attach to group
+				 * node is old and belongs to same group
+				 *      duplicate
+				 * node is old and belongs to different group:
+				 * 	merge groups and restart
+				 * node is new and no current group:
+				 *      create group and add as first node
+				 * node is new and group is open
+				 *      add to group
+				 * node is new and group is closed
+				 *      create new group
+				 *      add new node
+				 *      merge closed group into current
+				 *      continue (no restart)
+				 */
+
 
 				/*
 				 * @date 2021-11-08 00:00:19
@@ -1497,110 +1561,307 @@ struct groupTree_t {
 //					uint32_t expand = expandMember(gid, db.signatures[sid].firstMember, finalSlots, pSidMap, pSidVersion, depth);
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
-					// restart if iterators changed
-					if (this->N[iQ].gid != Q || this->N[iTu].gid != Tu ||this->N[iF].gid != F) {
+					// restart if iterators changed or orphaned
+					if (this->N[iQ].gid != Q || this->N[iQ].next == iQ ||
+					    this->N[iTu].gid != Tu || this->N[iTu].next == iTu ||
+					    this->N[iF].gid != F || this->N[iF].next == F) {
 						// restart with tail recursion
+						pSidVersion->nextVersion();
 						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 					}
-					
-					// did something fold
-					if (expand == IBIT) {
-						// iterators should notice the collapse and restart with better alternatives 
-						// NOTE: if assert triggers, then current group should basically restart, possibly salvaging existing entries. 
-						if (Q != this->N[iQ].gid || Tu != this->N[iTu].gid || F != this->N[iF].gid)
+
+					// is it a collapse?
+					if (expand & IBIT) {
+						// yes, was it a self-collapse
+						if (expand == (IBIT ^ (IBIT - 1)))
+							continue; // yes, silently ignore
+
+						// was it a request to restart 	
+						if (expand == (IBIT ^ (IBIT - 2))) {
+							// yes, restart
+							pSidVersion->nextVersion();
+							return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
+						}
+
+						// is this called recursively?
+						if (gidInitial != IBIT)
+							return expand; // yes, let caller handle collapse
+
+						/*
+						 * collapsing to endpoint
+						 */
+
+						uint32_t endpoint = expand & ~IBIT;
+						uint32_t latest   = updateToLatest(endpoint);
+
+						// merge and update groups
+						if (gid != IBIT) {
 							assert(0);
+							importGroup(gid, latest, pSidMap, pSidVersion, depth);
+						}
 
-						// group merging/folding might change current gid
-						while (gid != this->N[gid].gid)
-							gid = this->N[gid].gid;
-
-						continue; // yes, silently ignore (and restart)
-					}
-
-					// update to latest gid
-					gid = expand;
-					while (gid != this->N[gid].gid)
-						gid = this->N[gid].gid;
-
-					// test for full-collapse 
-					if (gid < this->nstart) {
+						// resolve forward references
 						if (depth == 1)
 							updateGroups(depth);
 
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						return endpoint;
+
+					} else if (gid != IBIT) {
+						uint32_t latest = updateToLatest(expand);
+						if (latest != gid) {
+							// need to merge groups
+							mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
+							// restart with tail recursion
+							pSidVersion->nextVersion();
+							return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
+						}
+					}
+
+					uint32_t latest = updateToLatest(expand);
+
+					// test for entrypoint-collapse 
+					if (latest < this->nstart) {
+						// yes
+						// is this called recursively?
+						if (gidInitial != IBIT)
+							return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
+
+						// merge and update groups
+						if (gid != IBIT) {
+							assert(0);
+							importGroup(gid, latest, pSidMap, pSidVersion, depth);
+						}
+
+						// resolve forward references
+						if (depth == 1)
+							updateGroups(depth);
 
 						return expand;
 					}
 
-					/*
-					 * Group merging might have outdated slots
-					 */
-					bool hasSelf = false;
-					for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-						uint32_t id = finalSlots[iSlot];
-						assert (id != 0);
+					// group management
+					if (gid == IBIT) {
+						// current group becomes latest, which is closed
+						assert(this->pGidRefCount[latest] != 0);
+						gid = latest;
 
-						if (id != this->N[id].gid) {
-							// get latest
-							while (id != this->N[id].gid)
-								id = this->N[id].gid;
-							// is it self
-							if (id == gid) {
-								hasSelf = true;
-								break;
-							}
-							// update slot
-							finalSlots[iSlot] = id;
-						}
+					} else if (gid != latest) {
+						// merge groups
+						mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
+						// restart with tail recursion
+						pSidVersion->nextVersion();
+						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 					}
 
-					if (hasSelf)
-						continue; //collapse to self reference, silently ignore
+					/*
+					 * Group merging (or expandSignature) might cause slots to become outdated.
+					 * If so, reload Cartesian element with updated values
+					 */
+					for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+						uint32_t id = finalSlots[iSlot];
+
+						if (id != this->N[id].gid)
+							assert(0); // it needs to happen first
+					}
 				}
 
 				/*
-				 * Add final sid/slot to collection
+				 * Add final sid/slot to group
 				 */
 
-				uint32_t oldCount = this->ncount;
+				// lookup slots
+				uint32_t ix  = this->lookupNode(sid, finalSlots);
+				uint32_t nid = this->nodeIndex[ix];
 
-				uint32_t nid    = addToCollection(sid, finalSlots, gid, pSidMap, pSidVersion, power);
-				uint32_t latest = updateToLatest(nid);
-				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
+				if (nid != 0) {
+					// node is old/existing
+					uint32_t latest = updateToLatest(this->N[nid].gid);
 
-				// restart if iterators changed
-				if (this->N[iQ].gid != Q || this->N[iTu].gid != Tu ||this->N[iF].gid != F) {
-					// restart with tail recursion
-					return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
-				}
+					assert(latest >= this->nstart); // endpoint collapse needs extra code
 
-				if (nid == oldCount) {
-					// if (ctx.opt_debug & ctx.DEBUG_ROW)
+					if (latest < this->nstart) {
+						// entrypoint collapse
+
+						// is this called recursively?
+						if (gidInitial != IBIT)
+							return IBIT ^ latest; // yes, let caller handle collapse
+
+						// merge and update groups
+						assert(0);
+						importGroup(gid, latest, pSidMap, pSidVersion, depth);
+
+						// resolve forward references
+						if (depth == 1)
+							updateGroups(depth);
+
+						return latest;
+
+					} else if (gid == IBIT) {
+						// "node is old and no current group"
+
+						// current group becomes latest
+						gid = latest;
+
+						// if group is open, clear sid lookup index
+						if (this->pGidRefCount[gid] == 0) {
+							pSidVersion->nextVersion();
+							pSidMap[db.SID_SELF] = gid; // clear sanity marker
+						}
+					} else if (latest != gid) {
+						// 'node is old and belongs to different group"
+
+						// merge groups
+						mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
+						// restart with tail recursion
+						pSidVersion->nextVersion();
+						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
+
+					} else if (this->pGidRefCount[gid] == 0) {
+						// "node is old and belongs to same open group"
+
+						// add to sid lookup if nothing set
+						if (pSidVersion->mem[sid] != pSidVersion->version) {
+							assert(pSidMap[db.SID_SELF] == gid);
+							pSidMap[sid]          = nid;
+							pSidVersion->mem[sid] = pSidVersion->version;
+						}
+
+						// node is duplicate, silently ignore
+						continue;
+
+					} else {
+						// "node is old and belongs to same closed group"
+
+						// yes, it is either already seen and validated, or further down the list and postponed
+
+						// duplicate
+						continue; // silently ignore
+
+					}
+
+				} else {
+					// node is new and needs to be created
+
+					if (gid == IBIT) {
+						// "node is new and no current group"
+
+						// create group header
+						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+						assert(selfSlots[MAXSLOTS - 1] == 0);
+
+						gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+						assert(gid == this->N[gid].slots[0]);
+						this->N[gid].gid = gid;
+
+						// create node
+						nid = this->newNode(sid, finalSlots, power);
+						groupNode_t *pNode = this->N + nid;
+
+						// add node to index
+						pNode->hashIX = ix;
+						this->nodeIndex[ix]        = nid;
+						this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+						// add node to list
+						pNode->gid = gid;
+						linkNode(this->N[gid].prev, nid);
+
+						// prepare new sid lookup index
+						pSidVersion->nextVersion();
+						pSidMap[db.SID_SELF] = gid; // set sanity marker
+						pSidMap[sid]         = nid;
+
+					} else if (this->pGidRefCount[gid] != 0) {
+						// "node is new and group is closed"
+
+						// create group header
+						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+						assert(selfSlots[MAXSLOTS - 1] == 0);
+
+						uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+						assert(newGid == this->N[newGid].slots[0]);
+						this->N[newGid].gid = newGid;
+
+						// merge closed into open group
+						mergeGroups(gid, newGid, pSidMap, pSidVersion, depth);
+
+						// restart with tail recursion
+						pSidVersion->nextVersion();
+						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
+
+					} else if (pSidVersion->mem[sid] != pSidVersion->version) {
+						// "node is new and group is open, no challenge"
+
+						// create node
+						nid = this->newNode(sid, finalSlots, power);
+						groupNode_t *pNode = this->N + nid;
+
+						// add node to index
+						pNode->hashIX = ix;
+						this->nodeIndex[ix]        = nid;
+						this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+						// add to group
+						pNode->gid = gid;
+						linkNode(this->N[gid].prev, nid);
+
+						// add sid to lookup index
+						assert(pSidMap[db.SID_SELF] == gid);
+						pSidMap[sid]          = nid;
+						pSidVersion->mem[sid] = pSidVersion->version;
+
+					} else {
+						// "node is new and group is open, challenge existing sid"
+
+						assert(pSidMap[db.SID_SELF] == gid);
+						uint32_t challenge = pSidMap[sid];
+
+						int cmp = this->compare(challenge, sid, finalSlots);
+						if (cmp < 0) {
+							// challenge is better
+							continue; // silently ignore
+
+						} else if (cmp > 0) {
+							// current is better, orphan and replace challenge
+							unlinkNode(challenge);
+
+							// create node
+							nid = this->newNode(sid, finalSlots, power);
+							groupNode_t *pNode = this->N + nid;
+
+							// add node to index
+							pNode->hashIX = ix;
+							this->nodeIndex[ix]        = nid;
+							this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+							// add to group
+							pNode->gid = gid;
+							linkNode(this->N[gid].prev, nid);
+
+							// add sid to lookup index
+							pSidMap[sid]          = nid;
+							pSidVersion->mem[sid] = pSidVersion->version;
+
+							// update sid lookup index
+							pSidMap[sid] = nid;
+
+						} else if (cmp == 0) {
+							assert(0); // should have been detected
+						}
+					}
+
+					// if (ctx.opt_debug & ctx.DEBUG_ROW)return
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-					       latest, nid,
-					       iQ, iTu, iF,
+					       gid, nid,
+					       Q, Tu, F,
 					       sid, db.signatures[sid].name,
 					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
 					       db.signatures[sid].size, power);
+
 				}
 
-				if (gid == IBIT) {
-					gid = latest;
-				} else if (gid != this->N[latest].gid) {
-					// merge groups lists
-					importGroup(gid, latest, pSidMap, pSidVersion, depth);
-
-					while (latest != this->N[latest].gid)
-						latest = this->N[latest].gid;
-				}
-
-				// update current group id to that of head of list
-				gid = nid;
-				while (gid != this->N[gid].gid)
-					gid = this->N[gid].gid;
-
-				// remember first  for return value
+				// remember first node (most likely `1n9`) for return value
 				if (firstNode == IBIT)
 					firstNode = nid;
 
@@ -1618,10 +1879,6 @@ struct groupTree_t {
 			 */
 
 			assert(gid == this->N[gid].gid);
-
-			// test for total collapse
-			if (gid < this->nstart)
-				break;
 
 			/*
 			 * Test for iterator collapsing
@@ -1937,8 +2194,6 @@ struct groupTree_t {
 				
 			pActive->mem[id] = thisVersion;
 		}
-		// only op-level may reference `gid`
-		pActive->mem[gid] = thisVersion;
 		
 		/*
 		 * Load string
@@ -2225,47 +2480,78 @@ struct groupTree_t {
 				freeMap(pStack);
 				freeMap(pMap);
 				freeVersion(pActive);
-				return IBIT;
+				return IBIT ^ (IBIT - 1); // caller needs to silently ignore
 			}
 
 			uint32_t nid;
 			if (pattern[1]) {
+
+				// allocate storage for scope
+				uint32_t *pSidMap            = allocMap();
+				versionMemory_t *pSidVersion = allocVersion();
+				pSidVersion->nextVersion();
+				pSidMap[db.SID_SELF] = 0; // clear sanity marker
+
+				// call
 				nid = addBasicNode (IBIT, cSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth + 1);
 				
-				// if intermediate folds to a slot entry, then it's a collapse
+				// release storage
+				freeMap(pSidMap);
+				freeVersion(pSidVersion);
+
+				// did something happen?
+				if (nid & IBIT) {
+					// yes, let caller handle what
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+					return nid;
+				}
+
+				uint32_t latest = updateToLatest(nid);
+
+				// did it fold into one of the slot entries or gid?
+				if (latest == gid || pActive->mem[latest] == thisVersion) {
+					// yes, caller needs to silently ignore
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+					return IBIT ^ (IBIT - 1);
+				}
+
+				// add intermediate to collection of rejects
+				pActive->mem[latest] = thisVersion;
+
 			} else {
 				assert(numStack == 0);
 
 				// NOTE: top-level, use same depth/indent as caller
 				nid = addBasicNode(gid, cSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 
-				// NOTE: last call, so no need to update gid
-				// NODE: if nid is a slot or gid, then it's an endpoint collapse  
+				// did something happen?
+				if (nid & IBIT) {
+					// yes, let caller handle what
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+					return nid;
+				}
+
+				uint32_t latest = updateToLatest(nid);
+
+				// did it fold into one of the slot entries?
+				if (pActive->mem[latest] == thisVersion) {
+					// yes, caller needs to silently ignore
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+					return IBIT ^ (IBIT - 1);
+				}
 			}
 
-			// update gid to latest
-			while (gid != this->N[gid].gid)
-				gid = this->N[gid].gid;
-				
-			// update node to latest, to determine it's gid
-			uint32_t latest = nid;
-			while (latest != this->N[latest].gid)
-				latest = this->N[latest].gid;
-
-			// is it old (fold)
-			// NOTE: exclude top-level reference to gid (that is expected)
-			if (pActive->mem[latest] == thisVersion && !(pattern[1] == 0 && latest == gid)) {
-				// yes
-				freeMap(pStack);
-				freeMap(pMap);
-				freeVersion(pActive);
-				return IBIT;
-			}
-
-			// remember
+			// Push result onto stack
 			pStack[numStack++]   = nid;
 			pMap[nextNode++]     = nid;
-			pActive->mem[latest] = thisVersion;
 		}
 		assert(numStack == 1); // only result on stack
 
@@ -2687,7 +2973,7 @@ struct groupTree_t {
          * return node id, which might change group
          * NOTE: caller must update group id `gid = this->N[nid].gid`.
 	 */
-	uint32_t addToCollection(uint32_t sid, uint32_t *pSlots, uint32_t gid, uint32_t *pSidMap, versionMemory_t *pSidVersion, uint32_t power) {
+	uint32_t addToCollection(uint32_t gid, uint32_t sid, uint32_t *pSlots, uint32_t *pSidMap, versionMemory_t *pSidVersion, uint32_t power, uint32_t Q, uint32_t Tu, uint32_t F, unsigned depth) {
 
 		assert(sid != db.SID_SELF); // headers need to be created directly, because they may not be indexed
 		assert(gid == IBIT || gid == this->N[gid].gid); // gid must be latest
@@ -2761,8 +3047,8 @@ struct groupTree_t {
 			// find sid
 			if (pSidVersion->mem[sid] == pSidVersion->version) {
 				oldNid = pSidMap[sid];
-				uint32_t latest = updateToLatest(oldNid);
-				int cmp = this->compare(latest, sid, pSlots);
+				assert(this->N[oldNid].gid == gid);
+				int cmp = this->compare(oldNid, sid, pSlots);
 
 				if (cmp < 0) {
 					// existing is better
@@ -2796,12 +3082,22 @@ struct groupTree_t {
 		linkNode(this->N[gid].prev, nid);
 
 		// add to sid lookup
+		assert(pSidMap[db.SID_SELF] == gid);
 		pSidMap[sid]          = nid;
 		pSidVersion->mem[sid] = pSidVersion->version;
 
 		// let orphaned redirect to newer
 		if (oldNid != IBIT)
 			this->N[oldNid].gid = nid;
+
+		// if (ctx.opt_debug & ctx.DEBUG_ROW)
+		printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+		       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+		       gid, nid,
+		       Q, Tu, F,
+		       sid, db.signatures[sid].name,
+		       pSlots[0], pSlots[1], pSlots[2], pSlots[3], pSlots[4], pSlots[5], pSlots[6], pSlots[7], pSlots[8],
+		       db.signatures[sid].size, power);
 
 		return nid;
 	}
@@ -2823,7 +3119,7 @@ struct groupTree_t {
 		assert(this->N[lhs].gid == lhs); // must be latest header
 		assert(this->N[rhs].gid == rhs); // must be latest header
 
-		printf("importgroup=1 ./eval \"%s\" \"%s\"\n", this->saveString(lhs).c_str(), this->saveString(N[rhs].gid).c_str());
+		printf("mergeGroups=1 ./eval \"%s\" \"%s\"\n", this->saveString(lhs).c_str(), this->saveString(N[rhs].gid).c_str());
 
 		/*
 		 * entrypoint collapse
@@ -2871,7 +3167,7 @@ struct groupTree_t {
 		/*
 		 * Setup gid
 		 */
-		
+
 		uint32_t gid;
 		if (this->pGidRefCount[lhs] == 0) {
 
@@ -2896,7 +3192,7 @@ struct groupTree_t {
 		 * NOTE: forward references are possible
 		 */
 
-		{
+		if (lhs != rhs) {
 			versionMemory_t *pVersion   = allocVersion();
 			uint32_t        thisVersion = pVersion->nextVersion();
 
@@ -3003,7 +3299,7 @@ struct groupTree_t {
 
 			freeVersion(pVersion);
 		}
-		
+
 		/*
 		 * Simple merge so everything gets onto one list
 		 */
@@ -3021,7 +3317,7 @@ struct groupTree_t {
 			}
 			this->N[rhs].gid = gid;
 		}
-		
+
 		// join lhs/rhs
 		if (lhs != gid) {
 			// point to contents
@@ -3055,13 +3351,17 @@ struct groupTree_t {
 		 * This will force a `resolveForward()`, after every c-product iteration. creating group headers that are used only once. 
 		 * 
 		 */
-		
+
 		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 			if (this->N[iGroup].gid != iGroup)
 				continue; // not start of list
 
+			// group may not be empty
+			assert(this->N[iGroup].next != iGroup);
+
 			// start new sid llokup index
 			uint32_t thisVersion = pSidVersion->nextVersion();
+			pSidMap[db.SID_SELF] = iGroup; // set sanity marker
 
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
@@ -3072,15 +3372,15 @@ struct groupTree_t {
 				uint32_t newSid  = pNode->sid;
 				uint32_t newSlots[MAXSLOTS];
 				bool     changed = false;
-				
+
 				/*
 				 * Update to latest
 				 */
-				
+
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 					uint32_t id = pNode->slots[iSlot];
-					if (this->N[iSlot].gid != id) {
-						id = updateToLatest(id);
+					if (this->N[id].gid != id) {
+						id      = updateToLatest(id);
 						changed = true;
 					}
 					newSlots[iSlot] = id;
@@ -3089,14 +3389,13 @@ struct groupTree_t {
 				for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
 					newSlots[iSlot] = 0;
 
-				
 				if (changed) {
 					// perform sid swap
 					applySwapping(pNode->sid, newSlots);
 
 					// perform folding. NOTE: newSid/newSlots might both change
 					applyFolding(&newSid, newSlots);
-					
+
 					// lookup slots
 					newNix = this->lookupNode(newSid, newSlots);
 					newNid = this->nodeIndex[newNix];
@@ -3146,14 +3445,16 @@ struct groupTree_t {
 						// add node immediately before original, so it doesn't get double processed
 						linkNode(this->N[iNode].prev, newNid);
 					}
-					
+
 					// add to sid lookup
+					assert(pSidMap[db.SID_SELF] == iGroup);
 					pSidMap[newSid]          = newNid;
 					pSidVersion->mem[newSid] = pSidVersion->version;
 
 				} else {
 					// how does `newSlots[]` compare to current sid
 					uint32_t bestNid = pSidMap[pNode->sid];
+					assert(this->N[bestNid].gid == iGroup);
 					assert(bestNid != iNode && bestNid != newNid);
 
 					int cmp = this->compare(bestNid, newSid, newSlots);
@@ -3183,13 +3484,14 @@ struct groupTree_t {
 						}
 
 						// add to sid lookup index
+						assert(pSidMap[db.SID_SELF] == iGroup);
 						pSidMap[newSid]          = newNid;
 						pSidVersion->mem[newSid] = pSidVersion->version;
 					} else if (cmp == 0) {
 						assert(0); // should have been detected
 					}
 				}
-				
+
 				// if changed, orphan original
 				if (changed) {
 					uint32_t prevId = this->N[iNode].prev;
@@ -3197,9 +3499,16 @@ struct groupTree_t {
 					iNode = prevId;
 				}
 			}
+
+			// group may not become empty
+			assert(this->N[iGroup].next != iGroup);
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+		// invalidate list
+		pSidVersion->nextVersion();
+		pSidMap[db.SID_SELF] = 0; // set sanity marker
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 	}
 	
 	/*
@@ -3398,12 +3707,13 @@ struct groupTree_t {
 				// node has unknown sid, inherit (gid already set)
 				linkNode(this->N[newest].prev, iNode);
 				// add to sid lookup index
+				assert(pSidMap[db.SID_SELF] == oldest);
 				pSidMap[pNode->sid] = iNode;
 				pSidVersion->mem[pNode->sid] = pSidVersion->version;
 			} else {
 				uint32_t nid = pSidMap[pNode->sid];
-				uint32_t latest = updateToLatest(nid);
-				int cmp = this->compare(latest, pNode->sid, pNode->slots);
+				assert(this->N[nid].gid == oldest);
+				int cmp = this->compare(nid, pNode->sid, pNode->slots);
 				
 				if (cmp < 0) {
 					// nid (newest) is better, leave pNode (oldest) orphaned
@@ -3417,6 +3727,7 @@ struct groupTree_t {
 					// inherit pNode (gid already set)
 					linkNode(this->N[newest].prev, iNode);
 					// add to sid lookup index
+					assert(pSidMap[db.SID_SELF] == newest);
 					pSidMap[pNode->sid] = iNode;
 					pSidVersion->mem[pNode->sid] = pSidVersion->version;
 				} else if (cmp == 0) {
@@ -3568,11 +3879,14 @@ struct groupTree_t {
 				// update if changed
 
 				// orphan outdated node to make things easier for `addToCollection()`.
+				if (pSidMap[pNode->sid] == iNode)
+					pSidVersion->mem[pNode->sid] = 0; // remove from sid lookup index
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				iNode = prevId;
+				
 
-				uint32_t newId = addToCollection(pNode->sid, newSlots, gid, pSidMap, pSidVersion, pNode->power);
+				uint32_t newId = addToCollection(gid, pNode->sid, newSlots, pSidMap, pSidVersion, pNode->power, /* followingForLogging: */ 0, 0, 0, depth);
 				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
 
 				uint32_t latest = newId;
@@ -3582,6 +3896,7 @@ struct groupTree_t {
 				// does node belong to different group
 				if (gid != this->N[latest].gid) {
 					// yes, merge groups
+					assert(0);
 					importGroup(gid, latest, pSidMap, pSidVersion, depth);
 					
 					uint32_t latest = gid;
@@ -3615,6 +3930,8 @@ struct groupTree_t {
 		assert(gid != this->N[gid].next);
 
 		freeVersion(pVersion);
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 		return groupForward;
 	}
 
@@ -3651,10 +3968,11 @@ struct groupTree_t {
 					 * init sid lookup for group
 					 */
 					pSidVersion->nextVersion();
+					pSidMap[db.SID_SELF] = iGroup; // set sanity marker
 
 					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 						groupNode_t *pNode = this->N + iNode;
-						
+
 						pSidMap[pNode->sid] = iNode;
 						pSidVersion->mem[pNode->sid] = pSidVersion->version; 
 					}
@@ -3892,6 +4210,48 @@ struct groupTree_t {
 	 */
 	void applyFolding(uint32_t *pSid, uint32_t *pSlots) {
 		// todo: placeholder
+
+		unsigned numPlaceholder = db.signatures[*pSid].numPlaceholder;
+		// may not be zero
+		assert(numPlaceholder < 1 || pSlots[0] != 0);
+		assert(numPlaceholder < 2 || pSlots[1] != 0);
+		assert(numPlaceholder < 3 || pSlots[2] != 0);
+		assert(numPlaceholder < 4 || pSlots[3] != 0);
+		assert(numPlaceholder < 5 || pSlots[4] != 0);
+		assert(numPlaceholder < 6 || pSlots[5] != 0);
+		assert(numPlaceholder < 7 || pSlots[6] != 0);
+		assert(numPlaceholder < 8 || pSlots[7] != 0);
+		assert(numPlaceholder < 9 || pSlots[8] != 0);
+		// test referencing to group headers
+		assert(N[pSlots[0]].gid == pSlots[0]);
+		assert(N[pSlots[1]].gid == pSlots[1]);
+		assert(N[pSlots[2]].gid == pSlots[2]);
+		assert(N[pSlots[3]].gid == pSlots[3]);
+		assert(N[pSlots[4]].gid == pSlots[4]);
+		assert(N[pSlots[5]].gid == pSlots[5]);
+		assert(N[pSlots[6]].gid == pSlots[6]);
+		assert(N[pSlots[7]].gid == pSlots[7]);
+		assert(N[pSlots[8]].gid == pSlots[8]);
+		// they may not be empty
+		assert(pSlots[0] < nstart || N[pSlots[0]].next != pSlots[0]);
+		assert(pSlots[1] < nstart || N[pSlots[1]].next != pSlots[1]);
+		assert(pSlots[2] < nstart || N[pSlots[2]].next != pSlots[2]);
+		assert(pSlots[3] < nstart || N[pSlots[3]].next != pSlots[3]);
+		assert(pSlots[4] < nstart || N[pSlots[4]].next != pSlots[4]);
+		assert(pSlots[5] < nstart || N[pSlots[5]].next != pSlots[5]);
+		assert(pSlots[6] < nstart || N[pSlots[6]].next != pSlots[6]);
+		assert(pSlots[7] < nstart || N[pSlots[7]].next != pSlots[7]);
+		assert(pSlots[8] < nstart || N[pSlots[8]].next != pSlots[8]);
+		// Single occurrences only
+		assert(pSlots[1] == 0 || (pSlots[1] != pSlots[0]));
+		assert(pSlots[2] == 0 || (pSlots[2] != pSlots[0] && pSlots[2] != pSlots[1]));
+		assert(pSlots[3] == 0 || (pSlots[3] != pSlots[0] && pSlots[3] != pSlots[1] && pSlots[3] != pSlots[2]));
+		assert(pSlots[4] == 0 || (pSlots[4] != pSlots[0] && pSlots[4] != pSlots[1] && pSlots[4] != pSlots[2] && pSlots[4] != pSlots[3]));
+		assert(pSlots[5] == 0 || (pSlots[5] != pSlots[0] && pSlots[5] != pSlots[1] && pSlots[5] != pSlots[2] && pSlots[5] != pSlots[3] && pSlots[5] != pSlots[4]));
+		assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
+		assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
+		assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
+
 	}
 	
 	/*
@@ -4349,7 +4709,12 @@ struct groupTree_t {
 		
 		assert(gid == this->N[gid].gid);
 
-		std::string   ret = "./eval";
+		char itxt[16];
+		sprintf(itxt, "%u", gid);
+		std::string ret = "dumpgroup=";
+		ret += itxt;
+		ret += " ./eval";
+		
 		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			ret += " \"";
 			ret += saveString(iNode);
