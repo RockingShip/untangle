@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-21 20:05:30 Changed: Small fixes for group collapses and merging.
 2021-12-21 00:55:36 Changed: Relocated `groupTree_t::constructSlots()`,  `expandSignature()`, `mergeGroups()` and `resolveForward()` higher in the source code (no code change).
 2021-12-20 23:09:03 Changed: Redesigned group collision detection and merging.
 2021-12-20 01:02:21 Added: `groupTree_t::mergeGroups()` and `pGidRefCount[]`.

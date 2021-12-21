@@ -1475,7 +1475,7 @@ struct groupTree_t {
 				uint32_t latest = updateToLatest(nid);
 
 				// did it fold into one of the slot entries or gid?
-				if (latest == gid || pActive->mem[latest] == thisVersion) {
+				if (latest < this->nstart || latest == gid || pActive->mem[latest] == thisVersion) {
 					// yes, caller needs to silently ignore
 					freeMap(pStack);
 					freeMap(pMap);
@@ -1504,7 +1504,7 @@ struct groupTree_t {
 				uint32_t latest = updateToLatest(nid);
 
 				// did it fold into one of the slot entries?
-				if (pActive->mem[latest] == thisVersion) {
+				if (latest < this->nstart || pActive->mem[latest] == thisVersion) {
 					// yes, caller needs to silently ignore
 					freeMap(pStack);
 					freeMap(pMap);
@@ -2159,7 +2159,6 @@ struct groupTree_t {
 	 * Return value is one of:
 	 *   IBIT not set: node representing arguments
 	 *   IBIT^(IBIT-1): self-collapse, silently ignore
-	 *   IBIT^(IBIT-2): merged groups, restart
 	 *   IBIT^id: group has collapsed to id
 	 *
 	 * @param {uint32_t}         gid - group id to add node to. May be IBIT to create new group
@@ -2231,11 +2230,11 @@ struct groupTree_t {
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
+			if (gidInitial != IBIT)
+				return nid; // let caller merge
+
 			// merge groups lists
 			mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
-
-			if (gidInitial != IBIT)
-				return IBIT ^ (IBIT - 2); // let caller restart
 
 			// ripple effect of merging
 			if (depth == 1)
@@ -2577,16 +2576,24 @@ struct groupTree_t {
 				 * This might (and most likely will) create many duplicates. It might even return gid.
 				 */
 
-				if (db.signatures[sid].size > 1 && depth < this->maxDepth) {
+				if (db.signatures[sid].size > 1 && depth <= this->maxDepth) {
 					uint32_t expand = expandSignature(gid, sid, finalSlots, pSidMap, pSidVersion, depth);
 //					uint32_t expand = expandMember(gid, db.signatures[sid].firstMember, finalSlots, pSidMap, pSidVersion, depth);
 					if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 					// restart if iterators changed or orphaned
-					if (this->N[iQ].gid != Q || this->N[iQ].next == iQ ||
-					    this->N[iTu].gid != Tu || this->N[iTu].next == iTu ||
-					    this->N[iF].gid != F || this->N[iF].next == F) {
+					if (this->N[iQ].gid != Q || (iQ >= this->nstart && this->N[iQ].next == iQ) ||
+					    this->N[iTu].gid != Tu || (iTu >= this->nstart && this->N[iTu].next == iTu) ||
+					    this->N[iF].gid != F || (iF >= this->nstart && this->N[iF].next == iF)) {
+						/*
+						 * @date 2021-12-21 02:07:43
+						 * 
+						 * Most likely this is the case of "node is old and belongs to different group".
+						 * `expandSignature()` created a component that triggered the merging of groups of which the iterators belong.
+						 * Orphaned iterators most likely are outdated by losing a `pSidMap[]` challange.
+						 */
 						// restart with tail recursion
+						printf("<iteratorReset1 initial=%u gid=%u />\n", gidInitial, gid);
 						pSidVersion->nextVersion();
 						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 					}
@@ -2596,13 +2603,6 @@ struct groupTree_t {
 						// yes, was it a self-collapse
 						if (expand == (IBIT ^ (IBIT - 1)))
 							continue; // yes, silently ignore
-
-						// was it a request to restart 	
-						if (expand == (IBIT ^ (IBIT - 2))) {
-							// yes, restart
-							pSidVersion->nextVersion();
-							return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
-						}
 
 						// is this called recursively?
 						if (gidInitial != IBIT)
@@ -2628,11 +2628,14 @@ struct groupTree_t {
 						return endpoint;
 
 					} else if (gid != IBIT) {
+						// `expand` is the node id of the top-level `1n9` of the signature.
 						uint32_t latest = updateToLatest(expand);
+						// is it already member of a different group?  
 						if (latest != gid) {
-							// need to merge groups
+							// yes, need to merge groups
 							mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
 							// restart with tail recursion
+							printf("<mergeSignature gid=%u expand=%u latest=%u />\n", gid, expand, latest);
 							pSidVersion->nextVersion();
 							return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 						}
@@ -2670,6 +2673,7 @@ struct groupTree_t {
 						// merge groups
 						mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
 						// restart with tail recursion
+						printf("<closedToOpen/>\n");
 						pSidVersion->nextVersion();
 						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 					}
@@ -2729,11 +2733,12 @@ struct groupTree_t {
 							pSidMap[db.SID_SELF] = gid; // clear sanity marker
 						}
 					} else if (latest != gid) {
-						// 'node is old and belongs to different group"
+						// "node is old and belongs to different group"
 
 						// merge groups
 						mergeGroups(gid, latest, pSidMap, pSidVersion, depth);
 						// restart with tail recursion
+						printf("<nodeMerge nid=%u latest=%u gid=%u >n", nid, latest, gid);
 						pSidVersion->nextVersion();
 						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 
@@ -2804,9 +2809,12 @@ struct groupTree_t {
 						this->N[newGid].gid = newGid;
 
 						// merge closed into open group
-						mergeGroups(gid, newGid, pSidMap, pSidVersion, depth);
+						mergeGroups(newGid, gid, pSidMap, pSidVersion, depth);
+						assert(this->N[gid].next == gid); // must be empty
+						gid = newGid;
 
 						// restart with tail recursion
+						printf("<iteratorReset2>n");
 						pSidVersion->nextVersion();
 						return addBasicNode(gid, tlSid, Q, Tu, Ti, F, pSidMap, pSidVersion, depth);
 
@@ -2955,6 +2963,17 @@ struct groupTree_t {
 	 * 5:   sidSwap
 	 * 6:   sidFold
 	 * 7:   if need to merge, abort current and goto 1
+	 * 
+	 * @date 2021-12-21 00:45:12
+	 * 
+	 * This routine was extremely complex to formalise.
+	 * Strangely, runtime inspections are still unneeded.
+	 * 
+	 * If after calling, forward loops are still present, `updateGroups()` would loop, not happened yet.
+	 * Not checked yet, remove too many nodes
+	 * strange that applyFolding() still not called.
+	 * strange that the test tree size for maxdepth=0 (67) was smaller than for maxdepth=2 (73) 
+	 * validateTree() would complain if resolveForward() would loop
 	 */
 	void mergeGroups(uint32_t lhs, uint32_t rhs, uint32_t *pSidMap, versionMemory_t *pSidVersion, unsigned depth) {
 
@@ -3257,6 +3276,7 @@ struct groupTree_t {
 						} else {
 							// no, cascading merge
 							// NOTE: tail recursion
+							printf("<iteratorReset3>n");
 							mergeGroups(iGroup, this->N[newNid].gid, pSidMap, pSidVersion, depth);
 							return;
 						}
@@ -3371,6 +3391,8 @@ struct groupTree_t {
 		uint32_t *pSidMap = allocMap();
 		versionMemory_t *pSidVersion = allocVersion();
 
+		bool once = false;
+		
 		/*
 		 * Walk through tree and search for outdated lists
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
@@ -3466,6 +3488,7 @@ struct groupTree_t {
 							break;
 						}
 					}
+
 				}
 
 				/*
@@ -3495,7 +3518,12 @@ struct groupTree_t {
 					}
 				}
 
-				assert (cntRemoved != 0);
+				if (cntRemoved == 0) {
+					if (!once) 
+						once = true;
+					else
+						assert (cntRemoved != 0);
+				}
 			}
 
 			firstGid = lastGid;
@@ -4039,7 +4067,9 @@ struct groupTree_t {
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				iNode = prevId;
-				
+
+				applySwapping(pNode->sid, newSlots);
+				applyFolding(&pNode->sid, newSlots);
 
 				uint32_t newId = addToCollection(gid, pNode->sid, newSlots, pSidMap, pSidVersion, pNode->power, /* followingForLogging: */ 0, 0, 0, depth);
 				if (ctx.opt_debug & context_t::DEBUGMASK_PRUNE) printf("<new=%u>", newId);
@@ -4493,6 +4523,12 @@ struct groupTree_t {
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
 
+		if (this->N[id].gid == id && this->N[id].next == id) {
+			char txt[12];
+			sprintf(txt, "<N=%u>", id);
+			return txt;
+		}
+		
 		uint32_t        nextPlaceholder  = this->kstart;	// next placeholder for `pTransform`
 		uint32_t        nextExportNodeId = this->nstart;	// next nodeId for exported name
 		uint32_t        *pMap            = allocMap();		// maps internal to exported node id 
