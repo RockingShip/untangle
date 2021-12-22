@@ -4326,9 +4326,14 @@ struct groupTree_t {
 	 * Apply signature based slot folding
 	 */
 	void applyFolding(uint32_t *pSid, uint32_t *pSlots) {
-		// todo: placeholder
 
-		unsigned numPlaceholder = db.signatures[*pSid].numPlaceholder;
+		const signature_t *pSignature    = db.signatures + *pSid;
+		unsigned          numPlaceholder = pSignature->numPlaceholder;
+		
+		if (numPlaceholder < 2)
+			return; // nothing to do
+		
+#if 1
 		// may not be zero
 		assert(numPlaceholder < 1 || pSlots[0] != 0);
 		assert(numPlaceholder < 2 || pSlots[1] != 0);
@@ -4349,7 +4354,7 @@ struct groupTree_t {
 		assert(N[pSlots[6]].gid == pSlots[6]);
 		assert(N[pSlots[7]].gid == pSlots[7]);
 		assert(N[pSlots[8]].gid == pSlots[8]);
-		// they may not be empty
+		// they may not be orphaned
 		assert(pSlots[0] < nstart || N[pSlots[0]].next != pSlots[0]);
 		assert(pSlots[1] < nstart || N[pSlots[1]].next != pSlots[1]);
 		assert(pSlots[2] < nstart || N[pSlots[2]].next != pSlots[2]);
@@ -4359,16 +4364,70 @@ struct groupTree_t {
 		assert(pSlots[6] < nstart || N[pSlots[6]].next != pSlots[6]);
 		assert(pSlots[7] < nstart || N[pSlots[7]].next != pSlots[7]);
 		assert(pSlots[8] < nstart || N[pSlots[8]].next != pSlots[8]);
-		// Single occurrences only
-		assert(pSlots[1] == 0 || (pSlots[1] != pSlots[0]));
-		assert(pSlots[2] == 0 || (pSlots[2] != pSlots[0] && pSlots[2] != pSlots[1]));
-		assert(pSlots[3] == 0 || (pSlots[3] != pSlots[0] && pSlots[3] != pSlots[1] && pSlots[3] != pSlots[2]));
-		assert(pSlots[4] == 0 || (pSlots[4] != pSlots[0] && pSlots[4] != pSlots[1] && pSlots[4] != pSlots[2] && pSlots[4] != pSlots[3]));
-		assert(pSlots[5] == 0 || (pSlots[5] != pSlots[0] && pSlots[5] != pSlots[1] && pSlots[5] != pSlots[2] && pSlots[5] != pSlots[3] && pSlots[5] != pSlots[4]));
-		assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
-		assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
-		assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
+#endif
 
+		bool changed;
+		do {
+			changed = false;
+
+			// bump versioned memory
+			uint32_t thisVersion = ++slotVersionNr;
+			if (thisVersion == 0) {
+				// version overflow, clear
+				memset(slotVersion, 0, this->maxNodes * sizeof(*slotVersion));
+	
+				thisVersion = ++slotVersionNr;
+			}
+
+			/*
+			 * Finding the fold index:
+			 * Entry  offset for first  occurrence [0, 1, 2, 3, 4,  5,  6,  7,  8]
+			 * Add to offset for second occurrence [0, 0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
+			 */
+
+			unsigned iFold = 0;
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+				uint32_t id = pSlots[iSlot];
+
+				if (slotVersion[id] == thisVersion) {
+					// found duplicate
+					
+					// finalise offset
+					iFold += slotMap[id];
+
+					// get folding sid/tid
+					uint32_t foldSid = pSignature->folds[iFold].sid;
+					uint32_t foldTid = pSignature->folds[iFold].tid;
+
+					// update current
+					*pSid = foldSid;
+					pSignature = db.signatures + *pSid;
+					numPlaceholder = pSignature->numPlaceholder;
+
+					// update slots
+					uint32_t   tmpSlots[MAXSLOTS];
+					const char *fwdTransform = db.fwdTransformNames[foldTid];
+
+					for (unsigned j = 0; j < numPlaceholder; j++)
+						tmpSlots[j] = pSlots[fwdTransform[j] - 'a'];
+					for (unsigned j = 0; j < numPlaceholder; j++)
+						pSlots[j] = tmpSlots[j];
+					
+					// zero padding
+					for (unsigned j = numPlaceholder; j < MAXSLOTS; j++)
+						pSlots[j] = 0;
+
+					changed = true;
+					break;
+				} else {
+					// update first occurrence
+					slotMap[id]     = iSlot;
+					slotVersion[id] = thisVersion;
+					// update second occurrence
+					iFold += iSlot;
+				}
+			}
+		} while (changed);
 	}
 	
 	/*

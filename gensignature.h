@@ -989,19 +989,14 @@ struct gensignatureContext_t : dbtool_t {
 	 * 
 	 * Fold signatures when slots contain duplicates.
 	 * Determine the resulting signature id and how to rearrange slots accordingly.
-	 * Entry offset for first occurrence [0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
-	 * Add to offset for second occurrence [0, 1, 2, 3, 4, 5, 6, 7, 8]
+	 * 
+	 * Finding the fold index:
+	 * Entry  offset for first  occurrence [0, 1, 2, 3, 4,  5,  6,  7,  8]
+	 * Add to offset for second occurrence [0, 0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
 	 */
-	void updateFolding(void) {
+	void /*__attribute__((optimize("O0")))*/ updateFolding(void) {
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Calculating signature folding\n", ctx.timeAsString());
-
-		pStore->signatures = (signature_t *) ctx.myAlloc("database_t::signatures", pStore->maxSignature, sizeof(*pStore->signatures));
-
-		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++) {
-			memset(pStore->signatures + iSid, 0, sizeof(*pStore->signatures));
-			memcpy(pStore->signatures + iSid, pStore->signatures + iSid, sizeof(*pStore->signatures));
-		}
 
 		tinyTree_t tree(ctx);
 
@@ -1031,10 +1026,13 @@ struct gensignatureContext_t : dbtool_t {
 				ctx.tick = 0;
 			}
 
+			if (pSignature->numPlaceholder < 2)
+				continue; // need at least two slot entries
+			
 			// walk through all folding possibilities
 			unsigned iFold = 0;
-			for (uint32_t i = 0; i < pSignature->numPlaceholder - 1u; i++) {
-				for (uint32_t j = i + 1; j < pSignature->numPlaceholder; j++) {
+			for (uint32_t j = 1; j < pSignature->numPlaceholder; j++) {
+				for (uint32_t i = 0; i < j; i++) {
 
 					// create initial slots
 					char slots[MAXSLOTS + 1];
@@ -1057,10 +1055,18 @@ struct gensignatureContext_t : dbtool_t {
 					assert(iFold < signature_t::MAXFOLDS);
 					pSignature->folds[iFold].sid = sid;
 					pSignature->folds[iFold].tid = tid;
+
+					// `j` must be excluded from transform
+					const char *fwdTransform = pStore->fwdTransformNames[tid];
+
+					for (unsigned k = 0; k < pStore->signatures[sid].numPlaceholder; k++) {
+						assert(fwdTransform[k] != (char) ('a' + j)); // the "second" slot may not be used (it's a duplicate) 
+					}
 					
 					iFold++;
 				}
 			}
+			assert(iFold <= signature_t::MAXFOLDS);
 
 			ctx.progress++;
 		}
