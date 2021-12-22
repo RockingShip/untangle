@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-22 18:19:01 Changed: A bit less paranoid.
 2021-12-22 18:17:45 Added: Implemented `groupTree_t::applyFolding()` and added `groupLayer`.
 2021-12-22 18:12:37 Changed: Let `groupTree_t` sid lookup index be aware or orphaned entries.
 2021-12-22 17:56:07 Added: Moved group construction resources to `groupTree_t::groupLayer_t`.

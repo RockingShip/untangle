@@ -2329,10 +2329,10 @@ struct groupTree_t {
 			mergeGroups(layer, gid, latest, depth);
 
 			// ripple effect of merging
-			if (depth == 1)
+			if (depth == 1) {
 				resolveForward(depth);
-
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+			}
 
 			// return node
 			return nid;
@@ -2563,8 +2563,10 @@ struct groupTree_t {
 //					importGroup(gid, folded, pSidMap, pSidVersion, depth);
 
 					// resolve forward references
-					if (depth == 1)
+					if (depth == 1) {
 						resolveForward(depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+					}
 
 					return folded;
 				}
@@ -2598,8 +2600,10 @@ struct groupTree_t {
 					mergeGroups(layer, gid, endpoint, depth);
 
 					// resolve forward references
-					if (depth == 1)
+					if (depth == 1) {
 						resolveForward(depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+					}
 
 					return endpoint;
 				}
@@ -2719,8 +2723,10 @@ struct groupTree_t {
 						}
 
 						// resolve forward references
-						if (depth == 1)
+						if (depth == 1) {
 							resolveForward(depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						}
 
 						return endpoint;
 
@@ -2754,8 +2760,10 @@ struct groupTree_t {
 						}
 
 						// resolve forward references
-						if (depth == 1)
+						if (depth == 1) {
 							resolveForward(depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						}
 
 						return expand;
 					}
@@ -2798,8 +2806,6 @@ struct groupTree_t {
 				if (nid != 0) {
 					// node is old/existing
 					uint32_t latest = updateToLatest(this->N[nid].gid);
-
-					assert(latest >= this->nstart); // endpoint collapse needs extra code
 
 					if (latest < this->nstart) {
 						// entrypoint collapse
@@ -3044,10 +3050,10 @@ struct groupTree_t {
 		/*
 		 * Test if group merging triggers an update  
 		 */
-		if (depth == 1)
+		if (depth == 1) {
 			resolveForward(depth);
-
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+		}
 
 		// return node the represents arguments
 		assert(firstNode != IBIT); // must exist
@@ -4018,7 +4024,7 @@ struct groupTree_t {
 			       pNode->power);
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+//		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 
 		assert(newest < this->nstart || newest != this->N[newest].next);
 	}
@@ -4204,7 +4210,7 @@ struct groupTree_t {
 
 		freeVersion(pVersion);
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
+//		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 		return groupForward;
 	}
 
