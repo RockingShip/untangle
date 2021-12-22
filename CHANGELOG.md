@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-22 21:31:46 Added: Some statistics for `groupTree_t`.
 2021-12-22 18:21:02 Changed: Let `groupTree_t::mergeGroups()` start scanning tree at a smarter location.
 2021-12-22 18:19:01 Changed: A bit less paranoid.
 2021-12-22 18:17:45 Added: Implemented `groupTree_t::applyFolding()` and added `groupLayer`.

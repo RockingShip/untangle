@@ -206,7 +206,7 @@ struct groupTree_t {
 	 */
 	// todo: measure runtime usage to tune this value
 	#if !defined(GROUPTREE_DEFAULT_MAXNODE)
-	#define GROUPTREE_DEFAULT_MAXNODE 100000000
+	#define GROUPTREE_DEFAULT_MAXNODE 200000000
 	#endif
 
 	/**
@@ -288,6 +288,9 @@ struct groupTree_t {
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
 	uint32_t		 *pGidRefCount;		// group refcounts used by slots. NOTE: focus is being it zero or not.
+	// statistics
+	uint64_t		cntAddNormaliseNode;
+	uint64_t		cntAddBasicNode;
 	
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -344,7 +347,10 @@ struct groupTree_t {
 		slotMap(NULL),
 		slotVersion(NULL),
 		slotVersionNr(1),
-		pGidRefCount(NULL)
+		pGidRefCount(NULL),
+		// statistics
+		cntAddNormaliseNode(0),
+		cntAddBasicNode(0)
 	{
 	}
 
@@ -394,7 +400,10 @@ struct groupTree_t {
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
 		slotVersionNr(1),
-		pGidRefCount((uint32_t *) ctx.myAlloc("groupTree_t::pGidRefCount", maxNodes, sizeof(*pGidRefCount)))
+		pGidRefCount((uint32_t *) ctx.myAlloc("groupTree_t::pGidRefCount", maxNodes, sizeof(*pGidRefCount))),
+		// statistics
+		cntAddNormaliseNode(0),
+		cntAddBasicNode(0)
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -2016,6 +2025,8 @@ struct groupTree_t {
 	 * Returns main node id, which might be outdated as effect of internal rewriting.
 	 */
 	uint32_t addNormaliseNode(uint32_t Q, uint32_t T, uint32_t F) {
+		this->cntAddNormaliseNode++;
+		
 		assert ((Q & ~IBIT) < this->ncount);
 		assert ((T & ~IBIT) < this->ncount);
 		assert ((F & ~IBIT) < this->ncount);
@@ -2262,6 +2273,17 @@ struct groupTree_t {
 	 * @return {number} newly created node Id, or IBIT when collapsed.
 	 */
 	uint32_t addBasicNode(groupLayer_t &layer, uint32_t gid, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, unsigned depth) {
+		this->cntAddBasicNode++;
+		
+		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
+			fprintf(stderr, "\r\e[K[%s] cntAddNormaliseNode=%lu cntAddBasicNode=%lu ncount=%u", ctx.timeAsString(),
+				this->cntAddNormaliseNode,
+				this->cntAddBasicNode,
+				this->ncount
+			);
+			ctx.tick = 0;
+		}
+
 		depth++;
 		assert(depth < 30);
 
