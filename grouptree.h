@@ -3160,7 +3160,7 @@ struct groupTree_t {
 		 * Flood-fill
 		 * NOTE: forward references are possible
 		 */
-
+		uint32_t lowestFlood = IBIT;
 		if (lhs != rhs) {
 			versionMemory_t *pVersion   = allocVersion();
 			uint32_t        thisVersion = pVersion->nextVersion();
@@ -3173,6 +3173,7 @@ struct groupTree_t {
 			bool changed;
 			do {
 				changed = false;
+				
 				for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
 					if (this->N[iGroup].gid != iGroup)
 						continue; // not start of list
@@ -3194,6 +3195,9 @@ struct groupTree_t {
 							if (pVersion->mem[id] == thisVersion) {
 								// yes
 								found = true;
+								// first/lowest group
+								if (lowestFlood > iGroup)
+									lowestFlood = iGroup;
 								break;
 							}
 						}
@@ -3209,6 +3213,9 @@ struct groupTree_t {
 				}
 			} while (changed);
 
+			if (lowestFlood > this->nstart)
+				lowestFlood = this->nstart;
+			
 			/*
 			 * Orphan all latest nodes with references to flood.
 			 * Flood represent self. Referencing self will collapse to `a/[self]` which is the group header and always present.
