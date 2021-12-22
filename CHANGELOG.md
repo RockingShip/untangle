@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-22 18:12:37 Changed: Let `groupTree_t` sid lookup index be aware or orphaned entries.
 2021-12-22 17:56:07 Added: Moved group construction resources to `groupTree_t::groupLayer_t`.
 2021-12-21 20:05:30 Changed: Small fixes for group collapses and merging.
 2021-12-21 00:55:36 Changed: Relocated `groupTree_t::constructSlots()`,  `expandSignature()`, `mergeGroups()` and `resolveForward()` higher in the source code (no code change).

@@ -701,6 +701,9 @@ struct groupTree_t {
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 			uint32_t rid = rhsSlots[iSlot];
 
+			// if left-hand-side outdated
+			return -1; //instafail
+			
 			// right-hand-side must be latest
 			assert(this->N[rid].gid == rid);
 			
@@ -842,7 +845,7 @@ struct groupTree_t {
 			assert(N[slots[6]].gid == slots[6]);
 			assert(N[slots[7]].gid == slots[7]);
 			assert(N[slots[8]].gid == slots[8]);
-			// they may not be empty
+			// they may not be orphaned
 			assert(slots[0] < nstart || N[slots[0]].next != slots[0]);
 			assert(slots[1] < nstart || N[slots[1]].next != slots[1]);
 			assert(slots[2] < nstart || N[slots[2]].next != slots[2]);
@@ -1019,7 +1022,7 @@ struct groupTree_t {
 
 		// NOTE: `slotsQ` is always `tid=0`, so `slotsQ[]` is not needed, load directly into `slotsR[]`.
 		pSignature = db.signatures + pNodeQ->sid;
-		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
 			uint32_t endpoint = updateToLatest(pNodeQ->slots[iSlot]);
 			assert(endpoint != 0);
@@ -1045,7 +1048,7 @@ struct groupTree_t {
 		}
 
 		pSignature = db.signatures + pNodeT->sid;
-		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
 			uint32_t endpoint = updateToLatest(pNodeT->slots[iSlot]);
 			assert(endpoint != 0);
@@ -1093,7 +1096,7 @@ struct groupTree_t {
 		 */
 
 		pSignature = db.signatures + pNodeF->sid;
-		for (uint32_t iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
 			uint32_t endpoint = pNodeF->slots[iSlot];
 			assert(endpoint != 0);
@@ -1616,7 +1619,7 @@ struct groupTree_t {
 		 * init
 		 */
 
-		unsigned             numStack = 0;
+		unsigned        numStack = 0;
 		uint32_t        nextNode = this->nstart;
 		uint32_t        *pStack  = allocMap(); // evaluation stack
 		uint32_t        *pMap    = allocMap(); // node id of intermediates
@@ -2340,14 +2343,14 @@ struct groupTree_t {
 		 */
 		if (gid != IBIT) {
 			// does group have a node with better sid?
-			if (pSidVersion->mem[tlSid] == pSidVersion->version) {
-				uint32_t nid = pSidMap[tlSid];
-				assert(this->N[nid].gid == gid);
-				int cmp = this->compare(nid, tlSid, tlSlots);
+			uint32_t challenge = layer.findSid(tlSid);
+			if (challenge != IBIT) {
+				assert(this->N[challenge].gid == gid); // must be latest
+				int cmp = this->compare(challenge, tlSid, tlSlots);
 
 				if (cmp < 0) {
 					// existing is better
-					return nid;
+					return challenge;
 				} else if (cmp == 0) {
 					assert(0); // should have been detected
 				}
@@ -2400,9 +2403,9 @@ struct groupTree_t {
 
 					if (gid != IBIT) {
 						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
-							if (pSidVersion->mem[iSid] == pSidVersion->version) {
-								uint32_t nid = pSidMap[iSid];
-								assert(this->N[nid].gid == gid);
+							uint32_t challenge = layer.findSid(iSid);
+							if (challenge != IBIT) {
+								assert(this->N[challenge].gid == gid);
 							}
 						}
 					}
@@ -2601,11 +2604,13 @@ struct groupTree_t {
 					return endpoint;
 				}
 
-				if (gid != IBIT) {
-					for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
-						if (pSidVersion->mem[iSid] == pSidVersion->version) {
-							uint32_t nid = pSidMap[iSid];
-							assert(this->N[nid].gid == gid);
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+					if (gid != IBIT) {
+						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
+							uint32_t challenge = layer.findSid(iSid);
+							if (challenge != IBIT) {
+								assert(this->N[challenge].gid == gid);
+							}
 						}
 					}
 				}
@@ -2617,9 +2622,9 @@ struct groupTree_t {
 				 */
 				if (gid != IBIT) {
 					// does group have a node with better sid?
-					if (pSidVersion->mem[sid] == pSidVersion->version) {
-						uint32_t nid = pSidMap[sid];
-						assert(this->N[nid].gid == gid);
+					uint32_t nid = layer.findSid(sid);
+					if (nid != IBIT) {
+						assert(this->N[nid].gid == gid); // must be latest
 						int cmp = this->compare(nid, sid, finalSlots);
 
 						if (cmp < 0) {
@@ -2774,7 +2779,7 @@ struct groupTree_t {
 					 * Group merging (or expandSignature) might cause slots to become outdated.
 					 * If so, reload Cartesian element with updated values
 					 */
-					for (uint32_t iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = finalSlots[iSlot];
 
 						if (id != this->N[id].gid)
@@ -2808,9 +2813,13 @@ struct groupTree_t {
 						mergeGroups(layer, gid, latest, depth);
 						
 						// resolve forward references
-						if (depth == 1)
+						if (depth == 1) {
 							resolveForward(depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						}
 
+						printf("<entryPointCollapse latest=%u gid=%u >n", latest, gid);
+						
 						return latest;
 
 					} else if (gid == IBIT) {
@@ -2911,40 +2920,10 @@ struct groupTree_t {
 						// restart with new group
 						return addBasicNode(layer, gid, tlSid, Q, Tu, Ti, F, depth);
 
-					} else if (pSidVersion->mem[sid] != pSidVersion->version) {
-						// "node is new and group is open, no challenge"
-
-						// create node
-						nid = this->newNode(sid, finalSlots, power);
-						groupNode_t *pNode = this->N + nid;
-
-						// add node to index
-						pNode->hashIX = ix;
-						this->nodeIndex[ix]        = nid;
-						this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-						// add to group
-						pNode->gid = gid;
-						linkNode(this->N[gid].prev, nid);
-
-							// add sid to lookup index
-							layer.pSidMap[sid]          = nid;
-							layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
 					} else {
-						// "node is new and group is open, challenge existing sid"
-
-						assert(pSidMap[db.SID_SELF] == gid);
-						uint32_t challenge = pSidMap[sid];
-
-						int cmp = this->compare(challenge, sid, finalSlots);
-						if (cmp < 0) {
-							// challenge is better
-							continue; // silently ignore
-
-						} else if (cmp > 0) {
-							// current is better, orphan and replace challenge
-							unlinkNode(challenge);
+						uint32_t challenge = layer.findSid(sid);
+						if (challenge == IBIT) {
+							// "node is new and group is open, no challenge"
 
 							// create node
 							nid = this->newNode(sid, finalSlots, power);
@@ -2959,12 +2938,43 @@ struct groupTree_t {
 							pNode->gid = gid;
 							linkNode(this->N[gid].prev, nid);
 
+							// add sid to lookup index
+							layer.pSidMap[sid]          = nid;
+							layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
+
+						} else {
+							// "node is new and group is open, challenge existing sid"
+							assert(this->N[challenge].gid == gid ); // must be latest
+
+							int cmp = this->compare(challenge, sid, finalSlots);
+							if (cmp < 0) {
+								// challenge is better
+								continue; // silently ignore
+
+							} else if (cmp > 0) {
+								// finalSlots is better, orphan and replace existing
+								unlinkNode(challenge);
+
+								// create node
+								nid = this->newNode(sid, finalSlots, power);
+								groupNode_t *pNode = this->N + nid;
+
+								// add node to index
+								pNode->hashIX = ix;
+								this->nodeIndex[ix]        = nid;
+								this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+								// add to group
+								pNode->gid = gid;
+								linkNode(this->N[gid].prev, nid);
+
 								// add sid to lookup index
 								layer.pSidMap[sid]          = nid;
 								layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
-						} else if (cmp == 0) {
-							assert(0); // should have been detected
+							} else if (cmp == 0) {
+								assert(0); // should have been detected
+							}
 						}
 					}
 
@@ -3002,7 +3012,10 @@ struct groupTree_t {
 			 * Test for iterator collapsing
 			 * When happens, all further iterations will fold and be silently ignored
 			 */
-			assert(!(this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid));
+			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid) {
+				printf("<iteratorCollapse Q=%u T=%u%s F=%u gid=%u>n", iQ, iTu, Ti ? "~" : "", iF, gid);
+				break;
+			}
 
 			// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 			// node 0 is a single node list containing SID_ZERO.
@@ -3379,7 +3392,8 @@ struct groupTree_t {
 				 * NOTE: newNid may be zero
 				 */
 
-				if (pSidVersion->mem[newSid] != thisVersion) {
+				uint32_t challenge = newLayer.findSid(newSid);
+				if (challenge == IBIT) {
 					// first time
 
 					// create node
@@ -3405,18 +3419,16 @@ struct groupTree_t {
 
 				} else {
 					// how does `newSlots[]` compare to current sid
-					uint32_t bestNid = pSidMap[pNode->sid];
-					assert(this->N[bestNid].gid == iGroup);
-					assert(bestNid != iNode && bestNid != newNid);
-
-					int cmp = this->compare(bestNid, newSid, newSlots);
+					assert(challenge != iNode && challenge != newNid);
+					assert(this->N[challenge].gid == iGroup); // must be latest
+					int cmp = this->compare(challenge, newSid, newSlots);
 
 					if (cmp < 0) {
 						// bestNid is still better, orphan iNode
 						changed = true;
 					} else if (cmp > 0) {
 						// newSlots is better, orphan and replace bestNid
-						unlinkNode(bestNid);
+						unlinkNode(challenge);
 
 						// create node
 						if (newNid == 0) {
@@ -3701,9 +3713,10 @@ struct groupTree_t {
 			 */
 
 			// find sid
-			if (pSidVersion->mem[sid] == pSidVersion->version) {
-				oldNid = pSidMap[sid];
-				assert(this->N[oldNid].gid == gid);
+			oldNid = pSidMap[sid];
+			if (pSidVersion->mem[sid] == pSidVersion->version && this->N[oldNid].next != oldNid) {
+				
+				assert(this->N[oldNid].gid == gid); // must be latest
 				int cmp = this->compare(oldNid, sid, pSlots);
 
 				if (cmp < 0) {
@@ -3958,7 +3971,7 @@ struct groupTree_t {
 				pSidVersion->mem[pNode->sid] = pSidVersion->version;
 			} else {
 				uint32_t nid = pSidMap[pNode->sid];
-				assert(this->N[nid].gid == oldest);
+				assert(this->N[nid].gid == oldest && this->N[nid].next != nid); // must be latest
 				int cmp = this->compare(nid, pNode->sid, pNode->slots);
 				
 				if (cmp < 0) {
@@ -4139,9 +4152,6 @@ struct groupTree_t {
 			} else if (nodeOutdated) {
 				// update if changed
 
-				// orphan outdated node to make things easier for `addToCollection()`.
-				if (layer.pSidMap[pNode->sid] == iNode)
-					layer.pSidVersion->mem[pNode->sid] = 0; // remove from sid lookup index
 				uint32_t prevId = pNode->prev;
 				unlinkNode(iNode);
 				iNode = prevId;
