@@ -3509,6 +3509,8 @@ struct groupTree_t {
 	 * @date 2021-11-11 23:19:34
 	 * 
 	 * Rebuild groups that have nodes that have forward references
+	 * 
+	 * NOTE: `layer` is only needed for the layer cnnectivity
 	 */
 	void resolveForward(groupLayer_t &layer, unsigned depth) {
 
@@ -3517,9 +3519,7 @@ struct groupTree_t {
 
 		printf("UPDATE\n");
 
-		uint32_t startGid = this->nstart; // todo: should be in `this`, set to `ncount` on return, and lowered by `importGroup()`.
-
-		uint32_t firstGid = startGid;
+		uint32_t firstGid = this->nstart;
 		uint32_t lastGid  = this->ncount;
 
 		bool once = false;
@@ -3534,6 +3534,8 @@ struct groupTree_t {
 			for (uint32_t iGroup = firstGid; iGroup < lastGid; iGroup++) {
 				// find group headers
 				if (this->N[iGroup].gid == iGroup) {
+
+					assert(this->N[iGroup].next != iGroup); // group may not be empty
 
 					/*
 					 * Update changed and remove obsoleted nodes.
@@ -3563,23 +3565,27 @@ struct groupTree_t {
 
 						printf("REBUILD %u->%u\n", iGroup, newGid);
 
-						// relocate to new group
-						for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-							groupNode_t *pNode = this->N + iNode;
+						// point to contents of group
+						uint32_t idNext = this->N[iGroup].next;
+						// detach contents from group by unlinking head
+						unlinkNode(iGroup);
+						// append contents to new group
+						linkNode(this->N[newGid].prev, idNext);
 
-							uint32_t prevId = pNode->prev;
-							unlinkNode(iNode);
-							linkNode(this->N[newGid].prev, iNode);
+						// update gids
+						for (uint32_t iNode = this->N[newGid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+							groupNode_t *pNode = this->N + iNode;
 							pNode->gid = newGid;
-							iNode = prevId;
 						}
 
 						// let current group forward to new
-						assert(this->N[iGroup].next == iGroup); // group should be empty
 						this->N[iGroup].gid = newGid;
+
+						assert(this->N[newGid].next != newGid); // group may not be empty
 					}
 				}
 			}
+			printf("counts %u %u\n",  lastGid - firstGid, this->ncount - lastGid);
 
 			if (this->ncount - lastGid == lastGid - firstGid) {
 				/*
@@ -3593,8 +3599,8 @@ struct groupTree_t {
 
 					if (pNode->sid == db.SID_SELF)
 						continue; // skip list headers
-					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
-						continue; // skip 1n9
+//					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
+//						continue; // skip 1n9
 
 					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
@@ -3950,14 +3956,8 @@ struct groupTree_t {
 					uint32_t newSlots[MAXSLOTS] = {0};
 
 					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-						uint32_t id = pNode->slots[iSlot];
+						uint32_t id = updateToLatest(pNode->slots[iSlot]);
 
-						// update
-						if (id != this->N[id].gid) {
-							while (id != this->N[id].gid)
-								id = this->N[id].gid;
-						}
-							
 						if (id == iGroup || id == 0) {
 							// self-reference to group or full-collapse 
 							errors++;
@@ -4046,9 +4046,7 @@ struct groupTree_t {
 
 						printf("%u", id);
 
-						uint32_t latest = id;
-						while (latest != this->N[latest].gid)
-							latest = this->N[latest].gid;
+						uint32_t latest = updateToLatest(id);
 
 						if (latest != id)
 							printf("(%u)", latest);
