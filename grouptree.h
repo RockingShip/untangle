@@ -317,6 +317,8 @@ struct groupTree_t {
 	uint64_t		cntAddNormaliseNode;	// number of calls to `addNormaliseNode()`
 	uint64_t		cntAddBasicNode;	// number of calls to `addbasicNode()`
 
+	unsigned withPower;
+	
 	/**
 	 * @date 2021-06-13 00:01:50
 	 *
@@ -382,7 +384,8 @@ struct groupTree_t {
 		cntApplyFolding(0),
 		cntMergeGroup(0),
 		cntAddNormaliseNode(0),
-		cntAddBasicNode(0)
+		cntAddBasicNode(0),
+		withPower(0)
 	{
 	}
 
@@ -442,7 +445,8 @@ struct groupTree_t {
 		cntApplyFolding(0),
 		cntMergeGroup(0),
 		cntAddNormaliseNode(0),
-		cntAddBasicNode(0)
+		cntAddBasicNode(0),
+		withPower(0)
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -1051,6 +1055,25 @@ struct groupTree_t {
 				// load initial sid lookup index
 				this->pSidMap[pNode->sid]          = iNode;
 				this->pSidVersion->mem[pNode->sid] = this->pSidVersion->version;
+
+				// update power levels
+				if (tree.withPower) {
+					//@formatter:off
+					switch(pSignature->size) {
+					case 0: if (this->minPower[0] < pNode->power) this->minPower[0] = pNode->power; // deliberate fall-through
+					case 1: if (this->minPower[1] < pNode->power) this->minPower[1] = pNode->power;
+					case 2: if (this->minPower[2] < pNode->power) this->minPower[2] = pNode->power;
+					case 3: if (this->minPower[3] < pNode->power) this->minPower[3] = pNode->power;
+					case 4: if (this->minPower[4] < pNode->power) this->minPower[4] = pNode->power;
+					case 5: if (this->minPower[5] < pNode->power) this->minPower[5] = pNode->power;
+					case 6: if (this->minPower[6] < pNode->power) this->minPower[6] = pNode->power;
+					case 7: if (this->minPower[7] < pNode->power) this->minPower[7] = pNode->power;
+						break;
+					default:
+						assert(0);
+					}
+					//@formatter:on
+				}
 			}
 		}
 
@@ -2737,6 +2760,15 @@ struct groupTree_t {
 				// combo not found or folded
 				if (sid == 0)
 					continue; // yes, silently ignore
+					
+				/*
+				 * @date 2021-12-25 00:53:05
+				 * 
+				 * Only consider if found pattern meets minimal power level
+				 */
+				
+				if (this->withPower && power < layer.minPower[db.signatures[sid].size])
+					continue; // silently ignore					
 
 				unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
 
@@ -2840,9 +2872,11 @@ struct groupTree_t {
 				 */
 
 				if (db.signatures[sid].size > 1 && depth <= this->maxDepth) {
-					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t expand = expandSignature(layer, gid, sid, finalSlots, depth);
-						uint32_t expand = expandMember(layer, gid, mid, finalSlots, depth);
+					if (true) {
+						uint32_t expand = expandSignature(layer, gid, sid, finalSlots, depth);
+//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+//						uint32_t expand = expandMember(layer, gid, mid, finalSlots, depth);
+
 						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
 
 						// gid might have been merged
@@ -3079,6 +3113,29 @@ struct groupTree_t {
 					// add sid to lookup index
 					layer.pSidMap[sid]          = nid;
 					layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
+
+					/*
+					 * @date 2021-12-25 00:57:11
+					 * 
+					 * Update power levels
+					 */
+					if (this->withPower) {
+						// @formatter:off
+						switch(db.signatures[sid].size) {
+						case 0: if (layer.minPower[0] < power) layer.minPower[0] = power; // deliberate fall-through
+						case 1: if (layer.minPower[1] < power) layer.minPower[1] = power;
+						case 2: if (layer.minPower[2] < power) layer.minPower[2] = power;
+						case 3: if (layer.minPower[3] < power) layer.minPower[3] = power;
+						case 4: if (layer.minPower[4] < power) layer.minPower[4] = power;
+						case 5: if (layer.minPower[5] < power) layer.minPower[5] = power;
+						case 6: if (layer.minPower[6] < power) layer.minPower[6] = power;
+						case 7: if (layer.minPower[7] < power) layer.minPower[7] = power;
+							break;
+						default:
+							assert(0);
+						}
+						// @formatter:on
+					}
 
 					// if (ctx.opt_debug & ctx.DEBUG_ROW)return
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
@@ -3370,8 +3427,21 @@ struct groupTree_t {
 		 * Walk through all nodes of group
 		 */
 		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t *pNode         = this->N + iNode;
-			unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+			groupNode_t       *pNode         = this->N + iNode;
+			const signature_t *pSignature    = db.signatures + pNode->sid;
+			unsigned          numPlaceholder = pSignature->numPlaceholder;
+
+			/*
+			 * Detect if node has enough power
+			 */
+			if (this->withPower && pNode->power < layer.minPower[pSignature->size]) {
+				// orphan
+				uint32_t prevId = this->N[iNode].prev;
+				unlinkNode(iNode);
+				iNode = prevId;
+				
+				continue; // next
+			}
 
 			/*
 			 * Detect if node is outdated
