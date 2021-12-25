@@ -190,11 +190,27 @@ struct groupTree_t {
 	 * Part of the core algorithm in detecting identical groups, is to expand nodes based on signature members.
 	 * Members are considered the minimal collection of structures and their components to reach all signature id's.
 	 * Recursively expanding structures turns out to escalate and requires some form of dampening.
+	 * 
+	 * 2021-12-25 13:33:53
+	 * 
+	 * Setting this to non-zero turn out to have an opposite effect.
+	 * 
+	 * 'DvDnBjEteBcBhEl^ByEd^!2Bc3&^?56Bc>eBce7?^!?BhB0EtBcEl^^eBc^ElEt^^!e5B65^!!!BjeC1BcEt^>C2^3C3C4!!BhEdEt^B4ByEl^^^ByEt^B8EdEl^^^!!!DnBjEteElBcBh^^D81^!E03C8E1^!!BhC3E3E3EleEl^!!eC6E6El!ElC7>E8^!!!BjEtE0^BhBy^C4^^BheElD6+F7^D8F8El?!eEdEtByBcEl&^ElBcBy^By!?ByB8^!C1!!!!!'
 	 *
+	 * Overview resulting size:
+	 * configuration                 | size | ncount
+	 * ------------------------------+------+-------
+	 * ExpandSignature(), maxDepth=0 | 58   | 1763
+	 * ExpandSignature(), maxDepth=1 | 42   | 7387
+	 * ExpandSignature(), maxDepth=2 | 44   | 11343
+	 * ExpandMember(),    maxDepth=0 | 58   | 1763
+	 * ExpandMember(),    maxDepth=1 | 78   | 8285
+	 * ExpandMember(),    maxDepth=2 | -    | -
+	 * 
  	 * @constant {number} DEFAULT_MAXDEPTH
 	 */
 	#if !defined(GROUPTREE_DEFAULT_MAXDEPTH)
-	#define GROUPTREE_DEFAULT_MAXDEPTH 6
+	#define GROUPTREE_DEFAULT_MAXDEPTH 0
 	#endif
 
 	/**
@@ -323,7 +339,7 @@ struct groupTree_t {
 		flags(0),
 		allocFlags(0),
 		system(0),
-		maxDepth(DEFAULT_MAXNODE),
+		maxDepth(DEFAULT_MAXDEPTH),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -383,7 +399,7 @@ struct groupTree_t {
 		flags(flags),
 		allocFlags(0),
 		system(0),
-		maxDepth(DEFAULT_MAXNODE),
+		maxDepth(DEFAULT_MAXDEPTH),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -973,7 +989,7 @@ struct groupTree_t {
 		 * NOTE: only partly implemented until all stress tests have been successful.
 		 */
 		enum {
-			LAYER_MAXNODE = 5
+			LAYER_MAXNODE = 8 // taken from patternSecond_t.
 		};
 		unsigned        minPower[LAYER_MAXNODE];
 
@@ -1012,7 +1028,6 @@ struct groupTree_t {
 		 * 
 		 * return false if gid is already under construction.
 		 * when returned false, silently ignore 
-		 *
 		 */
 		void setGid(uint32_t gid) {
 			assert(tree.N[gid].gid == gid); // must be latest 			
@@ -1020,6 +1035,23 @@ struct groupTree_t {
 
 			assert(gid != IBIT);
 			this->gid = gid;
+
+			// bump versioned memory
+			this->pSidVersion->nextVersion();
+
+			// clear power
+			for (unsigned k = 0; k < LAYER_MAXNODE; k++)
+				this->minPower[k] = 0;
+
+			// scan group for initial sid lookup and power
+			for (uint32_t iNode = tree.N[gid].next; iNode != tree.N[iNode].gid; iNode = tree.N[iNode].next) {
+				groupNode_t       *pNode      = tree.N + iNode;
+				const signature_t *pSignature = tree.db.signatures + pNode->sid;
+
+				// load initial sid lookup index
+				this->pSidMap[pNode->sid]          = iNode;
+				this->pSidVersion->mem[pNode->sid] = this->pSidVersion->version;
+			}
 		}
 
 		/*
@@ -2974,16 +3006,6 @@ struct groupTree_t {
 						gid = latest;
 						layer.setGid(gid);
 
-						// init sid lookup
-						layer.pSidVersion->nextVersion();
-
-						for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-							groupNode_t *pNode = this->N + iNode;
-
-							layer.pSidMap[pNode->sid]          = iNode;
-							layer.pSidVersion->mem[pNode->sid] = layer.pSidVersion->version;
-						}
-
 					} else if (gid != latest) {
 						// "node is old and belongs to different group"
 
@@ -3377,19 +3399,8 @@ struct groupTree_t {
 
 		bool hasForward = false; // set to `true` is a node has a forward reference
 
-		// start new sid lookup index
-		layer.pSidVersion->nextVersion();
-
-		/*
-		 * To reduce orphaning of nodes, do a quick scan of all the sids (storage/speed tradeoff)
-		 */
-		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t *pNode = this->N + iNode;
-
-			// add to sid lookup index
-			layer.pSidMap[pNode->sid]          = iNode;
-			layer.pSidVersion->mem[pNode->sid] = layer.pSidVersion->version;
-		}
+		// re-initialise layer
+		layer.setGid(gid);
 
 		/*
 		 * Walk through all nodes of group
@@ -4096,19 +4107,6 @@ struct groupTree_t {
 
 		exit(1);
 	}
-
-	/*
-	 * @date 2021-11-16 19:36:42
-	 * 
-	 * Test arguments belong to the same group
-	 */
-	inline bool isSameGroup(uint32_t gid, uint32_t nid) const {
-		while (nid != this->N[nid].gid)
-			nid = this->N[nid].gid;
-
-		return gid == nid;
-	}
-
 
 	/*
 	 * @date 2021-05-22 19:10:33
