@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-25 00:06:02 Fixed: `groupTree_t::resolveForward()` had broken detection.
 2021-12-25 00:02:27 Fixed: `groupTree_t::compare()` now correctly detects outdates nodes.
 2021-12-24 23:56:33 Deleted: `AddToCollection()`, `importGroup() and `scrubGroup().
 2021-12-24 23:53:24 Changed: Simplified first part and split second part of `groupTree_t::mergeGroups()` into `updateGroup()`.

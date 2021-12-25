@@ -3622,9 +3622,9 @@ struct groupTree_t {
 					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-						uint32_t id = pNode->slots[iSlot];
+						uint32_t id = updateToLatest(pNode->slots[iSlot]);
 
-						if (id > this->N[id].gid) {
+						if (id > this->N[iNode].gid) {
 							cntRemoved++;
 							// unlink 
 							unlinkNode(iNode);
@@ -3649,9 +3649,9 @@ struct groupTree_t {
 						unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-							uint32_t id = pNode->slots[iSlot];
+							uint32_t id = updateToLatest(pNode->slots[iSlot]);
 
-							if (id > this->N[id].gid) {
+							if (id > this->N[iNode].gid) {
 								cntRemoved++;
 								// unlink 
 								unlinkNode(iNode);
