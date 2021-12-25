@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-25 13:53:38 Changed: Simplified `groupTree_t::addBasicNode()` Cartesian-product inner loop.
 2021-12-25 13:46:30 Changed: Moved all layer initialisations to `grouplayer_t::setGid()`.
 2021-12-25 00:41:22 Changed: Detect changed slots after calling `groupTree_t::expandSignature()`.
 2021-12-25 00:37:31 Changed: Simplified `groupTree_t::resolveForward()`.

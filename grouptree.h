@@ -3030,6 +3030,25 @@ struct groupTree_t {
 				} else {
 					// node is new and needs to be created
 
+					// challenge the current champion?
+					if (gid != IBIT) {
+						// yes, is there a champion
+						uint32_t challenge = layer.findSid(sid);
+						if (challenge != IBIT) {
+							// yes
+							int cmp = this->compare(challenge, sid, finalSlots);
+							if (cmp < 0) {
+								// champion is better
+								continue; // silently ignore
+							} else if (cmp > 0) {
+								// finalSlots is better, orphan and replace existing
+								unlinkNode(challenge);
+							} else if (cmp == 0) {
+								assert(0); // should have been detected
+							}
+						}
+					}
+					
 					if (gid == IBIT) {
 						// "node is new and no current group"
 
@@ -3040,81 +3059,26 @@ struct groupTree_t {
 						gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 						assert(gid == this->N[gid].slots[0]);
 						this->N[gid].gid = gid;
-						layer.setGid(gid); // set layer to gid
 
-						// create node
-						nid = this->newNode(sid, finalSlots, power);
-						groupNode_t *pNode = this->N + nid;
-
-						// add node to index
-						pNode->hashIX = ix;
-						this->nodeIndex[ix]        = nid;
-						this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-						// add node to list
-						pNode->gid = gid;
-						linkNode(this->N[gid].prev, nid);
-
-						// add sid to lookup index
-						layer.pSidMap[sid]          = nid;
-						layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-					} else {
-						uint32_t challenge = layer.findSid(sid);
-						if (challenge == IBIT) {
-							// "node is new, no challenge"
-
-							// create node
-							nid = this->newNode(sid, finalSlots, power);
-							groupNode_t *pNode = this->N + nid;
-
-							// add node to index
-							pNode->hashIX = ix;
-							this->nodeIndex[ix]        = nid;
-							this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-							// add to group
-							pNode->gid = gid;
-							linkNode(this->N[gid].prev, nid);
-
-							// add sid to lookup index
-							layer.pSidMap[sid]          = nid;
-							layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-						} else {
-							// "node is new, challenge existing sid"
-
-							int cmp = this->compare(challenge, sid, finalSlots);
-							if (cmp < 0) {
-								// challenge is better
-								continue; // silently ignore
-
-							} else if (cmp > 0) {
-								// finalSlots is better, orphan and replace existing
-								unlinkNode(challenge);
-
-								// create node
-								nid = this->newNode(sid, finalSlots, power);
-								groupNode_t *pNode = this->N + nid;
-
-								// add node to index
-								pNode->hashIX = ix;
-								this->nodeIndex[ix]        = nid;
-								this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-								// add to group
-								pNode->gid = gid;
-								linkNode(this->N[gid].prev, nid);
-
-								// add sid to lookup index
-								layer.pSidMap[sid]          = nid;
-								layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-							} else if (cmp == 0) {
-								assert(0); // should have been detected
-							}
-						}
+						layer.setGid(gid); // set layer to empty gid
 					}
+
+					// create node
+					nid = this->newNode(sid, finalSlots, power);
+					groupNode_t *pNode = this->N + nid;
+
+					// add node to index
+					pNode->hashIX = ix;
+					this->nodeIndex[ix]        = nid;
+					this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+					// add node to list
+					pNode->gid = gid;
+					linkNode(this->N[gid].prev, nid);
+
+					// add sid to lookup index
+					layer.pSidMap[sid]          = nid;
+					layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
 					// if (ctx.opt_debug & ctx.DEBUG_ROW)return
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
