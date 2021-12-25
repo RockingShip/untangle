@@ -2506,6 +2506,7 @@ struct groupTree_t {
 				/*
 				 * Analyse Q/T/F combo 
 				 */
+				restartElement:
 
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 					// iterators may not be orphaned
@@ -2521,6 +2522,7 @@ struct groupTree_t {
 					assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
 					assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
 
+#if 0 // too slow
 					if (gid != IBIT) {
 						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 							uint32_t challenge = layer.findSid(iSid);
@@ -2529,6 +2531,7 @@ struct groupTree_t {
 							}
 						}
 					}
+#endif
 				}
 
 				/*
@@ -2760,6 +2763,12 @@ struct groupTree_t {
 							continue; // silently ignore
 						} else if (cmp == 0) {
 							// duplicate (which is processed and added to sid lookup) detected
+							/*
+							 * @date 2021-12-24 00:36:06
+							 * Somehow, firstNode gets forgotten
+							 */
+							if (firstNode == IBIT)
+								firstNode = nid;
 							continue; // silently ignore
 						}
 					}
@@ -2916,8 +2925,10 @@ struct groupTree_t {
 						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 							uint32_t id = finalSlots[iSlot];
 
-							if (id != this->N[id].gid)
-								assert(0); // it needs to happen first
+							if (id != this->N[id].gid) {
+								this->cntRestart++;
+								goto restartElement; // it needs to happen first
+							}
 						}
 					}
 				}
