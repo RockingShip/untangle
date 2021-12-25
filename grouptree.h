@@ -1176,8 +1176,10 @@ struct groupTree_t {
 		 */
 
 		uint32_t tidSlotT = db.lookupFwdTransform(slotsT);
-		if (tidSlotT == IBIT)
+		if (tidSlotT == IBIT) {
+			this->cntOutdated++;
 			return 0; // invalid slots (duplicate entries)
+		}
 
 		uint32_t ixFirst = db.lookupPatternFirst(pNodeQ->sid, pNodeT->sid ^ Ti, tidSlotT);
 		uint32_t idFirst = db.patternFirstIndex[ixFirst];
@@ -1192,7 +1194,7 @@ struct groupTree_t {
 		pSignature = db.signatures + pNodeF->sid;
 		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 			// get slot value
-			uint32_t endpoint = pNodeF->slots[iSlot];
+			uint32_t endpoint = updateToLatest(pNodeF->slots[iSlot]);
 			assert(endpoint != 0);
 
 			// is it a collapse
@@ -1221,8 +1223,10 @@ struct groupTree_t {
 		 */
 
 		uint32_t tidSlotF = db.lookupFwdTransform(slotsF);
-		if (tidSlotF == IBIT)
+		if (tidSlotF == IBIT) {
+			this->cntOutdated++;
 			return 0; // invalid slots (duplicate entries)
+		}
 
 		uint32_t ixSecond = db.lookupPatternSecond(idFirst, pNodeF->sid, tidSlotF);
 		uint32_t idSecond = db.patternSecondIndex[ixSecond];
@@ -2302,7 +2306,7 @@ struct groupTree_t {
 					}
 				} else if (Tu == F) {
 					// [18] a ?  b : b -> b        ENDPOINT
-					assert(0); // already tested
+					return F;
 				} else {
 					// [19] a ?  b : c             "?" QTF
 					tlSid = db.SID_QTF;
@@ -3110,7 +3114,7 @@ struct groupTree_t {
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 					       gid, nid,
-					       Q, Tu, F,
+					       iQ, iTu, iF,
 					       sid, db.signatures[sid].name,
 					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
 					       db.signatures[sid].size, power);
