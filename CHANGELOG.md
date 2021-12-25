@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-25 00:35:20 Changed: Dropped concept of open/closed groups.
 2021-12-25 00:31:45 Changed: Spacing.
 2021-12-25 00:27:51 Changed: Switched to `groupTree_t::expandMember()`, big indentation with no code change.
 2021-12-25 00:17:48 Fixed: `group_t::constructSlots()` count how often slots collapsed. 

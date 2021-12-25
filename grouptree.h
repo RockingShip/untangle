@@ -2959,40 +2959,35 @@ struct groupTree_t {
 					} else if (gid == IBIT) {
 						// "node is old and no current group"
 
-						// current group becomes latest
+						// attach to that group
 						gid = latest;
+						layer.setGid(gid);
 
-						// prepare new sid lookup index
+						// init sid lookup
 						layer.pSidVersion->nextVersion();
-						// restart with new group
-						return addBasicNode(layer, gid, tlSid, Q, Tu, Ti, F, depth);
 
-					} else if (latest != gid) {
+						for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+							groupNode_t *pNode = this->N + iNode;
+
+							layer.pSidMap[pNode->sid]          = iNode;
+							layer.pSidVersion->mem[pNode->sid] = layer.pSidVersion->version;
+						}
+
+					} else if (gid != latest) {
 						// "node is old and belongs to different group"
 
 						// merge groups
 						assert(this->N[gid].gid == gid);
 						mergeGroups(layer, gid, latest, depth);
+						
 						gid = updateToLatest(gid);
+						assert(layer.gid == gid);
+
 						// restart with tail recursion
-						printf("<nodeMerge nid=%u latest=%u gid=%u nGid=%u >n", nid, latest, gid, this->N[gid].gid);
-
-					} else if (this->pGidRefCount[gid] == 0) {
-						// "node is old and belongs to same open group"
-
-						// add to sid lookup if nothing set
-						if (layer.pSidVersion->mem[sid] != layer.pSidVersion->version) {
-							layer.pSidMap[sid]          = nid;
-							layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-						}
-
-						// node is duplicate, silently ignore
-						continue;
+						printf("<nodeMerge nid=%u latest=%u gid=%u nGid=%u >\n", nid, latest, gid, this->N[gid].gid);
 
 					} else {
-						// "node is old and belongs to same closed group"
-
-						// yes, it is either already seen and validated, or further down the list and postponed
+						// "node is old and belongs to same group"
 
 						// duplicate
 						continue; // silently ignore
@@ -3012,6 +3007,7 @@ struct groupTree_t {
 						gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 						assert(gid == this->N[gid].slots[0]);
 						this->N[gid].gid = gid;
+						layer.setGid(gid); // set layer to gid
 
 						// create node
 						nid = this->newNode(sid, finalSlots, power);
@@ -3030,34 +3026,10 @@ struct groupTree_t {
 						layer.pSidMap[sid]          = nid;
 						layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
-					} else if (this->pGidRefCount[gid] != 0) {
-						// "node is new and group is closed"
-
-						// create group header
-						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
-						assert(selfSlots[MAXSLOTS - 1] == 0);
-
-						uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
-						assert(newGid == this->N[newGid].slots[0]);
-						this->N[newGid].gid = newGid;
-
-						// merge closed into open group
-						mergeGroups(layer, newGid, gid, depth);
-						assert(this->N[gid].next == gid); // must be empty
-						gid = newGid;
-						this->pGidRefCount[gid] = 0; // todo: this is a hack
-
-						// restart with tail recursion
-						printf("<iteratorReset2>n");
-						// prepare new sid lookup index
-						layer.pSidVersion->nextVersion();
-						// restart with new group
-						return addBasicNode(layer, gid, tlSid, Q, Tu, Ti, F, depth);
-
 					} else {
 						uint32_t challenge = layer.findSid(sid);
 						if (challenge == IBIT) {
-							// "node is new and group is open, no challenge"
+							// "node is new, no challenge"
 
 							// create node
 							nid = this->newNode(sid, finalSlots, power);
@@ -3077,8 +3049,7 @@ struct groupTree_t {
 							layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
 						} else {
-							// "node is new and group is open, challenge existing sid"
-							assert(this->N[challenge].gid == gid ); // must be latest
+							// "node is new, challenge existing sid"
 
 							int cmp = this->compare(challenge, sid, finalSlots);
 							if (cmp < 0) {
@@ -3147,7 +3118,7 @@ struct groupTree_t {
 			 * When happens, all further iterations will fold and be silently ignored
 			 */
 			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid) {
-				printf("<iteratorCollapse Q=%u T=%u%s F=%u gid=%u>n", iQ, iTu, Ti ? "~" : "", iF, gid);
+				printf("<iteratorCollapse Q=%u T=%u%s F=%u gid=%u>\n", iQ, iTu, Ti ? "~" : "", iF, gid);
 				break;
 			}
 
