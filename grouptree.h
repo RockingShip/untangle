@@ -730,17 +730,22 @@ struct groupTree_t {
 		 */
 		unsigned numPlaceholder = db.signatures[rhsSid].numPlaceholder;
 
+		// lhs must be latest
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+			uint32_t lid = pLhs->slots[iSlot];
+			if (this->N[lid].gid != lid)
+				return +1;
+		}
+		
+		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+			uint32_t lid = pLhs->slots[iSlot];
 			uint32_t rid = rhsSlots[iSlot];
 
-			// if left-hand-side outdated
-			return -1; //instafail
-			
 			// right-hand-side must be latest
 			assert(this->N[rid].gid == rid);
 			
 			// is there a difference
-			cmp = (int)pLhs->slots[iSlot] - (int)rid;
+			cmp = (int) lid - (int) rid;
 			if (cmp != 0)
 				return cmp;
 		}
