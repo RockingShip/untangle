@@ -5157,79 +5157,109 @@ struct groupTree_t {
 			 * In case of emergency and the tree needs to be saved verbatim
 			 */
 
-			// output keys
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				// get remapped
-				groupNode_t wrtNode;
-				wrtNode.sid = 2; // 0=reserved, 1="0", 2="a"
-				wrtNode.slots[0] = iKey;
-				for (unsigned i = 1; i < MAXSLOTS; i++)
-					wrtNode.slots[i] = 0;
-
-				pMap[iKey] = nextId++;
-
-				size_t len = sizeof wrtNode;
-				fwrite(&wrtNode, len, 1, outf);
-				fpos += len;
-
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.sid));
-				for (unsigned i = 1; i < MAXSLOTS; i++)
-					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.slots[i]));
-			}
-
-			// output keys
-			for (uint32_t iNode = nstart; iNode < ncount; iNode++) {
+			// output entrypoints and nodes
+			for (uint32_t iNode = 0; iNode < ncount; iNode++) {
 				const groupNode_t *pNode = this->N + iNode;
 
-				// get remapped
-				groupNode_t wrtNode;
-				wrtNode.sid = pNode->sid;
-				for (unsigned i = 0; i < MAXSLOTS; i++)
-					wrtNode.slots[i] = pMap[pNode->slots[i]];
-
-				pMap[iNode] = nextId++;
-
-				size_t len = sizeof wrtNode;
-				fwrite(&wrtNode, len, 1, outf);
+				size_t len = sizeof(*pNode);
+				fwrite(pNode, len, 1, outf);
 				fpos += len;
 
-				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.sid));
+				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(pNode->sid));
 				for (unsigned i = 1; i < MAXSLOTS; i++)
-					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.slots[i]));
+					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(pNode->slots[i]));
 
 			}
 		} else {
-			uint32_t        *pStack     = allocMap();
-			versionMemory_t *pVersion   = allocVersion();
-			uint32_t        thisVersion = pVersion->nextVersion();
 
-			// output keys
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				pVersion->mem[iKey] = thisVersion;
-				pMap[iKey]     = iKey;
+			/*
+			 * Scan and assign output ids
+			 */
 
-				// get remapped
+			nextId = 0;
+			
+			for (uint32_t iGroup = 0; iGroup < this->ncount; iGroup++) {
+				if (this->N[iGroup].gid != iGroup)
+					continue; // not start of list
+					
+				assert(iGroup < this->nstart || this->N[iGroup].next != iGroup); // may not be empty
+				
+				// id header	
+				pMap[iGroup] = nextId++;
+				
+				// list nodes
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					const groupNode_t *pNode         = this->N + iNode;
+					unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+					// id node
+					pMap[iGroup] = nextId++;
+					
+					for (unsigned iSlot=0; iSlot<numPlaceholder; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						assert(this->N[id].gid == id); // must be latest
+						assert(id < this->nstart || this->N[id].next != id); // may not be orphaned
+						assert(id < iGroup); // may not be forward
+					}
+				}
+			}
+
+			/*
+			 * Write nodes
+			 */
+
+			for (uint32_t iGroup = 0; iGroup < this->ncount; iGroup++) {
+				if (this->N[iGroup].gid != iGroup)
+					continue; // not start of list
+
+				groupNode_t *pNode = this->N + iGroup;
+
+				/*
+				 * Output remapped header
+				 */
+
 				groupNode_t wrtNode;
-				wrtNode.sid = 2; // 0=reserved, 1="0", 2="a"
-				wrtNode.slots[0] = iKey;
-				for (unsigned i = 1; i < MAXSLOTS; i++)
-					wrtNode.slots[i] = 0;
+				wrtNode.gid   = pMap[iGroup];
+				wrtNode.prev  = pMap[pNode->prev];
+				wrtNode.next  = pMap[pNode->next];
+				wrtNode.sid   = pNode->sid;
+				wrtNode.power = pNode->power;
 
-				size_t len = sizeof wrtNode;
+				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
+					wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
+
+				size_t len = sizeof(wrtNode);
 				fwrite(&wrtNode, len, 1, outf);
 				fpos += len;
-
-				pMap[iKey] = nextId++;
 
 				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.sid));
 				for (unsigned i = 1; i < MAXSLOTS; i++)
 					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.slots[i]));
+
+				/*
+				 * Output remapped nodes
+				 */
+
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					pNode = this->N + iNode;
+
+					wrtNode.gid  = pMap[iGroup];
+					wrtNode.prev = pMap[pNode->prev];
+					wrtNode.next = pMap[pNode->next];
+					wrtNode.sid  = pNode->sid;
+					wrtNode.sid  = pNode->power;
+
+					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
+						wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
+
+					fwrite(&wrtNode, len, 1, outf);
+					fpos += len;
+
+					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.sid));
+					for (unsigned i = 1; i < MAXSLOTS; i++)
+						__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.slots[i]));
+				}
 			}
-
-			assert(!"placeholder");
-
-			freeVersion(pVersion);
-			freeMap(pStack);
 		}
 
 		/*

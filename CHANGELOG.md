@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-27 14:13:27 Changed: Implement core `groupTree_t::saveFile()`.
 2021-12-27 14:10:07 Changed: Hide `groupTree_t` logging behind `--debug` settings.
 2021-12-27 14:04:37 (MAJOR) Fixed: Limit Cartesian-product for NE/XOR, it is introducing combos that that are never
 2021-12-25 13:58:12 Changed: Disabled pattern power in `groupTree_t`.
