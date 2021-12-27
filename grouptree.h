@@ -200,12 +200,12 @@ struct groupTree_t {
 	 * Overview resulting size:
 	 * configuration                 | size | ncount
 	 * ------------------------------+------+-------
-	 * ExpandSignature(), maxDepth=0 | 58   | 1763
-	 * ExpandSignature(), maxDepth=1 | 42   | 7387
-	 * ExpandSignature(), maxDepth=2 | 44   | 11343
-	 * ExpandMember(),    maxDepth=0 | 58   | 1763
-	 * ExpandMember(),    maxDepth=1 | 78   | 8285
-	 * ExpandMember(),    maxDepth=2 | -    | -
+	 * ExpandSignature(), maxDepth=0 | 57   | 904
+	 * ExpandSignature(), maxDepth=1 | 35   | 3493
+	 * ExpandSignature(), maxDepth=2 | 25   | 5940
+	 * ExpandMember(),    maxDepth=0 | 57   | 904
+	 * ExpandMember(),    maxDepth=1 | 53   | 3246
+	 * ExpandMember(),    maxDepth=2 | 27   | 7269
 	 * 
  	 * @constant {number} DEFAULT_MAXDEPTH
 	 */
@@ -2562,6 +2562,14 @@ struct groupTree_t {
 				 * Analyse Q/T/F combo 
 				 */
 				restartElement:
+				
+				/*
+				 * @date 2021-12-27 14:04:37
+				 * Clamp F when handling NE/XOR. 
+				 * or it will create combos that this code is set out to detect and reduce 
+				 */
+				if (Tu == F)
+					iF = iTu;
 
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
 					// iterators may not be orphaned
@@ -3179,9 +3187,16 @@ struct groupTree_t {
 			// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
 			// node 0 is a single node list containing SID_ZERO.
 
-			iF = this->N[iF].next;
-			if (iF != this->N[iF].gid)
-				continue;
+
+			/*
+			 * @date 2021-12-27 14:04:37
+			 * Clamp F when handling NE/XOR. 
+			 */
+			if (Tu != F) {
+				iF = this->N[iF].next;
+				if (iF != this->N[iF].gid)
+					continue;
+			}
 
 			iTu = this->N[iTu].next;
 			if (iTu != this->N[iTu].gid)

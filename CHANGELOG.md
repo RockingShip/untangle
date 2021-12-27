@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-27 14:04:37 (MAJOR) Fixed: Limit Cartesian-product for NE/XOR, it is introducing combos that that are never
 2021-12-25 13:58:12 Changed: Disabled pattern power in `groupTree_t`.
 2021-12-25 13:53:38 Changed: Simplified `groupTree_t::addBasicNode()` Cartesian-product inner loop.
 2021-12-25 13:46:30 Changed: Moved all layer initialisations to `grouplayer_t::setGid()`.
