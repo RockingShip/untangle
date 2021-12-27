@@ -3145,15 +3145,15 @@ struct groupTree_t {
 						// @formatter:on
 					}
 
-					// if (ctx.opt_debug & ctx.DEBUG_ROW)return
-					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
-					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-					       gid, nid,
-					       iQ, iTu, iF,
-					       sid, db.signatures[sid].name,
-					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-					       db.signatures[sid].size, power);
-
+					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
+						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+						       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+						       gid, nid,
+						       iQ, iTu, iF,
+						       sid, db.signatures[sid].name,
+						       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
+						       db.signatures[sid].size, power);
+					}
 				}
 
 				// remember first node (most likely `1n9`) for return value
@@ -3588,7 +3588,8 @@ struct groupTree_t {
 		// allocate storage for scope
 		groupLayer_t newLayer(*this, &layer);
 
-		printf("UPDATE\n");
+		if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
+			printf("FORWARD\n");
 
 		uint32_t firstGid = this->nstart;
 		uint32_t lastGid  = this->ncount;
@@ -3634,7 +3635,8 @@ struct groupTree_t {
 						 * Walk and update the list
 						 */
 
-						printf("REBUILD %u->%u\n", iGroup, newGid);
+						if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
+							printf("REBUILD %u->%u\n", iGroup, newGid);
 
 						// point to contents of group
 						uint32_t idNext = this->N[iGroup].next;
@@ -3729,7 +3731,8 @@ struct groupTree_t {
 			lastGid  = this->ncount;
 		}
 
-		printf("/UPDATE\n");
+		if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
+			printf("/UPDATE\n");
 	}
 
 	/*
@@ -4850,15 +4853,18 @@ struct groupTree_t {
 			while (latest != this->N[latest].gid)
 				latest = this->N[latest].gid;
 
-			printf("### %s\n", saveString(latest).c_str());
+			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPEXPR)
+				printf("### %s\n", saveString(latest).c_str());
 
-			for (uint32_t iNode = this->N[latest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				groupNode_t *pNode = this->N + iNode;
-				printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
-				       pNode->gid, iNode,
-				       pNode->sid, db.signatures[pNode->sid].name,
-				       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
-				       pNode->power);
+			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
+				for (uint32_t iNode = this->N[latest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					groupNode_t *pNode = this->N + iNode;
+					printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
+					       pNode->gid, iNode,
+					       pNode->sid, db.signatures[pNode->sid].name,
+					       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
+					       pNode->power);
+				}
 			}
 
 			// remember
