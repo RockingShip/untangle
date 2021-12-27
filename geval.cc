@@ -489,13 +489,15 @@ struct gevalContext_t {
 			printf("\n");
 		}
 
-		if (differ)
-			fprintf(stderr, "crc DIFFER\n");
-		else
-			fprintf(stderr, "crc same\n");
-		
-		if (differ)
-			exit(1);
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY && pTree->estart - pTree->ostart > 1) {
+			if (differ)
+				fprintf(stderr, "crc DIFFER\n");
+			else
+				fprintf(stderr, "crc same\n");
+
+			if (differ)
+				exit(1);
+		}
 
 		return 0;
 	}

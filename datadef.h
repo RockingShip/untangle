@@ -161,7 +161,6 @@ struct signature_t {
 		SIGNATURENAMELENGTH = (6/*TINYTREE_MAXNODES*/ * 3 + 1 + 1),
 		/// @constant {number} Number of slot folding entryes
 		MAXFOLDS            = 36,
-		
 	};
 
 	enum {
@@ -218,7 +217,7 @@ struct signature_t {
 	 * Entry offset for first occurrence [0, 1, 3, 6, 10, 15, 21, 28] (geometric series)
 	 * Add to offset for second occurrence [0, 1, 2, 3, 4, 5, 6, 7, 8]
 	 */
-	
+
 	struct fold_t {
 		/// @var {number} Signature id after slots folded
 		uint32_t sid;
@@ -226,10 +225,15 @@ struct signature_t {
 		/// @var {number} Transform id to rebuild slots when folded
 		uint32_t tid;
 	};
-	
+
 	/// @var {number} results of slot folding
 	fold_t folds[MAXFOLDS];
 
+	/// @var {number} results of slot set to 0
+	fold_t foldsZ[MAXSLOTS];
+
+	/// @var {number} results of slot set to ~0
+	fold_t foldsNZ[MAXSLOTS];
 };
 
 /*

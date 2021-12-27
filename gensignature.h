@@ -634,7 +634,7 @@ struct gensignatureContext_t : dbtool_t {
 		// clear signature and imprint index
 		::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 
-		if (pStore->numSignature < 2)
+		if (pStore->numSignature < pStore->IDFIRST)
 			return; //nothing to do
 
 		// skip reserved entries
@@ -654,7 +654,7 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.tick = 0;
 
 		// create imprints for signature groups
-		ctx.progress++; // skip reserved
+		ctx.progress += pStore->IDFIRST; // skip reserved
 		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			const signature_t *pSignature = pStore->signatures + iSid;
 
@@ -1004,8 +1004,8 @@ struct gensignatureContext_t : dbtool_t {
 		ctx.setupSpeed(pStore->numSignature);
 		ctx.tick = 0;
 
-		ctx.progress++; // skip reserved
-		for (uint32_t iSid = 0; iSid < pStore->numSignature; iSid++) {
+		ctx.progress += pStore->IDFIRST; // skip reserved
+		for (uint32_t iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -1026,47 +1026,107 @@ struct gensignatureContext_t : dbtool_t {
 				ctx.tick = 0;
 			}
 
-			if (pSignature->numPlaceholder < 2)
-				continue; // need at least two slot entries
-			
-			// walk through all folding possibilities
-			unsigned iFold = 0;
-			for (uint32_t j = 1; j < pSignature->numPlaceholder; j++) {
-				for (uint32_t i = 0; i < j; i++) {
+			/*
+			 * Calculate slots with duplicate entries
+			 */
+			if (pSignature->numPlaceholder >= 2) {
+				// walk through all folding possibilities
+				unsigned iFold = 0;
+				for (uint32_t j = 1; j < pSignature->numPlaceholder; j++) {
+					for (uint32_t i = 0; i < j; i++) {
 
-					// create initial slots
-					char slots[MAXSLOTS + 1];
+						// create initial slots
+						char slots[MAXSLOTS + 1];
 
-					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
-						slots[iSlot] = 'a' + iSlot;
+						for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
+							slots[iSlot] = 'a' + iSlot;
 
-					slots[MAXSLOTS] = 0;
+						slots[MAXSLOTS] = 0;
 
-					// create a duplicate
-					slots[j] = slots[i];
+						// create a duplicate
+						slots[j] = slots[i];
 
-					// load tree
-					tree.loadStringSafe(pSignature->name, slots);
+						// load tree
+						tree.loadStringSafe(pSignature->name, slots);
 
-					// lookup sid/tid
-					uint32_t sid = 0, tid = 0;
-					pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
+						// lookup sid/tid
+						uint32_t sid = 0, tid = 0;
+						pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
 
-					assert(iFold < signature_t::MAXFOLDS);
-					pSignature->folds[iFold].sid = sid;
-					pSignature->folds[iFold].tid = tid;
+						assert(iFold < signature_t::MAXFOLDS);
+						pSignature->folds[iFold].sid = sid;
+						pSignature->folds[iFold].tid = tid;
 
-					// `j` must be excluded from transform
-					const char *fwdTransform = pStore->fwdTransformNames[tid];
+						// `j` must be excluded from transform
+						const char *fwdTransform = pStore->fwdTransformNames[tid];
 
-					for (unsigned k = 0; k < pStore->signatures[sid].numPlaceholder; k++) {
-						assert(fwdTransform[k] != (char) ('a' + j)); // the "second" slot may not be used (it's a duplicate) 
+						for (unsigned k = 0; k < pStore->signatures[sid].numPlaceholder; k++) {
+							assert(fwdTransform[k] != (char) ('a' + j)); // the "second" slot may not be used (it's a duplicate) 
+						}
+
+						iFold++;
 					}
-					
-					iFold++;
 				}
+				assert(iFold <= signature_t::MAXFOLDS);
 			}
-			assert(iFold <= signature_t::MAXFOLDS);
+
+			/*
+			 * Calculate slot set to 0
+			 */
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+
+				// create initial slots
+				char slots[MAXSLOTS + 1];
+
+				for (unsigned j = 0; j < MAXSLOTS; j++)
+					slots[j] = 'a' + j;
+
+				slots[MAXSLOTS] = 0;
+
+				// set slot to 0
+				slots[iSlot] = 0;
+
+				// load tree
+				tree.loadStringSafe(pSignature->name, slots);
+
+				// lookup sid/tid
+				uint32_t sid = 0, tid = 0;
+				pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
+
+				assert(!(sid & IBIT));
+
+				pSignature->foldsZ[iSlot].sid = sid;
+				pSignature->foldsZ[iSlot].tid = tid;
+			}
+
+			/*
+			 * Calculate slot set to ~0
+			 */
+			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
+
+				// create initial slots
+				char slots[MAXSLOTS + 1];
+
+				for (unsigned j = 0; j < MAXSLOTS; j++)
+					slots[j] = 'a' + j;
+
+				slots[MAXSLOTS] = 0;
+
+				// set slot to 0
+				slots[iSlot] = 0;
+
+				// load tree
+				tree.loadStringSafe(pSignature->name, slots);
+
+				// lookup sid/tid
+				uint32_t sid = 0, tid = 0;
+				pStore->lookupImprintAssociative(&tree, pStore->fwdEvaluator, pStore->revEvaluator, &sid, &tid);
+
+				assert(!(sid & IBIT));
+
+				pSignature->foldsNZ[iSlot].sid = sid;
+				pSignature->foldsNZ[iSlot].tid = tid;
+			}
 
 			ctx.progress++;
 		}

@@ -89,12 +89,6 @@ struct groupNode_t {
 	uint32_t next;
 
 	/*
-	 * Index hash, for fast lookups like when deleting.
-	 * NOTE: `SID_SELF`, the list headers, are never indexed. 
-	 */
-	uint32_t hashIX;
-
-	/*
 	 * The signature describing the behaviour of the node
 	 */
 	uint32_t sid;
@@ -473,7 +467,6 @@ struct groupTree_t {
 			pNode->gid  = iKey;
 			pNode->next = iKey;
 			pNode->prev = iKey;
-			pNode->hashIX = 0xffffffff;
 			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = iKey;
 
@@ -934,7 +927,6 @@ struct groupTree_t {
 		pNode->gid  = 0;
 		pNode->next = nid;
 		pNode->prev = nid;
-		pNode->hashIX = 0xffffffff;
 		pNode->sid    = sid;
 		pNode->power  = power;
 
@@ -3110,7 +3102,6 @@ struct groupTree_t {
 					groupNode_t *pNode = this->N + nid;
 
 					// add node to index
-					pNode->hashIX = ix;
 					this->nodeIndex[ix]        = nid;
 					this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
 
@@ -3552,7 +3543,6 @@ struct groupTree_t {
 			pNew->gid = gid;
 
 			// add node to index
-			pNew->hashIX                   = newNix;
 			this->nodeIndex[newNix]        = newNid;
 			this->nodeIndexVersion[newNix] = this->nodeIndexVersionNr;
 
@@ -4197,12 +4187,6 @@ struct groupTree_t {
 	 * NOTE: id/references are as-is and not updated to latest
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
-
-		if (this->N[id].gid == id && this->N[id].next == id) {
-			char txt[12];
-			sprintf(txt, "<N=%u>", id);
-			return txt;
-		}
 
 		uint32_t        nextPlaceholder  = this->kstart;	// next placeholder for `pTransform`
 		uint32_t        nextExportNodeId = this->nstart;	// next nodeId for exported name

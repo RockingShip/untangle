@@ -2293,7 +2293,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Output number of nodes and determine how many nodes if tree were flat
 	 */
-	printf(" [NUMEL=%u]", pTree->count - pTree->nstart);
+	printf(" [SIZE=%u]", pTree->count - pTree->nstart);
 
 	{
 		// sum weights of roots
@@ -2318,7 +2318,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 				weight[i] += weight[F]; // xor counts once
 		}
 
-		printf(" [VCOUNT=%f]", weight[pTree->root & ~IBIT]);
+		printf(" [WEIGHT=%.0f]", weight[pTree->root & ~IBIT]);
 
 		free(weight);
 	}

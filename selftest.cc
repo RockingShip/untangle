@@ -1329,7 +1329,7 @@ struct selftestContext_t : dbtool_t {
 
 		// reset index
 		::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
-		pStore->numSignature = 1; // skip reserved first entry
+		pStore->numSignature = pStore->IDFIRST; // skip reserved first entry
 
 		// apply settings
 		ctx.flags          = 0;
@@ -1647,8 +1647,8 @@ struct selftestContext_t : dbtool_t {
 			// prepare database
 			::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 			::memset(pStore->signatureIndex, 0, pStore->signatureIndexSize * sizeof(*pStore->signatureIndex));
-			pStore->numImprint     = 1; // skip reserved first entry
-			pStore->numSignature   = 1; // skip reserved first entry
+			pStore->numImprint     = pStore->IDFIRST; // skip reserved first entry
+			pStore->numSignature   = pStore->IDFIRST; // skip reserved first entry
 			pStore->interleave     = pInterleave->numStored;
 			pStore->interleaveStep = pInterleave->interleaveStep;
 

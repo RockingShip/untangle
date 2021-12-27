@@ -1311,11 +1311,11 @@ struct genmemberContext_t : dbtool_t {
 		// clear signature and imprint index
 		::memset(pStore->imprintIndex, 0, pStore->imprintIndexSize * sizeof(*pStore->imprintIndex));
 
-		if (pStore->numSignature < 2)
+		if (pStore->numSignature < pStore->IDFIRST)
 			return; //nothing to do
 
 		// skip reserved entry
-		pStore->numImprint = 1;
+		pStore->numImprint = pStore->IDFIRST;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 			fprintf(stderr, "[%s] Rebuilding imprints\n", ctx.timeAsString());
@@ -1340,8 +1340,8 @@ struct genmemberContext_t : dbtool_t {
 		numEmpty = numUnsafe = 0;
 
 		// create imprints for signature groups
-		ctx.progress++; // skip reserved
-		for (unsigned iSid = 1; iSid < pStore->numSignature; iSid++) {
+		ctx.progress += pStore->IDFIRST; // skip reserved
+		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 			if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
 				int perSecond = ctx.updateSpeed();
 
@@ -1703,8 +1703,8 @@ struct genmemberContext_t : dbtool_t {
 		ctx.setupSpeed(pStore->numMember);
 		ctx.tick = 0;
 
-		ctx.progress++; // skip reserved
-		for (unsigned iMid = 1; iMid < pStore->numMember; iMid++) {
+		ctx.progress += pStore->IDFIRST; // skip reserved
+		for (unsigned iMid = pStore->IDFIRST; iMid < pStore->numMember; iMid++) {
 			member_t *pMember = pStore->members + iMid;
 			signature_t *pSignature = pStore->signatures + pMember->sid;
 

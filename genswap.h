@@ -742,7 +742,7 @@ struct genswapContext_t : dbtool_t {
 		ctx.tick = 0;
 
 		// create imprints for signature groups
-		ctx.progress++; // skip reserved entry;
+		ctx.progress += pStore->IDFIRST; // skip reserved entry;
 		for (unsigned iSid = pStore->IDFIRST; iSid < pStore->numSignature; iSid++) {
 
 			if ((opt_sidLo && iSid < opt_sidLo) || (opt_sidHi && iSid >= opt_sidHi)) {
