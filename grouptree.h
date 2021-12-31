@@ -972,8 +972,8 @@ struct groupTree_t {
 
 		/*
 		 * Sid lookup index.
-		 * To instantly find node with identical sids so they can challange for better/worse.
-		 * Nodes losing a challange are orphaned.
+		 * To instantly find node with identical sids so they can challenge for better/worse.
+		 * Nodes losing a challenge are orphaned.
 		 */
 		uint32_t        *pSidMap;
 		versionMemory_t *pSidVersion;
@@ -1364,10 +1364,10 @@ struct groupTree_t {
 		 */
 
 		unsigned        numStack    = 0;
-		uint32_t        nextNode = this->nstart;
-		uint32_t        *pStack  = allocMap(); // evaluation stack
-		uint32_t        *pMap    = allocMap(); // node id of intermediates
-		versionMemory_t *pActive = allocVersion(); // collection of used id's
+		uint32_t        nextNode    = this->nstart;
+		uint32_t        *pStack     = allocMap(); // evaluation stack
+		uint32_t        *pMap       = allocMap(); // node id of intermediates
+		versionMemory_t *pActive    = allocVersion(); // collection of used id's
 		uint32_t        thisVersion = pActive->nextVersion(); // bump versioned memory
 
 		// component sid/slots
@@ -1764,12 +1764,12 @@ struct groupTree_t {
 		 * init
 		 */
 
-		unsigned        numStack = 0;
-		uint32_t        nextNode = this->nstart;
-		uint32_t        *pStack  = allocMap(); // evaluation stack
-		uint32_t        *pMap    = allocMap(); // node id of intermediates
-		versionMemory_t *pActive = allocVersion(); // collection of used id's
-		uint32_t thisVersion = pActive->nextVersion(); // bump versioned memory
+		unsigned        numStack    = 0;
+		uint32_t        nextNode    = this->nstart;
+		uint32_t        *pStack     = allocMap(); // evaluation stack
+		uint32_t        *pMap       = allocMap(); // node id of intermediates
+		versionMemory_t *pActive    = allocVersion(); // collection of used id's
+		uint32_t        thisVersion = pActive->nextVersion(); // bump versioned memory
 
 		// component sid/slots
 		uint32_t cSid             = 0; // 0=error/folded
@@ -2431,8 +2431,8 @@ struct groupTree_t {
 		depth++;
 		assert(depth < 30);
 
-		// gidInitial is to remember if this is a recursive call
-		uint32_t gidInitial = gid;
+		// initialGid is to remember if this is a recursive call
+		uint32_t initialGid = gid;
 
 		// todo: tail recursion might result in interator folding
 		Q  = updateToLatest(Q);
@@ -2488,7 +2488,7 @@ struct groupTree_t {
 			if (gid == IBIT || gid == latest)
 				return nid; // groups are compatible
 
-			if (gidInitial != IBIT)
+			if (initialGid != IBIT)
 				return nid; // let caller merge
 
 			// merge groups lists
@@ -2576,17 +2576,6 @@ struct groupTree_t {
 					assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
 					assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
 					assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
-
-#if 0 // too slow
-					if (gid != IBIT) {
-						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
-							uint32_t challenge = layer.findSid(iSid);
-							if (challenge != IBIT) {
-								assert(this->N[challenge].gid == gid);
-							}
-						}
-					}
-#endif
 				}
 
 				/*
@@ -2733,7 +2722,7 @@ struct groupTree_t {
 					assert(folded >= this->nstart); // todo: this is just to detect if it actually happens, but strangely is doesn't
 
 					// is there a current group
-					if (gidInitial != IBIT)
+					if (initialGid != IBIT)
 						return IBIT ^ folded; // yes, let caller handle collapse to endpoint
 
 					// collapse and update
@@ -2781,7 +2770,7 @@ struct groupTree_t {
 					// NOTE: endpoint is latest
 
 					// is this called recursively?
-					if (gidInitial != IBIT)
+					if (initialGid != IBIT)
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
 					// collapse to endpoint and update
@@ -2844,18 +2833,13 @@ struct groupTree_t {
 				 * node is old and no current group:
 				 *      attach to group
 				 * node is old and belongs to same group
-				 *      duplicate
+				 *      skip duplicate
 				 * node is old and belongs to different group:
-				 * 	merge groups and restart
+				 * 	merge groups
 				 * node is new and no current group:
 				 *      create group and add as first node
-				 * node is new and group is open
+				 * node is new and current group
 				 *      add to group
-				 * node is new and group is closed
-				 *      create new group
-				 *      add new node
-				 *      merge closed group into current
-				 *      continue (no restart)
 				 */
 
 
@@ -2892,10 +2876,10 @@ struct groupTree_t {
 							 * 
 							 * Most likely this is the case of "node is old and belongs to different group".
 							 * `expandSignature()` created a component that triggered the merging of groups of which the iterators belong.
-							 * Orphaned iterators most likely are outdated by losing a `pSidMap[]` challange.
+							 * Orphaned iterators most likely are outdated by losing a `pSidMap[]` challenge.
 							 */
 							// restart with tail recursion
-							printf("<iteratorReset1 initial=%u gid=%u />\n", gidInitial, gid);
+							printf("<iteratorReset1 initial=%u gid=%u />\n", initialGid, gid);
 							return addBasicNode(layer, gid, tlSid, Q, Tu, Ti, F, depth);
 						}
 
@@ -2906,7 +2890,7 @@ struct groupTree_t {
 								continue; // yes, silently ignore
 
 							// is this called recursively?
-							if (gidInitial != IBIT)
+							if (initialGid != IBIT)
 								return expand; // yes, let caller handle collapse
 
 							/*
@@ -2950,7 +2934,7 @@ struct groupTree_t {
 						if (latest < this->nstart) {
 							// yes
 							// is this called recursively?
-							if (gidInitial != IBIT)
+							if (initialGid != IBIT)
 								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
 
 							// merge and update groups
@@ -3009,13 +2993,13 @@ struct groupTree_t {
 
 				if (nid != 0) {
 					// node is old/existing
-					uint32_t latest = updateToLatest(this->N[nid].gid);
+					uint32_t latest = updateToLatest(nid);
 
 					if (latest < this->nstart) {
 						// entrypoint collapse
 
 						// is this called recursively?
-						if (gidInitial != IBIT)
+						if (initialGid != IBIT)
 							return IBIT ^ latest; // yes, let caller handle collapse
 
 						// merge and update groups
@@ -3203,7 +3187,7 @@ struct groupTree_t {
 		/*
 		 * prune stale nodes
 		 */
-		if (gid >= this->nstart)
+		if (initialGid == IBIT)
 			updateGroup(layer, gid, depth);
 
 		/*

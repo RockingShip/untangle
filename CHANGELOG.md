@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2021-12-31 12:45:52 Changed: Spacing and comments.
 2021-12-27 14:15:02 Added: `foldZ[]` and `foldNZ[]` to `signature_t`, no database version bump.
 2021-12-27 14:13:27 Changed: Implement core `groupTree_t::saveFile()`.
 2021-12-27 14:10:07 Changed: Hide `groupTree_t` logging behind `--debug` settings.
