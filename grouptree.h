@@ -1686,7 +1686,11 @@ struct groupTree_t {
 					freeMap(pStack);
 					freeMap(pMap);
 					freeVersion(pActive);
-					return nid;
+					/*
+					 * @date 2021-12-29 00:15:14
+					 * for components: Any kind of collapse should invalidate the final candidate structure. 
+					 */
+					return IBIT ^ (IBIT - 1);
 				}
 
 				uint32_t latest = updateToLatest(nid);
@@ -2093,7 +2097,11 @@ struct groupTree_t {
 					freeMap(pStack);
 					freeMap(pMap);
 					freeVersion(pActive);
-					return nid;
+					/*
+					 * @date 2021-12-29 00:15:14
+					 * for components: Any kind of collapse should invalidate the final candidate structure. 
+					 */
+					return IBIT ^ (IBIT - 1);
 				}
 
 				uint32_t latest = updateToLatest(nid);
