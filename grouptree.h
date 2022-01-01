@@ -2561,7 +2561,6 @@ struct groupTree_t {
 				/*
 				 * Analyse Q/T/F combo 
 				 */
-				restartElement:
 				
 				/*
 				 * @date 2021-12-27 14:04:37
@@ -2767,8 +2766,6 @@ struct groupTree_t {
 				if (this->withPower && power < layer.minPower[db.signatures[sid].size])
 					continue; // silently ignore					
 
-				unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
-
 				/*
 				 * Test for an endpoint collapse, which collapses the group as whole
 				 */
@@ -2849,147 +2846,6 @@ struct groupTree_t {
 				 * node is new and current group
 				 *      add to group
 				 */
-
-
-				/*
-				 * @date 2021-11-08 00:00:19
-				 * 
-				 * `ab^c^`: is stored as `abc^^/[a/[c] ab^/[a b]]` which is badly ordered.
-				 * Proper is: `abc^^/[a/[a] ab^/[b c]]`, but requires creation of `ab^[b c]`.
-				 * 
-				 * A suggested method to properly sort is to take the sid/slot combo and re-create it using the signature, 
-				 * implicitly creating better ordered components.
-				 * 
-				 * This might (and most likely will) create many duplicates. It might even return gid.
-				 */
-
-				if (db.signatures[sid].size > 1 && depth <= this->maxDepth) {
-					if (true) {
-						uint32_t expand = expandSignature(layer, gid, sid, finalSlots, depth);
-//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t expand = expandMember(layer, gid, mid, finalSlots, depth);
-
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
-
-						// gid might have been merged
-						gid = updateToLatest(gid);
-
-						// todo: test iterators against gid
-						// restart if iterators changed or orphaned
-						if (this->N[iQ].gid != Q || (iQ >= this->nstart && this->N[iQ].next == iQ) ||
-						    this->N[iTu].gid != Tu || (iTu >= this->nstart && this->N[iTu].next == iTu) ||
-						    this->N[iF].gid != F || (iF >= this->nstart && this->N[iF].next == iF)) {
-							/*
-							 * @date 2021-12-21 02:07:43
-							 * 
-							 * Most likely this is the case of "node is old and belongs to different group".
-							 * `expandSignature()` created a component that triggered the merging of groups of which the iterators belong.
-							 * Orphaned iterators most likely are outdated by losing a `pSidMap[]` challenge.
-							 */
-							// restart with tail recursion
-							printf("<iteratorReset1 initial=%u gid=%u />\n", initialGid, gid);
-							return addBasicNode(layer, gid, tlSid, Q, Tu, Ti, F, depth);
-						}
-
-						// is it a collapse?
-						if (expand & IBIT) {
-							// yes, was it a self-collapse
-							if (expand == (IBIT ^ (IBIT - 1)))
-								continue; // yes, silently ignore
-
-							// is this called recursively?
-							if (initialGid != IBIT)
-								return expand; // yes, let caller handle collapse
-
-							/*
-							 * collapsing to endpoint
-							 */
-
-							uint32_t endpoint = expand & ~IBIT;
-
-							// merge and update groups
-							if (gid != IBIT) {
-								uint32_t latest = updateToLatest(endpoint);
-								mergeGroups(layer, gid, latest, depth);
-							}
-
-							// resolve forward references
-							if (depth == 1) {
-								layer.gid = IBIT; // releasing layer
-								resolveForward(layer, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-							}
-
-							return endpoint;
-
-						} else if (gid != IBIT) {
-							// `expand` is the node id of the top-level `1n9` of the signature.
-							uint32_t latest = updateToLatest(expand);
-							// is it already member of a different group?  
-							if (latest != gid) {
-								// yes, need to merge groups
-								assert(this->N[gid].gid == gid);
-								mergeGroups(layer, gid, latest, depth);
-								gid = updateToLatest(gid);
-								// restart with tail recursion
-								printf("<mergeSignature gid=%u expand=%u latest=%u />\n", gid, expand, latest);
-							}
-						}
-
-						uint32_t latest = updateToLatest(expand);
-
-						// test for entrypoint-collapse 
-						if (latest < this->nstart) {
-							// yes
-							// is this called recursively?
-							if (initialGid != IBIT)
-								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
-
-							// merge and update groups
-							if (gid != IBIT) {
-								assert(0);
-								// importGroup(gid, latest, pSidMap, pSidVersion, depth);
-							}
-
-							// resolve forward references
-							if (depth == 1) {
-								layer.gid = IBIT; // finished constructing current layer 
-								resolveForward(layer, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
-							}
-
-							return expand;
-						}
-
-						// group management
-						if (gid == IBIT) {
-							// current group becomes latest, which is closed
-							assert(this->pGidRefCount[latest] != 0);
-							gid = latest;
-
-						} else if (gid != latest) {
-							// merge groups
-							assert(this->N[gid].gid == gid);
-							mergeGroups(layer, gid, latest, depth);
-							gid = updateToLatest(gid);
-							// restart with tail recursion
-							printf("<closedToOpen/>\n");
-						}
-
-						/*
-						 * Group merging (or expandSignature) might cause slots to become outdated.
-						 * If so, reload Cartesian element with updated values
-						 */
-						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-							uint32_t id = finalSlots[iSlot];
-
-							if (id != this->N[id].gid) {
-								this->cntRestart++;
-								goto restartElement; // it needs to happen first
-							}
-						}
-					}
-				}
 
 				/*
 				 * Add final sid/slot to group
@@ -3190,6 +3046,101 @@ struct groupTree_t {
 				continue;
 
 			break;
+		}
+
+		assert(gid != IBIT);
+		if (depth <= this->maxDepth) {
+			/*
+			 * @date 2022-01-01 00:28:49
+			 * Expand primary nodes. This is an important step of compressing and sorting trees
+			 */
+
+			for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				const groupNode_t *pNode      = this->N + iNode;
+				const signature_t *pSignature = db.signatures + pNode->sid;
+
+				// did iterator orphan or change
+				if (this->N[iNode].next == iNode || this->N[iNode].gid != gid) {
+					// yes, restart
+					iNode = gid;
+					continue;
+				}
+
+				if (pSignature->size > 1) {
+					if (true) {
+						uint32_t expand = expandSignature(layer, gid, pNode->sid, pNode->slots, depth);
+//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+//						uint32_t expand = expandMember(layer, gid, mid, finalSlots, depth);
+
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
+
+						// gid might have been merged
+						gid = updateToLatest(gid);
+						assert(layer.gid == gid);
+
+						// is it a collapse?
+						if (expand & IBIT) {
+							// yes, was it a self-collapse?
+							if (expand == (IBIT ^ (IBIT - 1))) {
+								// yes, orphan original
+								uint32_t idPrev = pNode->prev;
+								unlinkNode(iNode);
+								iNode = idPrev;
+								continue; // silently ignore
+							}
+
+							uint32_t endpoint = expand & ~IBIT;
+							uint32_t latest   = updateToLatest(endpoint);
+
+							// is this called recursively?
+							if (initialGid != IBIT)
+								return expand; // yes, let caller handle collapse
+
+							// merge and update groups
+							mergeGroups(layer, gid, latest, depth);
+
+							// resolve forward references
+							if (depth == 1) {
+								layer.gid = IBIT; // releasing layer
+								resolveForward(layer, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+							}
+
+							return endpoint;
+						}
+
+						uint32_t latest = updateToLatest(expand);
+
+						// test for entrypoint-collapse 
+						if (latest < this->nstart) {
+							assert(0); // does this happen
+							// yes
+							// is this called recursively?
+							if (initialGid != IBIT)
+								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
+
+							// merge and update groups
+							gid = mergeGroups(layer, gid, latest, depth);
+
+							// resolve forward references
+							if (depth == 1) {
+								layer.gid = IBIT; // finished constructing current layer 
+								resolveForward(layer, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+							}
+
+							return expand;
+						}
+
+						// group management
+						if (gid != latest) {
+							// merge groups
+							gid = mergeGroups(layer, gid, latest, depth);
+							assert(layer.gid == gid);
+						}
+					}
+				}
+			}
 		}
 
 		/*
