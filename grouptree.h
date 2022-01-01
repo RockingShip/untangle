@@ -2500,7 +2500,7 @@ struct groupTree_t {
 				return nid; // let caller merge
 
 			// merge groups lists
-			mergeGroups(layer, gid, latest, depth);
+			gid = mergeGroups(layer, gid, latest, depth);
 
 			// ripple effect of merging
 			if (depth == 1) {
@@ -2779,7 +2779,7 @@ struct groupTree_t {
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
 					// collapse to endpoint and update
-					mergeGroups(layer, gid, endpoint, depth);
+					gid = mergeGroups(layer, gid, endpoint, depth);
 
 					// resolve forward references
 					if (depth == 1) {
@@ -3186,26 +3186,55 @@ struct groupTree_t {
 	 * strange that the test tree size for maxdepth=0 (67) was smaller than for maxdepth=2 (73) 
 	 * validateTree() would complain if resolveForward() would loop
 	 * 
-	 * @date 2021-12-23 14:07:32
+	 * @date 2022-01-01 00:40:21
 	 * 
-	 * return true is group has a forward reference 
+	 * Merge towards the lowest of lhs/rhs. 
+	 * This should contain run-away `resolveForward()`.
 	 */
-	bool mergeGroups(groupLayer_t &layer, uint32_t gid, uint32_t rhs, unsigned depth) {
+	uint32_t mergeGroups(groupLayer_t &layer, uint32_t lhs, uint32_t rhs, unsigned depth) {
 
 		this->cntMergeGroup++;
 
-		assert(gid >= this->nstart); // lhs may not be an entrypoint
-		assert(this->N[gid].gid == gid); // lhs must be latest header
+		assert(this->N[lhs].gid == lhs); // lhs must be latest header
 		assert(this->N[rhs].gid == rhs); // rhs must be latest header
-		assert(gid != rhs); // groups must be different
-		assert(layer.findGid(rhs) == NULL); // rhs may not be under construction
+		assert(lhs != rhs); // groups must be different
+
+		/*
+		 * @date 2021-12-28 21:11:47
+		 * 
+		 * New gid is lowest of lhs/rhs.
+		 * This is to reuse group id's as much as possible and also to avoid runaway updates to latest. 
+		 */
+		uint32_t gid = lhs;
+		if (gid > rhs)
+			gid = rhs;
 
 //		printf("mergeGroups=1 ./eval \"%s\" \"%s\"\n", this->saveString(lhs).c_str(), this->saveString(N[rhs].gid).c_str());
 
-		// entrypoint collapse?		
-		if (rhs < this->nstart) {
+		/*
+		 * entrypoint collapse?
+		 */
+		if (lhs < this->nstart && rhs < this->nstart) {
+			assert(0);
+		} else if (lhs < this->nstart) {
 			// yes
-			for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+
+				// orphan node
+				uint32_t prevId = pNode->prev;
+				unlinkNode(iNode);
+				iNode = prevId;
+				// redirect to entrypoint
+				pNode->gid = lhs;
+			}
+			// let header redirect
+			this->N[rhs].gid = lhs;
+
+			return lhs;
+		} else if (rhs < this->nstart) {
+			// yes
+			for (uint32_t iNode = this->N[lhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
 				// orphan node
@@ -3216,9 +3245,18 @@ struct groupTree_t {
 				pNode->gid = rhs;
 			}
 			// let header redirect
-			this->N[gid].gid = rhs;
+			this->N[lhs].gid = rhs;
 
-			return false;
+			return rhs;
+		}
+		
+		/*
+		 * Empty/initial/orphaned group?
+		 */
+		if (this->N[lhs].next == lhs) {
+			assert(0);
+		} else if (this->N[rhs].next == rhs) {
+			assert(0);
 		}
 
 		assert(this->N[rhs].next != rhs); // rhs may not be empty (need to test after entrypoint test)
@@ -3227,11 +3265,11 @@ struct groupTree_t {
 		 * Flood-fill
 		 * NOTE: forward references are possible
 		 */
-		if (gid != rhs) {
+		if (lhs != rhs) {
 			versionMemory_t *pVersion   = allocVersion();
 			uint32_t        thisVersion = pVersion->nextVersion();
 
-			pVersion->mem[gid] = thisVersion;
+			pVersion->mem[lhs] = thisVersion;
 			pVersion->mem[rhs] = thisVersion;
 
 			// flood-fill, flag everything referencing the flood
@@ -3260,6 +3298,22 @@ struct groupTree_t {
 							// does it touch flood
 							if (pVersion->mem[id] == thisVersion) {
 								// yes
+								if (id == lhs || id == rhs) {
+									/*
+									 * @date 2021-12-30 21:24:05
+									 * This node will trigger a self-collapse to `a/[id]`,
+									 * and will connect lhs/rhs to the flood fill.
+									 * gid is taken from side that touches the flood. 
+									 * becaus from that context, the flood represents endpoints. 
+									 * Orphan it now, to eliminate the connection which would otherwise empty the group.
+									 */
+									uint32_t prevId = pNode->prev;
+									unlinkNode(iNode);
+									iNode = prevId;
+
+									break;
+								}
+								
 								found = true;
 								break;
 							}
@@ -3281,9 +3335,12 @@ struct groupTree_t {
 			 * Flood represent self. Referencing self will collapse to `a/[self]` which is the group header and always present.
 			 */
 
-			for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			for (uint32_t iNode = this->N[lhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
 				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				// redirecting to gid
+				pNode->gid = gid;
 
 				bool found = false;
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
@@ -3308,6 +3365,9 @@ struct groupTree_t {
 			for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
 				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				// redirecting to gid
+				pNode->gid = gid;
 
 				bool found = false;
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
@@ -3339,22 +3399,37 @@ struct groupTree_t {
 		 * Simple merge so everything gets onto one list
 		 */
 
-		// update gid of lhs/rhs
-		for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			this->N[iNode].gid = gid;
+		if (lhs == gid) {
+			// point to contents of rhs
+			uint32_t rhsNext = this->N[rhs].next;
+			if (rhs != rhsNext) {
+				// detach contents from rhs header
+				unlinkNode(rhs);
+
+				// append contents to gid
+				linkNode(this->N[lhs].prev, rhsNext);
+			}
+			
+			// let rhs forward to gid
+			this->N[rhs].gid = gid;
+		} else {
+			// point to contents of lhs
+			uint32_t lhsNext = this->N[lhs].next;
+			if (lhs != lhsNext) {
+				// detach contents from rhs header
+				unlinkNode(lhs);
+
+				// append contents to gid
+				linkNode(this->N[rhs].prev, lhsNext);
+			}
+
+			// let rhs forward to gid
+			this->N[lhs].gid = gid;
 		}
-		this->N[rhs].gid = gid;
-
-		// point to contents of rhs
-		uint32_t rhsNext = this->N[rhs].next;
-		// detach contents from rhs header
-		unlinkNode(rhs);
-
-		// append contents to lhs
-		linkNode(this->N[gid].prev, rhsNext);
 
 		// update and resolve conflicts
-		return updateGroup(layer, gid, depth);
+		updateGroup(layer, gid, depth);
+		return updateToLatest(gid);
 	}
 
 	/*
@@ -3424,18 +3499,26 @@ struct groupTree_t {
 			}
 
 			/*
-			 * Is original usable and does it survive a re-challenge (if any)
+			 * Is original still usable and does it survive a re-challenge (if any)
+			 * This is the fast-path.
 			 */
 
 			if (!changed) {
 				uint32_t challenge = layer.findSid(newSid);
 				assert (challenge != IBIT);
 
-				if (challenge != iNode && this->compare(challenge, newSid, newSlots) > 0) {
-					// node lost challenge, orphan
+				int cmp = this->compare(challenge, newSid, newSlots);
+				if (cmp < 0) {
+					// challenge is better, orphan node
 					uint32_t prevId = this->N[iNode].prev;
 					unlinkNode(iNode);
 					iNode = prevId;
+				} else if (cmp > 0) {
+					// newSlots (which is the original unchanged node) is better, `challenge` is incorrect, update it 
+					unlinkNode(challenge);
+					layer.pSidMap[newSid] = iNode;
+				} else if (cmp == 0) {
+					assert(challenge == iNode);
 				}
 
 				continue;
@@ -3455,7 +3538,9 @@ struct groupTree_t {
 				assert(endpoint != gid);
 
 				// collapse to endpoint and update
-				return mergeGroups(layer, gid, endpoint, depth);
+				gid = mergeGroups(layer, gid, endpoint, depth);
+				assert(endpoint < gid);
+				return false; 
 			}
 
 			/*
@@ -3465,14 +3550,26 @@ struct groupTree_t {
 			uint32_t newNix = this->lookupNode(newSid, newSlots);
 			uint32_t newNid = this->nodeIndex[newNix];
 
-			// does updated exist in a different group
-			if (newNid != 0 && this->N[newNid].gid != gid) {
+			// does updated exist?
+			if (newNid != 0) {
 				// yes
-				printf("<updateGroupMerge>\n");
-				this->cntUpdateGroupMerge++;
+				uint32_t latest = updateToLatest(newNid);
 
-				// merge groups
-				return mergeGroups(layer, gid, this->N[newNid].gid, depth);
+				if (latest != gid) {
+					printf("<updateGroupMerge>\n");
+					this->cntUpdateGroupMerge++;
+
+					// merge groups
+					gid = mergeGroups(layer, gid, latest, depth);
+					return updateGroup(layer, gid, depth);
+				}
+
+				// the updated node has already been created, orphan and ignore original
+				uint32_t prevId = this->N[iNode].prev;
+				unlinkNode(iNode);
+				iNode = prevId;
+
+				continue;
 			}
 
 			/*
@@ -3547,10 +3644,13 @@ struct groupTree_t {
 					 * Returns true if group has forward references
 					 */
 					
-					newLayer.gid = iGroup;
 					bool hasForward = updateGroup(newLayer, iGroup, depth);
 
-					assert(this->N[iGroup].next != iGroup); // group may not be empty
+					// groups might have merged
+					uint32_t gid = updateToLatest(iGroup);
+					assert(gid == newLayer.gid);
+
+					assert(this->N[gid].next != gid); // group may not be empty
 
 					// relocate to new group if it had a forward reference
 					if (hasForward) {
@@ -3569,12 +3669,12 @@ struct groupTree_t {
 						 */
 
 						if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
-							printf("REBUILD %u->%u\n", iGroup, newGid);
+							printf("REBUILD %u-%u->%u\n", iGroup, gid, newGid);
 
 						// point to contents of group
-						uint32_t idNext = this->N[iGroup].next;
+						uint32_t idNext = this->N[gid].next;
 						// detach contents from group by unlinking head
-						unlinkNode(iGroup);
+						unlinkNode(gid);
 						// append contents to new group
 						linkNode(this->N[newGid].prev, idNext);
 
@@ -3585,7 +3685,7 @@ struct groupTree_t {
 						}
 
 						// let current group forward to new
-						this->N[iGroup].gid = newGid;
+						this->N[gid].gid = newGid;
 
 						assert(this->N[newGid].next != newGid); // group may not be empty
 					}

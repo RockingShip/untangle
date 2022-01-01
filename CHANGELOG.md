@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-01 00:33:11 Changed: `groupTree_t::mergeGroups()` and `updateGroup()` merge to lowest of lhs/rhs.
 2022-01-01 00:28:49 Changed: Relocated `groupTree_t::expandSignature()` loop from Cartesian product loop to after. 
 2021-12-31 12:47:41 Fixed: Return and propagate self-collapse for components in `groupTree_t::expandSignature()`. 
 2021-12-31 12:45:52 Changed: Spacing and comments.
