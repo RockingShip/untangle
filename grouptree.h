@@ -2867,8 +2867,7 @@ struct groupTree_t {
 							return IBIT ^ latest; // yes, let caller handle collapse
 
 						// merge and update groups
-						assert(this->N[gid].gid == gid);
-						mergeGroups(layer, gid, latest, depth);
+						gid = mergeGroups(layer, gid, latest, depth);
 
 						// resolve forward references
 						if (depth == 1) {
@@ -2877,9 +2876,9 @@ struct groupTree_t {
 							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
 						}
 
-						printf("<entryPointCollapse latest=%u gid=%u >\n", latest, gid);
+						printf("<entrypointCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
 
-						return latest;
+						return nid;
 
 					} else if (gid == IBIT) {
 						// "node is old and no current group"
@@ -2891,19 +2890,69 @@ struct groupTree_t {
 					} else if (gid != latest) {
 						// "node is old and belongs to different group"
 
-						// merge groups
+						/*
+						 * @date 2021-12-27 20:59:29
+						 * Iterator collapse?
+						 * This can happen (for example): "ab^ cd^ ab^cd^& ?" == "ab^cd^&"
+						 * The iterator is an endpoint, so this is a group collapse
+						 */
+
+						// merge and update groups
 						assert(this->N[gid].gid == gid);
-						mergeGroups(layer, gid, latest, depth);
-						
-						gid = updateToLatest(gid);
+						gid = mergeGroups(layer, gid, latest, depth);
 						assert(layer.gid == gid);
 
-						// restart with tail recursion
-						printf("<nodeMerge nid=%u latest=%u gid=%u nGid=%u >\n", nid, latest, gid, this->N[gid].gid);
+						// is it a iterator collapse?
+						if (updateToLatest(iQ) == gid || updateToLatest(iTu) == gid || updateToLatest(iF) == gid) {
+							// yes
 
+							if (initialGid != IBIT)
+								return IBIT ^ nid; // yes, let caller handle collapse
+
+							// resolve forward references
+							if (depth == 1) {
+								layer.gid = IBIT; // finished constructing current layer 
+								resolveForward(layer, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+							}
+
+							printf("<iteratorCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
+
+							return IBIT ^ nid;
+						}
+
+						// restart
+//						iNode = gid;
+						
 					} else {
+						
 						// "node is old and belongs to same group"
+						uint32_t challenge = layer.findSid(sid);
+						if (challenge != IBIT) {
+							int cmp = this->compare(challenge, sid, finalSlots);
+							if (cmp > 0) {
+								/*
+								 * @date 2021-12-30 21:59:51
+								 * finalSlots will become the new champion
+								 * BUT... finalSLots already exists implying group has 2 sids
+								 * todo: fix the cause
+								 */
+								unlinkNode(challenge);
+								
+								// add sid to lookup index
+								layer.pSidMap[sid]          = nid;
+								layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
+								continue;
+							}
+						}
+						
+						assert(challenge == IBIT || challenge == nid);
+						assert(challenge != IBIT || this->N[nid].next == nid);
+						
+//						
+//						assert(challenge == nid || cmp < 0);
+						
 						// duplicate
 						continue; // silently ignore
 
@@ -3097,7 +3146,7 @@ struct groupTree_t {
 								return expand; // yes, let caller handle collapse
 
 							// merge and update groups
-							mergeGroups(layer, gid, latest, depth);
+							gid = mergeGroups(layer, gid, latest, depth);
 
 							// resolve forward references
 							if (depth == 1) {
