@@ -1074,8 +1074,8 @@ struct groupTree_t {
 		 * 
 		 * Find if gid as already under construction
 		 */
-		inline groupLayer_t *findGid(uint32_t gid) const {
-			for (groupLayer_t *pLayer = this->pPrevious; pLayer; pLayer = pLayer->pPrevious) {
+		inline const groupLayer_t *findGid(uint32_t gid) const {
+			for (const groupLayer_t *pLayer = this; pLayer; pLayer = pLayer->pPrevious) {
 				if (tree.updateToLatest(pLayer->gid) == gid)
 					return pLayer;
 			}
