@@ -272,7 +272,8 @@ struct groupTree_t {
 	uint32_t                 ostart;                // first output key id.
 	uint32_t                 estart;                // first external/extended key id. Roots from previous tree in chain.
 	uint32_t                 nstart;                // id of first node
-	uint32_t                 ncount;                // number of nodes in use
+	uint32_t                 ncount;                // number of nodes in use (as in id)
+	uint32_t                 gcount;                // number of groups in use (as in count)
 	uint32_t                 maxNodes;              // maximum tree capacity
 	uint32_t                 numRoots;              // entries in roots[]
 	// names
@@ -342,6 +343,7 @@ struct groupTree_t {
 		estart(0),
 		nstart(0),
 		ncount(0),
+		gcount(0),
 		maxNodes(0),
 		numRoots(0),
 		// names
@@ -403,6 +405,7 @@ struct groupTree_t {
 		estart(estart),
 		nstart(nstart),
 		ncount(nstart),
+		gcount(0),
 		maxNodes(maxNodes),
 		numRoots(numRoots),
 		// names
@@ -2434,10 +2437,11 @@ struct groupTree_t {
 		this->cntAddBasicNode++;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			fprintf(stderr, "\r\e[K[%s] cntAddNormaliseNode=%lu cntAddBasicNode=%lu ncount=%u | cntOutdated=%lu cntRestart=%lu cntUpdateGroupCollapse=%lu cntUpdateGroupMerge=%lu cntApplySwapping=%lu cntApplyFolding=%lu cntMergeGroup=%lu\n", ctx.timeAsString(),
+			fprintf(stderr, "\r\e[K[%s] cntAddNormaliseNode=%lu cntAddBasicNode=%lu ncount=%u gcount=%u | cntOutdated=%lu cntRestart=%lu cntUpdateGroupCollapse=%lu cntUpdateGroupMerge=%lu cntApplySwapping=%lu cntApplyFolding=%lu cntMergeGroup=%lu\n", ctx.timeAsString(),
 				this->cntAddNormaliseNode,
 				this->cntAddBasicNode,
 				this->ncount,
+				this->gcount,
 
 				this->cntOutdated,
 				this->cntRestart,
@@ -2990,6 +2994,7 @@ struct groupTree_t {
 						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
 						assert(selfSlots[MAXSLOTS - 1] == 0);
 
+						this->gcount++;
 						gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 						assert(gid == this->N[gid].slots[0]);
 						this->N[gid].gid = gid;
@@ -3734,6 +3739,7 @@ struct groupTree_t {
 						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
 						assert(selfSlots[MAXSLOTS - 1] == 0);
 
+						this->gcount++;
 						uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 						assert(newGid == this->N[newGid].slots[0]);
 						this->N[newGid].gid = newGid;
