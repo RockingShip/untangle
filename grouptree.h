@@ -3354,63 +3354,38 @@ struct groupTree_t {
 			pVersion->mem[lhs] = thisVersion;
 			pVersion->mem[rhs] = thisVersion;
 
-			// flood-fill, flag everything referencing the flood
-			// NOTE: can optimize by starting at a smart position 
-			bool changed;
-			do {
-				changed = false;
+			// flood-fill area between lhs/rhs, flag everything referencing the flood
 
-				for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
-					if (this->N[iGroup].gid != iGroup)
-						continue; // not start of list
-					if (pVersion->mem[iGroup] == thisVersion)
-						continue; // already processed 
+			// NOTE: lhs..rhs inclusive
+			for (uint32_t iGroup = lhs; iGroup <= rhs; iGroup++) {
+				if (this->N[iGroup].gid != iGroup)
+					continue; // not start of list
+				if (pVersion->mem[iGroup] == thisVersion)
+					continue; // already processed 
 
-					bool found = false;
+				bool found = false;
 
-					// process nodes of group	
-					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-						const groupNode_t *pNode         = this->N + iNode;
-						unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+				// process nodes of group	
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					const groupNode_t *pNode         = this->N + iNode;
+					unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
-						// examine references
-						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-							uint32_t id = updateToLatest(pNode->slots[iSlot]);
+					// examine references
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+						uint32_t id = updateToLatest(pNode->slots[iSlot]);
 
-							// does it touch flood
-							if (pVersion->mem[id] == thisVersion) {
-								// yes
-								if (id == lhs || id == rhs) {
-									/*
-									 * @date 2021-12-30 21:24:05
-									 * This node will trigger a self-collapse to `a/[id]`,
-									 * and will connect lhs/rhs to the flood fill.
-									 * gid is taken from side that touches the flood. 
-									 * becaus from that context, the flood represents endpoints. 
-									 * Orphan it now, to eliminate the connection which would otherwise empty the group.
-									 */
-									uint32_t prevId = pNode->prev;
-									unlinkNode(iNode);
-									iNode = prevId;
-
-									break;
-								}
-								
-								found = true;
-								break;
-							}
-						}
-						if (found)
+						// does it touch flood
+						if (pVersion->mem[id] == thisVersion) {
+							// yes
+							pVersion->mem[iGroup] = thisVersion;
+							found = true;
 							break;
+						}
 					}
-
-					if (found) {
-						// mark processed
-						pVersion->mem[iGroup] = thisVersion;
-						changed = true;
-					}
+					if (found)
+						break;
 				}
-			} while (changed);
+			}
 
 			/*
 			 * Orphan all nodes (both lhs and rhs) with references to flood.
@@ -3419,25 +3394,12 @@ struct groupTree_t {
 
 			for (uint32_t iNode = this->N[lhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
-				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				// redirecting to gid
 				pNode->gid = gid;
 
-				bool found = false;
-				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-					uint32_t id = updateToLatest(pNode->slots[iSlot]);
-
-					if (pVersion->mem[id] == thisVersion) {
-						found = true;
-						break;
-					}
-				}
-
-				if (found) {
-					// collapse, orphan
-
-					// unlink
+				if (pVersion->mem[iNode] == thisVersion) {
+					// orphan
 					uint32_t prevId = pNode->prev;
 					unlinkNode(iNode);
 					iNode = prevId;
@@ -3446,31 +3408,15 @@ struct groupTree_t {
 
 			for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
-				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				// redirecting to gid
 				pNode->gid = gid;
 
-				bool found = false;
-				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-					uint32_t id = updateToLatest(pNode->slots[iSlot]);
-
-					if (pVersion->mem[id] == thisVersion) {
-						found = true;
-						break;
-					}
-				}
-
-				if (found) {
-					// collapse, orphan
-
-					// unlink
+				if (pVersion->mem[iNode] == thisVersion) {
+					// orphan
 					uint32_t prevId = pNode->prev;
 					unlinkNode(iNode);
 					iNode = prevId;
-
-					// redirecting to lhs
-					pNode->gid = gid;
 				}
 			}
 
@@ -3482,30 +3428,14 @@ struct groupTree_t {
 		 */
 
 		if (lhs == gid) {
-			// point to contents of rhs
-			uint32_t rhsNext = this->N[rhs].next;
-			if (rhs != rhsNext) {
-				// detach contents from rhs header
-				unlinkNode(rhs);
-
-				// append contents to gid
-				linkNode(this->N[lhs].prev, rhsNext);
-			}
-			
+			linkNode(this->N[lhs].prev, rhs);
+			unlinkNode(rhs);
 			// let rhs forward to gid
 			this->N[rhs].gid = gid;
 		} else {
-			// point to contents of lhs
-			uint32_t lhsNext = this->N[lhs].next;
-			if (lhs != lhsNext) {
-				// detach contents from rhs header
-				unlinkNode(lhs);
-
-				// append contents to gid
-				linkNode(this->N[rhs].prev, lhsNext);
-			}
-
-			// let rhs forward to gid
+			linkNode(this->N[rhs].prev, lhs);
+			unlinkNode(lhs);
+			// let lhs forward to gid
 			this->N[lhs].gid = gid;
 		}
 
