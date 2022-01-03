@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-03 14:17:33 Changed: `groupTree_t::mergeGroup()` resolves forward references and updates to new group.
 2022-01-03 00:04:18 Fixed: Reuse nodes in `groupTree_t::updateGrup()` if unchanged AND no-forwards.
 2022-01-02 13:53:46 Fixed: `groupLayer_t::findGid()`.
 2022-01-01 01:30:43 Changed: Improved Cartesian product loop.

@@ -1027,7 +1027,7 @@ struct groupTree_t {
 		 */
 		void setGid(uint32_t gid) {
 			assert(tree.N[gid].gid == gid); // must be latest 			
-			assert(findGid(gid) == NULL); // gid may not already be under construction 
+//			assert(findGid(gid) == NULL); // gid may not already be under construction 
 
 			assert(gid != IBIT);
 			this->gid = gid;
@@ -1679,6 +1679,10 @@ struct groupTree_t {
 
 				// call
 				nid = addBasicNode (newLayer, IBIT, cSid, Q, Tu, Ti, F, depth + 1);
+				// gid might have changed
+				gid = updateToLatest(gid);
+				if (layer.gid != gid)
+					layer.setGid(gid);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -1711,7 +1715,10 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, gid, cSid, Q, Tu, Ti, F, depth);
+				nid = addBasicNode(layer, gid, cSid, Q, Tu, Ti, F, 28);
+				// gid might have changed
+				gid = updateToLatest(gid);
+				assert(layer.gid == gid);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2090,6 +2097,10 @@ struct groupTree_t {
 
 				// call
 				nid = addBasicNode (newLayer, IBIT, cSid, Q, Tu, Ti, F, depth + 1);
+				// gid might have changed
+				gid = updateToLatest(gid);
+				if (layer.gid != gid)
+					layer.setGid(gid);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2123,6 +2134,9 @@ struct groupTree_t {
 
 				// NOTE: top-level, use same depth/indent as caller
 				nid = addBasicNode(layer, gid, cSid, Q, Tu, Ti, F, depth);
+				// gid might have changed
+				gid = updateToLatest(gid);
+				assert(layer.gid == gid);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2505,8 +2519,8 @@ struct groupTree_t {
 			// ripple effect of merging
 			if (depth == 1) {
 				layer.gid = IBIT; // finished constructing current layer 
-				resolveForward(layer, depth);
-				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+				resolveForward(layer, gid, depth);
+				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 			}
 
 			// return node
@@ -2542,6 +2556,7 @@ struct groupTree_t {
 		 * First node of group used as return value
 		 */
 		uint32_t firstNode = IBIT;
+		validateTree(__LINE__);
 
 		/*
 		 * All nodes of the list need to be processed
@@ -2739,8 +2754,8 @@ struct groupTree_t {
 					// resolve forward references
 					if (depth == 1) {
 						layer.gid = IBIT; // finished constructing current layer 
-						resolveForward(layer, depth);
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						resolveForward(layer, gid, depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 					}
 
 					return folded;
@@ -2784,25 +2799,13 @@ struct groupTree_t {
 					// resolve forward references
 					if (depth == 1) {
 						layer.gid = IBIT; // finished constructing current layer 
-						resolveForward(layer, depth);
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+						resolveForward(layer, gid, depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 					}
 
 					return endpoint;
 				}
 
-#if 0 // too slow 
-				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
-					if (gid != IBIT) {
-						for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
-							uint32_t challenge = layer.findSid(iSid);
-							if (challenge != IBIT) {
-								assert(this->N[challenge].gid == gid);
-							}
-						}
-					}
-				}
-#endif
 
 				/*
 				 * @date 2021-11-16 16:22:03
@@ -2872,8 +2875,8 @@ struct groupTree_t {
 						// resolve forward references
 						if (depth == 1) {
 							layer.gid = IBIT; // finished constructing current layer 
-							resolveForward(layer, depth);
-							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+							resolveForward(layer, gid, depth);
+							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 						}
 
 						printf("<entrypointCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
@@ -2912,8 +2915,8 @@ struct groupTree_t {
 							// resolve forward references
 							if (depth == 1) {
 								layer.gid = IBIT; // finished constructing current layer 
-								resolveForward(layer, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+								resolveForward(layer, gid, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 							}
 
 							printf("<iteratorCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
@@ -3097,12 +3100,24 @@ struct groupTree_t {
 			break;
 		}
 
+		/*
+		 * @date 2022-01-03 14:10:19
+		 * Temporary hack to migrate to resolve forward)
+		 */
+		layer.gid = IBIT; // finished constructing current layer 
+		resolveForward(layer, gid, depth);
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+		gid = updateToLatest(gid);
+		layer.setGid(gid);
+		validateTree(__LINE__);
+
 		assert(gid != IBIT);
 		if (depth <= this->maxDepth) {
 			/*
 			 * @date 2022-01-01 00:28:49
 			 * Expand primary nodes. This is an important step of compressing and sorting trees
 			 */
+			validateTree(__LINE__);
 
 			for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				const groupNode_t *pNode      = this->N + iNode;
@@ -3121,11 +3136,19 @@ struct groupTree_t {
 //					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
 //						uint32_t expand = expandMember(layer, gid, mid, finalSlots, depth);
 
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, true); // allow forward references
-
 						// gid might have been merged
 						gid = updateToLatest(gid);
 						assert(layer.gid == gid);
+
+						/*
+						 * @date 2022-01-03 14:10:19
+						 * Temporary hack to migrate to resolve forward)
+						 */
+						layer.gid = IBIT; // finished constructing current layer 
+						resolveForward(layer, gid, depth);
+						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+						gid = updateToLatest(gid);
+						layer.setGid(gid);
 
 						// is it a collapse?
 						if (expand & IBIT) {
@@ -3151,8 +3174,8 @@ struct groupTree_t {
 							// resolve forward references
 							if (depth == 1) {
 								layer.gid = IBIT; // releasing layer
-								resolveForward(layer, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+								resolveForward(layer, gid, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 							}
 
 							return endpoint;
@@ -3174,8 +3197,8 @@ struct groupTree_t {
 							// resolve forward references
 							if (depth == 1) {
 								layer.gid = IBIT; // finished constructing current layer 
-								resolveForward(layer, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+								resolveForward(layer, gid, depth);
+								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 							}
 
 							return expand;
@@ -3201,10 +3224,10 @@ struct groupTree_t {
 		/*
 		 * Test if group merging triggers an update  
 		 */
-		if (depth == 1) {
+		if (initialGid == IBIT) {
 			layer.gid = IBIT; // finished constructing current layer 
-			resolveForward(layer, depth);
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__, depth != 1);
+			resolveForward(layer, gid, depth);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 		}
 
 		// return node the represents arguments
@@ -3254,9 +3277,14 @@ struct groupTree_t {
 		 * New gid is lowest of lhs/rhs.
 		 * This is to reuse group id's as much as possible and also to avoid runaway updates to latest. 
 		 */
-		uint32_t gid = lhs;
-		if (gid > rhs)
+		uint32_t gid;
+		if (lhs < rhs) {
+			gid = lhs;
+		} else {
 			gid = rhs;
+			rhs = lhs;
+			lhs = gid;
+		}
 
 //		printf("mergeGroups=1 ./eval \"%s\" \"%s\"\n", this->saveString(lhs).c_str(), this->saveString(N[rhs].gid).c_str());
 
@@ -3478,7 +3506,10 @@ struct groupTree_t {
 
 		// update and resolve conflicts
 		updateGroup(layer, gid, depth);
-		return updateToLatest(gid);
+		resolveForward(layer, nstart, depth);
+		gid = updateToLatest(gid);
+		layer.setGid(gid);
+		return gid;
 	}
 
 	/*
@@ -3552,7 +3583,7 @@ struct groupTree_t {
 			 * This is the fast-path.
 			 */
 
-			if (!changed && !hasForward) {
+			if (!changed) {
 				uint32_t challenge = layer.findSid(newSid);
 				assert (challenge != IBIT);
 
@@ -3662,7 +3693,7 @@ struct groupTree_t {
 	 * 
 	 * NOTE: `layer` is only needed for the layer cnnectivity
 	 */
-	void resolveForward(groupLayer_t &layer, unsigned depth) {
+	void resolveForward(groupLayer_t &layer, uint32_t gstart, unsigned depth) {
 
 		// allocate storage for scope
 		groupLayer_t newLayer(*this, &layer);
@@ -3670,18 +3701,14 @@ struct groupTree_t {
 		if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
 			printf("FORWARD\n");
 
-		uint32_t firstGid = this->nstart;
+		uint32_t firstGid = gstart;
 		uint32_t lastGid  = this->ncount;
-
-		bool once = false;
 
 		/*
 		 * Walk through tree and search for outdated lists
 		 * NOTE: this is about renumbering nodes, structures/patterns stay unchanged.
 		 * NOTE: the dataset has been specifically designed/created to avoid loops, so the `for` will reach an end-condition 
 		 */
-		while (firstGid != lastGid) {
-
 			for (uint32_t iGroup = firstGid; iGroup < lastGid; iGroup++) {
 				// find group headers
 				if (this->N[iGroup].gid == iGroup) {
@@ -3698,8 +3725,6 @@ struct groupTree_t {
 					// groups might have merged
 					uint32_t gid = updateToLatest(iGroup);
 					assert(gid == newLayer.gid);
-
-					assert(this->N[gid].next != gid); // group may not be empty
 
 					// relocate to new group if it had a forward reference
 					if (hasForward) {
@@ -3735,27 +3760,26 @@ struct groupTree_t {
 
 						// let current group forward to new
 						this->N[gid].gid = newGid;
+						layer.gid = IBIT;
 
 						assert(this->N[newGid].next != newGid); // group may not be empty
 					}
 				}
 			}
-			printf("counts %u %u\n",  lastGid - firstGid, this->ncount - lastGid);
 
 			if (this->ncount - lastGid == lastGid - firstGid) {
+				printf("counts %u %u\n",  lastGid - firstGid, this->ncount - lastGid);
+
 				/*
 				 * firstGid..lastGid produced lastGid..ncount
 				 * orphan and erase all forward references from firstGid
 				 * But only from non-1n9 nodes, as a 1n9-loop is still considered an error
 				 */
-				unsigned cntRemoved = 0;
 				for (uint32_t iNode = firstGid; iNode < this->ncount; iNode++) {
 					groupNode_t *pNode = this->N + iNode;
 
 					if (pNode->sid == db.SID_SELF)
 						continue; // skip list headers
-//					if (pNode->sid == db.SID_OR || pNode->sid == db.SID_GT || pNode->sid == db.SID_NE || pNode->sid == db.SID_QNTF || pNode->sid == db.SID_AND || pNode->sid == db.SID_QTF)
-//						continue; // skip 1n9
 
 					unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
@@ -3763,7 +3787,6 @@ struct groupTree_t {
 						uint32_t id = updateToLatest(pNode->slots[iSlot]);
 
 						if (id > this->N[iNode].gid) {
-							cntRemoved++;
 							// unlink 
 							unlinkNode(iNode);
 							// erase
@@ -3771,47 +3794,19 @@ struct groupTree_t {
 							break;
 						}
 					}
-
 				}
 
 				/*
-				 * Second round, this time removing `1n9`
+				 * Check for empty groups
 				 */
-				if (cntRemoved == 0) {
-					for (uint32_t iNode = firstGid; iNode < this->ncount; iNode++) {
-						groupNode_t *pNode = this->N + iNode;
+				for (uint32_t iGroup = firstGid; iGroup < this->ncount; iGroup++) {
+					// find group headers
+					if (this->N[iGroup].gid == iGroup) {
 
-						if (pNode->sid == db.SID_SELF)
-							continue; // skip list headers
-
-						unsigned numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
-
-						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-							uint32_t id = updateToLatest(pNode->slots[iSlot]);
-
-							if (id > this->N[iNode].gid) {
-								cntRemoved++;
-								// unlink 
-								unlinkNode(iNode);
-								// erase
-								memset(pNode, 0, sizeof(*pNode));
-								break;
-							}
-						}
+						assert(this->N[iGroup].next != iGroup); // group may not be empty
 					}
 				}
-
-				if (cntRemoved == 0) {
-					if (!once)
-						once = true;
-					else
-						assert (cntRemoved != 0);
-				}
 			}
-
-			firstGid = lastGid;
-			lastGid  = this->ncount;
-		}
 
 		if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
 			printf("/UPDATE\n");
@@ -4066,7 +4061,7 @@ struct groupTree_t {
 	 * 
 	 * For debugging
 	 */
-	void validateTree(unsigned lineNr, bool allowForward = false) {
+	void validateTree(unsigned lineNr) {
 		versionMemory_t *pVersion   = allocVersion();
 		uint32_t        thisVersion = pVersion->nextVersion();
 		int             errors      = 0;
@@ -4085,7 +4080,7 @@ struct groupTree_t {
 		for (uint32_t iNode = this->nstart; iNode < this->ncount; iNode++) {
 			const groupNode_t *pNode = this->N + iNode;
 
-			if (pNode->next == iNode && iNode == pNode->gid )
+			if (iNode == pNode->gid && pNode->next == iNode)
 				assert(0);
 
 			if (pNode->gid != this->N[pNode->gid].gid && pNode->next != iNode)
@@ -4121,8 +4116,7 @@ struct groupTree_t {
 
 						if (pVersion->mem[id] != thisVersion) {
 							// reference not defined
-							if (!allowForward)
-								errors++;
+							errors++;
 						}
 					}
 
@@ -4213,7 +4207,7 @@ struct groupTree_t {
 						} else if (latest == 0) {
 							// slots references zero
 							printf("<ERROR:gid=zero>");
-						} else if (!allowForward) {
+						} else {
 							if (id != latest) {
 								// reference orphaned
 								printf("<OUTDATED>");
