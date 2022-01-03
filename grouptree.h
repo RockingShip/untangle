@@ -3552,7 +3552,7 @@ struct groupTree_t {
 			 * This is the fast-path.
 			 */
 
-			if (!changed) {
+			if (!changed && !hasForward) {
 				uint32_t challenge = layer.findSid(newSid);
 				assert (challenge != IBIT);
 
