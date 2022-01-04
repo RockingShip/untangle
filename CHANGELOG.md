@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-04 14:31:20 Added: `groupTree_t::oldId` for debugging to track original nodes. 
 2022-01-04 14:29:23 Changed: Always call `groupTree_f::resolveForward()` after `mergeGroups()`.
 2022-01-04 13:51:51 Fixed: `groupTree_t::mergeGroups()` flood-fill top-level detection.
 2022-01-04 13:21:45 Changed: Improved C-iterator change detect.

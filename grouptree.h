@@ -106,7 +106,10 @@ struct groupNode_t {
 	 */
 	uint32_t power;
 
-
+	/*
+	 * Used for debuging to track the original node
+	 */
+	uint32_t oldId;
 };
 
 /*
@@ -927,11 +930,12 @@ struct groupTree_t {
 
 		groupNode_t *pNode = this->N + nid;
 
-		pNode->gid  = 0;
-		pNode->next = nid;
-		pNode->prev = nid;
-		pNode->sid    = sid;
-		pNode->power  = power;
+		pNode->gid   = 0;
+		pNode->next  = nid;
+		pNode->prev  = nid;
+		pNode->sid   = sid;
+		pNode->power = power;
+		pNode->oldId = 0;
 
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			pNode->slots[iSlot] = slots[iSlot];
@@ -3617,6 +3621,8 @@ struct groupTree_t {
 			newNid = this->newNode(newSid, newSlots, pNode->power); // TODO: power correction?
 			groupNode_t *pNew = this->N + newNid;
 
+			pNew->oldId = pNode->oldId ? pNode->oldId : iNode; 
+
 			// set group
 			pNew->gid = gid;
 
@@ -3696,6 +3702,8 @@ struct groupTree_t {
 						uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 						assert(newGid == this->N[newGid].slots[0]);
 						this->N[newGid].gid = newGid;
+
+						this->N[newGid].oldId = this->N[gid].oldId ? this->N[gid].oldId : gid;
 
 						/*
 						 * Walk and update the list
@@ -4142,8 +4150,8 @@ struct groupTree_t {
 					if (pNode->gid != iGroup)
 						printf("<GROUP>");
 
-					printf("%u\t%u\t%u:%s/[",
-					       pNode->gid, iNode,
+					printf("%u\t%u(%u)\t%u:%s/[",
+					       pNode->gid, iNode, pNode->oldId,
 					       pNode->sid, db.signatures[pNode->sid].name);
 
 					char delimiter = 0;
