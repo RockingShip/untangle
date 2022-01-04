@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-04 13:21:45 Changed: Improved C-iterator change detect.
 2022-01-03 18:16:06 Changed: `groupTree_t::mergeGroup()`, smarter range and flood-fill.
 2022-01-03 18:02:53 Added: Statistics `groupTree_t::gcount` for number of created groups.
 2022-01-03 14:17:33 Changed: `groupTree_t::mergeGroup()` resolves forward references.

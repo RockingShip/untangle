@@ -3066,23 +3066,51 @@ struct groupTree_t {
 
 			/*
 			 * detect iterator-group change
-			 * this happens when `importGroup()` is called for the likes of `abab^!`=`ab^`, when the iterator get imported into `gid`
+			 * this might happen when `mergeGroup()` involves an iterator group
 			 */
 
-			assert(gid == this->N[gid].gid);
+			bool changed = false;
 
-			/*
-			 * Test for iterator collapsing
-			 * When happens, all further iterations will fold and be silently ignored
-			 */
-			if (this->N[iQ].gid == gid || this->N[iTu].gid == gid || this->N[iF].gid == gid) {
-				printf("<iteratorCollapse Q=%u T=%u%s F=%u gid=%u>\n", iQ, iTu, Ti ? "~" : "", iF, gid);
-				break;
+			if (this->N[Q].gid != Q) {
+				// group change
+				iQ      = Q = updateToLatest(this->N[iQ].gid);
+				changed = true;
+			} else if (this->N[iQ].next == iQ && iQ >= this->nstart) {
+				// orphaned
+				iQ      = Q;
+				changed = true;
 			}
 
-			// iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
-			// node 0 is a single node list containing SID_ZERO.
+			if (this->N[Tu].gid != Tu) {
+				// group change
+				iTu     = Tu = updateToLatest(this->N[iTu].gid);
+				changed = true;
+			} else if (this->N[iTu].next == iTu && iTu >= nstart) {
+				// orphaned
+				iTu     = Tu;
+				changed = true;
+			}
 
+			if (Tu != F) {
+				if (this->N[F].gid != F) {
+					// group change
+					iF      = F = updateToLatest(this->N[iF].gid);
+					changed = true;
+				} else if (this->N[iF].next == iF && iF >= nstart) {
+					// orphaned
+					iF      = F;
+					changed = true;
+				}
+			}
+
+			if (changed)
+				continue;
+
+			/*
+			 * Bump iterators
+			 * iQ/iT/iF are allowed to start with 0, when that happens, don't loop forever.
+			 * node 0 is a single node list containing SID_ZERO.
+			 */
 
 			/*
 			 * @date 2021-12-27 14:04:37
