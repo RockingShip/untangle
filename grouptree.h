@@ -2519,13 +2519,8 @@ struct groupTree_t {
 
 			// merge groups lists
 			gid = mergeGroups(layer, gid, latest, depth);
-
-			// ripple effect of merging
-			if (depth == 1) {
-				layer.gid = IBIT; // finished constructing current layer 
-				resolveForward(layer, gid, depth);
-				if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-			}
+			layer.gid = IBIT; // finished constructing current layer 
+			resolveForward(layer, gid, depth);
 
 			// return node
 			return nid;
@@ -2799,13 +2794,8 @@ struct groupTree_t {
 
 					// collapse to endpoint and update
 					gid = mergeGroups(layer, gid, endpoint, depth);
-
-					// resolve forward references
-					if (depth == 1) {
-						layer.gid = IBIT; // finished constructing current layer 
-						resolveForward(layer, gid, depth);
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-					}
+					layer.gid = IBIT; // finished constructing current layer 
+					resolveForward(layer, gid, depth);
 
 					return endpoint;
 				}
@@ -2875,13 +2865,8 @@ struct groupTree_t {
 
 						// merge and update groups
 						gid = mergeGroups(layer, gid, latest, depth);
-
-						// resolve forward references
-						if (depth == 1) {
-							layer.gid = IBIT; // finished constructing current layer 
-							resolveForward(layer, gid, depth);
-							if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-						}
+						layer.gid = IBIT; // finished constructing current layer 
+						resolveForward(layer, gid, depth);
 
 						printf("<entrypointCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
 
@@ -2905,26 +2890,18 @@ struct groupTree_t {
 						 */
 
 						// merge and update groups
-						assert(this->N[gid].gid == gid);
 						gid = mergeGroups(layer, gid, latest, depth);
-						assert(layer.gid == gid);
+						layer.gid = IBIT; // finished constructing current layer 
+						resolveForward(layer, gid, depth);
+						layer.setGid(gid);
 
 						// is it a iterator collapse?
 						if (updateToLatest(iQ) == gid || updateToLatest(iTu) == gid || updateToLatest(iF) == gid) {
 							// yes
 
-							if (initialGid != IBIT)
-								return IBIT ^ nid; // yes, let caller handle collapse
-
-							// resolve forward references
-							if (depth == 1) {
-								layer.gid = IBIT; // finished constructing current layer 
-								resolveForward(layer, gid, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-							}
-
 							printf("<iteratorCollapse nid=%u latest=%u gid=%u >\n", nid, latest, gid);
 
+							layer.gid = IBIT;
 							return IBIT ^ nid;
 						}
 
@@ -3203,13 +3180,8 @@ struct groupTree_t {
 
 							// merge and update groups
 							gid = mergeGroups(layer, gid, latest, depth);
-
-							// resolve forward references
-							if (depth == 1) {
-								layer.gid = IBIT; // releasing layer
-								resolveForward(layer, gid, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-							}
+							layer.gid = IBIT; // releasing layer
+							resolveForward(layer, gid, depth);
 
 							return endpoint;
 						}
@@ -3226,13 +3198,8 @@ struct groupTree_t {
 
 							// merge and update groups
 							gid = mergeGroups(layer, gid, latest, depth);
-
-							// resolve forward references
-							if (depth == 1) {
-								layer.gid = IBIT; // finished constructing current layer 
-								resolveForward(layer, gid, depth);
-								if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-							}
+							layer.gid = IBIT; // finished constructing current layer 
+							resolveForward(layer, gid, depth);
 
 							return expand;
 						}
@@ -3241,7 +3208,9 @@ struct groupTree_t {
 						if (gid != latest) {
 							// merge groups
 							gid = mergeGroups(layer, gid, latest, depth);
-							assert(layer.gid == gid);
+							layer.gid = IBIT; // finished constructing current layer 
+							resolveForward(layer, gid, depth);
+							layer.setGid(gid);
 						}
 					}
 				}
@@ -3797,6 +3766,8 @@ struct groupTree_t {
 					}
 				}
 			}
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE)
 			printf("/UPDATE\n");
