@@ -3422,12 +3422,25 @@ struct groupTree_t {
 
 			for (uint32_t iNode = this->N[lhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
+				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				// redirecting to gid
 				pNode->gid = gid;
 
-				if (pVersion->mem[iNode] == thisVersion) {
-					// orphan
+				bool found = false;
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = updateToLatest(pNode->slots[iSlot]);
+
+					if (pVersion->mem[id] == thisVersion) {
+						found = true;
+						break;
+					}
+				}
+
+				if (found) {
+					// collapse, orphan
+
+					// unlink
 					uint32_t prevId = pNode->prev;
 					unlinkNode(iNode);
 					iNode = prevId;
@@ -3436,12 +3449,25 @@ struct groupTree_t {
 
 			for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode         = this->N + iNode;
+				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				// redirecting to gid
 				pNode->gid = gid;
 
-				if (pVersion->mem[iNode] == thisVersion) {
-					// orphan
+				bool found = false;
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = updateToLatest(pNode->slots[iSlot]);
+
+					if (pVersion->mem[id] == thisVersion) {
+						found = true;
+						break;
+					}
+				}
+
+				if (found) {
+					// collapse, orphan
+
+					// unlink
 					uint32_t prevId = pNode->prev;
 					unlinkNode(iNode);
 					iNode = prevId;
