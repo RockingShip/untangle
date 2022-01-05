@@ -331,7 +331,6 @@ struct groupTree_t {
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
-	uint32_t                 *pGidRefCount;                // group refcounts used by slots. NOTE: focus is being it zero or not.
 	// temporary heap for nodes
 	heapNode_t               *pHeapNodes;           // Pending Cartesian products
 	unsigned                 numHeapNode;           // Number of nodes on the heap
@@ -404,7 +403,6 @@ struct groupTree_t {
 		slotMap(NULL),
 		slotVersion(NULL),
 		slotVersionNr(1),
-		pGidRefCount(NULL),
 		// temporary heap for nodes
 		pHeapNodes(NULL),
 		numHeapNode(0),
@@ -469,7 +467,6 @@ struct groupTree_t {
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
 		slotVersionNr(1),
-		pGidRefCount((uint32_t *) ctx.myAlloc("groupTree_t::pGidRefCount", maxNodes, sizeof(*pGidRefCount))),
 		// temporary heap for nodes
 		pHeapNodes((heapNode_t *) ctx.myAlloc("groupTree_t::pHeapNodes", MAXHEAPNODE, sizeof(*pHeapNodes))),
 		numHeapNode(0),
@@ -512,8 +509,6 @@ struct groupTree_t {
 			pNode->prev = iKey;
 			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = iKey;
-
-			pGidRefCount[iKey]++;
 		}
 
 		// setup default roots
@@ -542,8 +537,6 @@ struct groupTree_t {
 			freeMap(slotMap);
 		if (slotVersion)
 			freeMap(slotVersion);
-		if (pGidRefCount)
-			ctx.myFree("groupTree_t::pGidRefCount", this->pGidRefCount);
 		if (pHeapNodes)
 			ctx.myFree("groupTree_t::pHeapNodes", this->pHeapNodes);
 
@@ -978,12 +971,7 @@ struct groupTree_t {
 
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			pNode->slots[iSlot] = slots[iSlot];
-			pGidRefCount[slots[iSlot]]++;
 		}
-
-		// correction, SID_SELF does not count or it will lock itself
-		if (sid == db.SID_SELF)
-			pGidRefCount[slots[0]]--;
 
 		return nid;
 	}
@@ -5282,7 +5270,6 @@ struct groupTree_t {
 		slotMap       = allocMap();
 		slotVersion   = allocMap(); // allocate as node-id map because of local version numbering
 		slotVersionNr = 1;
-		pGidRefCount  = (uint32_t *) ctx.myAlloc("groupTree_t::pGidRefCount", maxNodes, sizeof(*pGidRefCount));
 		// temporary heap for nodes
 		pHeapNodes    = (heapNode_t *) ctx.myAlloc("groupTree_t::pHeapNodes", MAXHEAPNODE, sizeof(*pHeapNodes));
 
