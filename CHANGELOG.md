@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-05 01:13:32 Added: `heapNode_t` to store/delay top-level nodes during group creation.
 2022-01-04 22:08:38 Changed: `groupTree_t::updateGroup()` and `resolveForward()` now smarter.
 2022-01-04 14:31:20 Added: `groupTree_t::oldId` for debugging to track original nodes. 
 2022-01-04 14:29:23 Changed: Always call `groupTree_f::resolveForward()` after `mergeGroups()`.
