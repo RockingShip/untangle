@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-05 23:02:15 Changed: Focus active gid to that in `groupTree_t::groupLayer_t`.
 2022-01-05 12:47:28 Changed: `groupTree_t::expandMembers()` working.
 2022-01-05 01:17:44 Deleted: `groupTree_t::pGidRefCount`.
 2022-01-05 01:13:32 Added: `heapNode_t` to store/delay top-level nodes during group creation.
