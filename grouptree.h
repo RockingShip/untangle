@@ -2136,7 +2136,7 @@ struct groupTree_t {
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode (newLayer, IBIT, cSid, Q, Tu, Ti, F, /*componentsOnly=*/false, depth + 1);
+				nid = addBasicNode(newLayer, IBIT, cSid, Q, Tu, Ti, F, /*componentsOnly=*/false, depth + 1);
 				// gid might have changed
 				gid = updateToLatest(gid);
 				if (layer.gid != gid)
@@ -2803,9 +2803,11 @@ struct groupTree_t {
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
 					// collapse to endpoint and update
-					layer.gid = IBIT;
-					mergeGroups(gid, endpoint, depth);
-					resolveForward(layer, gid, depth);
+					if (gid != IBIT) {
+						layer.gid = IBIT;
+						mergeGroups(gid, endpoint, depth);
+						resolveForward(layer, gid, depth);
+					}
 
 					return endpoint;
 				}
@@ -2883,6 +2885,22 @@ struct groupTree_t {
 					} else if (gid == IBIT) {
 						// "node is old and no current group"
 
+						/*
+						 * @date 2022-01-05 11:56:38
+						 * Does new group cause an iterator collapse 
+						 */
+
+						// iterator collapse?
+						if (latest == Q || latest == Tu || latest == F) {
+							// yes
+							
+							// is this called recursively?
+							if (componentsOnly)
+								return IBIT ^ latest; // yes, let caller handle collapse
+
+							return nid;
+						}
+
 						// attach to that group
 						gid = latest;
 						layer.setGid(gid);
@@ -2905,6 +2923,13 @@ struct groupTree_t {
 						gid = updateToLatest(gid);
 						layer.setGid(gid);
 
+						assert(gid != Q && gid != Tu && gid != F); // iterator collapse
+
+					} else if (this->N[nid].next == nid) {	
+						// "node is old and orphaned"
+						// if it was rejected then, it will be rejected now
+						
+						continue; // silently ignore
 					} else {
 						// "node is old and belongs to same group"
 
@@ -2913,13 +2938,10 @@ struct groupTree_t {
 							int cmp = this->compare(challenge, sid, finalSlots);
 
 							if (cmp > 0) {
-								assert(0); // todo: does this still happen 
-
 								/*
 								 * @date 2021-12-30 21:59:51
 								 * finalSlots will become the new champion
 								 * BUT... finalSLots already exists implying group has 2 sids
-								 * todo: fix the cause
 								 */
 								unlinkNode(challenge);
 
@@ -3120,6 +3142,8 @@ struct groupTree_t {
 					gid = latest;
 					layer.setGid(gid);
 
+					assert(gid != Q && gid != Tu && gid != F); // iterator collapse, needs extra code
+
 				} else if (gid != latest) {
 					// "node is old and belongs to different group"
 
@@ -3137,6 +3161,14 @@ struct groupTree_t {
 					// scan group and recreate layer
 					gid = updateToLatest(gid);
 					layer.setGid(gid);
+
+					assert(gid != Q && gid != Tu && gid != F); // iterator collapse
+
+				} else if (this->N[nid].next == nid) {
+					// "node is old and orphaned"
+					// if it was rejected then, it will be rejected now
+
+					continue; // silently ignore
 
 				} else {
 					// "node is old and belongs to same group"
