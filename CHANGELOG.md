@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-06 15:51:42 Deleted: `groupTree_t::heapNode_t`, experiment failed.
 2022-01-05 23:02:15 Changed: Focus active gid to that in `groupTree_t::groupLayer_t`.
 2022-01-05 12:47:28 Changed: `groupTree_t::expandMembers()` working.
 2022-01-05 01:17:44 Deleted: `groupTree_t::pGidRefCount`.

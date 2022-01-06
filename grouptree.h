@@ -146,21 +146,6 @@ struct versionMemory_t {
 };
 
 /*
- * @date 2022-01-02 13:55:30
- * 
- * Storage for Cartesian products.
- * When creating groups, first create all components, then add top-level nodes.
- * All pending nodes share the same heap storage 
- */
-struct heapNode_t {
-	uint32_t sid;
-	uint32_t slots[MAXSLOTS];
-	unsigned power;
-	// debugging
-	uint32_t iQ, iTu, iF;
-};
-
-/*
  * The database file header
  */
 struct groupTreeHeader_t {
@@ -331,9 +316,6 @@ struct groupTree_t {
 	uint32_t                 *slotMap;              // slot position of endpoint 
 	uint32_t                 *slotVersion;          // versioned memory for addNormaliseNode - content version
 	uint32_t                 slotVersionNr;         // active version number
-	// temporary heap for nodes
-	heapNode_t               *pHeapNodes;           // Pending Cartesian products
-	unsigned                 numHeapNode;           // Number of nodes on the heap
 	// statistics
 	uint64_t                 cntOutdated;           // `constructSlots()` detected and updated outdated Q/T/F
 	uint64_t                 cntRestart;            // C-product got confused, restart  
@@ -403,9 +385,6 @@ struct groupTree_t {
 		slotMap(NULL),
 		slotVersion(NULL),
 		slotVersionNr(1),
-		// temporary heap for nodes
-		pHeapNodes(NULL),
-		numHeapNode(0),
 		// statistics
 		cntOutdated(0),
 		cntRestart(0),
@@ -467,9 +446,6 @@ struct groupTree_t {
 		slotMap(allocMap()),
 		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
 		slotVersionNr(1),
-		// temporary heap for nodes
-		pHeapNodes((heapNode_t *) ctx.myAlloc("groupTree_t::pHeapNodes", MAXHEAPNODE, sizeof(*pHeapNodes))),
-		numHeapNode(0),
 		// statistics
 		cntOutdated(0),
 		cntRestart(0),
@@ -537,8 +513,6 @@ struct groupTree_t {
 			freeMap(slotMap);
 		if (slotVersion)
 			freeMap(slotVersion);
-		if (pHeapNodes)
-			ctx.myFree("groupTree_t::pHeapNodes", this->pHeapNodes);
 
 		// release pools
 		while (numPoolMap > 0)
@@ -2447,7 +2421,6 @@ struct groupTree_t {
 		/*
 		 * call worker
 		 */
-		this->numHeapNode = 0;
 		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*componentsOnly=*/false, /*depth=*/0);
 
 		return ret;
@@ -2584,7 +2557,6 @@ struct groupTree_t {
 		 * First node of group used as return value
 		 */
 		uint32_t firstNode      = IBIT;
-		unsigned savNumHeapNode = this->numHeapNode;
 
 		/*
 		 * All nodes of the list need to be processed
@@ -2898,7 +2870,7 @@ struct groupTree_t {
 						// iterator collapse?
 						if (latest == Q || latest == Tu || latest == F) {
 							// yes
-							
+
 							// is this called recursively?
 							if (componentsOnly)
 								return IBIT ^ latest; // yes, let caller handle collapse
@@ -2925,41 +2897,16 @@ struct groupTree_t {
 
 						assert(layer.gid != Q && layer.gid != Tu && layer.gid != F); // iterator collapse
 
-					} else if (this->N[nid].next == nid) {	
+					} else if (this->N[nid].next == nid) {
 						// "node is old and orphaned"
 						// if it was rejected then, it will be rejected now
-						
+
 						continue; // silently ignore
+
 					} else {
 						// "node is old and belongs to same group"
 
-						uint32_t challenge = layer.findSid(sid);
-						if (challenge != IBIT) {
-							int cmp = this->compare(challenge, sid, finalSlots);
-
-							if (cmp > 0) {
-								/*
-								 * @date 2021-12-30 21:59:51
-								 * finalSlots will become the new champion
-								 * BUT... finalSLots already exists implying group has 2 sids
-								 */
-								unlinkNode(challenge);
-
-								// add sid to lookup index
-								layer.pSidMap[sid]          = nid;
-								layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-								continue;
-							} else if (cmp == 0) {
-								assert(challenge == nid);
-							}
-						}
-
-						assert(challenge == IBIT || challenge == nid);
-						assert(challenge != IBIT || this->N[nid].next == nid);
-
-//						
-//						assert(challenge == nid || cmp < 0);
+						assert(layer.findSid(sid) == nid);
 
 						// duplicate
 						continue; // silently ignore
@@ -2967,19 +2914,94 @@ struct groupTree_t {
 					}
 
 				} else {
+
+					// challenge the current champion?
+					if (layer.gid != IBIT) {
+						// yes, is there a champion?
+						uint32_t challenge = layer.findSid(sid);
+						if (challenge != IBIT) {
+							// yes
+							int cmp = this->compare(challenge, sid, finalSlots);
+
+							if (cmp < 0) {
+								// champion is better
+								continue; // silently ignore
+							} else if (cmp > 0) {
+								// heap is better, orphan existing first and replace later with new
+								unlinkNode(challenge);
+							} else if (cmp == 0) {
+								assert(0); // should have been detected by `lookupNode()`.
+							}
+						}
+					}
+
+					if (layer.gid == IBIT) {
+						// "node is new and no current group"
+
+						// create group header
+						uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+						assert(selfSlots[MAXSLOTS - 1] == 0);
+
+						this->gcount++;
+						uint32_t gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+						assert(gid == this->N[gid].slots[0]);
+						this->N[gid].gid = gid;
+
+						layer.setGid(gid); // set layer to empty gid
+					}
+
+					// create node
+					nid = this->newNode(sid, finalSlots, power);
+					groupNode_t *pNode = this->N + nid;
+
+					// add node to index
+					this->nodeIndex[ix]        = nid;
+					this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+
+					// add node to list
+					pNode->gid = layer.gid;
+					linkNode(this->N[layer.gid].prev, nid);
+
+					// add sid to lookup index
+					layer.pSidMap[sid]          = nid;
+					layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
+
 					/*
-					 * Store candidate node onto the heap for later processing 
+					 * @date 2021-12-25 00:57:11
+					 * 
+					 * Update power levels
 					 */
+					if (this->withPower) {
+						// @formatter:off
+					switch(db.signatures[sid].size) {
+					case 0: if (layer.minPower[0] < power) layer.minPower[0] = power; // deliberate fall-through
+					case 1: if (layer.minPower[1] < power) layer.minPower[1] = power;
+					case 2: if (layer.minPower[2] < power) layer.minPower[2] = power;
+					case 3: if (layer.minPower[3] < power) layer.minPower[3] = power;
+					case 4: if (layer.minPower[4] < power) layer.minPower[4] = power;
+					case 5: if (layer.minPower[5] < power) layer.minPower[5] = power;
+					case 6: if (layer.minPower[6] < power) layer.minPower[6] = power;
+					case 7: if (layer.minPower[7] < power) layer.minPower[7] = power;
+						break;
+					default:
+						assert(0);
+					}
+					// @formatter:on
+					}
 
-					assert(this->numHeapNode < MAXHEAPNODE);
-					heapNode_t *pHeap = this->pHeapNodes + this->numHeapNode++;
+					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
+						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+						       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+						       layer.gid, nid,
+						       iQ, iTu, iF,
+						       sid, db.signatures[sid].name,
+						       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
+						       db.signatures[sid].size, power);
+					}
 
-					pHeap->sid = sid;
-					memcpy(pHeap->slots, finalSlots, MAXSLOTS * sizeof(*pHeap->slots));
-					pHeap->power = power;
-					pHeap->iQ = iQ;
-					pHeap->iTu = iTu;
-					pHeap->iF = iF;
+					// remember first node (most likely `1n9`) for return value
+					if (firstNode == IBIT)
+						firstNode = nid;
 				}
 
 				/*
@@ -3059,216 +3081,6 @@ struct groupTree_t {
 			break;
 		}
 
-		/*
-		 * Add pending top-level nodes stored on the heap to the group.
-		 * An optimize strategy could be to drop the list when an existing group has been found
-		 * 
-		 * NOTE: preserve order of creation
-		 */
-		
-		for (unsigned iHeap = savNumHeapNode; iHeap < this->numHeapNode; iHeap++) {
-			// node is new and needs to be created
-
-			/*
-			 * General idea:
-			 * 
-			 * node is old and no current group:
-			 *      attach to group
-			 * node is old and belongs to same group
-			 *      skip duplicate
-			 * node is old and belongs to different group:
-			 * 	merge groups
-			 * node is new and no current group:
-			 *      create group and add as first node
-			 * node is new and current group
-			 *      add to group
-			 */
-			heapNode_t *pHeap = this->pHeapNodes + iHeap;
-
-			/*
-			 * Update slots
-			 */
-
-			bool changed = false;
-
-			for (unsigned iSlot = 0; iSlot < db.signatures[pHeap->sid].numPlaceholder; iSlot++) {
-				uint32_t id = updateToLatest(pHeap->slots[iSlot]);
-
-				if (pHeap->slots[iSlot] != id) {
-					pHeap->slots[iSlot] = id;
-					changed = true;
-				}
-			}
-
-			if (changed) {
-				// perform sid swap
-				applySwapping(pHeap->sid, pHeap->slots);
-
-				// perform folding. NOTE: newSid/newSlots might both change
-				applyFolding(&pHeap->sid, pHeap->slots);
-			}
-
-
-			/*
-			 * Add final sid/slot to group
-			 */
-
-			// lookup slots
-			uint32_t ix  = this->lookupNode(pHeap->sid, pHeap->slots);
-			uint32_t nid = this->nodeIndex[ix];
-
-			if (nid != 0) {
-				// node is old/existing
-				uint32_t latest = updateToLatest(nid);
-
-				if (latest < this->nstart) {
-					// entrypoint collapse
-
-					// is this called recursively?
-					if (componentsOnly)
-						return IBIT ^ latest; // yes, let caller handle collapse
-
-					// collapse to entrypoint and update
-					mergeGroups(layer, latest);
-					resolveForward(layer);
-
-					return nid;
-
-				} else if (layer.gid == IBIT) {
-					// "node is old and no current group"
-
-					// attach to that group
-					layer.setGid(latest);
-
-					assert(layer.gid != Q && layer.gid != Tu && layer.gid != F); // iterator collapse, needs extra code
-
-				} else if (layer.gid != latest) {
-					// "node is old and belongs to different group"
-
-					/*
-					 * @date 2021-12-27 20:59:29
-					 * Iterator collapse?
-					 * This can happen (for example): "ab^ cd^ ab^cd^& ?" == "ab^cd^&"
-					 * The iterator is an endpoint, so this is a group collapse
-					 */
-
-					// merge and update groups
-					mergeGroups(layer, latest);
-					resolveForward(layer);
-
-					assert(layer.gid != Q && layer.gid != Tu && layer.gid != F); // iterator collapse
-
-				} else if (this->N[nid].next == nid) {
-					// "node is old and orphaned"
-					// if it was rejected then, it will be rejected now
-
-					continue; // silently ignore
-
-				} else {
-					// "node is old and belongs to same group"
-
-					assert(layer.findSid(pHeap->sid) == nid);
-
-					// duplicate
-					continue; // silently ignore
-
-				}
-
-			} else {
-
-				// challenge the current champion?
-				if (layer.gid != IBIT) {
-					// yes, is there a champion?
-					uint32_t challenge = layer.findSid(pHeap->sid);
-					if (challenge != IBIT) {
-						// yes
-						int cmp = this->compare(challenge, pHeap->sid, pHeap->slots);
-
-						if (cmp < 0) {
-							// champion is better
-							continue; // silently ignore
-						} else if (cmp > 0) {
-							// heap is better, orphan existing first and replace later with new
-							unlinkNode(challenge);
-						} else if (cmp == 0) {
-							assert(0); // should have been detected by `lookupNode()`.
-						}
-					}
-				}
-
-				if (layer.gid == IBIT) {
-					// "node is new and no current group"
-
-					// create group header
-					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
-					assert(selfSlots[MAXSLOTS - 1] == 0);
-
-					this->gcount++;
-					uint32_t gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
-					assert(gid == this->N[gid].slots[0]);
-					this->N[gid].gid = gid;
-
-					layer.setGid(gid); // set layer to empty gid
-				}
-
-				// create node
-				nid = this->newNode(pHeap->sid, pHeap->slots, pHeap->power);
-				groupNode_t *pNode = this->N + nid;
-
-				// add node to index
-				this->nodeIndex[ix]        = nid;
-				this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
-
-				// add node to list
-				pNode->gid = layer.gid;
-				linkNode(this->N[layer.gid].prev, nid);
-
-				// add sid to lookup index
-				layer.pSidMap[pHeap->sid]          = nid;
-				layer.pSidVersion->mem[pHeap->sid] = layer.pSidVersion->version;
-
-				/*
-				 * @date 2021-12-25 00:57:11
-				 * 
-				 * Update power levels
-				 */
-				if (this->withPower) {
-					// @formatter:off
-					switch(db.signatures[pHeap->sid].size) {
-					case 0: if (layer.minPower[0] < pHeap->power) layer.minPower[0] = pHeap->power; // deliberate fall-through
-					case 1: if (layer.minPower[1] < pHeap->power) layer.minPower[1] = pHeap->power;
-					case 2: if (layer.minPower[2] < pHeap->power) layer.minPower[2] = pHeap->power;
-					case 3: if (layer.minPower[3] < pHeap->power) layer.minPower[3] = pHeap->power;
-					case 4: if (layer.minPower[4] < pHeap->power) layer.minPower[4] = pHeap->power;
-					case 5: if (layer.minPower[5] < pHeap->power) layer.minPower[5] = pHeap->power;
-					case 6: if (layer.minPower[6] < pHeap->power) layer.minPower[6] = pHeap->power;
-					case 7: if (layer.minPower[7] < pHeap->power) layer.minPower[7] = pHeap->power;
-						break;
-					default:
-						assert(0);
-					}
-					// @formatter:on
-				}
-
-				if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
-					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
-					       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-					       layer.gid, nid,
-					       pHeap->iQ, pHeap->iTu, pHeap->iF,
-					       pHeap->sid, db.signatures[pHeap->sid].name,
-					       pHeap->slots[0], pHeap->slots[1], pHeap->slots[2], pHeap->slots[3], pHeap->slots[4], pHeap->slots[5], pHeap->slots[6], pHeap->slots[7], pHeap->slots[8],
-					       db.signatures[pHeap->sid].size, pHeap->power);
-				}
-
-				// remember first node (most likely `1n9`) for return value
-				if (firstNode == IBIT)
-					firstNode = nid;
-			}
-		}
-
-		// mark heap processed
-		this->numHeapNode = savNumHeapNode;
-		
 		/*
 		 * @date 2022-01-03 14:10:19
 		 * Temporary hack to migrate to resolve forward)
@@ -5269,8 +5081,6 @@ struct groupTree_t {
 		slotMap       = allocMap();
 		slotVersion   = allocMap(); // allocate as node-id map because of local version numbering
 		slotVersionNr = 1;
-		// temporary heap for nodes
-		pHeapNodes    = (heapNode_t *) ctx.myAlloc("groupTree_t::pHeapNodes", MAXHEAPNODE, sizeof(*pHeapNodes));
 
 		// make all `keyNames`+`rootNames` indices valid
 		keyNames.resize(nstart);
