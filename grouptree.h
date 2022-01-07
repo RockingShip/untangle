@@ -2765,15 +2765,6 @@ struct groupTree_t {
 					continue; // yes, silently ignore
 
 				/*
-				 * @date 2021-12-25 00:53:05
-				 * 
-				 * Only consider if found pattern meets minimal power level
-				 */
-
-				if (this->withPower && power < layer.minPower[db.signatures[sid].size])
-					continue; // silently ignore					
-
-				/*
 				 * Test for an endpoint collapse, which collapses the group as whole
 				 */
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
@@ -2984,10 +2975,10 @@ struct groupTree_t {
 				}
 
 				if (pSignature->size > 1) {
-//					if (true) {
-//						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth);
-					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-						uint32_t expand = expandMember(layer, mid, pNode->slots, depth);
+					if (true) {
+						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth);
+//					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+//						uint32_t expand = expandMember(layer, mid, pNode->slots, depth);
 
 						/*
 						 * @date 2022-01-05 17:27:20
@@ -3089,6 +3080,7 @@ struct groupTree_t {
 		signature_t *pSignature = db.signatures + sid;
 
 		/*
+		 * @date 2021-12-25 00:53:05
 		 * Detect if there is enough
 		 */
 		if (this->withPower && power < layer.minPower[pSignature->size])
@@ -3148,7 +3140,6 @@ struct groupTree_t {
 					assert(this->N[challenge].next != challenge);
 					unlinkNode(challenge);
 					layer.pSidMap[sid] = nid;
-					
 				}
 
 				// duplicate
@@ -3476,22 +3467,14 @@ struct groupTree_t {
 		/*
 		 * Walk through all nodes of group
 		 */
-		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+		uint32_t nextId;
+		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = nextId) {
 			groupNode_t       *pNode         = this->N + iNode;
 			const signature_t *pSignature    = db.signatures + pNode->sid;
 			unsigned          numPlaceholder = pSignature->numPlaceholder;
 
-			/*
-			 * Detect if node has enough power
-			 */
-			if (this->withPower && pNode->power < layer.minPower[pSignature->size]) {
-				// orphan
-				uint32_t prevId = this->N[iNode].prev;
-				unlinkNode(iNode);
-				iNode = prevId;
-
-				continue; // next
-			}
+			// save next iterator value in case list changes
+			nextId = pNode->next;
 
 			/*
 			 * Detect if node is outdated
@@ -3522,6 +3505,9 @@ struct groupTree_t {
 
 				// perform folding. NOTE: newSid/newSlots might both change
 				applyFolding(&newSid, newSlots);
+
+				// orphan outdated node
+				unlinkNode(iNode);
 			}
 
 			/*
@@ -3536,12 +3522,15 @@ struct groupTree_t {
 				int cmp = this->compare(challenge, newSid, newSlots);
 
 				if (cmp < 0) {
-					// challenge is better, orphan node
-					uint32_t prevId = this->N[iNode].prev;
+					// challenge is better, orphan node (orphan might already have been orphaned)
 					unlinkNode(iNode);
-					iNode = prevId;
 				} else if (cmp > 0) {
 					// newSlots (which is the original unchanged node) is better, `challenge` is incorrect, update it 
+
+					// next iterator is going to be orphaned, choose next
+					if (challenge == nextId)
+						nextId = this->N[nextId].next;
+
 					unlinkNode(challenge);
 					layer.pSidMap[newSid] = iNode;
 				} else if (cmp == 0) {
@@ -3552,19 +3541,32 @@ struct groupTree_t {
 			}
 
 			/*
-			 * Updated node is a winner
+			 * Try to create node
 			 */
 
-			// is there an endpoint collapse
-			if (newSid == db.SID_ZERO || newSid == db.SID_SELF) {
+			uint32_t newNix = this->lookupNode(newSid, newSlots);
+			uint32_t newNid = this->nodeIndex[newNix];
+
+			if (newNid != 0) {
+				// test for iterator/endpoint collapse
+				for (unsigned iSlot = 0; iSlot < db.signatures[newSid].numPlaceholder; iSlot++) {
+					assert(newSlots[iSlot] != layer.gid);
+				}
+			}
+
+			newNid = addToGroup(layer, newNix, newNid, newSid, newSlots, pNode->power); // TODO: power correction?
+
+			// was there a collapse?
+			if (newNid & IBIT) {
 				// yes
-				printf("<updateGroupCollapse>\n");
-				this->cntUpdateGroupCollapse++;
 
-				uint32_t endpoint = (newSid == db.SID_ZERO) ? 0 : newSlots[0];
-				assert(endpoint < layer.gid);
+				// self-collapse?
+				if (newNid == (IBIT ^ (IBIT - 1)))
+					continue; // yes, silently ignore
 
-				// collapse to endpoint and update
+				uint32_t endpoint = newNid & ~IBIT;
+
+				// merge and update groups
 				mergeGroups(layer, endpoint);
 				
 				if (endpoint < this->nstart)
@@ -3572,74 +3574,29 @@ struct groupTree_t {
 				else if (endpoint < *pLow)
 					*pLow = endpoint;
 
-				return false; // not a forward reference
-			}
-
-			/*
-			 * Lookup updated node
-			 */
-
-			uint32_t newNix = this->lookupNode(newSid, newSlots);
-			uint32_t newNid = this->nodeIndex[newNix];
-
-			// does updated exist?
-			if (newNid != 0) {
-				// yes
-				uint32_t latest = updateToLatest(newNid);
-
-				if (latest != layer.gid) {
-					assert(0); // does this path get walked
-
-					printf("<updateGroupMerge>\n");
-					this->cntUpdateGroupMerge++;
-
-					// merge groups
-					mergeGroups(layer, latest);
-
-					if (latest < this->nstart)
-						*pLow = this->nstart;
-					else if (latest < *pLow)
-						*pLow = latest;
-
-					return latest >= layer.gid; // is it a forward
+				return endpoint >= layer.gid; // is it a forward
 				}
 
-				// the updated node has already been created, orphan and ignore original
-				uint32_t prevId = this->N[iNode].prev;
-				unlinkNode(iNode);
-				iNode = prevId;
+			// should be freshly created
+			assert (this->N[newNid].gid == IBIT);
 
-				continue;
-			}
-
-			/*
-			 * Create node
-			 */
-
-			newNid = this->newNode(newSid, newSlots, pNode->power); // TODO: power correction?
+			// finalise node
 			groupNode_t *pNew = this->N + newNid;
-
 			pNew->oldId = pNode->oldId ? pNode->oldId : iNode; 
 
-			// set group
+			// add node to list
 			pNew->gid = layer.gid;
+			// add node immediately before the next, so it acts as a replacement and avoids getting double processed
+			linkNode(this->N[nextId].prev, newNid);
 
-			// add node to index
-			this->nodeIndex[newNix]        = newNid;
-			this->nodeIndexVersion[newNix] = this->nodeIndexVersionNr;
-
-			// add to sid lookup
-			layer.pSidMap[newSid]          = newNid;
-			layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
-
-			// add node immediately before original, so it acts as a replacement and avoids getting double processed
-			linkNode(pNode->prev, newNid);
-
-			// orphan original node
-			unlinkNode(iNode);
-
-			// update loop iterator
-			iNode = newNid;
+			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
+				printf("gid=%u\tnid=%u\told=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+				       layer.gid, newNid,
+				       pNew->oldId,
+				       newSid, db.signatures[newSid].name,
+				       newSlots[0], newSlots[1], newSlots[2], newSlots[3], newSlots[4], newSlots[5], newSlots[6], newSlots[7], newSlots[8],
+				       db.signatures[newSid].size, pNew->power);
+			}
 		}
 
 		// group may not become empty
@@ -4255,7 +4212,7 @@ struct groupTree_t {
 
 		freeVersion(pVersion);
 
-		exit(1);
+		assert(0);
 	}
 
 	/*
