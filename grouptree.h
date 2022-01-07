@@ -571,7 +571,7 @@ struct groupTree_t {
 	 * NOTE: id=IBIT means group under construction
 	 */
 	inline uint32_t updateToLatest(uint32_t id) const {
-		while (id != IBIT && id != this->N[id].gid)
+		while (id != this->N[id].gid)
 			id = this->N[id].gid;
 		return id;
 	}
@@ -1705,7 +1705,7 @@ struct groupTree_t {
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*componentsOnly=*/false, depth + 1);
+				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -1743,7 +1743,7 @@ struct groupTree_t {
 					layer.rebuild();
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*componentsOnly=*/true, 28);
+				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, 28);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2122,7 +2122,7 @@ struct groupTree_t {
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*componentsOnly=*/false, depth + 1);
+				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2160,7 +2160,7 @@ struct groupTree_t {
 					layer.rebuild();
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*componentsOnly=*/true, depth);
+				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, depth);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2421,7 +2421,7 @@ struct groupTree_t {
 		/*
 		 * call worker
 		 */
-		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*componentsOnly=*/false, /*depth=*/0);
+		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*isTopLevel=*/false, /*depth=*/0);
 
 		return ret;
 	}
@@ -2455,7 +2455,7 @@ struct groupTree_t {
 	 * @param {unsigned}         depth - Recursion depth
 	 * @return {number} newly created node Id, or IBIT when collapsed.
 	 */
-	uint32_t addBasicNode(groupLayer_t &layer, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, bool componentsOnly, unsigned depth) {
+	uint32_t addBasicNode(groupLayer_t &layer, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, bool isTopLevel, unsigned depth) {
 		this->cntAddBasicNode++;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -2743,7 +2743,7 @@ struct groupTree_t {
 					assert(0); // todo: does this path get walked?
 
 					// is there a current group
-					if (componentsOnly)
+					if (isTopLevel)
 						return IBIT ^ folded; // yes, let caller handle collapse to iterator
 
 					// collapse to iterator and update
@@ -2780,7 +2780,7 @@ struct groupTree_t {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
 					// is this called recursively?
-					if (componentsOnly)
+					if (isTopLevel)
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
 					// collapse to endpoint and update
@@ -2791,150 +2791,56 @@ struct groupTree_t {
 				}
 
 
-				/*
-				 * @date 2021-11-16 16:22:03
-				 * To prevent oscillation because this candidate is a worse alternative, test that first
-				 * Example: `abcde^^!/[b acd^^ a c d]` which will fold to `ab^/[b acd^^]` which is worse than `ab^/[a bcd^^]`
-				 */
-				if (layer.gid != IBIT) {
-					// would node win a challenge?
-					uint32_t challenge = layer.findSid(sid);
-					if (challenge != IBIT) {
-						int cmp = this->compare(challenge, sid, finalSlots);
+				// lookup slots
+				uint32_t nix  = this->lookupNode(sid, finalSlots);
+				uint32_t nid = this->nodeIndex[nix];
+				uint32_t latest = updateToLatest(nid);
 
-						if (cmp < 0) {
-							// yes, existing is better
-							continue; // silently ignore
-						} else if (cmp == 0) {
-							// duplicate (which is processed and added to sid lookup) detected
+				if (nid != 0 && (latest == Q || latest == Tu || latest == F)) {
+					/*
+					 * Iterator collapse.
+					 * Iterators are endpoints, making this a group-collapse to `a/[id]`. 
+					 */
 
-							/*
-							 * @date 2021-12-24 00:36:06
-							 * Somehow, firstNode gets forgotten
-							 */
-							if (firstNode == IBIT)
-								firstNode = challenge;
-							continue; // silently ignore
-						}
-					}
+					// is this called recursively?
+					if (isTopLevel)
+						return IBIT ^ latest; // yes, let caller handle collapse
+
+					return latest;
 				}
 
 				/*
-				 * General idea:
-				 * 
-				 * node is old and no current group:
-				 *      attach to group
-				 * node is old and belongs to same group
-				 *      skip duplicate
-				 * node is old and belongs to different group:
-				 * 	merge groups
-				 * node is new and no current group:
-				 *      create group and add as first node
-				 * node is new and current group
-				 *      add to group
+				 * Try to create node
 				 */
 
-				/*
-				 * Add final sid/slot to group
-				 */
+				nid = addToGroup(layer, nix, nid, sid, finalSlots, power);
 
-				// lookup slots
-				uint32_t ix  = this->lookupNode(sid, finalSlots);
-				uint32_t nid = this->nodeIndex[ix];
+				// was there a collapse?
+				if (nid & IBIT) {
+					// yes
 
-				if (nid != 0) {
-					// node is old/existing
-					uint32_t latest = updateToLatest(nid);
+					// self-collapse?
+					if (nid == (IBIT ^ (IBIT - 1)))
+						continue; // yes, silently ignore
 
-					if (latest < this->nstart) {
-						// entrypoint collapse
+					// is this called recursively?
+					if (isTopLevel)
+						return nid; // yes, let caller handle collapse
 
-						// is this called recursively?
-						if (componentsOnly)
-							return IBIT ^ latest; // yes, let caller handle collapse
+					uint32_t endpoint = nid & ~IBIT;
 
-						// collapse to entrypoint and update
-						mergeGroups(layer, latest);
-						resolveForward(layer);
+					// merge and update groups
+					mergeGroups(layer, endpoint);
+					resolveForward(layer);
 
-						return nid;
+					return endpoint;
+				}
 
-					} else if (layer.gid == IBIT) {
-						// "node is old and no current group"
+				// was node "freshly created?
+				if (this->N[nid].gid == IBIT) {
+					// yes
 
-						/*
-						 * @date 2022-01-05 11:56:38
-						 * Does new group cause an iterator collapse 
-						 */
-
-						// iterator collapse?
-						if (latest == Q || latest == Tu || latest == F) {
-							// yes
-
-							// is this called recursively?
-							if (componentsOnly)
-								return IBIT ^ latest; // yes, let caller handle collapse
-
-							return nid;
-						}
-
-						// attach to that group
-						layer.setGid(latest);
-
-					} else if (layer.gid != latest) {
-						// "node is old and belongs to different group"
-
-						/*
-						 * @date 2021-12-27 20:59:29
-						 * Iterator collapse?
-						 * This can happen (for example): "ab^ cd^ ab^cd^& ?" == "ab^cd^&"
-						 * The iterator is an endpoint, so this is a group collapse
-						 */
-
-						// merge and update groups
-						mergeGroups(layer, latest);
-						resolveForward(layer);
-
-						assert(layer.gid != Q && layer.gid != Tu && layer.gid != F); // iterator collapse
-
-					} else if (this->N[nid].next == nid) {
-						// "node is old and orphaned"
-						// if it was rejected then, it will be rejected now
-
-						continue; // silently ignore
-
-					} else {
-						// "node is old and belongs to same group"
-
-						assert(layer.findSid(sid) == nid);
-
-						// duplicate
-						continue; // silently ignore
-
-					}
-
-				} else {
-
-					// challenge the current champion?
-					if (layer.gid != IBIT) {
-						// yes, is there a champion?
-						uint32_t challenge = layer.findSid(sid);
-						if (challenge != IBIT) {
-							// yes
-							int cmp = this->compare(challenge, sid, finalSlots);
-
-							if (cmp < 0) {
-								// champion is better
-								continue; // silently ignore
-							} else if (cmp > 0) {
-								// heap is better, orphan existing first and replace later with new
-								unlinkNode(challenge);
-							} else if (cmp == 0) {
-								assert(0); // should have been detected by `lookupNode()`.
-							}
-						}
-					}
-
+					// is there a current group?			
 					if (layer.gid == IBIT) {
 						// "node is new and no current group"
 
@@ -2950,44 +2856,12 @@ struct groupTree_t {
 						layer.setGid(gid); // set layer to empty gid
 					}
 
-					// create node
-					nid = this->newNode(sid, finalSlots, power);
-					groupNode_t *pNode = this->N + nid;
-
-					// add node to index
-					this->nodeIndex[ix]        = nid;
-					this->nodeIndexVersion[ix] = this->nodeIndexVersionNr;
+					// finalise node
+					groupNode_t *pNew = this->N + nid;
 
 					// add node to list
-					pNode->gid = layer.gid;
+					pNew->gid = layer.gid;
 					linkNode(this->N[layer.gid].prev, nid);
-
-					// add sid to lookup index
-					layer.pSidMap[sid]          = nid;
-					layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-					/*
-					 * @date 2021-12-25 00:57:11
-					 * 
-					 * Update power levels
-					 */
-					if (this->withPower) {
-						// @formatter:off
-					switch(db.signatures[sid].size) {
-					case 0: if (layer.minPower[0] < power) layer.minPower[0] = power; // deliberate fall-through
-					case 1: if (layer.minPower[1] < power) layer.minPower[1] = power;
-					case 2: if (layer.minPower[2] < power) layer.minPower[2] = power;
-					case 3: if (layer.minPower[3] < power) layer.minPower[3] = power;
-					case 4: if (layer.minPower[4] < power) layer.minPower[4] = power;
-					case 5: if (layer.minPower[5] < power) layer.minPower[5] = power;
-					case 6: if (layer.minPower[6] < power) layer.minPower[6] = power;
-					case 7: if (layer.minPower[7] < power) layer.minPower[7] = power;
-						break;
-					default:
-						assert(0);
-					}
-					// @formatter:on
-					}
 
 					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
@@ -3110,10 +2984,10 @@ struct groupTree_t {
 				}
 
 				if (pSignature->size > 1) {
-					if (true) {
-						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth);
-//					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t expand = expandMember(layer, mid, pNode->slots, depth);
+//					if (true) {
+//						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth);
+					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+						uint32_t expand = expandMember(layer, mid, pNode->slots, depth);
 
 						/*
 						 * @date 2022-01-05 17:27:20
@@ -3137,7 +3011,7 @@ struct groupTree_t {
 							uint32_t latest   = updateToLatest(endpoint);
 
 							// is this called recursively?
-							if (componentsOnly)
+							if (isTopLevel)
 								return expand; // yes, let caller handle collapse
 
 							// merge and update groups
@@ -3154,7 +3028,7 @@ struct groupTree_t {
 							// yes
 
 							// is this called recursively?
-							if (componentsOnly)
+							if (isTopLevel)
 								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
 
 							// merge and update groups
@@ -3183,6 +3057,164 @@ struct groupTree_t {
 		// return node the represents arguments
 		assert(firstNode != IBIT); // must exist
 		return firstNode;
+	}
+
+	/*
+	 * @date 2022-01-07 12:55:28
+	 * 
+	 * Add sid/slots to group.
+	 * 
+ 	 * Callers needs to do this, and test slot entries against self-collapse
+ 	 * 
+	 * ```
+	 *  // lookup slots
+	 *  uint32_t nix  = this->lookupNode(sid, finalSlots);
+	 *  uint32_t nid = this->nodeIndex[nix];
+	 *  uint32_t latest = updateToLatest(nid);
+	 *  if (nid != 0 && (latest == Q || latest == Tu || latest == F))
+	 *      selfCollapse();
+	 * ``` 
+	 * 
+	 * Returns:
+	 *	IBIT ^ (IBIT - 1), self-collapse/silently ignore
+	 *	IBIT ^ entrypoint, group-collapse
+	 *	IBIT ^ endpoint, group-collapse
+	 *	id with gid=IBIT, newly created node
+	 *	id with gid!=IBIT, existing node
+	 */
+	uint32_t addToGroup(groupLayer_t &layer,
+			    uint32_t nix, uint32_t nid,
+			    uint32_t sid, const uint32_t *pSlots, unsigned power) {
+
+		signature_t *pSignature = db.signatures + sid;
+
+		/*
+		 * Detect if there is enough
+		 */
+		if (this->withPower && power < layer.minPower[pSignature->size])
+			return IBIT ^ (IBIT - 1);
+
+		/*
+		 * General idea:
+		 * 
+		 * node is old and no current group:
+		 *      attach to group
+		 * node is old and belongs to same group
+		 *      skip duplicate
+		 * node is old and belongs to different group:
+		 * 	merge groups
+		 * node is new and no current group:
+		 *      create group and add as first node
+		 * node is new and current group
+		 *      add to group
+		 */
+
+		if (nid != 0) {
+			// node is old/existing
+			uint32_t latest = updateToLatest(nid);
+
+			if (latest < this->nstart) {
+				// entrypoint collapse
+
+				return IBIT ^ latest; // entrypoint collapse
+
+			} else if (layer.gid == IBIT) {
+				// "node is old and no current group"
+
+				// attach to that group
+				layer.setGid(latest);
+
+				return latest; // existing node
+
+			} else if (layer.gid != latest) {
+				// "node is old and belongs to different group"
+
+				return IBIT ^ latest; // group merge
+
+			} else if (this->N[nid].next == nid) {
+				// "node is old and orphaned"
+				// if it was rejected then, it will be rejected now
+
+				return IBIT ^ (IBIT - 1); // silently ignore
+
+			} else {
+				// "node is old and belongs to same group"
+				uint32_t challenge = layer.findSid(sid);
+				if (challenge != nid) {
+					/*
+					 * Champion is outdated
+					 * Might happen when called from `updateGroup()`.
+					 */
+					assert(this->N[challenge].next != challenge);
+					unlinkNode(challenge);
+					layer.pSidMap[sid] = nid;
+					
+				}
+
+				// duplicate
+				return IBIT ^ (IBIT - 1); // silently ignore
+			}
+
+		}
+
+		// connected to group?
+		if (layer.gid != IBIT) {
+			// yes, challenge the champion?
+			uint32_t challenge = layer.findSid(sid);
+			if (challenge != IBIT) {
+				// yes
+				int cmp = this->compare(challenge, sid, pSlots);
+
+				if (cmp < 0) {
+					// champion is better
+					return IBIT ^ (IBIT - 1); // silently ignore
+				} else if (cmp > 0) {
+					// heap is better, orphan existing first and replace later with new
+					unlinkNode(challenge);
+				} else if (cmp == 0) {
+					assert(0); // should have been detected by `lookupNode()`.
+				}
+			}
+		}
+
+		// create node
+		nid = this->newNode(sid, pSlots, power);
+		groupNode_t *pNode = this->N + nid;
+
+		pNode->gid = IBIT;
+
+		// add node to index
+		this->nodeIndex[nix]        = nid;
+		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
+
+		// add sid to lookup index
+		layer.pSidMap[sid]          = nid;
+		layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
+
+		/*
+		 * @date 2021-12-25 00:57:11
+		 * 
+		 * Update power levels
+		 */
+		if (this->withPower) {
+			// @formatter:off
+			switch(db.signatures[sid].size) {
+			case 0: if (layer.minPower[0] < power) layer.minPower[0] = power; // deliberate fall-through
+			case 1: if (layer.minPower[1] < power) layer.minPower[1] = power;
+			case 2: if (layer.minPower[2] < power) layer.minPower[2] = power;
+			case 3: if (layer.minPower[3] < power) layer.minPower[3] = power;
+			case 4: if (layer.minPower[4] < power) layer.minPower[4] = power;
+			case 5: if (layer.minPower[5] < power) layer.minPower[5] = power;
+			case 6: if (layer.minPower[6] < power) layer.minPower[6] = power;
+			case 7: if (layer.minPower[7] < power) layer.minPower[7] = power;
+				break;
+			default:
+				assert(0);
+			}
+			// @formatter:on
+		}
+
+		return nid;
 	}
 
 	/*
@@ -4066,6 +4098,9 @@ struct groupTree_t {
 		// check orphans
 		for (uint32_t iNode = this->nstart; iNode < this->ncount; iNode++) {
 			const groupNode_t *pNode = this->N + iNode;
+
+			if (pNode->gid == IBIT)
+				continue; // under cnstruction
 
 			if (iNode == pNode->gid && pNode->next == iNode)
 				assert(0);
