@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-08 15:22:03 Changed: Adding starting position to `resolveForward()`.
 2022-01-07 21:15:57 Changed: `groupTree_t::updateGroup()` now using `addToGroup()`.
 2022-01-07 17:29:11 Added: `groupTree_t::addToGroup()`.
 2022-01-06 15:51:42 Deleted: `groupTree_t::heapNode_t`, experiment failed.
