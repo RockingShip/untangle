@@ -265,6 +265,9 @@ struct gevalContext_t {
 				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg], pTransform + 1);
 			else
 				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg]);
+
+			pTree->dumpGroup(pTree->roots[ostart + iArg]);
+			printf("ncount=%u gcount=%u\n", pTree->ncount, pTree->gcount);
 		}
 
 		return pTree;
@@ -734,6 +737,11 @@ int main(int argc, char *argv[]) {
 	// display system flags when database was created
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
+
+	if (app.opt_maxNode < db.numSignature) {
+		fprintf(stderr, "raising --maxnode to %u\n", db.numSignature);
+		app.opt_maxNode = db.numSignature;
+	}
 
 	groupTree_t *pTree = app.main(argc - optind, argv + optind);
 

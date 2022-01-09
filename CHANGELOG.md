@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-09 00:19:22 Changed: Prepare for nodes "under construction", with their gid set to IBIT. 
 2022-01-08 15:22:03 Changed: Adding starting position to `resolveForward()`.
 2022-01-07 21:15:57 Changed: `groupTree_t::updateGroup()` now using `addToGroup()`.
 2022-01-07 17:29:11 Added: `groupTree_t::addToGroup()`.
