@@ -91,6 +91,17 @@ struct groupNode_t {
 	uint32_t next;
 
 	/*
+	 * Used for debuging to track the original node
+	 */
+	uint32_t oldId;
+
+	/*
+	 * The size reduction of the database lookup.  
+	 * `pattern.size - signature.size `
+	 */
+	uint32_t power;
+
+	/*
 	 * The signature describing the behaviour of the node
 	 */
 	uint32_t sid;
@@ -103,15 +114,9 @@ struct groupNode_t {
 	uint32_t slots[MAXSLOTS];
 
 	/*
-	 * The size reduction of the database lookup.  
-	 * `pattern.size - signature.size `
+	 * @date 2022-01-09 03:42:50
+	 * `slots` MUST be last to maintain version compatibility. 
 	 */
-	uint32_t power;
-
-	/*
-	 * Used for debuging to track the original node
-	 */
-	uint32_t oldId;
 };
 
 /*
@@ -483,6 +488,7 @@ struct groupTree_t {
 			pNode->gid  = iKey;
 			pNode->next = iKey;
 			pNode->prev = iKey;
+			pNode->power  = 0;
 			pNode->sid  = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
@@ -939,9 +945,9 @@ struct groupTree_t {
 		pNode->gid   = 0;
 		pNode->next  = nid;
 		pNode->prev  = nid;
-		pNode->sid   = sid;
-		pNode->power = power;
 		pNode->oldId = 0;
+		pNode->power = power;
+		pNode->sid   = sid;
 
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			pNode->slots[iSlot] = slots[iSlot];
@@ -1707,18 +1713,7 @@ struct groupTree_t {
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
-				// did something happen?
-				if (nid & IBIT) {
-					// yes, let caller ignore collapsed structure
-					freeMap(pStack);
-					freeMap(pMap);
-					freeVersion(pActive);
-					/*
-					 * @date 2021-12-29 00:15:14
-					 * for components: Any kind of collapse should invalidate the final candidate structure. 
-					 */
-					return IBIT ^ (IBIT - 1);
-				}
+				assert(!(nid & IBIT)); // regular calls should not return collapses
 
 				uint32_t latest = updateToLatest(nid);
 
@@ -2124,18 +2119,7 @@ struct groupTree_t {
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
-				// did something happen?
-				if (nid & IBIT) {
-					// yes, let caller handle what
-					freeMap(pStack);
-					freeMap(pMap);
-					freeVersion(pActive);
-					/*
-					 * @date 2021-12-29 00:15:14
-					 * for components: Any kind of collapse should invalidate the final candidate structure. 
-					 */
-					return IBIT ^ (IBIT - 1);
-				}
+				assert(!(nid & IBIT)); // regular calls should not return collapses
 
 				uint32_t latest = updateToLatest(nid);
 
@@ -2492,9 +2476,14 @@ struct groupTree_t {
 		assert(F < this->nstart || F != this->N[F].next);
 		// gid must be latest
 		assert(layer.gid == IBIT || this->N[layer.gid].gid == layer.gid);
+	
 		// arguments may not fold to gid
-		assert(Q != layer.gid && Tu != layer.gid && F != layer.gid);
-		
+		if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
+			// this implies that layer.gid != IBIT
+			printf("<argument-collapse gid=%u Q=%u T=%u F=%u/>\n", layer.gid, Q, Tu, F); // how often does this happen
+			return IBIT ^ layer.gid; // collapse to argument
+		}
+
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
 
@@ -2976,7 +2965,7 @@ struct groupTree_t {
 			 * @date 2022-01-01 00:28:49
 			 * Expand primary nodes. This is an important step of compressing and sorting trees
 			 */
-			validateTree(__LINE__);
+			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 			for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				const groupNode_t *pNode      = this->N + iNode;
