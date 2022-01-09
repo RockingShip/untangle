@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-09 20:46:02 Fixed: Stress test feedback.
 2022-01-09 20:43:42 Changed: Fine grade depth. 
 2022-01-09 12:50:53 Changed: Re-ordering members in `groupNode_t`.
 2022-01-09 00:19:22 Changed: Prepare for nodes "under construction", with their gid set to IBIT. 

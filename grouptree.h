@@ -1687,6 +1687,8 @@ struct groupTree_t {
 						}
 					} else if (Tu == F) {
 						// [18] a ?  b : b -> b        ENDPOINT
+						printf("<endpoint line=%u/>\n", __LINE__);
+						return IBIT ^ F; // todo: NOTE: 
 						assert(0); // already tested
 					} else {
 						// [19] a ?  b : c             "?" QTF
@@ -1713,7 +1715,21 @@ struct groupTree_t {
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
-				assert(!(nid & IBIT)); // regular calls should not return collapses
+				// did something happen?
+				if (nid & IBIT) {
+					// yes, let caller handle what
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+					
+					assert(nid == (IBIT ^ (IBIT - 1))); // does this happen
+
+					/*
+					 * @date 2021-12-29 00:15:14
+					 * for components: Any kind of collapse should invalidate the final candidate structure. 
+					 */
+					return IBIT ^ (IBIT - 1);
+				}
 
 				uint32_t latest = updateToLatest(nid);
 
@@ -2119,7 +2135,21 @@ struct groupTree_t {
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
 
-				assert(!(nid & IBIT)); // regular calls should not return collapses
+				// did something happen?
+				if (nid & IBIT) {
+					// yes, let caller handle what
+					freeMap(pStack);
+					freeMap(pMap);
+					freeVersion(pActive);
+
+					assert(nid == (IBIT ^ (IBIT - 1))); // does this happen
+
+					/*
+					 * @date 2021-12-29 00:15:14
+					 * for components: Any kind of collapse should invalidate the final candidate structure. 
+					 */
+					return IBIT ^ (IBIT - 1);
+				}
 
 				uint32_t latest = updateToLatest(nid);
 
@@ -2410,6 +2440,8 @@ struct groupTree_t {
 		// regular calls may not collapse or ignore
 		assert(!(ret & IBIT));
 
+		validateTree(__LINE__);
+
 		return ret;
 	}
 
@@ -2580,9 +2612,6 @@ struct groupTree_t {
 		 * 
 		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
-
-		// todo: schedule for removal
-		validateTree(__LINE__);
 
 		/*
 		 * All nodes of the list need to be processed
@@ -2801,8 +2830,10 @@ struct groupTree_t {
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
 					// collapse to endpoint and update
-					mergeGroups(layer, endpoint);
-					resolveForward(layer, layer.gid);
+					if (layer.gid != IBIT) {
+						mergeGroups(layer, endpoint);
+						resolveForward(layer, layer.gid);
+					}
 
 					return endpoint;
 				}
@@ -2811,6 +2842,14 @@ struct groupTree_t {
 				// lookup slots
 				nix  = this->lookupNode(sid, finalSlots);
 				nid = this->nodeIndex[nix];
+				
+				/*
+				 * @date 2022-01-09 15:39:52
+				 * Ignore nodes under construction
+				 */
+				if (this->N[nid].gid == IBIT)
+					continue; // silently ignore
+
 				uint32_t latest = updateToLatest(nid);
 
 				if (nid != 0 && (latest == Q || latest == Tu || latest == F)) {
@@ -3024,13 +3063,8 @@ struct groupTree_t {
 						// is it a collapse?
 						if (expand & IBIT) {
 							// yes, was it a self-collapse?
-							if (expand == (IBIT ^ (IBIT - 1))) {
-								// yes, orphan original
-								uint32_t idPrev = pNode->prev;
-								unlinkNode(iNode);
-								iNode = idPrev;
+							if (expand == (IBIT ^ (IBIT - 1)))
 								continue; // silently ignore
-							}
 
 							uint32_t endpoint = expand & ~IBIT;
 							uint32_t latest   = updateToLatest(endpoint);
@@ -3598,18 +3632,30 @@ struct groupTree_t {
 			}
 
 			/*
+			 * @date 2022-01-09 15:59:22
+			 * A self-collapse is a node collapse
+			 */
+			{
+				// test for iterator/endpoint collapse
+				bool hasSelf = false;
+				for (unsigned iSlot = 0; iSlot < db.signatures[newSid].numPlaceholder; iSlot++) {
+					if (newSlots[iSlot] == layer.gid) {
+						hasSelf = true;
+						break;
+					}
+				}
+				if (hasSelf) {
+					assert(changed);
+					continue; // silently ignore
+				}
+			}
+
+			/*
 			 * Try to create node
 			 */
 
 			uint32_t newNix = this->lookupNode(newSid, newSlots);
 			uint32_t newNid = this->nodeIndex[newNix];
-
-			if (newNid != 0) {
-				// test for iterator/endpoint collapse
-				for (unsigned iSlot = 0; iSlot < db.signatures[newSid].numPlaceholder; iSlot++) {
-					assert(newSlots[iSlot] != layer.gid);
-				}
-			}
 
 			newNid = addToGroup(layer, newNix, newNid, newSid, newSlots, pNode->power); // TODO: power correction?
 
@@ -3625,14 +3671,16 @@ struct groupTree_t {
 
 				// merge and update groups
 				mergeGroups(layer, endpoint);
-				
+
 				if (endpoint < this->nstart)
 					*pLow = this->nstart;
 				else if (endpoint < *pLow)
 					*pLow = endpoint;
 
-				return endpoint >= layer.gid; // is it a forward
-				}
+				// restart
+				nextId = this->N[layer.gid].next;
+				continue;
+			}
 
 			// should be freshly created
 			assert (this->N[newNid].gid == IBIT);
@@ -3657,7 +3705,7 @@ struct groupTree_t {
 					unlinkNode(challenge);
 
 				// add to sid lookup index
-				layer.pSidMap[newSid]          = newSid;
+				layer.pSidMap[newSid]          = iNode;
 				layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
 			}
 
