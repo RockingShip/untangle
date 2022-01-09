@@ -1738,7 +1738,7 @@ struct groupTree_t {
 					layer.rebuild();
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, 28);
+				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, depth);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2463,7 +2463,6 @@ struct groupTree_t {
 			ctx.tick = 0;
 		}
 
-		depth++;
 		assert(depth < 30);
 
 		// should be latest
@@ -2489,7 +2488,7 @@ struct groupTree_t {
 
 		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
 			printf("%.*sQ=%u T=%u%s F=%u",
-			       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+			       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 			       Q, Tu, Ti ? "~" : "", F);
 			if (layer.gid != IBIT)
 				printf(" G=%u", layer.gid);
@@ -2516,7 +2515,7 @@ struct groupTree_t {
 			// is it under construction?
 			if (this->N[nid].gid == IBIT) {
 				// yes
-				assert(depth > 1); // must be a recursve call
+				assert(depth > 0); // must be a recursve call
 				return IBIT ^ (IBIT - 1); // silently ignore
 			}
 				
@@ -2526,6 +2525,37 @@ struct groupTree_t {
 			// Cartesian product hasn't started yet, smiple return
 			return nid;
 		}
+
+		/*
+		 * When hitting deepest depth, simply create node 
+		 */
+		if (depth >= this->maxDepth) {
+
+			// create group header
+			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+			assert(selfSlots[MAXSLOTS - 1] == 0);
+
+			this->gcount++;
+			uint32_t gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+			assert(gid == this->N[gid].slots[0]);
+			this->N[gid].gid = gid;
+
+			// create node
+			nid = this->newNode(tlSid, tlSlots, 0); // todo: what for power?
+			groupNode_t *pNode = this->N + nid;
+
+			pNode->gid = gid;
+
+			// add to list
+			linkNode(gid, nid);
+
+			// add node to index
+			this->nodeIndex[nix]        = nid;
+			this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
+
+			return nid;
+		}
+		depth++;
 
 		/* 
 		 * Before adding a new node to current group, check if it would make a chance to win the challenge.
@@ -2864,7 +2894,7 @@ struct groupTree_t {
 
 					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
-						       depth - 1, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+						       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 						       layer.gid, nid,
 						       iQ, iTu, iF,
 						       sid, db.signatures[sid].name,
@@ -2960,7 +2990,7 @@ struct groupTree_t {
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		assert(layer.gid != IBIT);
-		if (depth <= this->maxDepth) {
+		if (depth + 1 < this->maxDepth) {
 			/*
 			 * @date 2022-01-01 00:28:49
 			 * Expand primary nodes. This is an important step of compressing and sorting trees
@@ -2980,9 +3010,9 @@ struct groupTree_t {
 
 				if (pSignature->size > 1) {
 					if (true) {
-						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth);
+						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth + 1);
 //					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t expand = expandMember(layer, mid, pNode->slots, depth);
+//						uint32_t expand = expandMember(layer, mid, pNode->slots, depth + 1);
 
 						/*
 						 * @date 2022-01-05 17:27:20
