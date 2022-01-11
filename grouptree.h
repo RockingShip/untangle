@@ -5511,6 +5511,11 @@ struct groupTree_t {
 			assert(*pData == 0);
 		}
 
+		/*
+		 * @date 2022-01-11 15:53:49
+		 * Tree is read-only, and has no node index
+		 */
+
 		return 0;
 	}
 
@@ -5615,13 +5620,13 @@ struct groupTree_t {
 		uint32_t *pMap  = allocMap();
 		uint32_t nextId = 0; // next assignable node id
 
-		if (0) {
+		if (1) {
 			/*
 			 * In case of emergency and the tree needs to be saved verbatim
 			 */
 
 			// output entrypoints and nodes
-			for (uint32_t iNode = 0; iNode < ncount; iNode++) {
+			for (uint32_t iNode = 0; iNode < this->ncount; iNode++) {
 				const groupNode_t *pNode = this->N + iNode;
 
 				size_t len = sizeof(*pNode);
@@ -5633,6 +5638,8 @@ struct groupTree_t {
 					__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(pNode->slots[i]));
 
 			}
+			nextId = this->ncount;
+			
 		} else {
 
 			/*

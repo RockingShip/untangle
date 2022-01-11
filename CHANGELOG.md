@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-11 19:10:32 Fixed: `groupTree_t::loadFile()`.
 2022-01-11 19:05:07 Added: Extra debug/tracking info.
 2022-01-11 19:01:14 Changed: Improved `validateTree()`.
 2022-01-09 20:46:02 Fixed: Stress test feedback.
