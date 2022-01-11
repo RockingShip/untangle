@@ -1690,7 +1690,7 @@ struct groupTree_t {
 						}
 					} else if (Tu == F) {
 						// [18] a ?  b : b -> b        ENDPOINT
-						printf("<endpoint line=%u/>\n", __LINE__);
+						printf("<endpoint line=%u>\n", __LINE__);
 						return IBIT ^ F; // todo: NOTE: 
 						assert(0); // already tested
 					} else {
@@ -2110,7 +2110,7 @@ struct groupTree_t {
 						}
 					} else if (Tu == F) {
 						// [18] a ?  b : b -> b        ENDPOINT
-						printf("<endpoint line=%u/>\n", __LINE__);
+						printf("<endpoint line=%u>\n", __LINE__);
 						return IBIT ^ F; // todo: NOTE: 
 						assert(0); // already tested
 					} else {
@@ -2514,7 +2514,7 @@ struct groupTree_t {
 		// arguments may not fold to gid
 		if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 			// this implies that layer.gid != IBIT
-			printf("<argument-collapse gid=%u Q=%u T=%u F=%u/>\n", layer.gid, Q, Tu, F); // how often does this happen
+			printf("<argument-collapse gid=%u Q=%u T=%u F=%u>\n", layer.gid, Q, Tu, F); // how often does this happen
 			return IBIT ^ layer.gid; // collapse to argument
 		}
 
@@ -3318,6 +3318,8 @@ struct groupTree_t {
 	 */
 	void mergeGroups(groupLayer_t &layer, uint32_t rhs) {
 
+		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("MERGEGROUP %u %u\n", layer.gid, rhs);
+
 		this->cntMergeGroup++;
 
 		uint32_t lhs = layer.gid;
@@ -3355,12 +3357,14 @@ struct groupTree_t {
 
 				// orphan node
 				uint32_t prevId = pNode->prev;
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink rhs=%u\n", iNode);
 				unlinkNode(iNode);
 				iNode = prevId;
 				// redirect to entrypoint
 				pNode->gid = lhs;
 			}
 			// let header redirect
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup redirect rhs=%u lhs=%u\n", this->N[rhs].gid, lhs);
 			this->N[rhs].gid = lhs;
 
 			// update layer
@@ -3375,12 +3379,14 @@ struct groupTree_t {
 
 				// orphan node
 				uint32_t prevId = pNode->prev;
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink lhs=%u\n", iNode);
 				unlinkNode(iNode);
 				iNode = prevId;
 				// redirect to entrypoint
 				pNode->gid = rhs;
 			}
 			// let header redirect
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup redirect lhs=%u rhs=%u\n", this->N[lhs].gid, rhs);
 			this->N[lhs].gid = rhs;
 
 			// update layer
@@ -3498,6 +3504,7 @@ struct groupTree_t {
 
 					// unlink
 					uint32_t prevId = pNode->prev;
+					if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink iNode=%u\n", iNode);
 					unlinkNode(iNode);
 					iNode = prevId;
 				}
@@ -3511,11 +3518,13 @@ struct groupTree_t {
 		 */
 
 		if (lhs == gid) {
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup merge lhsprev=%u rhs=%u lhs=%u gid=%u\n", this->N[lhs].prev, rhs, lhs, gid);
 			linkNode(this->N[lhs].prev, rhs);
 			unlinkNode(rhs);
 			// let rhs redirect to gid
 			this->N[rhs].gid = gid;
 		} else {
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup merge rhsprev=%u lhs=%u rhs=%u gid=%u\n", this->N[rhs].prev, lhs, rhs, gid);
 			linkNode(this->N[rhs].prev, lhs);
 			unlinkNode(lhs);
 			// let lhs redirect to gid
@@ -3577,6 +3586,7 @@ struct groupTree_t {
 
 			if (hasForward && !allowForward) {
 				// silently ignore
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup noforward=%u\n", iNode);
 				unlinkNode(iNode);
 				hasForward= false;
 				continue;
@@ -3594,6 +3604,7 @@ struct groupTree_t {
 				applyFolding(&newSid, newSlots);
 
 				// orphan outdated node
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup changed=%u\n", iNode);
 				unlinkNode(iNode);
 			}
 
@@ -3614,6 +3625,7 @@ struct groupTree_t {
 
 					if (cmp < 0) {
 						// challenge is better, orphan node (orphan might already have been orphaned)
+						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup lose=%u challenge=%u\n", iNode, challenge);
 						unlinkNode(iNode);
 					} else if (cmp > 0) {
 						// newSlots (which is the original unchanged node) is better, `challenge` is incorrect, update it 
@@ -3622,7 +3634,9 @@ struct groupTree_t {
 						if (challenge == nextId)
 							nextId = this->N[nextId].next;
 
+						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup win=%u challenge=%u\n", iNode, challenge);
 						unlinkNode(challenge);
+
 						layer.pSidMap[newSid]          = iNode;
 						layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
 					} else if (cmp == 0) {
@@ -3659,8 +3673,10 @@ struct groupTree_t {
 
 			uint32_t newNix = this->lookupNode(newSid, newSlots);
 			uint32_t newNid = this->nodeIndex[newNix];
+			uint32_t oldNid = newNid;
 
 			newNid = addToGroup(layer, newNix, newNid, newSid, newSlots, pNode->power); // TODO: power correction?
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup add=%u oldNid=%u newNid=%u%s\n", iNode, oldNid, newNid & ~IBIT, newNid & IBIT ? "~" : "");
 
 			// was there a collapse?
 			if (newNid & IBIT) {
@@ -3682,6 +3698,7 @@ struct groupTree_t {
 
 				// restart
 				nextId = this->N[layer.gid].next;
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u next=%u\n", iNode, *pLow, nextId);
 				continue;
 			}
 
@@ -3695,6 +3712,7 @@ struct groupTree_t {
 			// add node to list
 			pNew->gid = layer.gid;
 			// add node immediately before the next, so it acts as a replacement and avoids getting double processed
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup link iNode=%u prev=%u newNid=%u\n", iNode, this->N[nextId].prev, newNid);
 			linkNode(this->N[nextId].prev, newNid);
 
 			/*
@@ -3704,8 +3722,10 @@ struct groupTree_t {
 			{
 				// Orphan any prior champion
 				uint32_t challenge = layer.findSid(newSid);
-				if (challenge != IBIT)
+				if (challenge != IBIT) {
+					if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup stale challenge=%u\n", challenge);
 					unlinkNode(challenge);
+				}
 
 				// add to sid lookup index
 				layer.pSidMap[newSid]          = iNode;
@@ -3751,6 +3771,8 @@ struct groupTree_t {
 			 * Walk and update the list
 			 */
 
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup forward oldGid=%u newGid=%u\n", layer.gid, newGid);
+			
 			// relocate group
 			linkNode(newGid, layer.gid);
 			unlinkNode(layer.gid);
@@ -3784,6 +3806,8 @@ struct groupTree_t {
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
 		uint32_t lastId     = this->ncount;	// highest group in sweep
+
+		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward gid=%u gstart=%u ncount=%u\n", layer.gid, gstart, this->ncount);
 
 		if (initialGid < this->nstart) {
 			// for endpoints, sweep the whole tree
@@ -3823,6 +3847,7 @@ struct groupTree_t {
 				// yes
 				assert(lowId < iGroup); // group merging always lowers gid
 				// jump
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward rewind=%u ncount=%u\n", lowId, this->ncount);
 				iGroup = lowId;
 				continue;
 			}
