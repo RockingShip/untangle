@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-11 19:01:14 Changed: Improved `validateTree()`.
 2022-01-09 20:46:02 Fixed: Stress test feedback.
 2022-01-09 20:43:42 Changed: Fine grade depth. 
 2022-01-09 12:50:53 Changed: Re-ordering members in `groupNode_t`.
