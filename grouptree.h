@@ -1063,7 +1063,9 @@ struct groupTree_t {
 		 * Scan group and build indices
 		 */
 		void rebuild(void) {
-			assert(this->gid != IBIT);
+			assert(this->gid != IBIT); // may not be under construction
+			assert(tree.N[this->gid].next != this->gid); // may not be empty
+
 
 			// update gid
 			this->gid = tree.updateToLatest(this->gid);
@@ -2616,6 +2618,8 @@ struct groupTree_t {
 		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
 
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+		
 		/*
 		 * All nodes of the list need to be processed
 		 * With `for` the node containing the end-condition is skipped.
@@ -2912,7 +2916,19 @@ struct groupTree_t {
 						assert(gid == this->N[gid].slots[0]);
 						this->N[gid].gid = gid;
 
-						layer.setGid(gid); // set layer to empty gid
+						/*
+						 * @date 2022-01-10 00:10:24
+						 * cannot use `setGid()` as that requires the group to be non-empty  
+						 */
+
+						layer.gid = gid;
+						
+						// bump versioned memory
+						layer.pSidVersion->nextVersion();
+
+						// clear power
+						for (unsigned k = 0; k < groupLayer_t::LAYER_MAXNODE; k++)
+							layer.minPower[k] = 0;
 					}
 
 					// finalise node
@@ -3100,7 +3116,7 @@ struct groupTree_t {
 							return expand;
 						}
 
-						// group management
+						// Merge groups if different
 						if (layer.gid != latest) {
 							// merge groups
 							mergeGroups(layer, latest);
@@ -3326,6 +3342,7 @@ struct groupTree_t {
 		
 		assert(this->N[lhs].gid == lhs); // lhs must be latest header
 		assert(this->N[rhs].gid == rhs); // rhs must be latest header
+		assert(this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for initial groups)
 		assert(lhs != rhs); // groups must be different
 
 		/*
@@ -3396,16 +3413,6 @@ struct groupTree_t {
 			return;
 		}
 		
-		/*
-		 * Empty/initial/orphaned group?
-		 */
-		if (this->N[lhs].next == lhs) {
-			assert(0);
-		} else if (this->N[rhs].next == rhs) {
-			assert(0);
-		}
-
-		assert(this->N[rhs].next != rhs); // rhs may not be empty (need to test after entrypoint test)
 
 		/*
 		 * Flood-fill
@@ -3722,6 +3729,15 @@ struct groupTree_t {
 			{
 				// Orphan any prior champion
 				uint32_t challenge = layer.findSid(newSid);
+				assert(challenge != iNode);
+				
+				/*
+				 * @date 2022-01-11 14:37:43
+				 * Reposition next if it is the challenge to be deleted
+				 */
+				if (challenge == nextId)
+					nextId = this->N[nextId].next;
+				
 				if (challenge != IBIT) {
 					if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup stale challenge=%u\n", challenge);
 					unlinkNode(challenge);
@@ -3785,6 +3801,7 @@ struct groupTree_t {
 			}
 
 			layer.gid = newGid;
+			// call will ignore layer, so skip `rebuild()`.
 		}
 
 		return hasForward;
@@ -3805,7 +3822,6 @@ struct groupTree_t {
 		uint32_t initialGid = layer.gid;	// initial gid, used to restore layer on exit
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
-		uint32_t lastId     = this->ncount;	// highest group in sweep
 
 		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward gid=%u gstart=%u ncount=%u\n", layer.gid, gstart, this->ncount);
 
@@ -3818,7 +3834,7 @@ struct groupTree_t {
 		 * Walk through tree and search for outdated groups
 		 */
 
-		while (iGroup < lastId) {
+		while (iGroup < this->ncount) {
 
 			// stop at group headers
 			if (this->N[iGroup].gid != iGroup) {
@@ -3851,12 +3867,6 @@ struct groupTree_t {
 				iGroup = lowId;
 				continue;
 			}
-			
-			/*
-			 * After processing rhs, if there were no forwards, then everything upto ncount is safe
-			 */
-			if (iGroup == firstId && !hasForward)
-				break;
 			
 			// next node
 			iGroup++;
