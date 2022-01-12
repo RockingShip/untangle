@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-12 15:11:48 Chaned: Enhanced `expandSignature()`.
 2022-01-11 19:19:42 Fixed: `mergeGroup()`/`resolveForward()`. 
 2022-01-11 19:10:32 Fixed: `groupTree_t::loadFile()`.
 2022-01-11 19:05:07 Added: Extra debug/tracking info.

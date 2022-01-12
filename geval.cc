@@ -205,9 +205,7 @@ struct gevalContext_t {
 		uint32_t estart = ostart + numArgs;
 		uint32_t nstart = estart;
 
-		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
-		// Apply defaults
-		pTree->maxDepth = this->opt_maxDepth;
+		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, this->opt_maxDepth, ctx.flags);
 
 		/*
 		 * Setup key/root names
