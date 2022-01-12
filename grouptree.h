@@ -60,7 +60,7 @@
 /*
  * Version number of data file
  */
-#define GROUPTREE_MAGIC 0x20211102
+#define GROUPTREE_MAGIC 0x20220112
 
 struct groupNode_t {
 
@@ -157,9 +157,10 @@ struct groupTreeHeader_t {
 	// meta
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
-	uint32_t sidCRC;               // CRC of database containing sid descriptions
+	uint32_t sidCRC;              // CRC of database containing sid descriptions
 	uint32_t system;              // node of balanced system (0 if none)
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
+	uint32_t maxDepth;            // maxDepth for `expandSignature()`. NOTE: Loaded trees are read-only 
 
 	// primary fields
 	uint32_t kstart;              // first input key id
@@ -5308,6 +5309,7 @@ struct groupTree_t {
 
 		flags      = fileHeader->magic_flags;
 		system     = fileHeader->system;
+		maxDepth   = fileHeader->maxDepth;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
 		estart     = fileHeader->estart;
@@ -5635,6 +5637,7 @@ struct groupTree_t {
 		header.sidCRC      = db.fileHeader.magic_sidCRC;
 		header.system      = pMap[system & ~IBIT] ^ (system & IBIT);
 		header.crc32       = crc32;
+		header.maxDepth    = this->maxDepth;
 		header.kstart      = kstart;
 		header.ostart      = ostart;
 		header.estart      = estart;
@@ -5899,6 +5902,7 @@ struct groupTree_t {
 
 		json_object_set_new_nocheck(jResult, "flags", json_integer(fileHeader->magic_flags));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
+		json_object_set_new_nocheck(jResult, "maxdepth", json_integer(fileHeader->maxDepth));
 		{
 			char crcstr[32];
 			sprintf(crcstr, "%08x", fileHeader->crc32);
