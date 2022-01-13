@@ -2919,6 +2919,8 @@ struct groupTree_t {
 					if (isTopLevel)
 						return nid; // yes, let caller handle collapse
 
+					assert(layer.gid != IBIT); // does this happen?
+
 					uint32_t endpoint = nid & ~IBIT;
 
 					// merge and update groups
@@ -3586,20 +3588,21 @@ struct groupTree_t {
 	 * 
 	 * pLhs/pRhs are the range limits used by `resolveForward()`.  
 	 */
-	bool updateGroup(groupLayer_t &layer, uint32_t *pLow, bool allowForward) {
+	bool updateGroup(groupLayer_t &layer, uint32_t *pLow) {
 
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
-		bool hasForward = false; // set to `true` is a node has a forward reference
+		bool hasForward = false; // set to `true` if a node has a forward reference, meaning the group has a forward reference
+		bool hasSelf    = false; // a self-collapse is a group collapse
 
 		/*
 		 * Walk through all nodes of group
 		 */
+		
 		uint32_t nextId;
 		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = nextId) {
 			groupNode_t       *pNode         = this->N + iNode;
-			const signature_t *pSignature    = db.signatures + pNode->sid;
-			unsigned          numPlaceholder = pSignature->numPlaceholder;
+			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			/*
 			 * @date 2022-01-13 20:06:22
@@ -3618,48 +3621,48 @@ struct groupTree_t {
 			 * Detect if node is outdated
 			 */
 
-			uint32_t newSid  = pNode->sid;
 			uint32_t newSlots[MAXSLOTS];
 			bool     changed = false;
 
 			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
+
 				if (this->N[id].gid != id) {
 					id      = updateToLatest(id);
 					changed = true;
 				}
-				if (id > layer.gid)
+				if (id == layer.gid)
+					hasSelf = true;
+				else if (id > layer.gid)
 					hasForward = true;
+				
 				newSlots[iSlot] = id;
 			}
 
-			if (hasForward && !allowForward) {
-				// silently ignore
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup noforward=%u\n", iNode);
+			if (hasSelf) {
+				/*
+				 * @date 2022-01-12 22:34:26
+				 * 
+				 * An endpoint being self is a "self-collapse" and is (as of now) a node collapse and should be silently ignores.
+				 * 
+				 * What theoretically happens:
+				 *  - Node A with a higher id references node B with a lower id.
+				 *  - At some point (most likely `expandSignature()`) concludes that both groups are identical.
+				 *  - `mergegroup()` will join both an "pulls" the higher id of A down to the lower id of B.
+				 *  - If A directly references B it references itself basically folding to `a/[id]`.
+				 *  
+				 *  Note to myself: a self-collapse is a node collapse and should be ignored, overruling the previous assumption that it could be a group collapse.  
+				 */
+
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup self=%u\n", iNode);
 				unlinkNode(iNode);
-				hasForward= false;
+
 				continue;
-			}
-
-			// pad with zeros
-			for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
-				newSlots[iSlot] = 0;
-
-			if (changed) {
-				// perform sid swap
-				applySwapping(newSid, newSlots);
-
-				// perform folding. NOTE: newSid/newSlots might both change
-				applyFolding(&newSid, newSlots);
-
-				// orphan outdated node
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup changed=%u\n", iNode);
-				unlinkNode(iNode);
 			}
 
 			/*
 			 * Is original still usable and does it survive a re-challenge (if any)
-			 * This is the fast-path.
+			 * This is to determine if they win/lose against nodes from another group after being merged
 			 */
 
 			if (!changed) {
@@ -3693,24 +3696,25 @@ struct groupTree_t {
 				continue;
 			}
 
+			// orphan outdated node
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup changed=%u\n", iNode);
+			unlinkNode(iNode);
+
 			/*
-			 * @date 2022-01-09 15:59:22
-			 * A self-collapse is a node collapse
+			 * Finalise new node
 			 */
-			{
-				// test for iterator/endpoint collapse
-				bool hasSelf = false;
-				for (unsigned iSlot = 0; iSlot < db.signatures[newSid].numPlaceholder; iSlot++) {
-					if (newSlots[iSlot] == layer.gid) {
-						hasSelf = true;
-						break;
-					}
-				}
-				if (hasSelf) {
-					assert(changed);
-					continue; // silently ignore
-				}
-			}
+
+			// pad with zeros
+			for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+				newSlots[iSlot] = 0;
+
+			uint32_t newSid  = pNode->sid;
+
+			// perform sid swap
+			applySwapping(newSid, newSlots);
+
+			// perform folding. NOTE: newSid/newSlots might both change
+			applyFolding(&newSid, newSlots);
 
 			/*
 			 * Try to create node
@@ -3727,11 +3731,20 @@ struct groupTree_t {
 			if (newNid & IBIT) {
 				// yes
 
-				// self-collapse?
+				// silently ignore
 				if (newNid == (IBIT ^ (IBIT - 1)))
-					continue; // yes, silently ignore
+					continue; // yes
 
 				uint32_t endpoint = newNid & ~IBIT;
+
+				/*
+				 * @date 2022-01-12 22:55:04
+				 * 
+				 * `addToGroup()` detected that the new node belongs to a different group/endpoint/entrypoint and merge groups
+				 * However, merging will break the current iterator.
+				 * 
+				 * Luckily, merging will lower the group id, allowing the sole caller `resolveForward()` to jump back and reprocess/continue this group later, again.
+				 */
 
 				// merge and update groups
 				mergeGroups(layer, endpoint);
@@ -3741,18 +3754,19 @@ struct groupTree_t {
 				else if (endpoint < *pLow)
 					*pLow = endpoint;
 
-				// restart
-				nextId = this->N[layer.gid].next;
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u next=%u\n", iNode, *pLow, nextId);
-				continue;
+				// delayed restart
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u\n", iNode, *pLow);
+				return hasForward;
 			}
 
-			// should be freshly created
+			// node should be freshly created
 			assert (this->N[newNid].gid == IBIT);
 
 			// finalise node
 			groupNode_t *pNew = this->N + newNid;
 			pNew->oldId = pNode->oldId ? pNode->oldId : iNode; 
+
+			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup link iNode=%u newNid=%u\n", iNode, newNid);
 
 			// add node to list
 			pNew->gid = layer.gid;
@@ -3827,10 +3841,8 @@ struct groupTree_t {
 	 * NOTE: `layer` is only needed for the layer connectivity
 	 */
 	void resolveForward(groupLayer_t &layer, uint32_t gstart) {
-
 		assert(this->N[layer.gid].gid == layer.gid); // lhs must be latest
 
-		bool     hasForward = false;		// true is one of the group nodes has a forward reference
 		uint32_t initialGid = layer.gid;	// initial gid, used to restore layer on exit
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
@@ -3864,24 +3876,22 @@ struct groupTree_t {
 			layer.rebuild();
 
 			uint32_t lowId = iGroup;
-			hasForward |= updateGroup(layer, &lowId, /*allowForward=*/true);
+			updateGroup(layer, &lowId);
 
 			// update lowest
 			if (lowId < firstId)
 				firstId = lowId;
 			
 			// if something merged, reposition to the start of the range
-			if (lowId != iGroup) {
-				// yes
-				assert(lowId < iGroup); // group merging always lowers gid
-				// jump
+			if (lowId < iGroup) {
+				// yes, jump
 				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward rewind=%u ncount=%u\n", lowId, this->ncount);
 				iGroup = lowId;
 				continue;
-			}
-			
-			// next node
+			} else {
+				// no, continue to next node
 			iGroup++;
+		}
 		}
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
@@ -3900,7 +3910,9 @@ struct groupTree_t {
 
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t   *pNode = this->N + iNode;
-				for (unsigned iSlot  = 0; iSlot < MAXSLOTS; iSlot++) {
+				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 					if (updateToLatest(pNode->slots[iSlot]) == id) {
 
 						printf("gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
@@ -5362,7 +5374,7 @@ struct groupTree_t {
 	 * SID_ZERO also included because it represents the reference value
 	 * 0 as a value, reference and operator are inter changable. 
 	 */
-	void saveFile(const char *fileName, bool showProgress = true) {
+	void  __attribute__((used)) saveFile(const char *fileName, bool showProgress = true) {
 		assert(numRoots > 0);
 
 		/*
