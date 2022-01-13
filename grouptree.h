@@ -1050,7 +1050,7 @@ struct groupTree_t {
 		 */
 		void setGid(uint32_t gid) {
 			assert(tree.N[gid].gid == gid); // must be latest 			
-// todo: re-enable			assert(findGid(gid) == NULL); // gid may not already be under construction 
+			assert(findGid(gid) == NULL); // gid may not already be under construction 
 
 			assert(gid != IBIT);
 			this->gid = gid;
@@ -2967,18 +2967,6 @@ struct groupTree_t {
 					pNew->gid = layer.gid;
 					linkNode(this->N[layer.gid].prev, nid);
 
-					// update champion
-					{
-						// Orphan any prior champion
-						uint32_t challenge = layer.findSid(sid);
-						if (challenge != IBIT)
-							unlinkNode(challenge);
-
-						// add to sid lookup index
-						layer.pSidMap[sid]          = nid;
-						layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-					}
-
 					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 						       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
@@ -3226,7 +3214,8 @@ struct groupTree_t {
 			if (this->N[nid].gid == IBIT) {
 				// "node is under construction"
 				assert(0); // does this happen?
-				// ignore until made visable
+
+				// ignore until made visible
 				return IBIT ^ (IBIT - 1); // silently ignore
 	
 			} else if (latest < this->nstart) {
@@ -3255,16 +3244,26 @@ struct groupTree_t {
 
 			} else {
 				// "node is old and belongs to same group"
+
 				uint32_t challenge = layer.findSid(sid);
-				if (challenge != IBIT && challenge != nid) {
-					/*
-					 * Champion is outdated
-					 * Might happen when called from `updateGroup()` after groups were merged
-					 */
-					assert(this->N[challenge].next != challenge);
-					unlinkNode(challenge);
+
+				if (challenge != IBIT) {
+					int cmp = this->compare(challenge, sid, pSlots);
+
+					if (cmp < 0) {
+						// challenge is better, silently ignore
+						return IBIT ^ (IBIT - 1); // silently ignore
+
+					} else if (cmp > 0) {
+						// argument is better, dismiss champion 
+						unlinkNode(challenge);
+
+					} else if (cmp == 0) {
+						assert(challenge == nid); // should have been detected
+					}
 				}
-				// update champion
+
+				// set as new champion
 				layer.pSidMap[sid]          = nid;
 				layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
@@ -3272,7 +3271,18 @@ struct groupTree_t {
 				return IBIT ^ (IBIT - 1); // silently ignore
 			}
 
+			assert(0); // should not reach here
 		}
+
+		// create node
+		nid = this->newNode(sid, pSlots, power);
+		groupNode_t *pNode = this->N + nid;
+
+		pNode->gid = IBIT;
+
+		// add node to index
+		this->nodeIndex[nix]        = nid;
+		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
 		// connected to group?
 		if (layer.gid != IBIT) {
@@ -3285,27 +3295,20 @@ struct groupTree_t {
 				if (cmp < 0) {
 					// champion is better
 					return IBIT ^ (IBIT - 1); // silently ignore
+					
 				} else if (cmp > 0) {
-					// heap is better, orphan existing first and replace later with new
-					/*
-					 * @date 2022-01-08 18:34:14
-					 * The caller is responsible for adding new nodes to the group and removing dethroned champions
-					 */
+					// argument is better, dismiss champion 
+					unlinkNode(challenge);
+
 				} else if (cmp == 0) {
 					assert(0); // should have been detected by `lookupNode()`.
 				}
 			}
 		}
 
-		// create node
-		nid = this->newNode(sid, pSlots, power);
-		groupNode_t *pNode = this->N + nid;
-
-		pNode->gid = IBIT;
-
-		// add node to index
-		this->nodeIndex[nix]        = nid;
-		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
+		// set as new champion
+		layer.pSidMap[sid]          = nid;
+		layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
 
 		/*
 		 * @date 2021-12-25 00:57:11
@@ -3598,6 +3601,16 @@ struct groupTree_t {
 			const signature_t *pSignature    = db.signatures + pNode->sid;
 			unsigned          numPlaceholder = pSignature->numPlaceholder;
 
+			/*
+			 * @date 2022-01-13 20:06:22
+			 * If iterator got orphaned, then it was a dethroned champion during the previous iteration.
+			 * Restart the loop
+			 */
+			if (pNode->next == iNode) {
+				nextId = this->N[layer.gid].next;
+				continue;
+			}
+
 			// save next iterator value in case list changes
 			nextId = pNode->next;
 
@@ -3650,37 +3663,33 @@ struct groupTree_t {
 			 */
 
 			if (!changed) {
-				uint32_t challenge = layer.findSid(newSid);
+				uint32_t challenge = layer.findSid(pNode->sid);
 
-				if (challenge == IBIT) {
-					// champion absent, make node champion
-					layer.pSidMap[newSid]          = iNode;
-					layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
-				} else {
-					int cmp = this->compare(challenge, newSid, newSlots);
+				if (challenge != IBIT) {
+					int cmp = this->compare(challenge, pNode->sid, pNode->slots);
 
 					if (cmp < 0) {
 						// challenge is better, orphan node (orphan might already have been orphaned)
-						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup lose=%u challenge=%u\n", iNode, challenge);
+
+						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old lose=%u challenge=%u\n", iNode, challenge);
 						unlinkNode(iNode);
+						continue;
+
 					} else if (cmp > 0) {
-						// newSlots (which is the original unchanged node) is better, `challenge` is incorrect, update it 
+						// the original unchanged node is better, `challenge` is incorrect, update it 
 
-						// if the champion to-be-orphaned is next in list, position appropriately
-						if (challenge == nextId)
-							nextId = this->N[nextId].next;
-
-						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup win=%u challenge=%u\n", iNode, challenge);
+						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old win=%u challenge=%u\n", iNode, challenge);
 						unlinkNode(challenge);
 
-						layer.pSidMap[newSid]          = iNode;
-						layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
 					} else if (cmp == 0) {
 						assert(challenge == iNode);
 					}
 				}
 
-				// keep node
+				// make node the new champion
+				layer.pSidMap[pNode->sid]          = iNode;
+				layer.pSidVersion->mem[pNode->sid] = layer.pSidVersion->version;
+
 				continue;
 			}
 
@@ -3750,32 +3759,6 @@ struct groupTree_t {
 			// add node immediately before the next, so it acts as a replacement and avoids getting double processed
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup link iNode=%u prev=%u newNid=%u\n", iNode, this->N[nextId].prev, newNid);
 			linkNode(this->N[nextId].prev, newNid);
-
-			/*
-			 * @date  2022-01-08 18:39:49
-			 * Orphan any prior champion
-			 */
-			{
-				// Orphan any prior champion
-				uint32_t challenge = layer.findSid(newSid);
-				assert(challenge != iNode);
-				
-				/*
-				 * @date 2022-01-11 14:37:43
-				 * Reposition next if it is the challenge to be deleted
-				 */
-				if (challenge == nextId)
-					nextId = this->N[nextId].next;
-				
-				if (challenge != IBIT) {
-					if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup stale challenge=%u\n", challenge);
-					unlinkNode(challenge);
-				}
-
-				// add to sid lookup index
-				layer.pSidMap[newSid]          = iNode;
-				layer.pSidVersion->mem[newSid] = layer.pSidVersion->version;
-			}
 
 			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 				printf("gid=%u\tnid=%u\told=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",

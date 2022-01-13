@@ -324,7 +324,7 @@ struct gevalContext_t {
 				pFootprint[0][i] = 0;
 
 			// fill rest with random patterns
-			for (uint32_t iKey = 1; iKey < pTree->nstart; iKey++) {
+			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
 				uint64_t *v = pFootprint[iKey];
 
 				// craptastic random fill

@@ -12,8 +12,9 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-13 20:13:08 Changed: Enhanced challenge handling, moved focus to `groupTree_t::addToGroup()`.
 2022-01-12 15:45:18 Added: `maxDepth` to `groupTreeHeader_t` (version bump).
-2022-01-12 15:11:48 Chaned: Enhanced `expandSignature()`.
+2022-01-12 15:11:48 Changed: Enhanced `expandSignature()`.
 2022-01-11 19:19:42 Fixed: `mergeGroup()`/`resolveForward()`. 
 2022-01-11 19:10:32 Fixed: `groupTree_t::loadFile()`.
 2022-01-11 19:05:07 Added: Extra debug/tracking info.
