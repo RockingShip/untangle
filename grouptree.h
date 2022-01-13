@@ -128,9 +128,9 @@ struct groupNode_t {
  * All values must be less-equal than the current version.
  */
 struct versionMemory_t {
-	uint32_t version;	// Current version
-	uint32_t numMemory;	// Number of elements
-	uint32_t mem[];		// vector (size allocated on demand)
+	uint32_t version;        // Current version
+	uint32_t numMemory;      // Number of elements
+	uint32_t mem[];          // vector (size allocated on demand)
 
 	/*
 	 * Bump the next version number
@@ -256,9 +256,9 @@ struct groupTree_t {
 
 	enum {
 		DEFAULT_MAXDEPTH = GROUPTREE_DEFAULT_MAXDEPTH,
-		DEFAULT_MAXNODE = GROUPTREE_DEFAULT_MAXNODE,
-		MAXPOOLARRAY = GROUPTREE_MAXPOOLARRAY,
-		MAXHEAPNODE = GROUPTREE_MAXHEAPNODE,
+		DEFAULT_MAXNODE  = GROUPTREE_DEFAULT_MAXNODE,
+		MAXPOOLARRAY     = GROUPTREE_MAXPOOLARRAY,
+		MAXHEAPNODE      = GROUPTREE_MAXHEAPNODE,
 	};
 
 	/*
@@ -334,8 +334,8 @@ struct groupTree_t {
 	uint64_t                 cntAddBasicNode;       // number of calls to `addBasicNode()`
 	uint32_t                 cntValidate;           // counter of last valid tree
 	//
-	unsigned                 withPower;		// enablepower
-	
+	unsigned                 withPower;             // enablepower
+
 	/**
 	 * @date 2021-06-13 00:01:50
 	 *
@@ -489,11 +489,11 @@ struct groupTree_t {
 
 			memset(pNode, 0, sizeof(*pNode));
 
-			pNode->gid  = iKey;
-			pNode->next = iKey;
-			pNode->prev = iKey;
-			pNode->power  = 0;
-			pNode->sid  = db.SID_SELF;
+			pNode->gid   = iKey;
+			pNode->next  = iKey;
+			pNode->prev  = iKey;
+			pNode->power = 0;
+			pNode->sid   = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
 
@@ -736,8 +736,8 @@ struct groupTree_t {
 		 */
 		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
 
-		for (unsigned iSlot=0; iSlot<pSignature->numPlaceholder; iSlot++) {
-			int ret = this->compare(this->N[lhs].slots[iSlot], treeR,  treeR->N[rhs].slots[iSlot]);
+		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+			int ret = this->compare(this->N[lhs].slots[iSlot], treeR, treeR->N[rhs].slots[iSlot]);
 			if (ret != 0)
 				return ret;
 		}
@@ -756,7 +756,7 @@ struct groupTree_t {
 		// left-hand-side must be latest in latest group
 		assert(this->N[pLhs->gid].gid == pLhs->gid);
 
-		int cmp = (int)pLhs->sid - (int)rhsSid;
+		int cmp = (int) pLhs->sid - (int) rhsSid;
 		if (cmp != 0)
 			return cmp;
 
@@ -771,7 +771,7 @@ struct groupTree_t {
 			if (this->N[lid].gid != lid)
 				return +1;
 		}
-		
+
 		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 			uint32_t lid = pLhs->slots[iSlot];
 			uint32_t rid = rhsSlots[iSlot];
@@ -799,8 +799,8 @@ struct groupTree_t {
 		assert(headId >= this->nstart);
 		assert(nodeId >= this->nstart);
 
-		groupNode_t *pHead  = this->N + headId;
-		groupNode_t *pNode  = this->N + nodeId;
+		groupNode_t *pHead = this->N + headId;
+		groupNode_t *pNode = this->N + nodeId;
 
 		uint32_t headIdNext = pHead->next;
 		uint32_t nodeIdLast = pNode->prev;
@@ -1070,7 +1070,7 @@ struct groupTree_t {
 
 			// update gid
 			this->gid = tree.updateToLatest(this->gid);
-			
+
 			// bump versioned memory
 			this->pSidVersion->nextVersion();
 
@@ -1188,12 +1188,12 @@ struct groupTree_t {
 		 */
 
 		// reassembly transforms
-		char        slotsT[MAXSLOTS + 1];
-		char        slotsF[MAXSLOTS + 1];
+		char              slotsT[MAXSLOTS + 1];
+		char              slotsF[MAXSLOTS + 1];
 		// resulting slots containing gids
-		uint32_t    slotsR[MAXSLOTS];
+		uint32_t          slotsR[MAXSLOTS];
 		// slotsR entries in use
-		unsigned    nextSlot = 0;
+		unsigned          nextSlot = 0;
 		const signature_t *pSignature;
 
 		/*
@@ -1402,10 +1402,10 @@ struct groupTree_t {
 		 * init
 		 */
 
-		unsigned        numStack    = 0;
-		uint32_t        nextNode    = this->nstart;
-		uint32_t        *pStack     = allocMap(); // evaluation stack
-		uint32_t        *pMap       = allocMap(); // node id of intermediates
+		unsigned numStack = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap(); // evaluation stack
+		uint32_t *pMap    = allocMap(); // node id of intermediates
 
 		// component sid/slots
 		uint32_t cSid             = 0; // 0=error/folded
@@ -1600,14 +1600,14 @@ struct groupTree_t {
 
 			if (Q == 0) {
 				// level-1 fold
-				nid = F;
+				nid  = F;
 				cSid = db.SID_SELF;
 			} else if (Ti) {
 				if (Tu == 0) {
 					if (Q == F || F == 0) {
 						// [ 0] a ? !0 : 0  ->  a
 						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						nid = Q;
+						nid  = Q;
 						cSid = db.SID_SELF;
 					} else {
 						// [ 2] a ? !0 : b  -> "+" OR
@@ -1623,7 +1623,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [ 3] a ? !a : 0  ->  0
 						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						nid = 0;
+						nid  = 0;
 						cSid = db.SID_SELF;
 					} else {
 						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
@@ -1660,7 +1660,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [10] a ?  0 : 0 -> 0
 						// [11] a ?  0 : a -> 0
-						nid = 0;
+						nid  = 0;
 						cSid = db.SID_SELF;
 					} else {
 						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
@@ -1675,7 +1675,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [13] a ?  a : 0 -> a
 						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						nid = Q;
+						nid  = Q;
 						cSid = db.SID_SELF;
 					} else {
 						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
@@ -1703,7 +1703,7 @@ struct groupTree_t {
 						}
 					} else if (Tu == F) {
 						// [18] a ?  b : b -> b        ENDPOINT
-						nid = F;
+						nid  = F;
 						cSid = db.SID_SELF;
 					} else {
 						// [19] a ?  b : c             "?" QTF
@@ -1772,8 +1772,8 @@ struct groupTree_t {
 			}
 
 			// Push result onto stack
-			pStack[numStack++]   = nid;
-			pMap[nextNode++]     = nid;
+			pStack[numStack++] = nid;
+			pMap[nextNode++]   = nid;
 		}
 		assert(numStack == 1); // only result on stack
 
@@ -1815,10 +1815,10 @@ struct groupTree_t {
 		 * init
 		 */
 
-		unsigned        numStack    = 0;
-		uint32_t        nextNode    = this->nstart;
-		uint32_t        *pStack     = allocMap(); // evaluation stack
-		uint32_t        *pMap       = allocMap(); // node id of intermediates
+		unsigned numStack = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t *pStack  = allocMap(); // evaluation stack
+		uint32_t *pMap    = allocMap(); // node id of intermediates
 
 		// component sid/slots
 		uint32_t cSid             = 0; // 0=error/folded
@@ -2017,14 +2017,14 @@ struct groupTree_t {
 
 			if (Q == 0) {
 				// level-1 fold
-				nid = F;
+				nid  = F;
 				cSid = db.SID_SELF;
 			} else if (Ti) {
 				if (Tu == 0) {
 					if (Q == F || F == 0) {
 						// [ 0] a ? !0 : 0  ->  a
 						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						nid = Q;
+						nid  = Q;
 						cSid = db.SID_SELF;
 					} else {
 						// [ 2] a ? !0 : b  -> "+" OR
@@ -2040,7 +2040,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [ 3] a ? !a : 0  ->  0
 						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						nid = 0;
+						nid  = 0;
 						cSid = db.SID_SELF;
 					} else {
 						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
@@ -2077,7 +2077,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [10] a ?  0 : 0 -> 0
 						// [11] a ?  0 : a -> 0
-						nid = 0;
+						nid  = 0;
 						cSid = db.SID_SELF;
 					} else {
 						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
@@ -2092,7 +2092,7 @@ struct groupTree_t {
 					if (Q == F || F == 0) {
 						// [13] a ?  a : 0 -> a
 						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						nid = Q;
+						nid  = Q;
 						cSid = db.SID_SELF;
 					} else {
 						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
@@ -2120,7 +2120,7 @@ struct groupTree_t {
 						}
 					} else if (Tu == F) {
 						// [18] a ?  b : b -> b        ENDPOINT
-						nid = F;
+						nid  = F;
 						cSid = db.SID_SELF;
 					} else {
 						// [19] a ?  b : c             "?" QTF
@@ -2144,8 +2144,8 @@ struct groupTree_t {
 					// was it a silent-ignore?
 					if (nid == (IBIT ^ (IBIT - 1))) {
 						// yes
-					freeMap(pStack);
-					freeMap(pMap);
+						freeMap(pStack);
+						freeMap(pMap);
 						return nid;
 					}
 
@@ -2192,7 +2192,7 @@ struct groupTree_t {
 
 			} else {
 				assert(numStack == 0);
-				
+
 				// NOTE: top-level, use same depth/indent as caller
 				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
 
@@ -2206,8 +2206,8 @@ struct groupTree_t {
 			}
 
 			// Push result onto stack
-			pStack[numStack++]   = nid;
-			pMap[nextNode++]     = nid;
+			pStack[numStack++] = nid;
+			pMap[nextNode++]   = nid;
 		}
 		assert(numStack == 1); // only result on stack
 
@@ -2524,7 +2524,7 @@ struct groupTree_t {
 		assert(F < this->nstart || F != this->N[F].next);
 		// gid must be latest
 		assert(layer.gid == IBIT || this->N[layer.gid].gid == layer.gid);
-	
+
 		// arguments may not fold to gid
 		if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 			// this implies that layer.gid != IBIT
@@ -2567,7 +2567,7 @@ struct groupTree_t {
 				assert(depth > 0); // must be a recursve call
 				return IBIT ^ (IBIT - 1); // silently ignore
 			}
-				
+
 			// (possibly outdated) node already exists, test if same group
 			assert(this->N[nid].gid != IBIT);
 
@@ -2631,7 +2631,7 @@ struct groupTree_t {
 		 */
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-		
+
 		/*
 		 * All nodes of the list need to be processed
 		 * With `for` the node containing the end-condition is skipped.
@@ -2868,7 +2868,7 @@ struct groupTree_t {
 				// lookup slots
 				nix = this->lookupNode(sid, finalSlots);
 				nid = this->nodeIndex[nix];
-				
+
 				/*
 				 * @date 2022-01-09 15:39:52
 				 * Ignore nodes under construction
@@ -2962,7 +2962,7 @@ struct groupTree_t {
 						 */
 
 						layer.gid = gid;
-						
+
 						// bump versioned memory
 						layer.pSidVersion->nextVersion();
 
@@ -3234,7 +3234,7 @@ struct groupTree_t {
 
 				// ignore until made visible
 				return IBIT ^ (IBIT - 1); // silently ignore
-	
+
 			} else if (latest < this->nstart) {
 				// entrypoint collapse
 
@@ -3312,7 +3312,7 @@ struct groupTree_t {
 				if (cmp < 0) {
 					// champion is better
 					return IBIT ^ (IBIT - 1); // silently ignore
-					
+
 				} else if (cmp > 0) {
 					// argument is better, dismiss champion 
 					unlinkNode(challenge);
@@ -3388,7 +3388,7 @@ struct groupTree_t {
 		this->cntMergeGroup++;
 
 		uint32_t lhs = layer.gid;
-		
+
 		assert(this->N[lhs].gid == lhs); // lhs must be latest header
 		assert(this->N[rhs].gid == rhs); // rhs must be latest header
 		assert(this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for initial groups)
@@ -3461,7 +3461,7 @@ struct groupTree_t {
 
 			return;
 		}
-		
+
 
 		/*
 		 * Flood-fill
@@ -3586,7 +3586,7 @@ struct groupTree_t {
 			// let lhs redirect to gid
 			this->N[lhs].gid = gid;
 		}
-		
+
 		// update layer
 		layer.gid = gid;
 		layer.rebuild();
@@ -3613,11 +3613,11 @@ struct groupTree_t {
 		/*
 		 * Walk through all nodes of group
 		 */
-		
+
 		uint32_t nextId;
 		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = nextId) {
-			groupNode_t       *pNode         = this->N + iNode;
-			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+			groupNode_t *pNode         = this->N + iNode;
+			unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			/*
 			 * @date 2022-01-13 20:06:22
@@ -3650,7 +3650,7 @@ struct groupTree_t {
 					hasSelf = true;
 				else if (id > layer.gid)
 					hasForward = true;
-				
+
 				newSlots[iSlot] = id;
 			}
 
@@ -3723,7 +3723,7 @@ struct groupTree_t {
 			for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
 				newSlots[iSlot] = 0;
 
-			uint32_t newSid  = pNode->sid;
+			uint32_t newSid = pNode->sid;
 
 			// perform sid swap
 			applySwapping(newSid, newSlots);
@@ -3779,7 +3779,7 @@ struct groupTree_t {
 
 			// finalise node
 			groupNode_t *pNew = this->N + newNid;
-			pNew->oldId = pNode->oldId ? pNode->oldId : iNode; 
+			pNew->oldId = pNode->oldId ? pNode->oldId : iNode;
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup link iNode=%u newNid=%u\n", iNode, newNid);
 
@@ -3829,7 +3829,7 @@ struct groupTree_t {
 			 */
 
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup forward oldGid=%u newGid=%u\n", layer.gid, newGid);
-			
+
 			// relocate group
 			linkNode(newGid, layer.gid);
 			unlinkNode(layer.gid);
@@ -3858,7 +3858,7 @@ struct groupTree_t {
 	void resolveForward(groupLayer_t &layer, uint32_t gstart) {
 		assert(this->N[layer.gid].gid == layer.gid); // lhs must be latest
 
-		uint32_t initialGid = layer.gid;	// initial gid, used to restore layer on exit
+		uint32_t initialGid = layer.gid;        // initial gid, used to restore layer on exit
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
 
@@ -3868,7 +3868,7 @@ struct groupTree_t {
 			// for endpoints, sweep the whole tree
 			firstId = iGroup = this->nstart;
 		}
-		
+
 		/*
 		 * Walk through tree and search for outdated groups
 		 */
@@ -3886,7 +3886,7 @@ struct groupTree_t {
 			/*
 			 * Prepare layer for group and update
 			 */
-			
+
 			layer.gid = iGroup;
 			layer.rebuild();
 
@@ -3896,7 +3896,7 @@ struct groupTree_t {
 			// update lowest
 			if (lowId < firstId)
 				firstId = lowId;
-			
+
 			// if something merged, reposition to the start of the range
 			if (lowId < iGroup) {
 				// yes, jump
@@ -3905,12 +3905,12 @@ struct groupTree_t {
 				continue;
 			} else {
 				// no, continue to next node
-			iGroup++;
-		}
+				iGroup++;
+			}
 		}
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-		
+
 		/*
 		 * Restore layer
 		 */
@@ -3924,7 +3924,7 @@ struct groupTree_t {
 				continue; // not start of list
 
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				groupNode_t   *pNode = this->N + iNode;
+				groupNode_t *pNode         = this->N + iNode;
 				unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
@@ -3933,7 +3933,7 @@ struct groupTree_t {
 						printf("gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
 						       pNode->gid, iNode,
 						       pNode->sid, db.signatures[pNode->sid].name,
-						       pNode->slots[0],  pNode->slots[1],  pNode->slots[2],  pNode->slots[3],  pNode->slots[4],  pNode->slots[5],  pNode->slots[6],  pNode->slots[7],  pNode->slots[8],
+						       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
 						       db.signatures[pNode->sid].size, pNode->power);
 						continue;
 					}
@@ -3947,7 +3947,7 @@ struct groupTree_t {
 			return;
 
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-			groupNode_t   *pNode = this->N + iNode;
+			groupNode_t *pNode = this->N + iNode;
 
 			showLine(pNode->gid, iNode, NULL, NULL, NULL);
 			printf("\n");
@@ -3960,10 +3960,9 @@ struct groupTree_t {
 		uint32_t oldId = this->N[iNode].oldId;
 		if (!oldId)
 			return;
-		
-		
+
 		for (uint32_t iNode = oldId; iNode < this->ncount; iNode++) {
-			groupNode_t   *pNode = this->N + iNode;
+			groupNode_t *pNode = this->N + iNode;
 
 			if (pNode->oldId == oldId) {
 				showLine(pNode->gid, iNode, NULL, NULL, NULL);
@@ -4182,7 +4181,7 @@ struct groupTree_t {
 
 					// update current
 					*pSid = foldSid;
-					pSignature = db.signatures + *pSid;
+					pSignature     = db.signatures + *pSid;
 					numPlaceholder = pSignature->numPlaceholder;
 
 					// update slots
@@ -4217,7 +4216,7 @@ struct groupTree_t {
 	}
 
 	void showLine(uint32_t iGroup, uint32_t iNode, const uint32_t *pSidCount, versionMemory_t *pFlood, versionMemory_t *pCycle) {
-		const groupNode_t *pNode = this->N + iNode;
+		const groupNode_t *pNode      = this->N + iNode;
 		const signature_t *pSignature = db.signatures + pNode->sid;
 
 		// test correct group
@@ -4245,7 +4244,7 @@ struct groupTree_t {
 				printf("<LATEST=%u>", latest);
 			if (pFlood != NULL && pCycle != NULL && pFlood->mem[latest] == pFlood->version && pCycle->mem[latest] == pCycle->version)
 				printf("<CYCLE>");
-				
+
 
 			if (latest == 0) {
 				// slots references zero
@@ -4525,10 +4524,10 @@ struct groupTree_t {
 	 */
 	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
 
-		uint32_t        nextPlaceholder  = this->kstart;	// next placeholder for `pTransform`
-		uint32_t        nextExportNodeId = this->nstart;	// next nodeId for exported name
-		uint32_t        *pMap            = allocMap();		// maps internal to exported node id 
-		versionMemory_t *pVersion        = allocVersion();	// version data for `pMap`.
+		uint32_t        nextPlaceholder  = this->kstart;        // next placeholder for `pTransform`
+		uint32_t        nextExportNodeId = this->nstart;        // next nodeId for exported name
+		uint32_t        *pMap            = allocMap();          // maps internal to exported node id 
+		versionMemory_t *pVersion        = allocVersion();      // version data for `pMap`.
 		std::string     name;
 
 		// bump version number
@@ -4735,7 +4734,7 @@ struct groupTree_t {
 	 * For debugging
 	 */
 	std::string __attribute__((used)) dumpGroup(uint32_t gid) {
-		while(gid != this->N[gid].gid)
+		while (gid != this->N[gid].gid)
 			gid = this->N[gid].gid;
 
 		assert(gid == this->N[gid].gid);
@@ -5190,7 +5189,7 @@ struct groupTree_t {
 
 			// remember
 			pStack[numStack++] = nid;
-			pMap[nextNode++] = nid;
+			pMap[nextNode++]   = nid;
 
 			if ((unsigned) numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
@@ -5389,7 +5388,7 @@ struct groupTree_t {
 	 * SID_ZERO also included because it represents the reference value
 	 * 0 as a value, reference and operator are inter changable. 
 	 */
-	void  __attribute__((used)) saveFile(const char *fileName, bool showProgress = true) {
+	void __attribute__((used)) saveFile(const char *fileName, bool showProgress = true) {
 		assert(numRoots > 0);
 
 		/*
@@ -5400,11 +5399,11 @@ struct groupTree_t {
 		memset(&header, 0, sizeof header);
 
 		// zeros for alignment
-		uint8_t zero16[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		uint8_t  zero16[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		// current file position
-		size_t         fpos       = 0;
+		size_t   fpos       = 0;
 		// crc for nodes/roots
-		uint32_t       crc32      = 0;
+		uint32_t crc32      = 0;
 
 //		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS)
 //			fprintf(stderr, "[%s] Writing %s\n", ctx.timeAsString(), fileName);
@@ -5498,7 +5497,7 @@ struct groupTree_t {
 
 			}
 			nextId = this->ncount;
-			
+
 		} else {
 
 			/*
@@ -5506,16 +5505,16 @@ struct groupTree_t {
 			 */
 
 			nextId = 0;
-			
+
 			for (uint32_t iGroup = 0; iGroup < this->ncount; iGroup++) {
 				if (this->N[iGroup].gid != iGroup)
 					continue; // not start of list
-					
+
 				assert(iGroup < this->nstart || this->N[iGroup].next != iGroup); // may not be empty
-				
+
 				// id header	
 				pMap[iGroup] = nextId++;
-				
+
 				// list nodes
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					const groupNode_t *pNode         = this->N + iNode;
@@ -5523,8 +5522,8 @@ struct groupTree_t {
 
 					// id node
 					pMap[iGroup] = nextId++;
-					
-					for (unsigned iSlot=0; iSlot<numPlaceholder; iSlot++) {
+
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 						uint32_t id = pNode->slots[iSlot];
 						assert(this->N[id].gid == id); // must be latest
 						assert(id < this->nstart || this->N[id].next != id); // may not be orphaned
@@ -5610,7 +5609,7 @@ struct groupTree_t {
 			uint32_t R = roots[iRoot];
 
 			// new wrtRoot
-			uint32_t wrtRoot = pMap[R & ~IBIT] ^(R & IBIT);
+			uint32_t wrtRoot = pMap[R & ~IBIT] ^ (R & IBIT);
 
 			__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtRoot));
 
