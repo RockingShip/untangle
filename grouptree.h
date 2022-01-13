@@ -1720,25 +1720,8 @@ struct groupTree_t {
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
-
-				// did something happen?
-				if (nid & IBIT) {
-					// was it a silent-ignore?
-					if (nid == (IBIT ^ (IBIT - 1))) {
-						// yes
-						freeMap(pStack);
-						freeMap(pMap);
-						return nid;
-					}
-
-					/*
-					 * @date 2022-01-12 14:07:22
-					 * Although the component collapsed, it is a valid node
-					 */
-
-					nid &= ~IBIT;
-				}
+				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
+				assert(!(nid & IBIT));
 
 				/*
 				 * @date 2022-01-12 13:21:33
@@ -1777,7 +1760,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, depth);
+				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2154,7 +2137,7 @@ struct groupTree_t {
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/false, depth + 1);
+				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2211,7 +2194,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 				
 				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*isTopLevel=*/true, depth);
+				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
 
 				// did something happen?
 				if (nid & IBIT) {
@@ -2469,7 +2452,7 @@ struct groupTree_t {
 		/*
 		 * call worker
 		 */
-		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*isTopLevel=*/false, /*depth=*/0);
+		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*leaveOpen=*/false, /*depth=*/0);
 
 		// regular calls may not collapse or ignore
 		assert(!(ret & IBIT));
@@ -2508,7 +2491,7 @@ struct groupTree_t {
 	 * @param {unsigned}         depth - Recursion depth
 	 * @return {number} newly created node Id, or IBIT when collapsed.
 	 */
-	uint32_t addBasicNode(groupLayer_t &layer, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, bool isTopLevel, unsigned depth) {
+	uint32_t addBasicNode(groupLayer_t &layer, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, bool leaveOpen, unsigned depth) {
 		this->cntAddBasicNode++;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -2834,14 +2817,18 @@ struct groupTree_t {
 					assert(0); // todo: does this path get walked?
 
 					// is there a current group
-					if (isTopLevel)
+					if (leaveOpen)
 						return IBIT ^ folded; // yes, let caller handle collapse to iterator
 
-					// collapse to iterator and update
-					mergeGroups(layer, folded);
-					resolveForward(layer, layer.gid);
-
-					return folded;
+					// merge groups?
+					if (layer.gid != IBIT) {
+						// yes
+						mergeGroups(layer, folded);
+						resolveForward(layer, layer.gid);
+						return layer.gid;
+					} else {
+						return folded;
+					}
 				}
 
 				/*
@@ -2862,21 +2849,24 @@ struct groupTree_t {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
 					// is this called recursively?
-					if (isTopLevel)
+					if (leaveOpen)
 						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
 
-					// collapse to endpoint and update
+					// merge groups?
 					if (layer.gid != IBIT) {
+						// yes
 						mergeGroups(layer, endpoint);
 						resolveForward(layer, layer.gid);
+						return layer.gid;
+					} else {
+						return endpoint;
 					}
 
-					return endpoint;
 				}
 
 
 				// lookup slots
-				nix  = this->lookupNode(sid, finalSlots);
+				nix = this->lookupNode(sid, finalSlots);
 				nid = this->nodeIndex[nix];
 				
 				/*
@@ -2890,15 +2880,32 @@ struct groupTree_t {
 
 				if (nid != 0 && (latest == Q || latest == Tu || latest == F)) {
 					/*
-					 * Iterator collapse.
-					 * Iterators are endpoints, making this a group-collapse to `a/[id]`. 
+					 * @date 2022-01-13 22:14:02
+					 * 
+					 * Iterator-collapse
+					 * An existing node was found that belongs to one of the iterators.
+					 * Either the current group, or another group.
+					 * There are no references to this group because it is under construction.
+					 * That makes it possible to promote the iterator as result
+					 * 
+					 * This is related to self-collapse "@date 2022-01-12 22:34:26".
+					 * The difference is that there the group already exists and a group-collapse would orphan the group invalidating all references to it.
+					 * Whereas here, the group is under construction, and suddenly detected it's an iterator/endpoint 
 					 */
 
 					// is this called recursively?
-					if (isTopLevel)
+					if (leaveOpen)
 						return IBIT ^ latest; // yes, let caller handle collapse
 
-					return latest;
+					// merge groups?
+					if (layer.gid != IBIT) {
+						// yes
+						mergeGroups(layer, latest);
+						resolveForward(layer, layer.gid);
+						return layer.gid;
+					} else {
+						return latest;
+					}
 				}
 
 				/*
@@ -2916,18 +2923,20 @@ struct groupTree_t {
 						continue; // yes, silently ignore
 
 					// is this called recursively?
-					if (isTopLevel)
+					if (leaveOpen)
 						return nid; // yes, let caller handle collapse
-
-					assert(layer.gid != IBIT); // does this happen?
 
 					uint32_t endpoint = nid & ~IBIT;
 
-					// merge and update groups
-					mergeGroups(layer, endpoint);
-					resolveForward(layer, layer.gid);
-
-					return endpoint;
+					// merge groups?
+					if (layer.gid != IBIT) {
+						// yes
+						mergeGroups(layer, endpoint);
+						resolveForward(layer, layer.gid);
+						return layer.gid;
+					} else {
+						return endpoint;
+					}
 				}
 
 				// was node freshly created?
@@ -3095,7 +3104,6 @@ struct groupTree_t {
 						 * @date 2022-01-05 17:27:20
 						 * expandSignature()/expandMember() will invalidate all layers
 						 */
-						if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 						layer.rebuild();
 
 						// is it a collapse?
@@ -3104,18 +3112,21 @@ struct groupTree_t {
 							if (expand == (IBIT ^ (IBIT - 1)))
 								continue; // silently ignore
 
-							uint32_t endpoint = expand & ~IBIT;
-							uint32_t latest   = updateToLatest(endpoint);
+							uint32_t latest = updateToLatest(expand & ~IBIT);
 
 							// is this called recursively?
-							if (isTopLevel)
+							if (leaveOpen)
 								return expand; // yes, let caller handle collapse
 
-							// merge and update groups
-							mergeGroups(layer, latest);
-							resolveForward(layer, layer.gid);
-
-							return endpoint;
+							// merge groups?
+							if (layer.gid != IBIT) {
+								// yes
+								mergeGroups(layer, latest);
+								resolveForward(layer, layer.gid);
+								return layer.gid;
+							} else {
+								return latest;
+							}
 						}
 
 						uint32_t latest = updateToLatest(expand);
@@ -3125,14 +3136,18 @@ struct groupTree_t {
 							// yes
 
 							// is this called recursively?
-							if (isTopLevel)
+							if (leaveOpen)
 								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
 
-							// merge and update groups
-							mergeGroups(layer, latest);
-							resolveForward(layer, layer.gid);
-
-							return expand;
+							// merge groups?
+							if (layer.gid != IBIT) {
+								// yes
+								mergeGroups(layer, latest);
+								resolveForward(layer, layer.gid);
+								return layer.gid;
+							} else {
+								return latest;
+							}
 						}
 
 						// Merge groups if different

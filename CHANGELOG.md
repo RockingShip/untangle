@@ -12,7 +12,8 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
-2022-01-13 21:47:13 Changed: Enhanced ``
+2022-01-13 23:18:01 Changed: Iterator collapse and consistent response to "collapsed" return values.
+2022-01-13 21:47:13 Changed: Added self-collapse detect to `groupTree_t::updateGroup()` and simplified program flow.
 2022-01-13 20:13:08 Changed: Enhanced challenge handling, moved focus to `groupTree_t::addToGroup()`.
 2022-01-12 15:45:18 Added: `maxDepth` to `groupTreeHeader_t` (version bump).
 2022-01-12 15:11:48 Changed: Enhanced `expandSignature()`.
