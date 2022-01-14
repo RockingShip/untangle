@@ -335,6 +335,7 @@ struct groupTree_t {
 	uint32_t                 cntValidate;           // counter of last valid tree
 	//
 	unsigned                 withPower;             // enablepower
+	uint32_t		 overflowGroup;		// group causing overflow
 
 	/**
 	 * @date 2021-06-13 00:01:50
@@ -403,7 +404,8 @@ struct groupTree_t {
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntValidate(0),
-		withPower(0)
+		withPower(0),
+		overflowGroup(0)
 	{
 	}
 
@@ -465,7 +467,8 @@ struct groupTree_t {
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntValidate(0),
-		withPower(0)
+		withPower(0),
+		overflowGroup()
 	{
 		if (this->N)
 			allocFlags |= ALLOCMASK_NODES;
@@ -939,8 +942,8 @@ struct groupTree_t {
 		}
 
 		if (nid > maxNodes - 10) { // 10 is arbitrary
-			fprintf(stderr, "[OVERFLOW]\n");
-			printf("{\"error\":\"overflow\",\"maxnode\":%d}\n", maxNodes);
+			fprintf(stderr, "[OVERFLOW overflowGroup=%u]\n", this->overflowGroup);
+			printf("{\"error\":\"overflow\",\"maxnode\":%d,\"group\":%u}\n", maxNodes, this->overflowGroup);
 			exit(1);
 		}
 
@@ -2457,7 +2460,7 @@ struct groupTree_t {
 		// regular calls may not collapse or ignore
 		assert(!(ret & IBIT));
 
-		validateTree(__LINE__);
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		return ret;
 	}
@@ -2510,6 +2513,9 @@ struct groupTree_t {
 				this->cntMergeGroup
 			);
 			ctx.tick = 0;
+			
+			if(depth == 0) 
+				validateTree(__LINE__);
 		}
 
 		assert(depth < 30);
@@ -3161,6 +3167,14 @@ struct groupTree_t {
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
+		/*
+		 * @date 2022-01-14 00:06:16
+		 * 
+		 * Resolve forward references for this layer.
+		 */
+		if (!leaveOpen)
+			resolveForward(layer, layer.gid);
+
 		// return group id
 		return layer.gid;
 	}
@@ -3433,7 +3447,7 @@ struct groupTree_t {
 
 			// update layer
 			layer.gid = gid;
-			layer.rebuild();
+			// gid is an entrypoint, no rebuild needed
 
 			return;
 		} else if (rhs < this->nstart) {
@@ -3455,7 +3469,7 @@ struct groupTree_t {
 
 			// update layer
 			layer.gid = gid;
-			layer.rebuild();
+			// gid is an entrypoint, no rebuild needed
 
 			return;
 		}
@@ -3857,6 +3871,12 @@ struct groupTree_t {
 		assert(this->N[layer.gid].gid == layer.gid); // lhs must be latest
 
 		/*
+		 * @date 2022-01-14 13:55:38
+		 * In case this call hangs in a loop, include the group in the error message
+		 */
+		this->overflowGroup = gstart;
+
+		/*
 		 * @date 2022-01-12 21:30:00
 		 * DOUBLE paranoid
 		 * This is an expensive validation.
@@ -3894,7 +3914,7 @@ struct groupTree_t {
 						// already processed?
 						if (pVersion->mem[iNode] == thisVersion)
 							continue; // yes
-						
+
 						bool nodeOk = true;
 
 						for (unsigned iSlot  = 0; iSlot < numPlaceholder; iSlot++) {
@@ -3949,7 +3969,6 @@ struct groupTree_t {
 				exit(1);
 
 		}
-
 		uint32_t initialGid = layer.gid;        // initial gid, used to restore layer on exit
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
@@ -4014,7 +4033,10 @@ struct groupTree_t {
 		 * Restore layer
 		 */
 		layer.gid = updateToLatest(initialGid);
-		layer.rebuild();
+		if (layer.gid >= this->nstart)
+			layer.rebuild();
+		
+		this->overflowGroup = 0;
 	}
 
 	void __attribute__((used)) whoHas(uint32_t id) {

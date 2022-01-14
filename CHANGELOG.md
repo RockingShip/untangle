@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-14 21:03:50 Fixed: Do NOT `resolveForward()` when `leaveOpen`.
 2022-01-14 01:20:18 Fixed: Restart position of `updateGroup()`/`resolveForward()`.
 2022-01-13 23:58:25 Added: Cyclic loop detect test for `groupTree_t::resolveForward()`.
 2022-01-13 23:26:31 Changed: Spacing (no code change).
