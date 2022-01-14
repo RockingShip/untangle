@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-13 23:58:25 Added: Cyclic loop detect test for `groupTree_t::resolveForward()`.
 2022-01-13 23:26:31 Changed: Spacing (no code change).
 2022-01-13 23:18:01 Changed: Iterator collapse and consistent response to "collapsed" return values.
 2022-01-13 21:47:13 Changed: Added self-collapse detect to `groupTree_t::updateGroup()` and simplified program flow.

@@ -3858,6 +3858,100 @@ struct groupTree_t {
 	void resolveForward(groupLayer_t &layer, uint32_t gstart) {
 		assert(this->N[layer.gid].gid == layer.gid); // lhs must be latest
 
+		/*
+		 * @date 2022-01-12 21:30:00
+		 * DOUBLE paranoid
+		 * This is an expensive validation.
+		 * And should only be needed in case the resolving rolls on forever.
+		 * 
+		 * It will multi-pass the tree, applying a flood to test if there are no loops
+		 */
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+			versionMemory_t *pVersion   = allocVersion();
+			uint32_t        thisVersion = pVersion->nextVersion();
+
+			// mark entrypoints
+			for (uint32_t iNode = this->kstart; iNode < this->nstart; iNode++)
+				pVersion->mem[iNode] = thisVersion;
+
+			// flood fill
+			bool changed;
+			do {
+				changed = false;
+
+				for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+					if (this->N[iGroup].gid != iGroup)
+						continue; // not start of list
+
+					// already processed?
+					if (pVersion->mem[iGroup] == thisVersion)
+						continue; // yes
+
+					bool groupOk = true;
+
+					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+						groupNode_t *pNode         = this->N + iNode;
+						unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+						// already processed?
+						if (pVersion->mem[iNode] == thisVersion)
+							continue; // yes
+						
+						bool nodeOk = true;
+
+						for (unsigned iSlot  = 0; iSlot < numPlaceholder; iSlot++) {
+							uint32_t id = updateToLatest(pNode->slots[iSlot]);
+							if (pVersion->mem[id] != thisVersion) {
+								nodeOk = false;
+								break;
+							}
+						}
+
+						// all references resolved
+						if (nodeOk) {
+							// yes, mark processed
+							pVersion->mem[iNode] = thisVersion;
+						} else {
+							// no, group failed
+							groupOk = false;
+						}
+					}
+
+					// all nodes resolved
+					if (groupOk) {
+						// yes
+						pVersion->mem[iGroup] = thisVersion;
+						changed = true;
+					}
+				}
+
+			} while (changed);
+
+			// all nodes filled
+			bool found = false;
+			for (uint32_t iNode = this->nstart; iNode < this->ncount; iNode++) {
+				groupNode_t *pNode = this->N + iNode;
+
+				// is it an active node?
+				if (pNode->next == iNode || pNode->gid == iNode || pNode->gid == IBIT)
+					continue; // no
+
+				// already processed?
+				if (pVersion->mem[iNode] != thisVersion) {
+					// no
+					if (!found) {
+						printf("ERROR resolveForward:\n");
+						found = true;
+					}
+					showLine(pNode->gid, iNode, NULL, NULL, NULL);
+					printf("\n");
+				}
+			}
+			if (found)
+				exit(1);
+
+		}
+
 		uint32_t initialGid = layer.gid;        // initial gid, used to restore layer on exit
 		uint32_t iGroup     = gstart;           // group being processed
 		uint32_t firstId    = gstart;           // lowest group in sweep
@@ -4273,6 +4367,7 @@ struct groupTree_t {
 		versionMemory_t *pNodeFound  = allocVersion();
 		bool            anyError     = false;
 		bool            hasForward   = false;
+
 		/*
 		 * Check nodes
 		 */
@@ -4467,6 +4562,97 @@ struct groupTree_t {
 					}
 				}
 			}
+		}
+
+		/*
+		 * @date 2022-01-13 23:54:25
+		 * Resolve forward loop detect
+		 */
+		if (true) {
+			versionMemory_t *pVersion   = allocVersion();
+			uint32_t        thisVersion = pVersion->nextVersion();
+
+			// mark entrypoints
+			for (uint32_t iNode = this->kstart; iNode < this->nstart; iNode++)
+				pVersion->mem[iNode] = thisVersion;
+
+			// flood fill
+			bool changed;
+			do {
+				changed = false;
+
+				for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+					if (this->N[iGroup].gid != iGroup)
+						continue; // not start of list
+
+					// already processed?
+					if (pVersion->mem[iGroup] == thisVersion)
+						continue; // yes
+
+					bool groupOk = true;
+
+					for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+						groupNode_t *pNode         = this->N + iNode;
+						unsigned    numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+						// already processed?
+						if (pVersion->mem[iNode] == thisVersion)
+							continue; // yes
+
+						bool nodeOk = true;
+
+						for (unsigned iSlot  = 0; iSlot < numPlaceholder; iSlot++) {
+							uint32_t id = updateToLatest(pNode->slots[iSlot]);
+							if (pVersion->mem[id] != thisVersion) {
+								nodeOk = false;
+								break;
+							}
+						}
+
+						// all references resolved
+						if (nodeOk) {
+							// yes, mark processed
+							pVersion->mem[iNode] = thisVersion;
+						} else {
+							// no, group failed
+							groupOk = false;
+						}
+					}
+
+					// all nodes resolved
+					if (groupOk) {
+						// yes
+						pVersion->mem[iGroup] = thisVersion;
+						changed = true;
+					}
+				}
+
+			} while (changed);
+
+			// all nodes filled
+			bool found = false;
+			for (uint32_t iNode = this->nstart; iNode < this->ncount; iNode++) {
+				groupNode_t *pNode = this->N + iNode;
+
+				// is it an active node?
+				if (pNode->next == iNode || pNode->gid == iNode || pNode->gid == IBIT)
+					continue; // no
+
+				// already processed?
+				if (pVersion->mem[iNode] != thisVersion) {
+					// no
+					if (!found) {
+						printf("ERROR resolveForward:\n");
+						found = true;
+					}
+					showLine(pNode->gid, iNode, NULL, NULL, NULL);
+					printf("\n");
+				}
+			}
+			if (found)
+				exit(1);
+
+			freeVersion(pVersion);
 		}
 
 		/*
