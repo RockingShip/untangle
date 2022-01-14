@@ -2838,6 +2838,7 @@ struct groupTree_t {
 				/*
 				 * Build slots and lookup signature
 				 */
+				restart:
 				uint32_t finalSlots[MAXSLOTS];
 				uint32_t power;
 				uint32_t sid = constructSlots(layer, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &power);
@@ -2868,6 +2869,93 @@ struct groupTree_t {
 
 				}
 
+				/*
+				 * @date 2022-01-14 00:01:39
+				 * 
+				 * Expand signature in an attempt for merge with other groups
+				 */
+				if (depth + 1 < this->maxDepth && db.signatures[sid].size > 1) {
+
+//					if (true) {
+//						uint32_t expand = expandSignature(layer, sid, finalSlots, depth + 1);
+					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+						uint32_t expand = expandMember(layer, mid, finalSlots
+									       , depth + 1);
+
+						/*
+						 * @date 2022-01-05 17:27:20
+						 * expandSignature()/expandMember() will invalidate all layers
+						 */
+						layer.rebuild();
+
+						// is it a collapse?
+						if (expand & IBIT) {
+							// yes, was it a self-collapse?
+							if (expand == (IBIT ^ (IBIT - 1)))
+								continue; // silently ignore
+
+							uint32_t latest = updateToLatest(expand & ~IBIT);
+
+							// is this called recursively?
+							if (leaveOpen)
+								return expand; // yes, let caller handle collapse
+
+							// merge groups?
+							if (layer.gid != IBIT) {
+								// yes
+								mergeGroups(layer, latest);
+								resolveForward(layer, layer.gid);
+								return layer.gid;
+							} else {
+								return latest;
+							}
+						}
+
+						uint32_t latest = updateToLatest(expand);
+
+						// test for entrypoint-collapse 
+						if (latest < this->nstart) {
+							// yes
+
+							// is this called recursively?
+							if (leaveOpen)
+								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
+
+							// merge groups?
+							if (layer.gid != IBIT) {
+								// yes
+								mergeGroups(layer, latest);
+								resolveForward(layer, layer.gid);
+								return layer.gid;
+							} else {
+								return latest;
+							}
+						}
+
+						// Merge groups if different
+						if (layer.gid != latest) {
+							// merge groups
+							mergeGroups(layer, latest);
+							resolveForward(layer, layer.gid);
+						}
+					}
+				}
+
+				/*
+				 * @date 2022-01-14 02:10:15
+				 * did iterators change
+				 */
+				if (this->N[iQ].gid != Q || this->N[iTu].gid != Tu || this->N[iF].gid != F)
+					continue; // update iterators
+
+				for (unsigned iSlot = 0; iSlot < db.signatures[sid].numPlaceholder; iSlot++) {
+					uint32_t id = finalSlots[iSlot];
+
+					if (this->N[id].gid != id) {
+						printf("finalSlots restart\n");
+						goto restart;
+					}
+				}
 
 				// lookup slots
 				nix = this->lookupNode(sid, finalSlots);
@@ -3070,102 +3158,7 @@ struct groupTree_t {
 			break;
 		}
 
-		/*
-		 * @date 2022-01-03 14:10:19
-		 * todo: Temporary hack to migrate to resolve forward)
-		 */
-		if (layer.gid != IBIT)
-			resolveForward(layer, layer.gid);
-
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
 		assert(layer.gid != IBIT);
-		if (depth + 1 < this->maxDepth) {
-			/*
-			 * @date 2022-01-01 00:28:49
-			 * Expand primary nodes. This is an important step of compressing and sorting trees
-			 */
-			if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
-			for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
-				const groupNode_t *pNode      = this->N + iNode;
-				const signature_t *pSignature = db.signatures + pNode->sid;
-
-				// did iterator orphan or change
-				if (this->N[iNode].next == iNode || this->N[iNode].gid != layer.gid) {
-					// yes, restart
-					iNode = layer.gid;
-					continue;
-				}
-
-				if (pSignature->size > 1) {
-					if (true) {
-						uint32_t expand = expandSignature(layer, pNode->sid, pNode->slots, depth + 1);
-//					for (uint32_t mid = db.signatures[pNode->sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t expand = expandMember(layer, mid, pNode->slots, depth + 1);
-
-						/*
-						 * @date 2022-01-05 17:27:20
-						 * expandSignature()/expandMember() will invalidate all layers
-						 */
-						layer.rebuild();
-
-						// is it a collapse?
-						if (expand & IBIT) {
-							// yes, was it a self-collapse?
-							if (expand == (IBIT ^ (IBIT - 1)))
-								continue; // silently ignore
-
-							uint32_t latest = updateToLatest(expand & ~IBIT);
-
-							// is this called recursively?
-							if (leaveOpen)
-								return expand; // yes, let caller handle collapse
-
-							// merge groups?
-							if (layer.gid != IBIT) {
-								// yes
-								mergeGroups(layer, latest);
-								resolveForward(layer, layer.gid);
-								return layer.gid;
-							} else {
-								return latest;
-							}
-						}
-
-						uint32_t latest = updateToLatest(expand);
-
-						// test for entrypoint-collapse 
-						if (latest < this->nstart) {
-							// yes
-
-							// is this called recursively?
-							if (leaveOpen)
-								return IBIT ^ latest; // yes, let caller handle collapse to entrypoint
-
-							// merge groups?
-							if (layer.gid != IBIT) {
-								// yes
-								mergeGroups(layer, latest);
-								resolveForward(layer, layer.gid);
-								return layer.gid;
-							} else {
-								return latest;
-							}
-						}
-
-						// Merge groups if different
-						if (layer.gid != latest) {
-							// merge groups
-							mergeGroups(layer, latest);
-							resolveForward(layer, layer.gid);
-						}
-					}
-				}
-			}
-		}
-
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		/*
 		 * @date 2022-01-14 00:06:16

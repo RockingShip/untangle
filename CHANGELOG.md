@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-14 21:28:01 Changed: Relocate `groupTree_t::expandSignature()` to Cartesian product loop.
 2022-01-14 21:17:29 Added: `groupTree_t::testAndUnlock()` to handle weird and rare `resolveForward()` time related ordering. 
 2022-01-14 21:15:45 Fixed: `groupTree_t::mergeGroups()` and self-collapse.
 2022-01-14 21:14:26 Fixed: Check new node against challenge before adding to group.
