@@ -2630,8 +2630,6 @@ struct groupTree_t {
 		 * Second step: create Cartesian products of Q/T/F group lists
 		 */
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
 		/*
 		 * All nodes of the list need to be processed
 		 * With `for` the node containing the end-condition is skipped.
@@ -3603,7 +3601,7 @@ struct groupTree_t {
 	 * 
 	 * pLhs/pRhs are the range limits used by `resolveForward()`.  
 	 */
-	bool updateGroup(groupLayer_t &layer, uint32_t *pLow) {
+	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId) {
 
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
@@ -3764,13 +3762,13 @@ struct groupTree_t {
 				// merge and update groups
 				mergeGroups(layer, endpoint);
 
-				if (endpoint < this->nstart)
-					*pLow = this->nstart;
-				else if (endpoint < *pLow)
-					*pLow = endpoint;
+				if (layer.gid < this->nstart)
+					*pRestartId = this->nstart;
+				else if (layer.gid < *pRestartId)
+					*pRestartId = layer.gid;
 
 				// delayed restart
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u\n", iNode, *pLow);
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u\n", iNode, *pRestartId);
 				return hasForward;
 			}
 
@@ -3984,18 +3982,25 @@ struct groupTree_t {
 			layer.gid = iGroup;
 			layer.rebuild();
 
-			uint32_t lowId = iGroup;
-			updateGroup(layer, &lowId);
+			/*
+			 * @date 2022-01-14 00:58:29
+			 * restartId will only change as a result of a nested `mergeGroup()`.
+			 * And it may point to the current `iGroup` in case a restart was requested
+			 * 
+			 */
+			uint32_t restartId  = this->ncount;
+			bool     hasForward = updateGroup(layer, &restartId);
+			(void) hasForward;
 
 			// update lowest
-			if (lowId < firstId)
-				firstId = lowId;
+			if (restartId < firstId)
+				firstId = restartId;
 
 			// if something merged, reposition to the start of the range
-			if (lowId < iGroup) {
+			if (restartId <= iGroup) {
 				// yes, jump
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward rewind=%u ncount=%u\n", lowId, this->ncount);
-				iGroup = lowId;
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward rewind=%u ncount=%u\n", restartId, this->ncount);
+				iGroup = restartId;
 				continue;
 			} else {
 				// no, continue to next node
