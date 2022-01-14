@@ -3303,16 +3303,6 @@ struct groupTree_t {
 			assert(0); // should not reach here
 		}
 
-		// create node
-		nid = this->newNode(sid, pSlots, power);
-		groupNode_t *pNode = this->N + nid;
-
-		pNode->gid = IBIT;
-
-		// add node to index
-		this->nodeIndex[nix]        = nid;
-		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
-
 		// connected to group?
 		if (layer.gid != IBIT) {
 			// yes, challenge the champion?
@@ -3334,6 +3324,16 @@ struct groupTree_t {
 				}
 			}
 		}
+
+		// create node
+		nid = this->newNode(sid, pSlots, power);
+		groupNode_t *pNode = this->N + nid;
+
+		pNode->gid = IBIT;
+
+		// add node to index
+		this->nodeIndex[nix]        = nid;
+		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
 		// set as new champion
 		layer.pSidMap[sid]          = nid;
