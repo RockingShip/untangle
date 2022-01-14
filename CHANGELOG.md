@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-14 21:15:45 Fixed: `groupTree_t::mergeGroups()` and self-collapse.
 2022-01-14 21:14:26 Fixed: Check new node against challenge before adding to group.
 2022-01-14 21:03:50 Fixed: Do NOT `resolveForward()` when `leaveOpen`.
 2022-01-14 01:20:18 Fixed: Restart position of `updateGroup()`/`resolveForward()`.

@@ -3403,8 +3403,11 @@ struct groupTree_t {
 
 		assert(this->N[lhs].gid == lhs); // lhs must be latest header
 		assert(this->N[rhs].gid == rhs); // rhs must be latest header
-		assert(this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for initial groups)
-		assert(lhs != rhs); // groups must be different
+		assert(rhs < this->nstart || this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for initial groups)
+
+		// is it a self-collapse
+		if (lhs == rhs)
+			return; // yes
 
 		/*
 		 * @date 2021-12-28 21:11:47
