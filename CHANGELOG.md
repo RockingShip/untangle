@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-17 17:22:36 Fixed: Detect endpoint-collapse in `groupTree_t::`constructSlots()`.
 2022-01-17 17:15:09 Changed: Relocate changed iterators in `grouTree_t::addBasicNode()`.
 2022-01-16 00:58:02 Changed: Unified collapse-handling in `groupTree_t::addBasicNode()`.
 2022-01-14 21:28:01 Changed: Relocate `groupTree_t::expandSignature()` to Cartesian product loop.

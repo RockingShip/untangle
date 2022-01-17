@@ -1209,9 +1209,12 @@ struct groupTree_t {
 			uint32_t endpoint = updateToLatest(pNodeQ->slots[iSlot]);
 			assert(endpoint != 0);
 
-			// is it a self-collapse
-			if (endpoint == layer.gid)
-				return 0; // yes
+			// is it an endpoint-collapse
+			if (endpoint == layer.gid) {
+				// yes
+				pFinal[0] = endpoint;
+				return db.SID_SELF;
+			}
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
@@ -1235,9 +1238,12 @@ struct groupTree_t {
 			uint32_t endpoint = updateToLatest(pNodeT->slots[iSlot]);
 			assert(endpoint != 0);
 
-			// is it a self-collapse
-			if (endpoint == layer.gid)
-				return 0; // yes
+			// is it an endpoint-collapse
+			if (endpoint == layer.gid) {
+				// yes
+				pFinal[0] = endpoint;
+				return db.SID_SELF;
+			}
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
@@ -1285,9 +1291,12 @@ struct groupTree_t {
 			uint32_t endpoint = updateToLatest(pNodeF->slots[iSlot]);
 			assert(endpoint != 0);
 
-			// is it a self-collapse
-			if (endpoint == layer.gid)
-				return 0; // yes
+			// is it an endpoint-collapse
+			if (endpoint == layer.gid) {
+				// yes
+				pFinal[0] = endpoint;
+				return db.SID_SELF;
+			}
 
 			// was it seen before
 			if (slotVersion[endpoint] != thisVersion) {
