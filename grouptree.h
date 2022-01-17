@@ -1557,14 +1557,13 @@ struct groupTree_t {
 			Tu = updateToLatest(Tu);
 			F  = updateToLatest(F);
 
-			// did one of the deeper components merge with the layer  
+			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
 
-				// todo: this is a self-collapse (group), but temporarily handle it as a silently-ignore (node) until more stable
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT ^ (IBIT - 1);
+				return IBIT ^ layer.gid;
 			}
 
 			/*
@@ -1732,10 +1731,27 @@ struct groupTree_t {
 
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
-				assert(!(nid & IBIT));
+
+				layer.gid = updateToLatest(layer.gid);
+				layer.rebuild();
+
+				/*
+				 * @date 2022-01-16 00:32:17
+				 * returns "silently-ignore" if a potential loop was detected
+				 * See matching timestamp in `addBasicNode()`.
+				 */
+				if (nid & IBIT) {
+					// yes, let caller handle collapse
+					freeMap(pStack);
+					freeMap(pMap);
+					return nid;
+				}
+				
+				assert(nid == updateToLatest(nid));
 
 				/*
 				 * @date 2022-01-12 13:21:33
+				 * (position outdated)
 				 *
 				 * If the component folds to an entrypoint:
 				 *	The original idea of `expandSignature()` is to create alternatives in an attempty to match and join groups.
@@ -1751,21 +1767,6 @@ struct groupTree_t {
 				 * 	This too might be a good thing.
 				 * 	todo: let it happen instead of rejecting
 				 */
-
-				uint32_t latest = updateToLatest(layer.gid);
-
-				// refresh layer if outdated (might have merged with component)
-				if (layer.gid != latest) {
-					layer.gid = latest;
-					layer.rebuild();
-
-
-					// todo: (in case gid==node) this is a self-collapse (group), but temporarily handle it as a silently-ignore (node) until more stable
-
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT ^ (IBIT - 1);
-				}
 
 			} else {
 				assert(numStack == 0);
@@ -1974,14 +1975,13 @@ struct groupTree_t {
 			Tu = updateToLatest(Tu);
 			F  = updateToLatest(F);
 
-			// did one of the deeper components merge with the layer  
+			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
 
-				// todo: this is a self-collapse (group), but temporarily handle it as a silently-ignore (node) until more stable
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT ^ (IBIT - 1);
+				return IBIT ^ layer.gid;
 			}
 
 			/*
@@ -2149,10 +2149,27 @@ struct groupTree_t {
 
 				// call
 				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
-				assert(!(nid & IBIT));
+
+				layer.gid = updateToLatest(layer.gid);
+				layer.rebuild();
+
+				/*
+				 * @date 2022-01-16 00:32:17
+				 * returns "silently-ignore" if a potential loop was detected
+				 * See matching timestamp in `addBasicNode()`.
+				 */
+				if (nid & IBIT) {
+					// yes, let caller handle collapse
+					freeMap(pStack);
+					freeMap(pMap);
+					return nid;
+				}
+				
+				assert(nid == updateToLatest(nid));
 
 				/*
 				 * @date 2022-01-12 13:21:33
+				 * (position outdated)
 				 *
 				 * If the component folds to an entrypoint:
 				 *	The original idea of `expandSignature()` is to create alternatives in an attempty to match and join groups.
@@ -2168,21 +2185,6 @@ struct groupTree_t {
 				 * 	This too might be a good thing.
 				 * 	todo: let it happen instead of rejecting
 				 */
-
-				uint32_t latest = updateToLatest(layer.gid);
-
-				// refresh layer if outdated (might have merged with component)
-				if (layer.gid != latest) {
-					layer.gid = latest;
-					layer.rebuild();
-
-
-					// todo: (in case gid==node) this is a self-collapse (group), but temporarily handle it as a silently-ignore (node) until more stable
-
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT ^ (IBIT - 1);
-				}
 
 			} else {
 				assert(numStack == 0);
