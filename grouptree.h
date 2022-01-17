@@ -1082,7 +1082,7 @@ struct groupTree_t {
 				this->minPower[k] = 0;
 
 			// scan group for initial sid lookup and power
-			for (uint32_t iNode = tree.N[gid].next; iNode != tree.N[iNode].gid; iNode = tree.N[iNode].next) {
+			for (uint32_t iNode = tree.N[this->gid].next; iNode != tree.N[iNode].gid; iNode = tree.N[iNode].next) {
 				groupNode_t       *pNode      = tree.N + iNode;
 				const signature_t *pSignature = tree.db.signatures + pNode->sid;
 
@@ -1118,7 +1118,7 @@ struct groupTree_t {
 		 */
 		inline const groupLayer_t *findGid(uint32_t gid) const {
 			for (const groupLayer_t *pLayer = this; pLayer; pLayer = pLayer->pPrevious) {
-				if (tree.updateToLatest(pLayer->gid) == gid)
+				if (pLayer->gid != IBIT && tree.updateToLatest(pLayer->gid) == gid)
 					return pLayer;
 			}
 			return NULL;
@@ -1141,8 +1141,7 @@ struct groupTree_t {
 			if (tree.N[nid].next == nid)
 				return IBIT; // node was orphaned
 
-
-			assert(tree.N[nid].gid == this->gid);
+			assert(tree.N[nid].gid == this->gid); // node/group must match
 			return nid;
 		}
 
@@ -2908,8 +2907,44 @@ struct groupTree_t {
 				 * did iterators change
 				 */
 
-				if (this->N[iQ].gid != Q || this->N[iTu].gid != Tu || this->N[iF].gid != F)
-					continue; // yes, update iterators
+				{
+					bool changed = false;
+
+					if (this->N[Q].gid != Q) {
+						// group change
+						iQ      = Q = updateToLatest(this->N[iQ].gid);
+						changed = true;
+					} else if (this->N[iQ].next == iQ && iQ >= this->nstart) {
+						// orphaned
+						iQ      = Q;
+						changed = true;
+					}
+
+					if (this->N[Tu].gid != Tu) {
+						// group change
+						iTu     = Tu = updateToLatest(this->N[iTu].gid);
+						changed = true;
+					} else if (this->N[iTu].next == iTu && iTu >= nstart) {
+						// orphaned
+						iTu     = Tu;
+						changed = true;
+					}
+
+					if (Tu != F) {
+						if (this->N[F].gid != F) {
+							// group change
+							iF      = F = updateToLatest(this->N[iF].gid);
+							changed = true;
+						} else if (this->N[iF].next == iF && iF >= nstart) {
+							// orphaned
+							iF      = F;
+							changed = true;
+						}
+					}
+
+					if (changed)
+						goto restart; // restart with updated iterators
+				}
 
 				// did slot entries change group?	
 				for (unsigned iSlot = 0; iSlot < db.signatures[sid].numPlaceholder; iSlot++) {
@@ -3062,43 +3097,6 @@ struct groupTree_t {
 			 * detect iterator-group change
 			 * this might happen when `mergeGroup()` involves an iterator group
 			 */
-
-			bool changed = false;
-
-			if (this->N[Q].gid != Q) {
-				// group change
-				iQ      = Q = updateToLatest(this->N[iQ].gid);
-				changed = true;
-			} else if (this->N[iQ].next == iQ && iQ >= this->nstart) {
-				// orphaned
-				iQ      = Q;
-				changed = true;
-			}
-
-			if (this->N[Tu].gid != Tu) {
-				// group change
-				iTu     = Tu = updateToLatest(this->N[iTu].gid);
-				changed = true;
-			} else if (this->N[iTu].next == iTu && iTu >= nstart) {
-				// orphaned
-				iTu     = Tu;
-				changed = true;
-			}
-
-			if (Tu != F) {
-				if (this->N[F].gid != F) {
-					// group change
-					iF      = F = updateToLatest(this->N[iF].gid);
-					changed = true;
-				} else if (this->N[iF].next == iF && iF >= nstart) {
-					// orphaned
-					iF      = F;
-					changed = true;
-				}
-			}
-
-			if (changed)
-				continue;
 
 			/*
 			 * Bump iterators
@@ -3580,7 +3578,7 @@ struct groupTree_t {
 	 * 
 	 * pLhs/pRhs are the range limits used by `resolveForward()`.  
 	 */
-	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId) {
+	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId, bool allowForward) {
 
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
@@ -3952,13 +3950,14 @@ struct groupTree_t {
 		 */
 		this->overflowGroup = gstart;
 
-		uint32_t initialGid = layer.gid;        // initial gid, used to restore layer on exit
-		uint32_t iGroup     = gstart;           // group being processed
-		uint32_t firstId    = gstart;           // lowest group in sweep
+		uint32_t iGroup  = gstart;           // group being processed
+		uint32_t firstId = gstart;           // lowest group in sweep
+
+		groupLayer_t newLayer(*this, &layer); // separate layer for recursive calls 
 
 		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward gid=%u gstart=%u ncount=%u\n", layer.gid, gstart, this->ncount);
 
-		if (initialGid < this->nstart) {
+		if (gstart < this->nstart) {
 			// for endpoints, sweep the whole tree
 			firstId = iGroup = this->nstart;
 		}
@@ -3969,7 +3968,7 @@ struct groupTree_t {
 
 		uint32_t mark = this->ncount;
 		unsigned numMark = 0;
-			
+
 		while (iGroup < this->ncount) {
 			/*
 			 * Test if mark reached
@@ -3978,7 +3977,7 @@ struct groupTree_t {
 				// yes
 				mark = this->ncount;
 				numMark++;
-				
+
 				if (numMark > 3) {
 					//* DOUBLE paranoid, passed more than 3x through tree, which might indicate a cyclic loop
 					// NOTE: if it does this too often, consider raising the threshold.
@@ -3989,7 +3988,7 @@ struct groupTree_t {
 					continue;
 				}
 			}
-			
+
 			// stop at group headers
 			if (this->N[iGroup].gid != iGroup) {
 				iGroup++;
@@ -4002,8 +4001,8 @@ struct groupTree_t {
 			 * Prepare layer for group and update
 			 */
 
-			layer.gid = iGroup;
-			layer.rebuild();
+			newLayer.gid = iGroup;
+			newLayer.rebuild();
 
 			/*
 			 * @date 2022-01-14 00:58:29
@@ -4012,7 +4011,7 @@ struct groupTree_t {
 			 * 
 			 */
 			uint32_t restartId  = this->ncount;
-			bool     hasForward = updateGroup(layer, &restartId);
+			bool     hasForward = updateGroup(newLayer, &restartId, /*allowForward=*/true);
 			(void) hasForward;
 
 			// update lowest
@@ -4036,10 +4035,9 @@ struct groupTree_t {
 		/*
 		 * Restore layer
 		 */
-		layer.gid = updateToLatest(initialGid);
-		if (layer.gid >= this->nstart)
-			layer.rebuild();
-		
+		layer.gid = updateToLatest(layer.gid);
+		layer.rebuild();
+
 		this->overflowGroup = 0;
 	}
 
