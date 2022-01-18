@@ -1068,7 +1068,7 @@ struct groupTree_t {
 		 */
 		void rebuild(void) {
 			assert(this->gid != IBIT); // may not be under construction
-			assert(tree.N[this->gid].next != this->gid); // may not be empty
+//			assert(tree.N[this->gid].next != this->gid); // may not be empty
 
 
 			// update gid
@@ -1747,7 +1747,7 @@ struct groupTree_t {
 					return nid;
 				}
 				
-				assert(nid == updateToLatest(nid));
+//				assert(nid == updateToLatest(nid));
 
 				/*
 				 * @date 2022-01-12 13:21:33

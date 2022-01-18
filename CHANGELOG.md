@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-18 17:09:31 Changed: Disable asserts.
 2022-01-17 17:47:26 Fixed: Detect endpoint-collapse in `groupTree_t::`expandSignature()`.
 2022-01-17 17:22:36 Fixed: Detect endpoint-collapse in `groupTree_t::`constructSlots()`.
 2022-01-17 17:15:09 Changed: Relocate changed iterators in `grouTree_t::addBasicNode()`.
