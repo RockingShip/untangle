@@ -3796,7 +3796,7 @@ struct groupTree_t {
 		 * Or groups were merged and the highest id went lower.
 		 */
 
-		if (hasForward) {
+		if (hasForward && !allowForward) {
 			/*
 			 * create new list header
 			 */
@@ -4022,7 +4022,7 @@ struct groupTree_t {
 			 * 
 			 */
 			uint32_t restartId  = this->ncount;
-			bool     hasForward = updateGroup(newLayer, &restartId, /*allowForward=*/true);
+			bool     hasForward = updateGroup(newLayer, &restartId, /*allowForward=*/false);
 			(void) hasForward;
 
 			// update lowest
