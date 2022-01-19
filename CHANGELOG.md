@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-19 20:21:18 Changed: `groupTree_t::addBasicNode()` returns IGNORE/COLLAPSE/SUCCESS and actualises `layer.gid`.
 2022-01-19 00:21:32 Fixed: Implemented `allowForward` in `groupTree_t::updateGroup()`. 
 2022-01-18 17:09:31 Changed: Disable asserts.
 2022-01-17 17:47:26 Fixed: Detect endpoint-collapse in `groupTree_t::`expandSignature()`.

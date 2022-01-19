@@ -1724,30 +1724,36 @@ struct groupTree_t {
 
 			if (cSid == db.SID_SELF) {
 				// folding occurred and result is in nid
+
+				// Push onto stack
+				pStack[numStack++] = nid;
+				pMap[nextNode++]   = nid;
+
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
-
-				layer.gid = updateToLatest(layer.gid);
-				layer.rebuild();
+				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
 
 				/*
 				 * @date 2022-01-16 00:32:17
 				 * returns "silently-ignore" if a potential loop was detected
 				 * See matching timestamp in `addBasicNode()`.
+				 * 
+				 * NOTE: returning a collapse will drastically reduce runtime, but is less accurate
 				 */
-				if (nid & IBIT) {
-					// yes, let caller handle collapse
+				if (ret == (IBIT ^ (IBIT - 1))) {
+					// yes, silently ignore
 					freeMap(pStack);
 					freeMap(pMap);
-					return nid;
+					return ret;
 				}
-				
-//				assert(nid == updateToLatest(nid));
+
+				// Push onto stack
+				pStack[numStack++] = newLayer.gid;
+				pMap[nextNode++]   = newLayer.gid;
 
 				/*
 				 * @date 2022-01-12 13:21:33
@@ -1771,42 +1777,52 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
-				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
+				// catch up on changes
+				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+					layer.gid = updateToLatest(layer.gid);
+					layer.rebuild();
+				}
 
-				// did something happen?
-				if (nid & IBIT) {
-					// yes, let caller handle what
+				// NOTE: top-level, use same depth/indent as caller
+				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
+
+				// collapse?
+				if (ret & IBIT) {
+					// yes, let caller handle collapse
 					freeMap(pStack);
 					freeMap(pMap);
-					return nid;
+					return ret;
 				}
-			}
 
-			// Push result onto stack
-			pStack[numStack++] = nid;
-			pMap[nextNode++]   = nid;
+				assert(layer.gid != IBIT);
+
+				// Push onto stack
+				pStack[numStack++] = layer.gid;
+				pMap[nextNode++]   = layer.gid;
+
+				break;
+			}
 		}
 		assert(numStack == 1); // only result on stack
 
-		// release and return
 		uint32_t ret = pStack[0];
 
 		freeMap(pStack);
 		freeMap(pMap);
 
-		/*
-		 * @date 2022-01-12 13:42:16
-		 * Did it fold to one of the endpoints
-		 */
-		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-			uint32_t id = updateToLatest(pSlots[iSlot]);
-
-			if (ret == id)
-				return IBIT ^ id; // yes
+		// catch up on changes
+		if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+			layer.gid = updateToLatest(layer.gid);
+			layer.rebuild();
 		}
 
-		return ret;
+		/// merge result into group under cinstruction
+		if (layer.gid != ret) {
+			mergeGroups(layer, ret);
+			updateGroup(layer, NULL, /*allowForwar=*/true);
+		}
+
+		return layer.gid;
 	}
 
 	/*
@@ -2142,30 +2158,36 @@ struct groupTree_t {
 
 			if (cSid == db.SID_SELF) {
 				// folding occurred and result is in nid
+
+				// Push onto stack
+				pStack[numStack++] = nid;
+				pMap[nextNode++]   = nid;
+
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
 				// call
-				nid = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
-
-				layer.gid = updateToLatest(layer.gid);
-				layer.rebuild();
+				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
 
 				/*
 				 * @date 2022-01-16 00:32:17
 				 * returns "silently-ignore" if a potential loop was detected
 				 * See matching timestamp in `addBasicNode()`.
+				 * 
+				 * NOTE: returning a collapse will drastically reduce runtime, but is less accurate
 				 */
-				if (nid & IBIT) {
-					// yes, let caller handle collapse
+				if (ret == (IBIT ^ (IBIT - 1))) {
+					// yes, silently ignore
 					freeMap(pStack);
 					freeMap(pMap);
-					return nid;
+					return ret;
 				}
-				
-				assert(nid == updateToLatest(nid));
+
+				// Push onto stack
+				pStack[numStack++] = newLayer.gid;
+				pMap[nextNode++]   = newLayer.gid;
 
 				/*
 				 * @date 2022-01-12 13:21:33
@@ -2189,42 +2211,52 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
-				// NOTE: top-level, use same depth/indent as caller
-				nid = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
+				// catch up on changes
+				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+					layer.gid = updateToLatest(layer.gid);
+					layer.rebuild();
+				}
 
-				// did something happen?
-				if (nid & IBIT) {
-					// yes, let caller handle what
+				// NOTE: top-level, use same depth/indent as caller
+				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
+
+				// collapse?
+				if (ret & IBIT) {
+					// yes, let caller handle collapse
 					freeMap(pStack);
 					freeMap(pMap);
-					return nid;
+					return ret;
 				}
-			}
 
-			// Push result onto stack
-			pStack[numStack++] = nid;
-			pMap[nextNode++]   = nid;
+				assert(layer.gid != IBIT);
+
+				// Push onto stack
+				pStack[numStack++] = layer.gid;
+				pMap[nextNode++]   = layer.gid;
+
+				break;
+			}
 		}
 		assert(numStack == 1); // only result on stack
 
-		// release and return
 		uint32_t ret = pStack[0];
 
 		freeMap(pStack);
 		freeMap(pMap);
 
-		/*
-		 * @date 2022-01-12 13:42:16
-		 * Did it fold to one of the endpoints
-		 */
-		for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-			uint32_t id = updateToLatest(pSlots[iSlot]);
-
-			if (ret == id)
-				return IBIT ^ id; // yes
+		// catch up on changes
+		if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+			layer.gid = updateToLatest(layer.gid);
+			layer.rebuild();
 		}
 
-		return ret;
+		/// merge result into group under cinstruction
+		if (layer.gid != ret) {
+			mergeGroups(layer, ret);
+			updateGroup(layer, NULL, /*allowForwar=*/true);
+		}
+
+		return layer.gid;
 	}
 
 	/*
@@ -2448,14 +2480,14 @@ struct groupTree_t {
 		/*
 		 * call worker
 		 */
-		uint32_t ret = addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*leaveOpen=*/false, /*depth=*/0);
+		addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*leaveOpen=*/false, /*depth=*/0);
 
-		// regular calls may not collapse or ignore
-		assert(!(ret & IBIT));
+		// regular calls should have an allocated group context
+		assert(!(layer.gid & IBIT));
 
 		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
-		return ret;
+		return layer.gid;
 	}
 
 	/**
@@ -2561,21 +2593,39 @@ struct groupTree_t {
 		uint32_t nid = this->nodeIndex[nix];
 
 		if (nid != 0) {
-			// is it under construction?
-			if (this->N[nid].gid != IBIT) {
-				// no, Cartesian product hasn't started yet, simple return
-				uint32_t latest = updateToLatest(nid); // NOTE: this is valid: `nid != 0 && latest == 0`
-				return latest;
+			// is node under construction? 
+			if (this->N[nid].gid == IBIT)
+				return IBIT ^ (IBIT - 1); // yes. silently ignore
+
+			uint32_t latest = updateToLatest(nid);
+
+			// is there a group id?
+			if (layer.gid == IBIT) {
+				layer.gid = latest; // no, attach to that of the node
+				return layer.gid;
 			}
 
-			assert(depth > 0); // must be a recursve call
-			return IBIT ^ (IBIT - 1); // silently ignore
+			// different groups?
+			if (layer.gid != latest)
+				mergeGroups(layer, latest); // yes, merge
+			else if (leaveOpen)
+				return layer.gid; // fast-path
+
+			// is this called recursively?
+			if (leaveOpen)
+				updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
+			else
+				resolveForward(layer, layer.gid); // no, finalise
+
+			return layer.gid;
 		}
 
 		/*
 		 * When hitting the deepest depth, simply create node 
 		 */
 		if (depth >= this->maxDepth) {
+
+			assert(layer.gid ==  IBIT);
 
 			// create group header
 			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
@@ -2599,7 +2649,8 @@ struct groupTree_t {
 			this->nodeIndex[nix]        = nid;
 			this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
-			return nid;
+			layer.gid = gid;
+			return layer.gid;
 		}
 		depth++;
 
@@ -2614,7 +2665,8 @@ struct groupTree_t {
 
 				if (cmp < 0) {
 					// existing is better
-					return challenge;
+					return layer.gid;
+
 				} else if (cmp == 0) {
 					assert(0); // should have been detected by `lookupNode()`
 				}
@@ -2834,7 +2886,7 @@ struct groupTree_t {
 				 */
 
 				uint32_t finalSlots[MAXSLOTS];
-				uint32_t power;
+				uint32_t power = 0;
 				uint32_t sid = constructSlots(layer, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &power);
 
 				// combo not found or folded
@@ -2847,20 +2899,27 @@ struct groupTree_t {
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
-					// is this called recursively?
-					if (leaveOpen)
-						return IBIT ^ endpoint; // yes, let caller handle collapse to endpoint
+					uint32_t latest = updateToLatest(endpoint);
 
-					// merge groups?
-					if (layer.gid != IBIT) {
-						// yes
-						mergeGroups(layer, endpoint);
-						resolveForward(layer, layer.gid);
-						return layer.gid;
-					} else {
-						return endpoint;
+					// is there a group id?
+					if (layer.gid == IBIT) {
+						layer.gid = latest; // no, attach to that of the node
+						return IBIT ^ layer.gid;
 					}
 
+					// different groups?
+					if (layer.gid != latest)
+						mergeGroups(layer, latest); // yes, merge
+					else if (leaveOpen)
+						return IBIT ^ layer.gid; // fast-path
+
+					// is this called recursively?
+					if (leaveOpen)
+						updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
+					else
+						resolveForward(layer, layer.gid); // no, finalise
+
+					return IBIT ^ layer.gid;
 				}
 
 				/*
@@ -2870,46 +2929,27 @@ struct groupTree_t {
 				 */
 				if (depth + 1 < this->maxDepth && db.signatures[sid].size > 1) {
 
-					if (true) {
-						nid = expandSignature(layer, sid, finalSlots, depth + 1);
-//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						nid = expandMember(layer, mid, finalSlots, depth + 1);
+//					if (true) {
+//						uint32_t ret = expandSignature(layer, sid, finalSlots, depth + 1);
+					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+						uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
 
-						/*
-						 * @date 2022-01-05 17:27:20
-						 * expandSignature()/expandMember() will invalidate all layers
-						 */
-						layer.rebuild();
+						// silently ignore
+						if (ret == (IBIT ^ (IBIT - 1)))
+							continue; // yes
 
 						// is it a collapse?
-						if ((nid & IBIT) || nid < this->nstart) {
+						if ((ret & IBIT) || layer.gid < this->nstart) {
 							// yes
 
-							// was it a self-collapse?
-							if (nid == (IBIT ^ (IBIT - 1)))
-								continue; // yes, silently ignore
+							assert(layer.gid != IBIT);
 
 							// is this called recursively?
-							if (leaveOpen)
-								return nid; // yes, let caller handle collapse
+							if (!leaveOpen)
+								resolveForward(layer, layer.gid); // no, finalise
 
-							uint32_t latest = updateToLatest(nid & ~IBIT);
-
-							// merge groups?
-							if (layer.gid != IBIT) {
-								// yes
-								mergeGroups(layer, latest);
-								resolveForward(layer, layer.gid);
-								return layer.gid;
-							} else {
-								return latest;
-							}
+							return IBIT ^ layer.gid;
 						}
-
-						// Merge groups if different
-						uint32_t latest = updateToLatest(nid);
-						if (layer.gid != latest)
-							mergeGroups(layer, latest);
 					}
 				}
 
@@ -2957,13 +2997,27 @@ struct groupTree_t {
 						goto restart; // restart with updated iterators
 				}
 
-				// did slot entries change group?	
-				for (unsigned iSlot = 0; iSlot < db.signatures[sid].numPlaceholder; iSlot++) {
-					uint32_t id = finalSlots[iSlot];
+				/*
+				 * @date 2022-01-18 20:00:42
+				 * did slot entries change group
+				 */
+				{
+					bool hasCollapse = false;
+					for (unsigned iSlot = 0; iSlot < db.signatures[sid].numPlaceholder; iSlot++) {
+						uint32_t id = finalSlots[iSlot];
 
-					if (this->N[id].gid != id) {
-						printf("finalSlots restart\n");
-						goto restart;
+						if (this->N[id].gid != id) {
+							id = updateToLatest(id);
+							if (id == layer.gid)
+								hasCollapse = true;
+							printf("finalSlots restart\n");
+							goto restart;
+						}
+					}
+					// self-collapse
+					if (hasCollapse) {
+						// yes
+						assert(0); // todo: wait for it to happen. grouptree.h.ZW2
 					}
 				}
 
@@ -2991,6 +3045,7 @@ struct groupTree_t {
 					 * The difference is that there the group already exists and a group-collapse would orphan the group invalidating all references to it.
 					 * Whereas here, the group is under construction, and suddenly detected it's an iterator/endpoint 
 					 */
+					assert(layer.gid != IBIT);
 
 					// is this called recursively?
 					if (leaveOpen)
@@ -3001,9 +3056,9 @@ struct groupTree_t {
 						// yes
 						mergeGroups(layer, latest);
 						resolveForward(layer, layer.gid);
-						return layer.gid;
+						return IBIT ^ layer.gid;
 					} else {
-						return latest;
+						return IBIT ^ latest;
 					}
 				}
 
@@ -3013,29 +3068,34 @@ struct groupTree_t {
 
 				nid = addToGroup(layer, nix, nid, sid, finalSlots, power);
 
+				// silently ignore?
+				if (nid == (IBIT ^ (IBIT - 1)))
+					continue; // yes
+
 				// was there a collapse?
 				if ((nid & IBIT) || nid < this->nstart) {
 					// yes
+					uint32_t latest = nid & ~IBIT;
 
-					// was it a self-collapse?
-					if (nid == (IBIT ^ (IBIT - 1)))
-						continue; // yes, silently ignore
+					// is there a group id?
+					if (layer.gid == IBIT) {
+						layer.gid = latest; // no, attach to that of the node
+						return IBIT ^ layer.gid;
+					}
+
+					// different groups?
+					if (layer.gid != latest)
+						mergeGroups(layer, latest); // yes, merge
+					else if (leaveOpen)
+						return IBIT ^ layer.gid; // fast-path
 
 					// is this called recursively?
 					if (leaveOpen)
-						return nid; // yes, let caller handle collapse
+						updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
+					else
+						resolveForward(layer, layer.gid); // no, finalise
 
-					latest = updateToLatest(nid & ~IBIT);
-
-					// merge groups?
-					if (layer.gid != IBIT) {
-						// yes
-						mergeGroups(layer, latest);
-						resolveForward(layer, layer.gid);
-						return layer.gid;
-					} else {
-						return latest;
-					}
+					return IBIT ^ layer.gid;
 				}
 
 				// was node freshly created?
@@ -3227,14 +3287,23 @@ struct groupTree_t {
 				// "node is old and no current group"
 
 				// attach to that group
-				layer.setGid(latest);
+				layer.gid = latest;
+				layer.rebuild();
 
-				return latest; // existing node
+				return layer.gid; // existing node
 
 			} else if (layer.gid != latest) {
 				// "node is old and belongs to different group"
 
-				return IBIT ^ latest; // group merge
+				mergeGroups(layer, latest);
+				updateGroup(layer, NULL, true);
+
+				/*
+				 * @date 2022-01-19 13:14:35
+				 * NOTE: this is a merge and NOT a collapse
+				 * However, acting accordingly will trigger an avalanche of "break-resolveForward"
+				 */
+				return IBIT ^ layer.gid; // group merge
 
 			} else if (this->N[nid].next == nid) {
 				// "node is old and orphaned"
@@ -3591,6 +3660,10 @@ struct groupTree_t {
 	 */
 	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId, bool allowForward) {
 
+		// did group collapse to entrypoint?
+		if (layer.gid < this->nstart)
+			return false; // yes
+
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
 		bool hasForward = false; // set to `true` if a node has a forward reference, meaning the group has a forward reference
@@ -3750,18 +3823,21 @@ struct groupTree_t {
 				// merge and update groups
 				mergeGroups(layer, endpoint);
 
-				if (layer.gid < this->nstart)
-					*pRestartId = this->nstart;
-				else if (layer.gid < *pRestartId)
-					*pRestartId = layer.gid;
+				if (pRestartId) {
+					if (layer.gid < this->nstart)
+						*pRestartId = this->nstart;
+					else if (layer.gid < *pRestartId)
+						*pRestartId = layer.gid;
+				}
 
 				// delayed restart
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u low=%u\n", iNode, *pRestartId);
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup collapse iNode=%u\n", iNode);
 				return hasForward;
 			}
 
-			// node should be freshly created
-			assert (this->N[newNid].gid == IBIT);
+			// If not freshly created, then it was a merge
+			if (this->N[newNid].gid != IBIT)
+				continue;
 
 			// finalise node
 			groupNode_t *pNew = this->N + newNid;
@@ -4041,7 +4117,7 @@ struct groupTree_t {
 			}
 		}
 
-		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+//		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		/*
 		 * Restore layer
@@ -4613,7 +4689,7 @@ struct groupTree_t {
 		 */
 
 		if (true) {
-			versionMemory_t *pVersion   = allocVersion();
+			versionMemory_t *pVersion   = pSidVersion; // NOTE: reuse storage
 			uint32_t        thisVersion = pVersion->nextVersion();
 
 			// mark entrypoints
@@ -4695,8 +4771,6 @@ struct groupTree_t {
 			}
 			if (found)
 				exit(1);
-
-			freeVersion(pVersion);
 		}
 
 		/*
@@ -5432,7 +5506,7 @@ struct groupTree_t {
 		freeMap(pStack);
 		freeMap(pMap);
 		if (transformList)
-			freeMap(transformList);
+			ctx.myFree("groupTree_t::transformList", transformList);
 
 		/*
 		 * Return most recent group
