@@ -3921,6 +3921,10 @@ struct groupTree_t {
 			if (pVersion->mem[iGroup] == thisVersion)
 				continue; // yes
 
+			// Skip if group is single member
+			if (this->N[iGroup].next == this->N[iGroup].prev)
+				continue; // yes
+
 			changed = false;
 
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
