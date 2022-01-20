@@ -96,10 +96,9 @@ struct groupNode_t {
 	uint32_t oldId;
 
 	/*
-	 * The size reduction of the database lookup.  
-	 * `pattern.size - signature.size `
+	 * weight/score. Sum of weights of all references. Less is better
 	 */
-	uint32_t power;
+	double weight;
 
 	/*
 	 * The signature describing the behaviour of the node
@@ -334,7 +333,6 @@ struct groupTree_t {
 	uint64_t                 cntAddBasicNode;       // number of calls to `addBasicNode()`
 	uint32_t                 cntValidate;           // counter of last valid tree
 	//
-	unsigned                 withPower;             // enablepower
 	uint32_t		 overflowGroup;		// group causing overflow
 
 	/**
@@ -404,7 +402,6 @@ struct groupTree_t {
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntValidate(0),
-		withPower(0),
 		overflowGroup(0)
 	{
 	}
@@ -467,7 +464,6 @@ struct groupTree_t {
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntValidate(0),
-		withPower(0),
 		overflowGroup()
 	{
 		if (this->N)
@@ -492,11 +488,11 @@ struct groupTree_t {
 
 			memset(pNode, 0, sizeof(*pNode));
 
-			pNode->gid   = iKey;
-			pNode->next  = iKey;
-			pNode->prev  = iKey;
-			pNode->power = 0;
-			pNode->sid   = db.SID_SELF;
+			pNode->gid    = iKey;
+			pNode->next   = iKey;
+			pNode->prev   = iKey;
+			pNode->weight = 1;
+			pNode->sid    = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
 
@@ -509,6 +505,19 @@ struct groupTree_t {
 	 * Release system resources
 	 */
 	virtual ~groupTree_t() {
+		// check if entrypoints are compromised
+		assert(this->N[0].gid == 0);
+		assert(this->N[0].next == 0);
+		assert(this->N[0].prev == 0);
+		assert(this->N[0].weight == 0);
+		for (uint32_t iNode = this->kstart; iNode < this->nstart; iNode++) {
+			groupNode_t *pNode = this->N + iNode;
+			assert(pNode->gid == iNode);
+			assert(pNode->next == iNode);
+			assert(pNode->prev == iNode);
+			assert(pNode->weight == 1);
+		}
+		
 		// release allocations if not mmapped
 		if (allocFlags & ALLOCMASK_NODES)
 			ctx.myFree("groupTree_t::N", this->N);
@@ -684,7 +693,7 @@ struct groupTree_t {
 	 *       0 L = R
 	 *      +1 L > R
 	 */
-	int compare(uint32_t lhs, uint32_t rhsSid, const uint32_t *rhsSlots) const {
+	int compare(uint32_t lhs, uint32_t rhsSid, const uint32_t *rhsSlots, const double &weight) const {
 		const groupNode_t *pLhs = this->N + lhs;
 
 		// left-hand-side must be latest in latest group
@@ -697,6 +706,16 @@ struct groupTree_t {
 		int cmp = (int) pLhs->sid - (int) rhsSid;
 		if (cmp != 0)
 			return cmp;
+
+		/*
+		 * Compare weight
+		 */
+#if 0 // todo: wait until after ucList
+		if (pLhs->weight < weight)
+			return -1;
+		if (pLhs->weight > weight)
+			return +1;
+#endif
 
 		/*
 		 * compare slots
@@ -727,7 +746,7 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date  2021-11-10 00:05:51
+	 * @date 2021-11-10 00:05:51
 	 * 
 	 * Add node to list
 	 */
@@ -827,7 +846,7 @@ struct groupTree_t {
 	 *
 	 * Create a new node
 	 */
-	inline uint32_t newNode(uint32_t sid, const uint32_t slots[], uint32_t power) {
+	inline uint32_t newNode(uint32_t sid, const uint32_t slots[], const double weight) {
 		uint32_t nid = this->ncount++;
 
 		assert(nid < maxNodes);
@@ -884,15 +903,17 @@ struct groupTree_t {
 
 		groupNode_t *pNode = this->N + nid;
 
-		pNode->gid   = 0;
-		pNode->next  = nid;
-		pNode->prev  = nid;
-		pNode->oldId = 0;
-		pNode->power = power;
-		pNode->sid   = sid;
+		pNode->gid    = 0;
+		pNode->next   = nid;
+		pNode->prev   = nid;
+		pNode->oldId  = 0;
+		pNode->weight = weight;
+		pNode->sid    = sid;
 
+		// assign slots
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
-			pNode->slots[iSlot] = slots[iSlot];
+			uint32_t id = slots[iSlot];
+			pNode->slots[iSlot] = id;
 		}
 
 		return nid;
@@ -923,7 +944,7 @@ struct groupTree_t {
 
 		/*
 		 * Group id of current group under construction. 
-		 * Also used as locking guard, to authenticate `pSidMap[]` and `minPower`. 
+		 * Also used as locking guard and to authenticate `pSidMap[]` 
 		 */
 		uint32_t gid;
 
@@ -936,17 +957,6 @@ struct groupTree_t {
 		versionMemory_t *pSidVersion;
 
 		/*
-		 * Minimal power levels for each wtructure size.
-		 * Although TINYTREE_MAXNODES is 13, power applies to dataset size which is no higher than `5n9`.   
-		 * 
-		 * NOTE: only partly implemented until all stress tests have been successful.
-		 */
-		enum {
-			LAYER_MAXNODE = 8 // taken from patternSecond_t.
-		};
-		unsigned        minPower[LAYER_MAXNODE];
-
-		/*
 		 * @date 2021-12-21 20:39:38
 		 * 
 		 * Constructor
@@ -956,7 +966,6 @@ struct groupTree_t {
 			gid         = IBIT;
 			pSidMap     = tree.allocMap();
 			pSidVersion = tree.allocVersion();
-			memset(minPower, 0, sizeof(minPower));
 
 			// bump version
 			pSidVersion->nextVersion();
@@ -978,6 +987,10 @@ struct groupTree_t {
 		 * Scan group and build indices
 		 */
 		void rebuild(void) {
+			// Is gid an unmodifiable entrypoint
+			if (this->gid < tree.nstart)
+				return; // yes
+
 			assert(this->gid != IBIT); // may not be under construction
 //			assert(tree.N[this->gid].next != this->gid); // may not be empty
 
@@ -988,38 +1001,25 @@ struct groupTree_t {
 			// bump versioned memory
 			this->pSidVersion->nextVersion();
 
-			// clear power
-			for (unsigned k = 0; k < LAYER_MAXNODE; k++)
-				this->minPower[k] = 0;
+			// minimum group weight
+			double gweight = 1.0 / 0.0; // +inf
 
-			// scan group for initial sid lookup and power
+			// scan group for initial sid lookup and minimum weight
 			for (uint32_t iNode = tree.N[this->gid].next; iNode != tree.N[iNode].gid; iNode = tree.N[iNode].next) {
-				groupNode_t       *pNode      = tree.N + iNode;
-				const signature_t *pSignature = tree.db.signatures + pNode->sid;
+				groupNode_t *pNode = tree.N + iNode;
 
 				// load initial sid lookup index
 				this->pSidMap[pNode->sid]          = iNode;
 				this->pSidVersion->mem[pNode->sid] = this->pSidVersion->version;
 
-				// update power levels
-				if (tree.withPower) {
-					//@formatter:off
-					switch(pSignature->size) {
-					case 0: if (this->minPower[0] < pNode->power) this->minPower[0] = pNode->power; // deliberate fall-through
-					case 1: if (this->minPower[1] < pNode->power) this->minPower[1] = pNode->power;
-					case 2: if (this->minPower[2] < pNode->power) this->minPower[2] = pNode->power;
-					case 3: if (this->minPower[3] < pNode->power) this->minPower[3] = pNode->power;
-					case 4: if (this->minPower[4] < pNode->power) this->minPower[4] = pNode->power;
-					case 5: if (this->minPower[5] < pNode->power) this->minPower[5] = pNode->power;
-					case 6: if (this->minPower[6] < pNode->power) this->minPower[6] = pNode->power;
-					case 7: if (this->minPower[7] < pNode->power) this->minPower[7] = pNode->power;
-						break;
-					default:
-						assert(0);
-					}
-					//@formatter:on
-				}
+				// update weight
+				if (pNode->weight < gweight)
+					gweight = pNode->weight;
 			}
+
+			// update weight
+			assert(gweight < 1.0 / 0.0);
+			tree.N[this->gid].weight = gweight;
 		}
 
 		/*
@@ -1046,7 +1046,7 @@ struct groupTree_t {
 			assert(this->gid != IBIT);
 
 			if (pSidVersion->mem[sid] != pSidVersion->version)
-				return IBIT; // index not loaded
+				return IBIT; // index entry not set
 
 			uint32_t nid = pSidMap[sid];
 			if (tree.N[nid].next == nid)
@@ -1072,10 +1072,10 @@ struct groupTree_t {
 	 * @param {uint32_t}     Ti      - IBIT to indicate that Tu is inverted.
 	 * @param {groupNode_t*} pNodeF  - F component of Cartesian product
 	 * @param {uint32_t*}    pFinal  - Constructed slots ordered such that tid=0.
-	 * @param {uint32_t*}    pPower  - structure size difference between what was detected and the signature.
+	 * @param {double*}      pWeight - Weight of all references including self
 	 * @return {uint32_t}            - signature id, 0 if none found or folded..
 	 */
-	uint32_t constructSlots(groupLayer_t &layer, const groupNode_t *pNodeQ, const groupNode_t *pNodeT, uint32_t Ti, const groupNode_t *pNodeF, uint32_t *pFinal, uint32_t *pPower) {
+	uint32_t constructSlots(groupLayer_t &layer, const groupNode_t *pNodeQ, const groupNode_t *pNodeT, uint32_t Ti, const groupNode_t *pNodeF, uint32_t *pFinal, double *pWeight) {
 
 		/*
 		 * @date 2021-11-05 01:32:20
@@ -1261,11 +1261,15 @@ struct groupTree_t {
 		while (nextSlot < MAXSLOTS)
 			slotsR[nextSlot++] = 0;
 
-		// extract
-
+		// extract final slots and determine weight
+		double weight = db.signatures[pSecond->sidR].size;
 		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
-			pFinal[iSlot] = slotsR[pTransformExtract[iSlot] - 'a'];
-			assert(pFinal[iSlot] != 0);
+			uint32_t id = slotsR[pTransformExtract[iSlot] - 'a'];
+			assert(id != 0);
+
+			pFinal[iSlot] = id;
+			if (id)
+				weight += this->N[id].weight;
 		}
 		for (unsigned iSlot = pSignature->numPlaceholder; iSlot < MAXSLOTS; iSlot++)
 			pFinal[iSlot] = 0;
@@ -1276,8 +1280,9 @@ struct groupTree_t {
 		if (pSignature->swapId)
 			applySwapping(pSecond->sidR, pFinal);
 
-		// don't forget power
-		*pPower = pSecond->power;
+		// don't forget (calculated) weight
+		assert(weight < 1.0 / 0.0);
+		*pWeight = weight;
 
 		return pSecond->sidR;
 	}
@@ -1640,6 +1645,12 @@ struct groupTree_t {
 				pStack[numStack++] = nid;
 				pMap[nextNode++]   = nid;
 
+				// catch up on changes
+				if (layer.gid != IBIT) {
+					layer.gid = updateToLatest(layer.gid);
+					layer.rebuild();
+				}
+
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
@@ -1647,6 +1658,11 @@ struct groupTree_t {
 
 				// call
 				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
+
+				/*
+				 * @date 2022-01-20 14:25:35
+				 * layer.gid might now be outdated
+				 */
 
 				/*
 				 * @date 2022-01-16 00:32:17
@@ -1689,7 +1705,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// catch up on changes
-				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+				if (layer.gid != IBIT) {
 					layer.gid = updateToLatest(layer.gid);
 					layer.rebuild();
 				}
@@ -1710,8 +1726,6 @@ struct groupTree_t {
 				// Push onto stack
 				pStack[numStack++] = layer.gid;
 				pMap[nextNode++]   = layer.gid;
-
-				break;
 			}
 		}
 		assert(numStack == 1); // only result on stack
@@ -1721,16 +1735,10 @@ struct groupTree_t {
 		freeMap(pStack);
 		freeMap(pMap);
 
-		// catch up on changes
-		if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
-			layer.gid = updateToLatest(layer.gid);
-			layer.rebuild();
-		}
-
-		/// merge result into group under cinstruction
+		// merge result into group under cinstruction
 		if (layer.gid != ret) {
 			mergeGroups(layer, ret);
-			updateGroup(layer, NULL, /*allowForwar=*/true);
+			updateGroup(layer, NULL, /*allowForward=*/true);
 		}
 
 		return layer.gid;
@@ -2074,6 +2082,12 @@ struct groupTree_t {
 				pStack[numStack++] = nid;
 				pMap[nextNode++]   = nid;
 
+				// catch up on changes
+				if (layer.gid != IBIT) {
+					layer.gid = updateToLatest(layer.gid);
+					layer.rebuild();
+				}
+
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
@@ -2081,6 +2095,11 @@ struct groupTree_t {
 
 				// call
 				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/false, depth + 1);
+
+				/*
+				 * @date 2022-01-20 14:25:35
+				 * layer.gid might now be outdated
+				 */
 
 				/*
 				 * @date 2022-01-16 00:32:17
@@ -2123,7 +2142,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// catch up on changes
-				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
+				if (layer.gid != IBIT) {
 					layer.gid = updateToLatest(layer.gid);
 					layer.rebuild();
 				}
@@ -2131,7 +2150,7 @@ struct groupTree_t {
 				// NOTE: top-level, use same depth/indent as caller
 				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
 
-				// collapse?
+				// collapse/ignore?
 				if (ret & IBIT) {
 					// yes, let caller handle collapse
 					freeMap(pStack);
@@ -2144,8 +2163,6 @@ struct groupTree_t {
 				// Push onto stack
 				pStack[numStack++] = layer.gid;
 				pMap[nextNode++]   = layer.gid;
-
-				break;
 			}
 		}
 		assert(numStack == 1); // only result on stack
@@ -2155,16 +2172,10 @@ struct groupTree_t {
 		freeMap(pStack);
 		freeMap(pMap);
 
-		// catch up on changes
-		if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid) {
-			layer.gid = updateToLatest(layer.gid);
-			layer.rebuild();
-		}
-
-		/// merge result into group under cinstruction
+		// merge result into group under construction
 		if (layer.gid != ret) {
 			mergeGroups(layer, ret);
-			updateGroup(layer, NULL, /*allowForwar=*/true);
+			updateGroup(layer, NULL, /*allowForward=*/true);
 		}
 
 		return layer.gid;
@@ -2476,6 +2487,7 @@ struct groupTree_t {
 
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
+		double tlWeight;
 
 		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
 			printf("%.*sQ=%u T=%u%s F=%u",
@@ -2490,14 +2502,18 @@ struct groupTree_t {
 		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
 			tlSlots[0] = Q;
 			tlSlots[1] = F;
+			tlWeight = 1 + this->N[Q].weight + this->N[F].weight;
 		} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
+			tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight;
 		} else {
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
 			tlSlots[2] = F;
+			tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight + this->N[F].weight;
 		}
+		assert(tlWeight < 1.0 / 0.0);
 
 		// test if node already exists
 		uint32_t nix = this->lookupNode(tlSid, tlSlots);
@@ -2536,19 +2552,19 @@ struct groupTree_t {
 		 */
 		if (depth >= this->maxDepth) {
 
-			assert(layer.gid ==  IBIT);
+			assert(layer.gid == IBIT);
 
 			// create group header
 			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			this->gcount++;
-			uint32_t gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+			uint32_t gid = this->newNode(db.SID_SELF, selfSlots, tlWeight);
 			assert(gid == this->N[gid].slots[0]);
 			this->N[gid].gid = gid;
 
 			// create node
-			nid = this->newNode(tlSid, tlSlots, 0); // todo: what for power?
+			nid = this->newNode(tlSid, tlSlots, tlWeight);
 			groupNode_t *pNode = this->N + nid;
 
 			pNode->gid = gid;
@@ -2572,7 +2588,7 @@ struct groupTree_t {
 			// does group have a node with better sid?
 			uint32_t challenge = layer.findSid(tlSid);
 			if (challenge != IBIT) {
-				int cmp = this->compare(challenge, tlSid, tlSlots);
+				int cmp = this->compare(challenge, tlSid, tlSlots, tlWeight);
 
 				if (cmp < 0) {
 					// existing is better
@@ -2588,9 +2604,7 @@ struct groupTree_t {
 		 * @date 2021-11-04 02:08:51
 		 * 
 		 * Second step: create Cartesian products of Q/T/F group lists
-		 */
-
-		/*
+		 * 
 		 * All nodes of the list need to be processed
 		 * With `for` the node containing the end-condition is skipped.
 		 * `while{}do()` evaluates the condition after the iteration, allowing all nodes to be iterated.
@@ -2801,8 +2815,9 @@ struct groupTree_t {
 				 */
 
 				uint32_t finalSlots[MAXSLOTS];
-				uint32_t power = 0;
-				uint32_t sid = constructSlots(layer, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &power);
+				double   weight = 0;
+
+				uint32_t sid = constructSlots(layer, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &weight);
 
 				// combo not found or folded
 				if (sid == 0)
@@ -2844,10 +2859,10 @@ struct groupTree_t {
 				 */
 				if (depth + 1 < this->maxDepth && db.signatures[sid].size > 1) {
 
-//					if (true) {
-//						uint32_t ret = expandSignature(layer, sid, finalSlots, depth + 1);
-					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-						uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
+					if (true) {
+						uint32_t ret = expandSignature(layer, sid, finalSlots, depth + 1);
+//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+//						uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
 
 						// silently ignore
 						if (ret == (IBIT ^ (IBIT - 1)))
@@ -2925,8 +2940,7 @@ struct groupTree_t {
 				}
 
 				/*
-				 * @date 2022-01-18 20:00:42
-				 * did slot entries change group
+				 * did nodes reference in slot change group?
 				 */
 				{
 					bool hasCollapse = false;
@@ -2947,6 +2961,10 @@ struct groupTree_t {
 						assert(0); // todo: wait for it to happen. grouptree.h.ZW2
 					}
 				}
+
+				/*
+				 * Does sid/finalSlots exist?
+				 */
 
 				// lookup slots
 				nix = this->lookupNode(sid, finalSlots);
@@ -2972,7 +2990,13 @@ struct groupTree_t {
 					 * The difference is that there the group already exists and a group-collapse would orphan the group invalidating all references to it.
 					 * Whereas here, the group is under construction, and suddenly detected it's an iterator/endpoint 
 					 */
-					assert(layer.gid != IBIT);
+
+					// attached gtoup
+					if (layer.gid == IBIT) {
+						// no
+						layer.gid = latest;
+						return IBIT ^ latest;
+					}
 
 					// is this called recursively?
 					if (leaveOpen)
@@ -2993,7 +3017,7 @@ struct groupTree_t {
 				 * Try to create node
 				 */
 
-				nid = addToGroup(layer, nix, nid, sid, finalSlots, power);
+				nid = addToGroup(layer, nix, nid, sid, finalSlots, weight);
 
 				// silently ignore?
 				if (nid == (IBIT ^ (IBIT - 1)))
@@ -3038,23 +3062,15 @@ struct groupTree_t {
 						assert(selfSlots[MAXSLOTS - 1] == 0);
 
 						this->gcount++;
-						uint32_t gid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+						uint32_t gid = this->newNode(db.SID_SELF, selfSlots, 1.0 / 0.0);
 						assert(gid == this->N[gid].slots[0]);
 						this->N[gid].gid = gid;
 
-						/*
-						 * @date 2022-01-10 00:10:24
-						 * cannot use `setGid()` as that requires the group to be non-empty  
-						 */
-
+						// attach to layer
 						layer.gid = gid;
 
 						// bump versioned memory
 						layer.pSidVersion->nextVersion();
-
-						// clear power
-						for (unsigned k = 0; k < groupLayer_t::LAYER_MAXNODE; k++)
-							layer.minPower[k] = 0;
 					}
 
 					// finalise node
@@ -3063,15 +3079,20 @@ struct groupTree_t {
 					// add node to list
 					pNew->gid = layer.gid;
 					linkNode(this->N[layer.gid].prev, nid);
+					
+					// update group weight
+					assert(pNew->weight < 1.0 / 0.0);
+					if (pNew->weight < this->N[layer.gid].weight)
+						this->N[layer.gid].weight = pNew->weight;
 
 					if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
-						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+						printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u wgt=%lf\n",
 						       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 						       layer.gid, nid,
 						       iQ, iTu, iF,
 						       sid, db.signatures[sid].name,
 						       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-						       db.signatures[sid].size, power);
+						       db.signatures[sid].size, pNew->weight);
 					}
 
 				}
@@ -3168,16 +3189,7 @@ struct groupTree_t {
 	 */
 	uint32_t addToGroup(groupLayer_t &layer,
 			    uint32_t nix, uint32_t nid,
-			    uint32_t sid, const uint32_t *pSlots, unsigned power) {
-
-		signature_t *pSignature = db.signatures + sid;
-
-		/*
-		 * @date 2021-12-25 00:53:05
-		 * Detect if there is enough
-		 */
-		if (this->withPower && power < layer.minPower[pSignature->size])
-			return IBIT ^ (IBIT - 1);
+			    uint32_t sid, const uint32_t *pSlots, const double &weight) {
 
 		/*
 		 * General idea:
@@ -3244,7 +3256,7 @@ struct groupTree_t {
 				uint32_t challenge = layer.findSid(sid);
 
 				if (challenge != IBIT) {
-					int cmp = this->compare(challenge, sid, pSlots);
+					int cmp = this->compare(challenge, sid, pSlots, weight);
 
 					if (cmp < 0) {
 						// challenge is better, silently ignore
@@ -3276,7 +3288,7 @@ struct groupTree_t {
 			uint32_t challenge = layer.findSid(sid);
 			if (challenge != IBIT) {
 				// yes
-				int cmp = this->compare(challenge, sid, pSlots);
+				int cmp = this->compare(challenge, sid, pSlots, weight);
 
 				if (cmp < 0) {
 					// champion is better
@@ -3293,7 +3305,7 @@ struct groupTree_t {
 		}
 
 		// create node
-		nid = this->newNode(sid, pSlots, power);
+		nid = this->newNode(sid, pSlots, weight);
 		groupNode_t *pNode = this->N + nid;
 
 		pNode->gid = IBIT;
@@ -3305,29 +3317,6 @@ struct groupTree_t {
 		// set as new champion
 		layer.pSidMap[sid]          = nid;
 		layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
-
-		/*
-		 * @date 2021-12-25 00:57:11
-		 * 
-		 * Update power levels
-		 */
-		if (this->withPower) {
-			// @formatter:off
-			switch(db.signatures[sid].size) {
-			case 0: if (layer.minPower[0] < power) layer.minPower[0] = power; // deliberate fall-through
-			case 1: if (layer.minPower[1] < power) layer.minPower[1] = power;
-			case 2: if (layer.minPower[2] < power) layer.minPower[2] = power;
-			case 3: if (layer.minPower[3] < power) layer.minPower[3] = power;
-			case 4: if (layer.minPower[4] < power) layer.minPower[4] = power;
-			case 5: if (layer.minPower[5] < power) layer.minPower[5] = power;
-			case 6: if (layer.minPower[6] < power) layer.minPower[6] = power;
-			case 7: if (layer.minPower[7] < power) layer.minPower[7] = power;
-				break;
-			default:
-				assert(0);
-			}
-			// @formatter:on
-		}
 
 		return nid;
 	}
@@ -3593,8 +3582,9 @@ struct groupTree_t {
 
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
-		bool hasForward = false; // set to `true` if a node has a forward reference, meaning the group has a forward reference
-		bool hasSelf    = false; // a self-collapse is a group collapse
+		bool   hasForward = false;     // set to `true` if a node has a forward reference, meaning the group has a forward reference
+		bool   hasSelf    = false;     // a self-collapse is a group collapse
+		double gweight    = 1.0 / 0.0; // group weight. +inf
 
 		/*
 		 * Walk through all nodes of group
@@ -3624,6 +3614,7 @@ struct groupTree_t {
 
 			uint32_t newSlots[MAXSLOTS];
 			bool     changed = false;
+			double   weight  = db.signatures[pNode->sid].size;
 
 			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
@@ -3638,7 +3629,10 @@ struct groupTree_t {
 					hasForward = true;
 
 				newSlots[iSlot] = id;
+				if (id)
+					weight += this->N[id].weight;
 			}
+			pNode->weight = weight;
 
 			if (hasSelf) {
 				/*
@@ -3670,10 +3664,14 @@ struct groupTree_t {
 				uint32_t challenge = layer.findSid(pNode->sid);
 
 				if (challenge != IBIT) {
-					int cmp = this->compare(challenge, pNode->sid, pNode->slots);
+					int cmp = this->compare(challenge, pNode->sid, pNode->slots, weight);
 
 					if (cmp < 0) {
 						// challenge is better, orphan node (orphan might already have been orphaned)
+
+						// update minimal group weight
+						if (this->N[challenge].weight < gweight)
+							gweight = this->N[challenge].weight;
 
 						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old lose=%u challenge=%u\n", iNode, challenge);
 						unlinkNode(iNode);
@@ -3689,6 +3687,10 @@ struct groupTree_t {
 						assert(challenge == iNode);
 					}
 				}
+
+				// update minimal group weight
+				if (weight < gweight)
+					gweight = weight;
 
 				// make node the new champion
 				layer.pSidMap[pNode->sid]          = iNode;
@@ -3725,7 +3727,7 @@ struct groupTree_t {
 			uint32_t newNid = this->nodeIndex[newNix];
 			uint32_t oldNid = newNid;
 
-			newNid = addToGroup(layer, newNix, newNid, newSid, newSlots, pNode->power); // TODO: power correction?
+			newNid = addToGroup(layer, newNix, newNid, newSid, newSlots, pNode->weight);
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup add=%u oldNid=%u newNid=%u%s\n", iNode, oldNid, newNid & ~IBIT, newNid & IBIT ? "~" : "");
 
 			// was there a collapse?
@@ -3778,18 +3780,26 @@ struct groupTree_t {
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup link iNode=%u prev=%u newNid=%u\n", iNode, this->N[nextId].prev, newNid);
 			linkNode(this->N[nextId].prev, newNid);
 
+			// update minimal group weight
+			if (pNew->weight < gweight)
+				gweight = pNew->weight;
+
 			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
-				printf("gid=%u\tnid=%u\told=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+				printf("gid=%u\tnid=%u\told=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u wgt=%f\n",
 				       layer.gid, newNid,
 				       pNew->oldId,
 				       newSid, db.signatures[newSid].name,
 				       newSlots[0], newSlots[1], newSlots[2], newSlots[3], newSlots[4], newSlots[5], newSlots[6], newSlots[7], newSlots[8],
-				       db.signatures[newSid].size, pNew->power);
+				       db.signatures[newSid].size, pNew->weight);
 			}
 		}
 
 		// group may not become empty
 		assert(this->N[layer.gid].next != layer.gid);
+
+		// group weight is min of all nodes
+		assert(gweight < 1.0 / 0.0);
+		this->N[layer.gid].weight = gweight;
 
 		/*
 		 * @date 2022-01-03 00:18:25
@@ -3808,7 +3818,7 @@ struct groupTree_t {
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			this->gcount++;
-			uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
+			uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, gweight);
 			assert(newGid == this->N[newGid].slots[0]);
 			this->N[newGid].gid = newGid;
 
@@ -3832,7 +3842,7 @@ struct groupTree_t {
 			}
 
 			layer.gid = newGid;
-			// call will ignore layer, so skip `rebuild()`.
+			layer.rebuild();
 		}
 
 		return hasForward;
@@ -3961,7 +3971,7 @@ struct groupTree_t {
 	 * NOTE: `layer` is only needed for the layer connectivity
 	 */
 	void resolveForward(groupLayer_t &layer, uint32_t gstart) {
-		assert(this->N[layer.gid].gid == layer.gid); // lhs must be latest
+		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
 		/*
 		 * @date 2022-01-14 13:55:38
@@ -4072,11 +4082,11 @@ struct groupTree_t {
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 					if (updateToLatest(pNode->slots[iSlot]) == id) {
 
-						printf("gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u pwr=%u\n",
+						printf("gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u wgt=%lf\n",
 						       pNode->gid, iNode,
 						       pNode->sid, db.signatures[pNode->sid].name,
 						       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
-						       db.signatures[pNode->sid].size, pNode->power);
+						       db.signatures[pNode->sid].size, pNode->weight);
 						continue;
 					}
 				}
@@ -4145,7 +4155,7 @@ struct groupTree_t {
 
 					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
 						const groupNode_t *pRhs = this->N + pSlots[pTransformSwap[i] - 'a'];
-						int cmp = this->compare(pSlots[i], pRhs->sid, pRhs->slots);
+						int cmp = this->compare(pSlots[i], pRhs->sid, pRhs->slots, pRhs->weight);
 
 						if (cmp > 0) {
 							needSwap = true;
@@ -4400,7 +4410,7 @@ struct groupTree_t {
 				printf("<FORWARD>");
 			}
 		}
-		printf("]");
+		printf("] wgt=%lf", pNode->weight);
 		if (pSidCount != NULL && pSidCount[pNode->sid] > 1)
 			printf("<MULTI>");
 	}
@@ -4451,9 +4461,14 @@ struct groupTree_t {
 			}
 
 			// does group have errors
+			double gweight = 1.0 / 0.0; // +inf
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				const groupNode_t *pNode         = this->N + iNode;
 				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				// must have valid weight
+				if (pNode->weight < gweight)
+					gweight = pNode->weight;
 
 				pNodeFound->mem[iNode] = pNodeFound->version; // mark node found
 
@@ -4482,7 +4497,7 @@ struct groupTree_t {
 					}
 				}
 				if (pSidCount[pNode->sid] > 1)
-					error       = true; // multi-sid
+					error = true; // multi-sid
 
 				if (error) {
 					if (!anyError)
@@ -4493,6 +4508,8 @@ struct groupTree_t {
 					anyError = true;
 				}
 			}
+			// group must have minimal weight
+			assert(this->N[iGroup].weight == gweight);
 		}
 
 		/*
@@ -4825,12 +4842,15 @@ struct groupTree_t {
 
 		// list header is non-info. Skip to next node
 		if (nid >= this->nstart && this->N[nid].sid == db.SID_SELF) {
-			if (1) {
-				// favour first node in list (most likely `1n9`), mostly shorter names, but deeper recursion
-				nid = this->N[nid].next;
-			} else {
-				// favour last  node in list,(most likely `4n9`), may create longer names but less deeper recursion
-				nid = this->N[nid].prev;
+			/*
+			 * @date 2022-01-20 00:57:37
+			 * Find first node that matches group weight
+			 */
+			for (uint32_t iNode = this->N[nid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				if (this->N[iNode].weight == this->N[nid].weight) {
+					nid = iNode;
+					break;
+				}
 			}
 			assert (this->N[nid].sid != db.SID_SELF);
 		}
@@ -5416,11 +5436,11 @@ struct groupTree_t {
 			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 				for (uint32_t iNode = this->N[latest].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					groupNode_t *pNode = this->N + iNode;
-					printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] pwr=%u\n",
+					printf("#gid=%u\tnid=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] wgt=%lf\n",
 					       pNode->gid, iNode,
 					       pNode->sid, db.signatures[pNode->sid].name,
 					       pNode->slots[0], pNode->slots[1], pNode->slots[2], pNode->slots[3], pNode->slots[4], pNode->slots[5], pNode->slots[6], pNode->slots[7], pNode->slots[8],
-					       pNode->power);
+					       pNode->weight);
 				}
 			}
 
@@ -5784,11 +5804,11 @@ struct groupTree_t {
 				 */
 
 				groupNode_t wrtNode;
-				wrtNode.gid   = pMap[iGroup];
-				wrtNode.prev  = pMap[pNode->prev];
-				wrtNode.next  = pMap[pNode->next];
-				wrtNode.sid   = pNode->sid;
-				wrtNode.power = pNode->power;
+				wrtNode.gid    = pMap[iGroup];
+				wrtNode.prev   = pMap[pNode->prev];
+				wrtNode.next   = pMap[pNode->next];
+				wrtNode.sid    = pNode->sid;
+				wrtNode.weight = pNode->weight;
 
 				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
 					wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
@@ -5808,11 +5828,11 @@ struct groupTree_t {
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					pNode = this->N + iNode;
 
-					wrtNode.gid  = pMap[iGroup];
-					wrtNode.prev = pMap[pNode->prev];
-					wrtNode.next = pMap[pNode->next];
-					wrtNode.sid  = pNode->sid;
-					wrtNode.sid  = pNode->power;
+					wrtNode.gid    = pMap[iGroup];
+					wrtNode.prev   = pMap[pNode->prev];
+					wrtNode.next   = pMap[pNode->next];
+					wrtNode.sid    = pNode->sid;
+					wrtNode.weight = pNode->weight;
 
 					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
 						wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
