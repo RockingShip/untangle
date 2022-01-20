@@ -675,83 +675,14 @@ struct groupTree_t {
 	}
 
 	/*
-	 * @date 2021-05-12 01:23:06
-	 *
-	 * Compare two-subtrees
-	 * When encountering a cascade, walk all terms which might result in a different path for left/right
-	 * The `topLevelCascade` is used by `addOrderNode()` to simulate that arguments belong to same cascade
-	 * Otherwise things like `addOrderedNE(`ab^`,`b`) will fail to complete the left-hand-side cascade walk.
-	 *
-	 * NOTE: Only key id's can be compared, node id's can only compare equality (=)
-	 *       comparing enumeration requires walking the tree.
-	 *
+	 * @date 2021-11-10 18:27:04
+	 * 
+	 * Compare a node (lhs) with sid/slots/weight (rhs)
+	 * 
 	 * return:
 	 *      -1 L < R
 	 *       0 L = R
 	 *      +1 L > R
-	 */
-	int compare(uint32_t lhs, groupTree_t *treeR, uint32_t rhs) {
-		assert(this == treeR && "to be implemented");
-
-		if (lhs == rhs)
-			return 0;
-
-		if (lhs < this->nstart) {
-			if (rhs >= this->nstart)
-				return -1;
-			else if (lhs < rhs)
-				return -1;
-			else
-				return +1;
-		} else if (rhs < this->nstart) {
-			if (lhs >= this->nstart)
-				return +1;
-			else if (lhs < rhs)
-				return -1;
-			else
-				return +1;
-
-		}
-
-		if (this->N[lhs].sid < treeR->N[rhs].sid) {
-			return -1;
-		} else if (this->N[lhs].sid > treeR->N[rhs].sid) {
-			return +1;
-		}
-
-		/*
-		 * SID_SELF needs special handling or it will recurse on itself 
-		 */
-		if (this->N[lhs].sid == db.SID_SELF) {
-			if (this->N[lhs].slots[0] < treeR->N[rhs].slots[0]) {
-				return -1;
-			} else if (this->N[lhs].slots[0] > treeR->N[rhs].slots[0]) {
-				return +1;
-			} else {
-				return 0;
-			}
-		}
-
-		/*
-		 * simple compare
-		 * todo: cache results
-		 * todo: nesting may be dead-code
-		 */
-		const signature_t *pSignature = db.signatures + this->N[lhs].sid;
-
-		for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
-			int ret = this->compare(this->N[lhs].slots[iSlot], treeR, treeR->N[rhs].slots[iSlot]);
-			if (ret != 0)
-				return ret;
-		}
-
-		return 0;
-	}
-
-	/*
-	 * @date 2021-11-10 18:27:04
-	 * 
-	 * variation that allows comparison with an anonymous node
 	 */
 	int compare(uint32_t lhs, uint32_t rhsSid, const uint32_t *rhsSlots) const {
 		const groupNode_t *pLhs = this->N + lhs;
@@ -759,12 +690,16 @@ struct groupTree_t {
 		// left-hand-side must be latest in latest group
 		assert(this->N[pLhs->gid].gid == pLhs->gid);
 
+		/*
+		 * Compare sid
+		 */
+
 		int cmp = (int) pLhs->sid - (int) rhsSid;
 		if (cmp != 0)
 			return cmp;
 
 		/*
-		 * simple compare
+		 * compare slots
 		 */
 		unsigned numPlaceholder = db.signatures[rhsSid].numPlaceholder;
 
@@ -1035,30 +970,6 @@ struct groupTree_t {
 		~groupLayer_t() {
 			tree.freeMap(pSidMap);
 			tree.freeVersion(pSidVersion);
-		}
-
-		/*
-		 * @date 2021-12-22 22:13:54
-		 * 
-		 * Set group id of current layer, and check it is unique
-		 * 
-		 * @date 2021-12-23 01:57:13
-		 * 
-		 * return false if gid is already under construction.
-		 * when returned false, silently ignore 
-		 * 
-		 * @date 2022-01-03 01:06:31
-		 * 
-		 * Scans the group and prepares `pSidMap[]` and `minPower[]`.
-		 */
-		void setGid(uint32_t gid) {
-			assert(tree.N[gid].gid == gid); // must be latest 			
-			assert(findGid(gid) == NULL); // gid may not already be under construction 
-
-			assert(gid != IBIT);
-			this->gid = gid;
-
-			rebuild();
 		}
 
 		/*
@@ -2710,18 +2621,22 @@ struct groupTree_t {
 					iF = iTu;
 
 				if (ctx.flags & context_t::MAGICMASK_PARANOID) {
+					// iterators must match arguments
+					assert(this->N[iQ].gid == Q);
+					assert(this->N[iTu].gid == Tu);
+					assert(this->N[iF].gid == F);
+					// iterators must be in up-to-date
+					assert(this->N[Q].gid == Q);
+					assert(this->N[Tu].gid == Tu);
+					assert(this->N[F].gid == F);
 					// iterators may not be orphaned
 					assert(iQ < this->nstart || this->N[iQ].next != iQ);
 					assert(iTu < this->nstart || this->N[iTu].next != iTu);
 					assert(iF < this->nstart || this->N[iF].next != iF);
 					// iterators may not be current group
-					assert(this->N[iQ].gid != layer.gid);
-					assert(this->N[iTu].gid != layer.gid);
-					assert(this->N[iF].gid != layer.gid);
-					// iterators must be in up-to-date
-					assert(this->N[iQ].gid == this->N[this->N[iQ].gid].gid);
-					assert(this->N[iTu].gid == this->N[this->N[iTu].gid].gid);
-					assert(this->N[iF].gid == this->N[this->N[iF].gid].gid);
+					assert(Q != layer.gid);
+					assert(Tu != layer.gid);
+					assert(F != layer.gid);
 				}
 
 				/*
@@ -2991,6 +2906,18 @@ struct groupTree_t {
 							iF      = F;
 							changed = true;
 						}
+					}
+
+					// is it an iterator collapse?
+					if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+						// yes
+						assert(layer.gid != IBIT);
+
+						// is this called recursively?
+						if (!leaveOpen)
+							resolveForward(layer, layer.gid); // no, finalise
+
+						return IBIT ^ layer.gid;
 					}
 
 					if (changed)
@@ -3880,6 +3807,7 @@ struct groupTree_t {
 			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zeroed
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
+			this->gcount++;
 			uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, /*power*/ 0);
 			assert(newGid == this->N[newGid].slots[0]);
 			this->N[newGid].gid = newGid;
@@ -4212,7 +4140,8 @@ struct groupTree_t {
 					bool needSwap = false;
 
 					for (unsigned i = 0; i < pSignature->numPlaceholder; i++) {
-						int cmp = this->compare(pSlots[i], this, pSlots[pTransformSwap[i] - 'a']);
+						const groupNode_t *pRhs = this->N + pSlots[pTransformSwap[i] - 'a'];
+						int cmp = this->compare(pSlots[i], pRhs->sid, pRhs->slots);
 
 						if (cmp > 0) {
 							needSwap = true;

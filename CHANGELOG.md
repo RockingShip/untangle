@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-20 12:49:58 Changed: Unified to single `groupTree_t::compare()`.
 2022-01-19 20:21:18 Changed: `groupTree_t::addBasicNode()` returns IGNORE/COLLAPSE/SUCCESS and actualises `layer.gid`.
 2022-01-19 00:21:32 Fixed: Implemented `allowForward` in `groupTree_t::updateGroup()`. 
 2022-01-18 17:09:31 Changed: Disable asserts.
