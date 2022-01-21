@@ -2550,7 +2550,7 @@ struct groupTree_t {
 			if (leaveOpen)
 				updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
 			else
-				resolveForward(layer, layer.gid); // no, finalise
+				resolveForwards(layer, layer.gid); // no, finalise
 
 			return layer.gid;
 		}
@@ -2811,7 +2811,7 @@ struct groupTree_t {
 					if (layer.gid != IBIT) {
 						// yes
 						mergeGroups(layer, folded);
-						resolveForward(layer, layer.gid);
+						resolveForwards(layer, layer.gid);
 						return layer.gid;
 					} else {
 						return folded;
@@ -2855,7 +2855,7 @@ struct groupTree_t {
 					if (leaveOpen)
 						updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
 					else
-						resolveForward(layer, layer.gid); // no, finalise
+						resolveForwards(layer, layer.gid); // no, finalise
 
 					return IBIT ^ layer.gid;
 				}
@@ -2887,7 +2887,7 @@ struct groupTree_t {
 
 							// is this called recursively?
 							if (!leaveOpen)
-								resolveForward(layer, layer.gid); // no, finalise
+								resolveForwards(layer, layer.gid); // no, finalise
 
 							return IBIT ^ layer.gid;
 						}
@@ -2941,7 +2941,7 @@ struct groupTree_t {
 
 						// is this called recursively?
 						if (!leaveOpen)
-							resolveForward(layer, layer.gid); // no, finalise
+							resolveForwards(layer, layer.gid); // no, finalise
 
 						return IBIT ^ layer.gid;
 					}
@@ -3017,7 +3017,7 @@ struct groupTree_t {
 					if (layer.gid != IBIT) {
 						// yes
 						mergeGroups(layer, latest);
-						resolveForward(layer, layer.gid);
+						resolveForwards(layer, layer.gid);
 						return IBIT ^ layer.gid;
 					} else {
 						return IBIT ^ latest;
@@ -3055,7 +3055,7 @@ struct groupTree_t {
 					if (leaveOpen)
 						updateGroup(layer, NULL, /*allowForward=*/true); // yes, fix merging collisions
 					else
-						resolveForward(layer, layer.gid); // no, finalise
+						resolveForwards(layer, layer.gid); // no, finalise
 
 					return IBIT ^ layer.gid;
 				}
@@ -3167,7 +3167,7 @@ struct groupTree_t {
 		 * Resolve forward references for this layer.
 		 */
 		if (!leaveOpen)
-			resolveForward(layer, layer.gid);
+			resolveForwards(layer, layer.gid);
 
 		// return group id
 		return layer.gid;
@@ -3277,7 +3277,7 @@ struct groupTree_t {
 				/*
 				 * @date 2022-01-19 13:14:35
 				 * NOTE: this is a merge and NOT a collapse
-				 * However, acting accordingly will trigger an avalanche of "break-resolveForward"
+				 * However, acting accordingly will trigger an avalanche of "break-resolveForwards"
 				 */
 				return IBIT ^ layer.gid; // group merge
 
@@ -3379,12 +3379,12 @@ struct groupTree_t {
 	 * Not checked yet, remove too many nodes
 	 * strange that applyFolding() still not called.
 	 * strange that the test tree size for maxdepth=0 (67) was smaller than for maxdepth=2 (73) 
-	 * validateTree() would complain if resolveForward() would loop
+	 * validateTree() would complain if resolveForwards() would loop
 	 * 
 	 * @date 2022-01-01 00:40:21
 	 * 
 	 * Merge towards the lowest of lhs/rhs. 
-	 * This should contain run-away `resolveForward()`.
+	 * This should contain run-away `resolveForwards()`.
 	 */
 	void mergeGroups(groupLayer_t &layer, uint32_t rhs) {
 
@@ -3608,7 +3608,10 @@ struct groupTree_t {
 	 * Merging will try to reassign the highest to the lowest
 	 * If reassigning would create forward references, then recreate the group and return true.
 	 * 
-	 * pLhs/pRhs are the range limits used by `resolveForward()`.  
+	 * pLhs/pRhs are the range limits used by `resolveForwards()`.
+	 * 
+	 * @date 2022-01-16 01:55:42
+	 * When `allowForward` set, then recreate the group with a new id to relax forward references
 	 */
 	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId, bool allowForward) {
 
@@ -3785,7 +3788,7 @@ struct groupTree_t {
 				 * `addToGroup()` detected that the new node belongs to a different group/endpoint/entrypoint and merge groups
 				 * However, merging will break the current iterator.
 				 * 
-				 * Luckily, merging will lower the group id, allowing the sole caller `resolveForward()` to jump back and reprocess/continue this group later, again.
+				 * Luckily, merging will lower the group id, allowing the sole caller `resolveForwards()` to jump back and reprocess/continue this group later, again.
 				 */
 
 				// merge and update groups
@@ -3984,7 +3987,7 @@ struct groupTree_t {
 					continue; // yes
 
 				showLine(pNode->gid, iNode, NULL, NULL, NULL);
-				printf(" break-resolveForward\n");
+				printf(" break-resolveForwards\n");
 
 				// orphan node
 				uint32_t prevId = pNode->prev;
@@ -4009,7 +4012,7 @@ struct groupTree_t {
 	 * 
 	 * NOTE: `layer` is only needed for the layer connectivity
 	 */
-	void resolveForward(groupLayer_t &layer, uint32_t gstart) {
+	void resolveForwards(groupLayer_t &layer, uint32_t gstart) {
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 
 		/*
@@ -4023,7 +4026,7 @@ struct groupTree_t {
 
 		groupLayer_t newLayer(*this, &layer); // separate layer for recursive calls 
 
-		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward gid=%u gstart=%u ncount=%u\n", layer.gid, gstart, this->ncount);
+		if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveForwards gid=%u gstart=%u ncount=%u\n", layer.gid, gstart, this->ncount);
 
 		if (gstart < this->nstart) {
 			// for endpoints, sweep the whole tree
@@ -4088,7 +4091,7 @@ struct groupTree_t {
 			// if something merged, reposition to the start of the range
 			if (restartId <= iGroup) {
 				// yes, jump
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveforward rewind=%u ncount=%u\n", restartId, this->ncount);
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("resolveForwards rewind=%u ncount=%u\n", restartId, this->ncount);
 				iGroup = restartId;
 				continue;
 			} else {
@@ -4744,7 +4747,7 @@ struct groupTree_t {
 				if (pVersion->mem[iNode] != thisVersion) {
 					// no
 					if (!found) {
-						printf("ERROR resolveForward:\n");
+						printf("ERROR resolveForwards:\n");
 						found = true;
 					}
 					showLine(pNode->gid, iNode, NULL, NULL, NULL);
