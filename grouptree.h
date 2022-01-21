@@ -923,6 +923,13 @@ struct groupTree_t {
 	 * @date 2021-12-21 20:22:46
 	 * 
 	 * Context containing resources for a group under construction.
+	 * 
+	 * @date 2022-01-20 23:56:28
+	 * 
+	 * With regard to the sid lookup index:
+	 * 
+	 * `groupTree_t::updateGroup()` and `groupTree_t::addToGroup()` will exit with a valid index
+	 * `groupTree_t::addBasicNode()` and `groupTree_t::addToGroup()` require a valid index on entry
 	 */
 	struct groupLayer_t {
 		/*
@@ -987,6 +994,10 @@ struct groupTree_t {
 		 * Scan group and build indices
 		 */
 		void rebuild(void) {
+			// anything to rebuild
+			if (this->gid == IBIT)
+				return; // no
+
 			// Is gid an unmodifiable entrypoint
 			if (this->gid < tree.nstart)
 				return; // yes
@@ -1645,12 +1656,6 @@ struct groupTree_t {
 				pStack[numStack++] = nid;
 				pMap[nextNode++]   = nid;
 
-				// catch up on changes
-				if (layer.gid != IBIT) {
-					layer.gid = updateToLatest(layer.gid);
-					layer.rebuild();
-				}
-
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
@@ -1676,6 +1681,14 @@ struct groupTree_t {
 					freeMap(pStack);
 					freeMap(pMap);
 					return ret;
+				}
+
+				// is there an endpoint collapse?
+				if (layer.gid != IBIT && layer.gid == newLayer.gid) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT ^ layer.gid;
 				}
 
 				// Push onto stack
@@ -1705,10 +1718,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// catch up on changes
-				if (layer.gid != IBIT) {
-					layer.gid = updateToLatest(layer.gid);
-					layer.rebuild();
-				}
+				layer.rebuild();
 
 				// NOTE: top-level, use same depth/indent as caller
 				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
@@ -1734,6 +1744,8 @@ struct groupTree_t {
 
 		freeMap(pStack);
 		freeMap(pMap);
+
+		assert(layer.gid != IBIT);
 
 		// merge result into group under cinstruction
 		if (layer.gid != ret) {
@@ -2082,12 +2094,6 @@ struct groupTree_t {
 				pStack[numStack++] = nid;
 				pMap[nextNode++]   = nid;
 
-				// catch up on changes
-				if (layer.gid != IBIT) {
-					layer.gid = updateToLatest(layer.gid);
-					layer.rebuild();
-				}
-
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
@@ -2115,7 +2121,15 @@ struct groupTree_t {
 					return ret;
 				}
 
-				// Push onto stack
+				// is there an endpoint collapse?
+				if (layer.gid != IBIT && layer.gid == newLayer.gid) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT ^ layer.gid;
+				}
+
+				// Push result onto stack
 				pStack[numStack++] = newLayer.gid;
 				pMap[nextNode++]   = newLayer.gid;
 
@@ -2142,10 +2156,7 @@ struct groupTree_t {
 				assert(numStack == 0);
 
 				// catch up on changes
-				if (layer.gid != IBIT) {
-					layer.gid = updateToLatest(layer.gid);
-					layer.rebuild();
-				}
+				layer.rebuild();
 
 				// NOTE: top-level, use same depth/indent as caller
 				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, /*leaveOpen=*/true, depth);
@@ -2478,12 +2489,9 @@ struct groupTree_t {
 		// gid must be latest
 		assert(layer.gid == IBIT || this->N[layer.gid].gid == layer.gid);
 
-		// arguments may not fold to gid
-		if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
-			// this implies that layer.gid != IBIT
-			printf("<argument-collapse gid=%u Q=%u T=%u F=%u>\n", layer.gid, Q, Tu, F); // how often does this happen
-			return IBIT ^ layer.gid; // collapse to argument
-		}
+		// is it an argument-collapse?
+		if (Q == layer.gid || Tu == layer.gid || F == layer.gid)
+			return IBIT ^ layer.gid; // yes
 
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
@@ -2864,6 +2872,9 @@ struct groupTree_t {
 //					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
 //						uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
 
+						// need to rebuild sid lookup index
+						layer.rebuild();
+
 						// silently ignore
 						if (ret == (IBIT ^ (IBIT - 1)))
 							continue; // yes
@@ -3079,7 +3090,11 @@ struct groupTree_t {
 					// add node to list
 					pNew->gid = layer.gid;
 					linkNode(this->N[layer.gid].prev, nid);
-					
+
+					// add to sid lookup
+					layer.pSidMap[sid]          = nid;
+					layer.pSidVersion->mem[sid] = layer.pSidVersion->version;
+
 					// update group weight
 					assert(pNew->weight < 1.0 / 0.0);
 					if (pNew->weight < this->N[layer.gid].weight)
@@ -3186,6 +3201,28 @@ struct groupTree_t {
 	 *  It is the responsibility of the caller to:
 	 *  - link new nodes to a list
 	 *  - add new nodes to the sid lookup index 
+	 *  
+	 * @date 2022-01-16 14:25:48
+	 * 
+	 * Layers are groups under construction.
+	 * The naming is chosen because with recursive calling a stack of such groups can arise.
+	 * Layers can be chained to bridge recursive calls and aid in locking and structural loop detection.
+	 * 
+	 * Groups under construction try to delay the allocation of a group id as long as possible.
+	 * The idea being that creating alternatives (through `expandSignature()`) might find similar existing groups that can be reused and merged,
+	 *   in which case the layer is no longer under construction, but attached.
+	 *   
+	 * Delaying the creation of group ids is also important for self-collapse detection.
+	 * As long as the nodes under construction cannot be referenced, they cannot be used to create dependency loops.
+	 * If, after creating all Cartesian products, the group is still under construction, then a new group id is assigned which is guarenteed loop free.
+	 * 
+	 * Nested calls might (from their context) find a match with a node under construction.
+	 * In such cases, they grab and merge the pending nodes into their own group.
+	 * From a caller point of view, this is an endpint-collapse and processed accordingly.
+	 * 
+	 * NOTE: `layer.gid` lags behind the actual group id the nodes are member of.
+	 * 
+	 * NOTE: must return either a collapse or a node id
 	 */
 	uint32_t addToGroup(groupLayer_t &layer,
 			    uint32_t nix, uint32_t nid,
@@ -3560,7 +3597,6 @@ struct groupTree_t {
 
 		// update layer
 		layer.gid = gid;
-		layer.rebuild();
 	}
 
 	/*
@@ -3589,6 +3625,9 @@ struct groupTree_t {
 		/*
 		 * Walk through all nodes of group
 		 */
+
+		// bump versioned memory
+		layer.pSidVersion->nextVersion();
 
 		uint32_t nextId;
 		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = nextId) {
@@ -4031,7 +4070,6 @@ struct groupTree_t {
 			 */
 
 			newLayer.gid = iGroup;
-			newLayer.rebuild();
 
 			/*
 			 * @date 2022-01-14 00:58:29
@@ -4060,12 +4098,6 @@ struct groupTree_t {
 		}
 
 //		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
-
-		/*
-		 * Restore layer
-		 */
-		layer.gid = updateToLatest(layer.gid);
-		layer.rebuild();
 
 		this->overflowGroup = 0;
 	}

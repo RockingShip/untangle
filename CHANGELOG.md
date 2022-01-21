@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-21 10:05:10 Fixed: Use `groupTree_t::rebuild()` only where necessary.
 2022-01-20 17:07:41 Changed: Replaced `groupTree_t::power` with `weight`.
 2022-01-20 13:52:33 Fixed: Skip single node groups in `groupTree_t::testAndUnlock().`
 2022-01-20 12:49:58 Changed: Unified to single `groupTree_t::compare()`.
