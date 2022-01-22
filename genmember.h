@@ -558,7 +558,7 @@ struct genmemberContext_t : dbtool_t {
 		}
 
 		/*
-		 * @date  2021-06-27 19:56:00
+		 * @date 2021-06-27 19:56:00
 		 * Erase heads, they may contain random values
 		 */
 		for (unsigned j = 0; j < member_t::MAXHEAD; j++)

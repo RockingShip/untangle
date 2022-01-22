@@ -2456,7 +2456,7 @@ struct baseTree_t {
 	}
 
 	/*
-	 * @date  2021-05-12 18:08:34
+	 * @date 2021-05-12 18:08:34
 	 *
 	 * lookup/create and normalise any combination of Q, T and F, inverted or not.
 	 * NOTE: the return value may be inverted

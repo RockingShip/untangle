@@ -74,19 +74,19 @@ struct gevalContext_t {
 	/// @var {string} name of database
 	const char *opt_databaseName;
 	/// @var {number} --datasize, Data vector size containing test patterns for CRC (units in uint64_t)
-	unsigned opt_dataSize;
+	unsigned   opt_dataSize;
 	/// @var {number} header flags
-	uint32_t opt_flagsSet;
+	uint32_t   opt_flagsSet;
 	/// @var {number} header flags
-	uint32_t opt_flagsClr;
+	uint32_t   opt_flagsClr;
 	/// @var {number} --maxdepth, Maximum node expansion depth for `groupTree_t`.
-	unsigned opt_maxDepth;
+	unsigned   opt_maxDepth;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned opt_maxNode;
+	unsigned   opt_maxNode;
 	/// @var {number} --normalise, display names as normalised with transforms
-	unsigned opt_normalise;
+	unsigned   opt_normalise;
 	/// @global {number} --seed=n, Random seed to generate evaluator test pattern
-	unsigned opt_seed;
+	unsigned   opt_seed;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -365,7 +365,7 @@ struct gevalContext_t {
 		 * maximum storageMost optimal replacement function 
 		 * 
 		 */
-		
+
 		// load endpoints into placeholder slots
 		// load signature into tree
 		// apply tree on placeholders
@@ -383,51 +383,53 @@ struct gevalContext_t {
 			// walk through group list in search of a `1n9` node
 			for (uint32_t iNode = pTree->N[iGroup].next; iNode != iGroup; iNode = pTree->N[iNode].next) {
 				groupNode_t *pNode = pTree->N + iNode;
-				
+
 				// catch `1n9`
 				if (pNode->sid == pStore->SID_OR) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = 0;
 					Ti = IBIT;
-					F = pNode->slots[1];
+					F  = pNode->slots[1];
 					break;
 				} else if (pNode->sid == pStore->SID_GT) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
-					F = 0;
+					F  = 0;
 					break;
 				} else if (pNode->sid == pStore->SID_NE) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
-					F = pNode->slots[1];
+					F  = pNode->slots[1];
 					break;
 				} else if (pNode->sid == pStore->SID_AND) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
-					F = 0;
+					F  = 0;
 					break;
 				} else if (pNode->sid == pStore->SID_QNTF) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = IBIT;
-					F = pNode->slots[2];
+					F  = pNode->slots[2];
 					break;
 				} else if (pNode->sid == pStore->SID_QTF) {
-					Q = pNode->slots[0];
+					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
 					Ti = 0;
-					F = pNode->slots[2];
+					F  = pNode->slots[2];
 					break;
 				}
 			}
-			
+
 			// was anything found
-			if (Q == 0)
-				ctx.fatal("\n{\"error\":\"group misses 1n9\",\"where\":\"%s:%s:%d\",\"gid\":%u}\n",
-					  __FUNCTION__, __FILE__, __LINE__, iGroup);
+			if (Q == 0) {
+				fprintf(stderr, "\n{\"error\":\"group misses 1n9\",\"where\":\"%s:%s:%d\",\"gid\":%u}\n",
+					__FUNCTION__, __FILE__, __LINE__, iGroup);
+				break;
+			}
 
 			// determine if the operator is `QTF` or `QnTF`
 			if (Ti) {
@@ -440,9 +442,9 @@ struct gevalContext_t {
 					pFootprint[iGroup][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
 			}
 		}
-		
+
 		uint32_t firstcrc = 0;
-		bool     differ = false;
+		bool     differ   = false;
 
 		for (unsigned iRoot = pTree->ostart; iRoot < pTree->estart; iRoot++) {
 			std::string name;
@@ -721,17 +723,17 @@ int main(int argc, char *argv[]) {
 		::alarm(ctx.opt_timer);
 	}
 
-		// Open database
+	// Open database
 	database_t db(ctx);
 
 	db.open(app.opt_databaseName);
 	app.pStore = &db;
-	
+
 	// set flags
 	ctx.flags = db.creationFlags;
 	ctx.flags |= app.opt_flagsSet;
 	ctx.flags &= ~app.opt_flagsClr;
-	
+
 	// display system flags when database was created
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
