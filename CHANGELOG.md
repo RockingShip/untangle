@@ -12,7 +12,8 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
-2022-01-22 21:45:50 Added: Under-construction list (groupLayer_t::ucList) preperations.
+2022-01-23 22:43:37 Changed: Replaced `groupTree_t::addToGroup()` with `addOldNode()`.
+2022-01-22 21:45:50 Added: Under-construction list (groupLayer_t::ucList) preparations.
 2022-01-21 10:23:54 Changed: Renamed `grouptree_t::resolveForward()` into `resolveForwards()` (multiple groups).
 2022-01-21 10:05:10 Fixed: Use `groupTree_t::rebuild()` only where necessary.
 2022-01-20 17:07:41 Changed: Replaced `groupTree_t::power` with `weight`.
