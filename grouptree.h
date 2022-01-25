@@ -1327,6 +1327,105 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2022-01-21 21:35:02
+	 * 
+	 * Add a newly created node to layer.
+	 * 
+	 * There are 3 situations: `layer.gid`, `N[layer.ucList].gid`
+	 * `IBIT` signals under-construction, which means that the nodes are safe (have not been referenced) and will not create loops
+	 * 
+	 * NOTE: gid can be an entrypoint and should cause a group collapse.
+	 *       
+	 * layer | ucList | action
+	 * ------+--------+-------
+	 * IBIT      -      [0] create ucList
+	 * IBIT     IBIT    [1] append to ucList
+	 * IBIT      id     [2] connect to ucList & append
+	 *  id       -      [3] append layer.gid
+	 *  id      IBIT    [4] ucList violation
+	 *  id       id     [5] ucList violation
+	 * 
+	 * [2] has had its under-construction list adopted/stolen
+	 */
+	void addNewNode(groupLayer_t &layer, uint32_t nix, uint32_t nid) {
+
+		assert(nid != IBIT);
+		assert(this->N[nid].gid == IBIT); // node must be new
+
+		groupNode_t *pNode = this->N + nid;
+
+		// add node to index
+		this->nodeIndex[nix]        = nid;
+		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
+
+		// DEACTIVATE `ucList` 			
+		if (layer.gid == IBIT) {
+			// create group header
+			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
+			assert(selfSlots[MAXSLOTS - 1] == 0);
+
+			this->gcount++;
+			uint32_t gid = this->newNode(db.SID_SELF, selfSlots, 1.0 / 0.0);
+			assert(gid == this->N[gid].slots[0]);
+			this->N[gid].gid = gid;
+
+			// attach to layer
+			layer.gid = gid;
+
+			// bump versioned memory
+			layer.pChampionVersion->nextVersion();
+		}
+
+		if (layer.gid == IBIT) {
+
+			if (layer.ucList == IBIT) {
+				// [0] create ucList
+
+				layer.ucList = nid;
+
+			} else if (this->N[layer.ucList].gid == IBIT) {
+				// [1] append to ucList
+
+				linkNode(this->N[layer.ucList].prev, nid);
+
+			} else {
+				// [2] connect to ucList & append
+				layer.gid    = updateToLatest(layer.ucList);
+				layer.ucList = IBIT;
+
+				// set gid
+				pNode->gid = layer.gid;
+
+				// append rhs to group
+				linkNode(this->N[layer.gid].prev, nid);
+
+				rebuildLayer(layer);
+			}
+
+		} else {
+			// [3] append layer.gid
+			assert(this->N[layer.gid].gid == layer.gid); // layer must be latest
+			assert(layer.gid >= this->nstart); // entrypoints should have been handled
+			assert(layer.ucList == IBIT); // [4]/[5] list should have been merged
+			
+			// set gid
+			pNode->gid = layer.gid;
+
+			// append rhs node to group
+			linkNode(this->N[layer.gid].prev, nid);
+		}
+
+		// add to champion index
+		layer.pChampionMap[pNode->sid]          = nid;
+		layer.pChampionVersion->mem[pNode->sid] = layer.pChampionVersion->version;
+
+		if (pNode->weight < layer.loWeight)
+			layer.loWeight = pNode->weight;
+		if (pNode->hiSlotId > layer.hiSlotId)
+			layer.hiSlotId = pNode->hiSlotId;
+	}
+
+	/*
 	 * @date 2022-01-22 22:09:22
 	 * 
 	 * Convert under-construction to newly created group
@@ -2961,29 +3060,10 @@ struct groupTree_t {
 
 			assert(layer.gid == IBIT);
 
-			// create group header
-			uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
-			assert(selfSlots[MAXSLOTS - 1] == 0);
-
-			this->gcount++;
-			uint32_t gid = this->newNode(db.SID_SELF, selfSlots, tlWeight);
-			assert(gid == this->N[gid].slots[0]);
-			this->N[gid].gid = gid;
-
 			// create node
 			nid = this->newNode(tlSid, tlSlots, tlWeight);
-			groupNode_t *pNode = this->N + nid;
-
-			pNode->gid = gid;
-
-			// add to list
-			linkNode(gid, nid);
-
-			// add node to index
-			this->nodeIndex[nix]        = nid;
-			this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
-
-			layer.gid = gid;
+			
+			addNewNode(layer, nix, nid);
 
 			return 0; // success
 		}
@@ -3485,21 +3565,7 @@ struct groupTree_t {
 
 				nid = this->newNode(sid, finalSlots, weight);
 
-				// add node to list
-				this->N[nid].gid = layer.gid;
-				linkNode(this->N[layer.gid].prev, nid);
-
-				// add node to index
-				this->nodeIndex[nix]        = nid;
-				this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
-
-				// set as new champion
-				layer.pChampionMap[sid]          = nid;
-				layer.pChampionVersion->mem[sid] = layer.pChampionVersion->version;
-
-				// update group weight
-				if (weight < this->N[layer.gid].weight)
-					this->N[layer.gid].weight = weight;
+				addNewNode(layer, nix, nid);
 
 				if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 					printf("%.*sgid=%u\tnid=%u\tQ=%u\tT=%u\tF=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u wgt=%lf\n",
