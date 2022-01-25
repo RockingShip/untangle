@@ -1181,9 +1181,8 @@ struct groupTree_t {
 		 */
 		if (layer.gid == IBIT && layer.ucList != IBIT && this->N[layer.ucList].gid != IBIT) {
 			// yes, connect to it
-			uint32_t ucLatest = updateToLatest(layer.ucList);
 
-			layer.gid    = ucLatest;
+			layer.gid    = updateToLatest(layer.ucList);
 			layer.ucList = IBIT;
 
 			// NOTE: [6] does `updateGroup()` and [7] does `mergeGroup()`. No need to rebuild layer
@@ -1216,40 +1215,42 @@ struct groupTree_t {
 				// cleanup
 				updateGroup(layer, NULL, /*allowForward=*/true);
 
-			} else if (layer.gid != this->N[rhs].gid){
-				// [7] merge other group
-				uint32_t rhsLatest = updateToLatest(rhs);
-
-				mergeGroups(layer, rhsLatest);
-				if (layer.gid >= this->nstart)
-					updateGroup(layer, NULL, /*allowForward=*/true);
-
 			} else {
-				// [7] refresh node of same group
-				groupNode_t *pNode = this->N + rhs;
+				uint32_t rhsLatest = updateToLatest(rhs);
+				if (layer.gid != rhsLatest) {
+					// [7] merge other group
 
-				uint32_t champion = layer.findChampion(pNode->sid);
+					mergeGroups(layer, rhsLatest);
+					if (layer.gid >= this->nstart)
+						updateGroup(layer, NULL, /*allowForward=*/true);
 
-				if (champion != IBIT && champion != rhs) {
-					int cmp = this->compare(champion, pNode->sid, pNode->slots, pNode->weight);
+				} else {
+					// [7] refresh node of same group
+					groupNode_t *pNode = this->N + rhs;
 
-					if (cmp < 0) {
-						// champion is better, silently ignore
-						return; // silently ignore
+					uint32_t champion = layer.findChampion(pNode->sid);
 
-					} else if (cmp > 0) {
-						// rhs is better (lighter weight), dismiss champion 
-						unlinkNode(champion);
-						assert(this->N[champion].gid != IBIT); // orphans must have a gid
+					if (champion != IBIT && champion != rhs) {
+						int cmp = this->compare(champion, pNode->sid, pNode->slots, pNode->weight);
 
-					} else if (cmp == 0) {
-						assert(champion == rhs); // should have been detected
+						if (cmp < 0) {
+							// champion is better, silently ignore
+							return; // silently ignore
+
+						} else if (cmp > 0) {
+							// rhs is better (lighter weight), dismiss champion 
+							unlinkNode(champion);
+							assert(this->N[champion].gid != IBIT); // orphans must have a gid
+
+						} else if (cmp == 0) {
+							assert(champion == rhs); // should have been detected
+						}
 					}
-				}
 
-				// set as new champion
-				layer.pChampionMap[pNode->sid]          = rhs;
-				layer.pChampionVersion->mem[pNode->sid] = layer.pChampionVersion->version;
+					// set as new champion
+					layer.pChampionMap[pNode->sid]          = rhs;
+					layer.pChampionVersion->mem[pNode->sid] = layer.pChampionVersion->version;
+				}
 			}
 
 			return;
@@ -1272,8 +1273,7 @@ struct groupTree_t {
 		 */
 
 		// connect to rhs gid
-		uint32_t rhsLatest = updateToLatest(rhs);
-		layer.gid = rhsLatest;
+		layer.gid = updateToLatest(rhs);
 
 		if (layer.gid < this->nstart) {
 			// entrypoint collapse
@@ -3116,6 +3116,43 @@ struct groupTree_t {
 				this->cntCproduct++;
 
 				/*
+				 * @date 2022-01-14 02:10:15
+				 * did iterators change
+				 */
+
+				if (this->N[Q].gid != Q) {
+					// group change
+					iQ      = Q = updateToLatest(this->N[iQ].gid);
+				} else if (this->N[iQ].next == iQ && iQ >= this->nstart) {
+					// orphaned
+					iQ      = Q;
+				}
+
+				if (this->N[Tu].gid != Tu) {
+					// group change
+					iTu     = Tu = updateToLatest(this->N[iTu].gid);
+				} else if (this->N[iTu].next == iTu && iTu >= nstart) {
+					// orphaned
+					iTu     = Tu;
+				}
+
+				if (Tu != F) {
+					if (this->N[F].gid != F) {
+						// group change
+						iF      = F = updateToLatest(this->N[iF].gid);
+					} else if (this->N[iF].next == iF && iF >= nstart) {
+						// orphaned
+						iF      = F;
+					}
+				}
+
+				// is it an iterator collapse?
+				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+					// yes
+					return IBIT; // return collapse
+				}
+
+				/*
 				 * Analyse Q/T/F combo 
 				 */
 
@@ -3378,57 +3415,6 @@ struct groupTree_t {
 				}
 
 				/*
-				 * @date 2022-01-14 02:10:15
-				 * did iterators change
-				 */
-
-				{
-					bool changed = false;
-
-					if (this->N[Q].gid != Q) {
-						// group change
-						iQ      = Q = updateToLatest(this->N[iQ].gid);
-						changed = true;
-					} else if (this->N[iQ].next == iQ && iQ >= this->nstart) {
-						// orphaned
-						iQ      = Q;
-						changed = true;
-					}
-
-					if (this->N[Tu].gid != Tu) {
-						// group change
-						iTu     = Tu = updateToLatest(this->N[iTu].gid);
-						changed = true;
-					} else if (this->N[iTu].next == iTu && iTu >= nstart) {
-						// orphaned
-						iTu     = Tu;
-						changed = true;
-					}
-
-					if (Tu != F) {
-						if (this->N[F].gid != F) {
-							// group change
-							iF      = F = updateToLatest(this->N[iF].gid);
-							changed = true;
-						} else if (this->N[iF].next == iF && iF >= nstart) {
-							// orphaned
-							iF      = F;
-							changed = true;
-						}
-					}
-
-					// is it an iterator collapse?
-					if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
-						// yes
-						assert(layer.gid != IBIT);
-						return IBIT ^ layer.gid;
-					}
-
-					if (changed)
-						goto restart; // restart with updated iterators
-				}
-
-				/*
 				 * did node reference in slots change group?
 				 */
 				for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
@@ -3448,13 +3434,13 @@ struct groupTree_t {
 				nix = this->lookupNode(sid, finalSlots);
 				nid = this->nodeIndex[nix];
 
-				// is node under construction?
-				if (this->N[nid].gid == IBIT)
-					continue; // yes, silently ignore
-
-				uint32_t latest = updateToLatest(nid);
-
 				if (nid != 0) {
+					// is node under construction?
+					if (this->N[nid].gid == IBIT)
+						continue; // yes, silently ignore
+	
+					uint32_t latest = updateToLatest(nid);
+
 					if (latest == Q || latest == Tu || latest == F) {
 						/*
 						 * @date 2022-01-13 22:14:02

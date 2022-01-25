@@ -12,8 +12,9 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-25 14:47:36 Changed: Relocate C-product iterator changing group.
 2022-01-25 12:19:28 Deleted: Removed `groupLayer_t::needResolveForward`.
-2022-01-25 12:04:34 Added: (deactivated) `groupTree_t::`addNewNode)`.
+2022-01-25 12:04:34 Added: (deactivated) `groupTree_t::`addNewNode()`.
 2022-01-25 11:40:34 Added: `groupLayer_t::loWeight` and `hiSlotId`.
 2022-01-25 01:23:35 Added: `grouptree_t::flushLayer()` and layers/group are now always up-to-date on exit.
 2022-01-24 22:47:56 Changed: Renamed `groupLayer_t::rebuild()` to `grouptree_t::rebuild:layer()`.
