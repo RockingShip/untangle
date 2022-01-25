@@ -1043,12 +1043,6 @@ struct groupTree_t {
 		double hiSlotId;
 
 		/*
-		 * Flag if mergeGroup() was applied.
-		 * If set, caller needs to finalise with `resolveForward()`.
-		 */
-		bool needResolveForward;
-
-		/*
 		 * @date 2021-12-21 20:39:38
 		 * 
 		 * Constructor
@@ -1061,7 +1055,6 @@ struct groupTree_t {
 			pChampionVersion = tree.allocVersion();
 			loWeight         = 1.0 / 0.0; // + inf
 			hiSlotId         = 0;
-			needResolveForward = false;
 
 			// bump version
 			pChampionVersion->nextVersion();
@@ -1438,9 +1431,11 @@ struct groupTree_t {
 		if (layer.gid != IBIT) {
 			// yes, finalise
 
-			resolveForwards(layer, layer.gid);
-			// gid might have outdated
-			layer.gid = updateToLatest(layer.gid);
+			if (layer.hiSlotId > layer.gid) {
+				resolveForwards(layer, layer.gid);
+				// gid might have outdated
+				layer.gid = updateToLatest(layer.gid);
+			}
 
 		} else if (layer.ucList != IBIT) {
 			// no, create group
@@ -3436,27 +3431,12 @@ struct groupTree_t {
 				/*
 				 * did node reference in slots change group?
 				 */
-				{
-					bool hasCollapse = false;
-					for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
-						uint32_t id = finalSlots[iSlot];
+				for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+					uint32_t id = finalSlots[iSlot];
 
-						if (this->N[id].gid != id) {
-							id = updateToLatest(id);
-							if (id == layer.gid)
-								hasCollapse = true;
-							printf("finalSlots restart\n");
-							goto restart;
-						}
-
-						// todo: schedule for removal
-						if (id > layer.gid)
-							layer.needResolveForward = true;
-					}
-					// self-collapse
-					if (hasCollapse) {
-						// yes
-						assert(0); // todo: wait for it to happen. grouptree.h.ZW2
+					if (this->N[id].gid != id) {
+						printf("finalSlots restart\n");
+						goto restart;
 					}
 				}
 
@@ -3537,26 +3517,6 @@ struct groupTree_t {
 							assert(0); // should have been detected by `lookupNode()`.
 						}
 					}
-				}
-
-				// is there a current group?			
-				if (layer.gid == IBIT) {
-					// "node is new and no current group"
-
-					// create group header
-					uint32_t selfSlots[MAXSLOTS] = {this->ncount}; // other slots are zerod
-					assert(selfSlots[MAXSLOTS - 1] == 0);
-
-					this->gcount++;
-					uint32_t gid = this->newNode(db.SID_SELF, selfSlots, 1.0 / 0.0);
-					assert(gid == this->N[gid].slots[0]);
-					this->N[gid].gid = gid;
-
-					// attach to layer
-					layer.gid = gid;
-
-					// bump versioned memory
-					layer.pChampionVersion->nextVersion();
 				}
 
 				/*
@@ -3667,7 +3627,6 @@ struct groupTree_t {
 		assert(rhs < this->nstart || this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for entrypoints)
 
 		this->cntMergeGroup++;
-		layer.needResolveForward = true;
 
 		/*
 		 * @date 2021-12-28 21:11:47
@@ -3882,13 +3841,12 @@ struct groupTree_t {
 	 * @date 2022-01-16 01:55:42
 	 * When `allowForward` set, then recreate the group with a new id to relax forward references
 	 */
-	bool updateGroup(groupLayer_t &layer, uint32_t *pRestartId, bool allowForward) {
+	void updateGroup(groupLayer_t &layer, uint32_t *pRestartId, bool allowForward) {
 
 		assert(layer.gid != IBIT && layer.ucList == IBIT); // must have id
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
 		assert(layer.gid >= this->nstart); // entrypoints should have been detected
 
-		bool     hasForward = false;     // set to `true` if a node has a forward reference, meaning the group has a forward reference
 		bool     hasSelf    = false;     // a self-collapse is a group collapse
 		double   gWeight    = 1.0 / 0.0; // group weight. +inf
 		uint32_t gHiSlotId  = 0;         // highest slot id
@@ -3947,8 +3905,6 @@ struct groupTree_t {
 
 				if (id == layer.gid)
 					hasSelf = true;
-				else if (id > layer.gid)
-					hasForward = true;
 			}
 			assert(newWeight < 1.0 / 0.0); // +inf
 			pNode->weight = newWeight; // adding nodes to existing groups will change weights of references
@@ -4080,7 +4036,7 @@ struct groupTree_t {
 						*pRestartId = layer.gid;
 				}
 
-				return hasForward;
+				return;
 			}
 
 			/*
@@ -4214,7 +4170,7 @@ struct groupTree_t {
 		 * Or groups were merged and the highest id went lower.
 		 */
 
-		if (hasForward && !allowForward) {
+		if (gHiSlotId > layer.gid && !allowForward) {
 			/*
 			 * create new list header
 			 */
@@ -4251,8 +4207,6 @@ struct groupTree_t {
 			this->N[newGid].weight = gWeight;
 			this->N[newGid].hiSlotId = gHiSlotId;
 		}
-
-		return hasForward;
 	}
 
 	/*
@@ -4467,6 +4421,15 @@ struct groupTree_t {
 			assert(this->N[iGroup].next != iGroup); // group may not be empty
 
 			/*
+			 * @date 2022-01-25 11:49:09
+			 * No need to update group if it only references the past
+			 */
+			if (this->N[iGroup].hiSlotId > iGroup) {
+				iGroup++;
+				continue;
+			}
+
+			/*
 			 * Prepare layer for group and update
 			 */
 
@@ -4479,8 +4442,7 @@ struct groupTree_t {
 			 * 
 			 */
 			uint32_t restartId  = this->ncount;
-			bool     hasForward = updateGroup(newLayer, &restartId, /*allowForward=*/false);
-			(void) hasForward;
+			updateGroup(newLayer, &restartId, /*allowForward=*/false);
 
 			// update lowest
 			if (restartId < firstId)
@@ -4501,7 +4463,6 @@ struct groupTree_t {
 //		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
 
 		this->overflowGroup = 0;
-		layer.needResolveForward = false;
 	}
 
 	void __attribute__((used)) whoHas(uint32_t id) {
