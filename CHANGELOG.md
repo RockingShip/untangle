@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-25 00:49:51 Changed: Orphans must have a gid.
 2022-01-24 22:34:01 Changed: Renamed and fixed champion champion.
 2022-01-23 22:43:37 Changed: Replaced `groupTree_t::addToGroup()` with `addOldNode()`.
 2022-01-22 21:45:50 Added: Under-construction list (groupLayer_t::ucList) preparations.
