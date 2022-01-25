@@ -108,6 +108,11 @@ struct groupNode_t {
 	double weight;
 
 	/*
+	 * Highest group id found in slots
+	 */
+	uint32_t hiSlotId;
+
+	/*
 	 * The signature describing the behaviour of the node
 	 */
 	uint32_t sid;
@@ -501,11 +506,12 @@ struct groupTree_t {
 
 			memset(pNode, 0, sizeof(*pNode));
 
-			pNode->gid    = iKey;
-			pNode->next   = iKey;
-			pNode->prev   = iKey;
-			pNode->weight = 1;
-			pNode->sid    = db.SID_SELF;
+			pNode->gid      = iKey;
+			pNode->next     = iKey;
+			pNode->prev     = iKey;
+			pNode->weight   = 1;
+			pNode->hiSlotId = iKey;
+			pNode->sid      = db.SID_SELF;
 			pNode->slots[0] = iKey;
 		}
 
@@ -916,17 +922,22 @@ struct groupTree_t {
 
 		groupNode_t *pNode = this->N + nid;
 
-		pNode->gid    = IBIT;
-		pNode->next   = nid;
-		pNode->prev   = nid;
-		pNode->oldId  = 0;
-		pNode->weight = weight;
-		pNode->sid    = sid;
+		pNode->gid      = IBIT;
+		pNode->next     = nid;
+		pNode->prev     = nid;
+		pNode->oldId    = 0;
+		pNode->weight   = weight;
+		pNode->hiSlotId = 0;
+		pNode->sid      = sid;
 
 		// assign slots
 		for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 			uint32_t id = slots[iSlot];
 			pNode->slots[iSlot] = id;
+
+			// update max
+			if (id > pNode->hiSlotId)
+				pNode->hiSlotId = id;
 		}
 
 		return nid;
@@ -1022,6 +1033,16 @@ struct groupTree_t {
 		versionMemory_t *pChampionVersion;
 
 		/*
+		 * Lowest weight across all nodes, will be written when flushed
+		 */
+		double loWeight;
+
+		/*
+		 * Highest slot id across all nodes, will be written when flushed
+		 */
+		double hiSlotId;
+
+		/*
 		 * Flag if mergeGroup() was applied.
 		 * If set, caller needs to finalise with `resolveForward()`.
 		 */
@@ -1034,10 +1055,12 @@ struct groupTree_t {
 		 */
 		groupLayer_t(groupTree_t &tree, groupLayer_t *pPrevious) : tree(tree), pPrevious(pPrevious) {
 
-			gid                = IBIT;
-			ucList             = IBIT;
-			pChampionMap       = tree.allocMap();
-			pChampionVersion   = tree.allocVersion();
+			gid              = IBIT;
+			ucList           = IBIT;
+			pChampionMap     = tree.allocMap();
+			pChampionVersion = tree.allocVersion();
+			loWeight         = 1.0 / 0.0; // + inf
+			hiSlotId         = 0;
 			needResolveForward = false;
 
 			// bump version
@@ -1086,10 +1109,14 @@ struct groupTree_t {
 		assert(layer.ucList == IBIT); // when gid set, ucList is not allowed
 
 		// update to latest
-		layer.gid = this->updateToLatest(layer.gid);
+		layer.gid      = updateToLatest(layer.gid);
+		layer.loWeight = 1.0 / 0.0; // + inf
+		layer.hiSlotId = 0;
 
 		// Is gid an unmodifiable entrypoint
 		if (layer.gid < this->nstart) {
+			layer.loWeight = (layer.gid == 0) ? 0 : 1;
+			layer.hiSlotId = layer.gid;
 			return; // yes
 		}
 
@@ -1097,9 +1124,6 @@ struct groupTree_t {
 
 		// bump versioned memory
 		layer.pChampionVersion->nextVersion();
-
-		// minimum group weight
-		double gweight = 1.0 / 0.0; // +inf
 
 		// scan group for initial champion and minimum weight
 		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
@@ -1110,13 +1134,16 @@ struct groupTree_t {
 			layer.pChampionVersion->mem[pNode->sid] = layer.pChampionVersion->version;
 
 			// update weight
-			if (pNode->weight < gweight)
-				gweight = pNode->weight;
+			if (pNode->weight < layer.loWeight)
+				layer.loWeight = pNode->weight;
+			// update hiSlotId
+			if (pNode->hiSlotId > layer.hiSlotId)
+				layer.hiSlotId = pNode->hiSlotId;
 		}
 
 		// update weight
-		assert(gweight < 1.0 / 0.0);
-		this->N[layer.gid].weight = gweight;
+		assert(layer.loWeight < 1.0 / 0.0);
+		this->N[layer.gid].weight = layer.loWeight;
 	}
 
 	/*
@@ -1408,17 +1435,24 @@ struct groupTree_t {
 			 */
 
 			double   loWeight = 1.0 / 0.0; // + inf
+			uint32_t hiSlotId = 0;
 
 			for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
 				if (pNode->weight < loWeight)
 					loWeight = pNode->weight;
+				if (pNode->hiSlotId > hiSlotId)
+					hiSlotId = pNode->hiSlotId;
 			}
+
+			layer.loWeight = loWeight;
+			layer.hiSlotId = hiSlotId;
 
 			// finalise group header
 			groupNode_t *pHeader = this->N + layer.gid;
-			pHeader->weight   = loWeight;
+			pHeader->weight   = layer.loWeight;
+			pHeader->hiSlotId = layer.hiSlotId;
 		}
 	}
 
@@ -3189,7 +3223,7 @@ struct groupTree_t {
 				 */
 
 				uint32_t finalSlots[MAXSLOTS];
-				double   weight = 0;
+				double   weight = +1.0 / 0.0; // +inf
 
 				uint32_t sid = constructSlots(layer, this->N + normQ, this->N + normTu, normTi, this->N + normF, finalSlots, &weight);
 
@@ -3786,14 +3820,12 @@ struct groupTree_t {
 
 		assert(layer.gid != IBIT && layer.ucList == IBIT); // must have id
 		assert(this->N[layer.gid].gid == layer.gid); // must be latest
+		assert(layer.gid >= this->nstart); // entrypoints should have been detected
 
-		// did group collapse to entrypoint?
-		if (layer.gid < this->nstart)
-			return false; // yes
-
-		bool   hasForward = false;     // set to `true` if a node has a forward reference, meaning the group has a forward reference
-		bool   hasSelf    = false;     // a self-collapse is a group collapse
-		double gweight    = 1.0 / 0.0; // group weight. +inf
+		bool     hasForward = false;     // set to `true` if a node has a forward reference, meaning the group has a forward reference
+		bool     hasSelf    = false;     // a self-collapse is a group collapse
+		double   gWeight    = 1.0 / 0.0; // group weight. +inf
+		uint32_t gHiSlotId  = 0;         // highest slot id
 
 		this->cntUpdateGroup++;
 
@@ -3829,8 +3861,9 @@ struct groupTree_t {
 			 */
 
 			uint32_t newSlots[MAXSLOTS];
-			bool     changed   = false;
-			double   newWeight = db.signatures[pNode->sid].size;
+			bool     changed     = false;
+			double   newWeight   = db.signatures[pNode->sid].size;
+			uint32_t newHiSlotId = 0;
 
 			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 				uint32_t id = pNode->slots[iSlot];
@@ -3839,17 +3872,20 @@ struct groupTree_t {
 					id      = updateToLatest(id);
 					changed = true;
 				}
+
+				newSlots[iSlot] = id;
+
+				newWeight += this->N[id].weight;
+				if (id > newHiSlotId)
+					newHiSlotId = id;
+
 				if (id == layer.gid)
 					hasSelf = true;
 				else if (id > layer.gid)
 					hasForward = true;
-
-				newSlots[iSlot] = id;
-				if (id)
-					newWeight += this->N[id].weight;
 			}
 			assert(newWeight < 1.0 / 0.0); // +inf
-			pNode->weight = newWeight;
+			pNode->weight = newWeight; // adding nodes to existing groups will change weights of references
 
 			// is it a self-collapse:
 			if (hasSelf) {
@@ -3890,8 +3926,10 @@ struct groupTree_t {
 						// champion is better, orphan node (orphan might already have been orphaned)
 
 						// update minimal group weight
-						if (this->N[champion].weight < gweight)
-							gweight = this->N[champion].weight;
+						if (this->N[champion].weight < gWeight)
+							gWeight = this->N[champion].weight;
+						if (this->N[champion].hiSlotId > gHiSlotId)
+							gHiSlotId = this->N[champion].hiSlotId;
 
 						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old lose=%u champion=%u\n", iNode, champion);
 						unlinkNode(iNode);
@@ -3910,8 +3948,11 @@ struct groupTree_t {
 				}
 
 				// update minimal group weight
-				if (newWeight < gweight)
-					gweight = newWeight;
+				if (pNode->weight < gWeight)
+					gWeight = pNode->weight;
+				// update highest slot id
+				if (pNode->hiSlotId > gHiSlotId)
+					gHiSlotId = pNode->hiSlotId;
 
 				// make node the new champion
 				layer.pChampionMap[pNode->sid]          = iNode;
@@ -4074,8 +4115,11 @@ struct groupTree_t {
 			linkNode(this->N[nextId].prev, nid);
 
 			// update minimal group weight
-			if (newWeight < gweight)
-				gweight = newWeight;
+			if (pNew->weight < gWeight)
+				gWeight = pNew->weight;
+			// update highest slot id
+			if (pNew->hiSlotId > gHiSlotId)
+				gHiSlotId = pNew->hiSlotId;
 
 			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPNODE) {
 				printf("gid=%u\tnid=%u\told=%u\t%u:%s/[%u %u %u %u %u %u %u %u %u] siz=%u wgt=%f\n",
@@ -4091,8 +4135,10 @@ struct groupTree_t {
 		assert(this->N[layer.gid].next != layer.gid);
 
 		// group weight is min of all nodes
-		assert(gweight < 1.0 / 0.0);
-		this->N[layer.gid].weight = gweight;
+		assert(gWeight < 1.0 / 0.0);
+		layer.loWeight = gWeight;
+		layer.hiSlotId = gHiSlotId;
+		this->N[layer.gid].weight = gWeight;
 
 		/*
 		 * @date 2022-01-03 00:18:25
@@ -4111,7 +4157,7 @@ struct groupTree_t {
 			assert(selfSlots[MAXSLOTS - 1] == 0);
 
 			this->gcount++;
-			uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, gweight);
+			uint32_t newGid = this->newNode(db.SID_SELF, selfSlots, 1.0 / 0.0); // +inf
 			assert(newGid == this->N[newGid].slots[0]);
 
 			this->N[newGid].gid   = newGid;
@@ -4136,6 +4182,8 @@ struct groupTree_t {
 
 			layer.gid = newGid;
 			// no need to `rebuild()`, as only some basics have changed
+			this->N[newGid].weight = gWeight;
+			this->N[newGid].hiSlotId = gHiSlotId;
 		}
 
 		return hasForward;
@@ -4149,7 +4197,7 @@ struct groupTree_t {
 	 * 
 	 * It will multi-pass the tree, applying a flood to test if there are no loops
 	 */
-	void testAndUnlock(void) {
+	void testAndUnlock(groupLayer_t &layer) {
 		versionMemory_t *pVersion   = allocVersion();
 		uint32_t        thisVersion = pVersion->nextVersion();
 
@@ -4249,6 +4297,36 @@ struct groupTree_t {
 				changed = true;
 			}
 
+			/*
+			 * @date 2022-01-24 21:41:21
+			 * this is nasty. unlinking a node might effect `hiSlotId`. Rescan to correct 
+			 */
+			if (changed) {
+				double   gLoWeight = 1.0 / 0.0; // +inf
+				uint32_t gHiSlotId = 0;
+
+				// scan for highest id
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					groupNode_t *pNode = this->N + iNode;
+
+					if (pNode->weight < gLoWeight)
+						gLoWeight = pNode->weight;
+					if (pNode->hiSlotId > gHiSlotId)
+						gHiSlotId = pNode->hiSlotId;
+				}
+
+				// who to update
+				if (layer.gid == iGroup) {
+					// the layer
+					layer.loWeight = gLoWeight;
+					layer.hiSlotId = gHiSlotId;
+				} else {
+					// the group header
+					this->N[iGroup].weight   = gLoWeight;
+					this->N[iGroup].hiSlotId = gHiSlotId;
+				}
+			}
+
 			// restart if locked nodes removed
 			if (changed)
 				goto restart;
@@ -4307,7 +4385,7 @@ struct groupTree_t {
 					//* DOUBLE paranoid, passed more than 3x through tree, which might indicate a cyclic loop
 					// NOTE: if it does this too often, consider raising the threshold.
 					fprintf(stderr, "[%s] checkLocked numMark=%u gstart=%u group=%u ncount=%u\n", ctx.timeAsString(), numMark, gstart, iGroup, this->ncount);
-					testAndUnlock();
+					testAndUnlock(layer);
 					// restart
 					iGroup = this->nstart;
 					continue;
@@ -4751,15 +4829,18 @@ struct groupTree_t {
 			}
 
 			// does group have errors
-			double gweight = 1.0 / 0.0; // +inf
+			double   gWeight   = 1.0 / 0.0; // +inf
+			uint32_t gHiSlotId = 0;
 			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				const groupNode_t *pNode         = this->N + iNode;
 				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 				// must have valid weight
 				assert(pNode->weight < 1.0 / 0.0);
-				if (pNode->weight < gweight)
-					gweight = pNode->weight;
+				if (pNode->weight < gWeight)
+					gWeight = pNode->weight;
+				if (pNode->hiSlotId > gHiSlotId)
+					gHiSlotId = pNode->hiSlotId;
 
 				pNodeFound->mem[iNode] = pNodeFound->version; // mark node found
 
@@ -4800,7 +4881,8 @@ struct groupTree_t {
 				}
 			}
 			// group must have minimal weight
-			assert(this->N[iGroup].weight == gweight);
+			assert(this->N[iGroup].weight == gWeight);
+			assert(this->N[iGroup].hiSlotId == gHiSlotId);
 		}
 
 		/*
@@ -6095,11 +6177,12 @@ struct groupTree_t {
 				 */
 
 				groupNode_t wrtNode;
-				wrtNode.gid    = pMap[iGroup];
-				wrtNode.prev   = pMap[pNode->prev];
-				wrtNode.next   = pMap[pNode->next];
-				wrtNode.sid    = pNode->sid;
-				wrtNode.weight = pNode->weight;
+				wrtNode.gid      = pMap[iGroup];
+				wrtNode.prev     = pMap[pNode->prev];
+				wrtNode.next     = pMap[pNode->next];
+				wrtNode.sid      = pNode->sid;
+				wrtNode.weight   = pNode->weight;
+				wrtNode.hiSlotId = pNode->hiSlotId;
 
 				for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
 					wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
@@ -6119,11 +6202,12 @@ struct groupTree_t {
 				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					pNode = this->N + iNode;
 
-					wrtNode.gid    = pMap[iGroup];
-					wrtNode.prev   = pMap[pNode->prev];
-					wrtNode.next   = pMap[pNode->next];
-					wrtNode.sid    = pNode->sid;
-					wrtNode.weight = pNode->weight;
+					wrtNode.gid      = pMap[iGroup];
+					wrtNode.prev     = pMap[pNode->prev];
+					wrtNode.next     = pMap[pNode->next];
+					wrtNode.sid      = pNode->sid;
+					wrtNode.weight   = pNode->weight;
+					wrtNode.hiSlotId = pNode->hiSlotId;
 
 					for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++)
 						wrtNode.slots[iSlot] = pMap[pNode->slots[iSlot]];
