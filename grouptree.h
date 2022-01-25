@@ -1055,58 +1055,6 @@ struct groupTree_t {
 		}
 
 		/*
-		 * @date 2022-01-05 17:29:57
-		 * 
-		 * Scan group and build indices
-		 */
-		void rebuild(void) {
-			// anything to rebuild
-			if (this->gid == IBIT)
-				return; // no
-
-			assert(this->ucList == IBIT); // when gid set, ucList is not allowed
-
-			// update to latest
-			this->gid = tree.updateToLatest(this->gid);
-
-			// Is gid an unmodifiable entrypoint
-			if (this->gid < tree.nstart)
-				return; // yes
-
-			assert(tree.N[this->gid].next != this->gid); // may not be empty
-
-			// update gid
-			if (tree.N[this->gid].gid != this->gid) {
-				// only happens when groups merged
-				assert(this->needResolveForward);
-				this->gid = tree.updateToLatest(this->gid);
-			}
-
-			// bump versioned memory
-			this->pChampionVersion->nextVersion();
-
-			// minimum group weight
-			double gweight = 1.0 / 0.0; // +inf
-
-			// scan group for initial champion and minimum weight
-			for (uint32_t iNode = tree.N[this->gid].next; iNode != tree.N[iNode].gid; iNode = tree.N[iNode].next) {
-				groupNode_t *pNode = tree.N + iNode;
-
-				// load initial champion index
-				this->pChampionMap[pNode->sid]          = iNode;
-				this->pChampionVersion->mem[pNode->sid] = this->pChampionVersion->version;
-
-				// update weight
-				if (pNode->weight < gweight)
-					gweight = pNode->weight;
-			}
-
-			// update weight
-			assert(gweight < 1.0 / 0.0);
-			tree.N[this->gid].weight = gweight;
-		}
-
-		/*
 		 * @date 2021-12-21 22:29:41
 		 * 
 		 * Find sid.
@@ -1124,6 +1072,52 @@ struct groupTree_t {
 			return nid;
 		}
 	};
+
+	/*
+	 * @date 2022-01-05 17:29:57
+	 * 
+	 * Scan group and build indices
+	 */
+	void rebuildLayer(groupLayer_t &layer) {
+		// anything to rebuild
+		if (layer.gid == IBIT)
+			return; // no
+
+		assert(layer.ucList == IBIT); // when gid set, ucList is not allowed
+
+		// update to latest
+		layer.gid = this->updateToLatest(layer.gid);
+
+		// Is gid an unmodifiable entrypoint
+		if (layer.gid < this->nstart) {
+			return; // yes
+		}
+
+		assert(this->N[layer.gid].next != layer.gid); // may not be orphaned
+
+		// bump versioned memory
+		layer.pChampionVersion->nextVersion();
+
+		// minimum group weight
+		double gweight = 1.0 / 0.0; // +inf
+
+		// scan group for initial champion and minimum weight
+		for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			groupNode_t *pNode = this->N + iNode;
+
+			// load initial champion index
+			layer.pChampionMap[pNode->sid]          = iNode;
+			layer.pChampionVersion->mem[pNode->sid] = layer.pChampionVersion->version;
+
+			// update weight
+			if (pNode->weight < gweight)
+				gweight = pNode->weight;
+		}
+
+		// update weight
+		assert(gweight < 1.0 / 0.0);
+		this->N[layer.gid].weight = gweight;
+	}
 
 	/*
 	 * @date 2022-01-21 21:35:02
@@ -1167,10 +1161,12 @@ struct groupTree_t {
 		 */
 		if (layer.gid == IBIT && layer.ucList != IBIT && this->N[layer.ucList].gid != IBIT) {
 			// yes, connect to it
-			layer.gid    = updateToLatest(layer.ucList);
+			uint32_t ucLatest = updateToLatest(layer.ucList);
+
+			layer.gid    = ucLatest;
 			layer.ucList = IBIT;
 
-			layer.rebuild();
+			// NOTE: [6] does `updateGroup()` and [7] does `mergeGroup()`. No need to rebuild layer
 		}
 
 		/*
@@ -1203,6 +1199,7 @@ struct groupTree_t {
 			} else if (layer.gid != this->N[rhs].gid){
 				// [7] merge other group
 				uint32_t rhsLatest = updateToLatest(rhs);
+
 				if (layer.gid != rhsLatest) {
 					mergeGroups(layer, rhsLatest);
 					updateGroup(layer, NULL, /*allowForward=*/true);
@@ -1284,7 +1281,7 @@ struct groupTree_t {
 
 		} else if (layer.ucList == IBIT) {
 			// [1] connect to rhs
-			layer.rebuild();
+			rebuildLayer(layer);
 
 		} else {
 			// [3] connect to rhs & merge ucList
@@ -1911,7 +1908,7 @@ struct groupTree_t {
 				 * layer.gid might now be outdated
 				 */
 				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid)
-					layer.rebuild();
+					rebuildLayer(layer);
 
 				/*
 				 * @date 2022-01-16 00:32:17
@@ -2360,7 +2357,7 @@ struct groupTree_t {
 				 * layer.gid might now be outdated
 				 */
 				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid)
-					layer.rebuild();
+					rebuildLayer(layer);
 
 				/*
 				 * @date 2022-01-16 00:32:17
@@ -3755,7 +3752,9 @@ struct groupTree_t {
 			assert(newWeight < 1.0 / 0.0); // +inf
 			pNode->weight = newWeight;
 
+			// is it a self-collapse:
 			if (hasSelf) {
+				// yes
 				/*
 				 * @date 2022-01-12 22:34:26
 				 * 
@@ -3866,7 +3865,7 @@ struct groupTree_t {
 
 				// update layer
 				layer.gid = newGid;
-				layer.rebuild();
+				rebuildLayer(layer);
 
 				if (pRestartId) {
 					if (layer.gid < this->nstart)
@@ -4037,7 +4036,7 @@ struct groupTree_t {
 				this->N[iNode].gid = newGid;
 
 			layer.gid = newGid;
-			layer.rebuild();
+			// no need to `rebuild()`, as only some basics have changed
 		}
 
 		return hasForward;
