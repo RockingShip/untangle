@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-25 01:23:35 Added: `grouptree_t::flushLayer()` and layers/group are now always up-to-date on exit.
 2022-01-24 22:47:56 Changed: Renamed `groupLayer_t::rebuild()` to `grouptree_t::rebuild:layer()`.
 2022-01-24 22:35:36 Changed: Proper switch between `expandSignature()/expandMember()`.
 2022-01-25 00:49:51 Changed: Orphans must have a gid.
