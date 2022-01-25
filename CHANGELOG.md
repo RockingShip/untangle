@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-24 22:34:01 Changed: Renamed and fixed champion champion.
 2022-01-23 22:43:37 Changed: Replaced `groupTree_t::addToGroup()` with `addOldNode()`.
 2022-01-22 21:45:50 Added: Under-construction list (groupLayer_t::ucList) preparations.
 2022-01-21 10:23:54 Changed: Renamed `grouptree_t::resolveForward()` into `resolveForwards()` (multiple groups).
@@ -138,7 +139,7 @@ Unfinished actions:
 2021-12-09 17:28:44 Changed: `groupTree_t`, Unroll `MAXSLOTS` by using `numPlaceholder`.
 2021-12-09 17:03:02 Changed: `groupTree_t::updateGroups()`, Harden against infinite forward unrolling. 
 2021-12-09 16:52:23 Changed: `groupTree_t::validateTree()`, Harden against missing `0n9`/`1n9`.
-2021-12-09 16:37:07 Changed: `groupTree_t::compare()`, Take into account group-id forwarding, drop `orphanWorse()` and replace with `findSid()`. 
+2021-12-09 16:37:07 Changed: `groupTree_t::compare()`, Take into account group-id forwarding, drop `orphanWorse()` and replace with `findChampion()`. 
 2021-12-09 15:41:02 Fixed: `groupTree_t` Versioned memory usage. (2 distinct changed).
 2021-12-09 15:34:15 Added: `groupTree_t::versionMemory_t`, Need to keep current version number bound to vector.
 2021-12-06 16:48:40 Added: `groupTree_t::pruneGroup()`, Remove weak nodes that have insufficient power.
