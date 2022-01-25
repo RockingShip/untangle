@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-24 22:35:36 Changed: Proper switch between `expandSignature()/expandMember()`.
 2022-01-25 00:49:51 Changed: Orphans must have a gid.
 2022-01-24 22:34:01 Changed: Renamed and fixed champion champion.
 2022-01-23 22:43:37 Changed: Replaced `groupTree_t::addToGroup()` with `addOldNode()`.

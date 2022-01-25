@@ -338,6 +338,7 @@ struct groupTree_t {
 	uint64_t                 cntMergeGroup;         // number of calls to `mergeGroup()`
 	uint64_t                 cntAddNormaliseNode;   // number of calls to `addNormaliseNode()`
 	uint64_t                 cntAddBasicNode;       // number of calls to `addBasicNode()`
+	uint32_t                 cntUpdateGroup;        // number of calls to `updateGroup()`
 	uint32_t                 cntValidate;           // counter of last valid tree
 	uint32_t                 cntCproduct;           // counter number of Cproduct iterations
 	//
@@ -409,6 +410,7 @@ struct groupTree_t {
 		cntMergeGroup(0),
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
+		cntUpdateGroup(0),
 		cntValidate(0),
 		cntCproduct(0),
 		overflowGroup(0)
@@ -472,6 +474,7 @@ struct groupTree_t {
 		cntMergeGroup(0),
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
+		cntUpdateGroup(0),
 		cntValidate(0),
 		cntCproduct(0),
 		overflowGroup()
@@ -3123,20 +3126,17 @@ struct groupTree_t {
 					}
 				}
 
+				signature_t *pSignature = db.signatures + sid;
+
 				/*
 				 * @date 2022-01-14 00:01:39
 				 * 
 				 * Expand signature in an attempt for merge with other groups
 				 */
-				if (depth + 1 < this->maxDepth && db.signatures[sid].size > 1) {
+				if (depth + 1 < this->maxDepth && pSignature->size > 1) {
 
 					if (true) {
 						uint32_t ret = expandSignature(layer, sid, finalSlots, depth + 1);
-//					for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-//						uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
-
-						// todo: schedule for removal
-						assert(layer.gid == updateToLatest(layer.gid));
 
 						// silently ignore
 						if (ret == (IBIT ^ (IBIT - 1)))
@@ -3148,6 +3148,23 @@ struct groupTree_t {
 							assert(layer.gid != IBIT);
 							return IBIT ^ layer.gid;
 						}
+
+					} else {
+						for (uint32_t mid = pSignature->firstMember; mid != 0; mid = db.members[mid].nextMember) {
+							uint32_t ret = expandMember(layer, mid, finalSlots, depth + 1);
+
+							// silently ignore
+							if (ret == (IBIT ^ (IBIT - 1)))
+								continue; // yes
+
+							// is it a collapse?
+							if ((ret & IBIT) || layer.gid < this->nstart) {
+								// yes
+								assert(layer.gid != IBIT);
+								return IBIT ^ layer.gid;
+							}
+						}
+
 					}
 				}
 
@@ -3203,11 +3220,11 @@ struct groupTree_t {
 				}
 
 				/*
-				 * did nodes reference in slot change group?
+				 * did node reference in slots change group?
 				 */
 				{
 					bool hasCollapse = false;
-					for (unsigned iSlot = 0; iSlot < db.signatures[sid].numPlaceholder; iSlot++) {
+					for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
 						uint32_t id = finalSlots[iSlot];
 
 						if (this->N[id].gid != id) {
@@ -3356,9 +3373,9 @@ struct groupTree_t {
 					       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
 					       layer.gid, nid,
 					       iQ, iTu, iF,
-					       sid, db.signatures[sid].name,
+					       sid, pSignature->name,
 					       finalSlots[0], finalSlots[1], finalSlots[2], finalSlots[3], finalSlots[4], finalSlots[5], finalSlots[6], finalSlots[7], finalSlots[8],
-					       db.signatures[sid].size, weight);
+					       pSignature->size, weight);
 				}
 
 				/*
@@ -3681,6 +3698,8 @@ struct groupTree_t {
 		bool   hasForward = false;     // set to `true` if a node has a forward reference, meaning the group has a forward reference
 		bool   hasSelf    = false;     // a self-collapse is a group collapse
 		double gweight    = 1.0 / 0.0; // group weight. +inf
+
+		this->cntUpdateGroup++;
 
 		restart:
 
