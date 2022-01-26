@@ -226,7 +226,7 @@ struct groupTree_t {
  	 * @constant {number} DEFAULT_MAXDEPTH
 	 */
 	#if !defined(GROUPTREE_DEFAULT_MAXDEPTH)
-	#define GROUPTREE_DEFAULT_MAXDEPTH 0
+	#define GROUPTREE_DEFAULT_MAXDEPTH 5
 	#endif
 
 	/**
@@ -1508,6 +1508,7 @@ struct groupTree_t {
 		this->nodeIndex[nix]        = nid;
 		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
+#if 1
 		// DEACTIVATE `ucList` 			
 		if (layer.gid == IBIT) {
 			// create group header
@@ -1525,6 +1526,7 @@ struct groupTree_t {
 			// bump versioned memory
 			layer.pChampionVersion->nextVersion();
 		}
+#endif
 
 		if (layer.gid == IBIT) {
 
