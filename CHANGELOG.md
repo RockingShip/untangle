@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-26 14:58:13 Fixed: Updating `weight`/`hiSlotIt`.
 2022-01-26 14:56:53 Fixed: Cartesian product iterator change detection.
 2022-01-26 14:54:04 Added: `groupTree_t::addCollapse()`.
 2022-01-26 14:51:17 Added: `groupTree_t::orphanNode()`.

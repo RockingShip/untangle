@@ -1229,7 +1229,8 @@ struct groupTree_t {
 
 		// update weight
 		assert(layer.loWeight < 1.0 / 0.0);
-		this->N[layer.gid].weight = layer.loWeight;
+		this->N[layer.gid].weight   = layer.loWeight;
+		this->N[layer.gid].hiSlotId = layer.hiSlotId;
 	}
 
 	/*
@@ -5022,13 +5023,6 @@ struct groupTree_t {
 				const groupNode_t *pNode         = this->N + iNode;
 				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
-				// must have valid weight
-				assert(pNode->weight < 1.0 / 0.0);
-				if (pNode->weight < gWeight)
-					gWeight = pNode->weight;
-				if (pNode->hiSlotId > gHiSlotId)
-					gHiSlotId = pNode->hiSlotId;
-
 				pNodeFound->mem[iNode] = pNodeFound->version; // mark node found
 
 				bool error = false;
@@ -5037,8 +5031,16 @@ struct groupTree_t {
 				if (pNode->gid != iGroup)
 					error = true;
 
+				double   nWeight   = db.signatures[pNode->sid].size;
+				uint32_t nHiSlotId = 0;
+
 				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 					uint32_t id = pNode->slots[iSlot];
+
+					// must have valid weight
+					nWeight += this->N[id].weight;
+					if (id > nHiSlotId)
+						nHiSlotId = id;
 
 					uint32_t latest = updateToLatest(id);
 
@@ -5055,6 +5057,18 @@ struct groupTree_t {
 						hasForward = true;
 					}
 				}
+
+				// node must have correct weight/hiSlotId
+				assert(pNode->weight == nWeight);
+				assert(pNode->hiSlotId == nHiSlotId);
+
+				// must have valid weight
+				assert(nWeight < 1.0 / 0.0);
+				if (pNode->weight < gWeight)
+					gWeight = pNode->weight;
+				if (pNode->hiSlotId > gHiSlotId)
+					gHiSlotId = pNode->hiSlotId;
+
 				if (pSidCount[pNode->sid] > 1)
 					error = true; // multi-sid
 
@@ -5067,7 +5081,8 @@ struct groupTree_t {
 					anyError = true;
 				}
 			}
-			// group must have minimal weight
+
+			// group must have correct weight/hiSlotId
 			assert(this->N[iGroup].weight == gWeight);
 			assert(this->N[iGroup].hiSlotId == gHiSlotId);
 		}
