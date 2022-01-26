@@ -1412,6 +1412,70 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2022-01-25 19:03:49
+	 * 
+	 * Collapse a group
+	 */
+	
+	void addCollapse(groupLayer_t &layer, uint32_t rhs) {
+		assert(rhs != IBIT);
+		assert(this->N[rhs].gid != IBIT); // node must be assigned to a group (old)
+
+		uint32_t rhsLatest = updateToLatest(rhs);
+		
+		assert(layer.gid != rhsLatest); // may not self-collapse
+		
+		/*
+		 * collapse the under-constructon list
+		 */
+		if (layer.ucList != IBIT) {
+
+			// orphan all nodes waiting construction and redirect to endpoint
+			while (layer.ucList != IBIT) {
+				// get id
+				uint32_t    nid    = layer.ucList;
+				groupNode_t *pNode = this->N + nid;
+
+				// unlink
+				if (pNode->next == nid) {
+					// this is last
+					layer.ucList = IBIT;
+				} else {
+					// unlink from list
+					layer.ucList = pNode->next;
+					unlinkNode(nid);
+				}
+
+				// redirect to entrypoint
+				pNode->gid = rhsLatest;
+			}
+		}
+		
+		/*
+		 * Collapse the group
+		 */
+		if (layer.gid != IBIT) {
+
+			// orphan all nodes and redirect to endpoint
+			for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+
+				// redirect to entrypoint
+				pNode->gid = rhsLatest;
+
+				// orphan node
+				iNode = orphanNode(layer, iNode); // returns previous node
+			}
+
+			// redirect group header
+			this->N[layer.gid].gid = rhsLatest;
+		}
+
+		// rediret layer
+		layer.gid = rhsLatest;
+	}
+
+	/*
 	 * @date 2022-01-21 21:35:02
 	 * 
 	 * Add a newly created node to layer.
@@ -3425,7 +3489,7 @@ struct groupTree_t {
 
 					assert(0); // todo: does this path get walked?
 
-					addOldNode(layer, folded);
+					addCollapse(layer, folded);
 
 					return IBIT; // return collapse
 				}
@@ -3449,7 +3513,9 @@ struct groupTree_t {
 				if (sid == db.SID_ZERO || sid == db.SID_SELF) {
 					uint32_t endpoint = (sid == db.SID_ZERO) ? 0 : finalSlots[0];
 
-					addOldNode(layer, endpoint);
+					// if layer==endpoint, then it is a self-collapse, else it is an endpoint collapse
+					if (layer.gid != endpoint)
+						addCollapse(layer, endpoint);
 
 					return IBIT; // return collapse
 				}
@@ -3554,9 +3620,14 @@ struct groupTree_t {
 						 * This is related to self-collapse "@date 2022-01-12 22:34:26".
 						 * The difference is that there the group already exists and a group-collapse would orphan the group invalidating all references to it.
 						 * Whereas here, the group is under construction, and suddenly detected it's an iterator/endpoint 
+						 * 
+						 * @date 2022-01-25 22:02:16
+						 * 
+						 * If `latest == layer.gid` then it is a self-collapse, otherwise it is an endpoint-collapse
 						 */
 
-						addOldNode(layer, nid);
+						if (layer.gid != latest)
+							addCollapse(layer, latest);
 
 						return IBIT; // return collapse
 					}
@@ -4087,6 +4158,7 @@ struct groupTree_t {
 					// orphan node
 					iNode = orphanNode(layer, iNode); // returns previous node
 				}
+
 				// let header redirect
 				this->N[layer.gid].gid = newGid;
 
