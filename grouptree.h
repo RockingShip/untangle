@@ -3578,17 +3578,34 @@ struct groupTree_t {
 						}
 
 					}
-				}
 
-				/*
-				 * did node reference in slots change group?
-				 */
-				for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
-					uint32_t id = finalSlots[iSlot];
+					/*
+					 * Did iterators change?
+					 */
+					if (this->N[Q].gid != Q || this->N[Tu].gid != Tu || this->N[F].gid != F)
+						goto restart; // yes
 
-					if (this->N[id].gid != id) {
-						printf("finalSlots restart\n");
-						goto restart;
+					/*
+					 * were groups merged that no becomes a self-collapse? 
+					 */if (layer.gid == Q || layer.gid == Tu || layer.gid == F)
+						 return IBIT; // endpoint-collapse
+
+					/*
+					 * did node reference in slots change group?
+					 */
+					for (unsigned iSlot = 0; iSlot < pSignature->numPlaceholder; iSlot++) {
+						uint32_t id = finalSlots[iSlot];
+
+						// did reference merge groups?
+						if (this->N[id].gid != id) {
+							//
+							printf("finalSlots restart\n");
+							goto restart;
+						}
+						
+						// is there an endpoint collapse
+						if (id == layer.gid)
+							return IBIT; // yes
 					}
 				}
 
@@ -4525,10 +4542,17 @@ struct groupTree_t {
 		unsigned numMark = 0;
 
 		while (iGroup < this->ncount) {
+
+			// stop at group headers
+			if (this->N[iGroup].gid != iGroup) {
+				iGroup++;
+				continue;
+			}
+
 			/*
 			 * Test if mark reached
 			 */
-			if (iGroup == mark) {
+			if (iGroup >= mark) {
 				// yes
 				mark = this->ncount;
 				numMark++;
@@ -4542,12 +4566,6 @@ struct groupTree_t {
 					iGroup = this->nstart;
 					continue;
 				}
-			}
-
-			// stop at group headers
-			if (this->N[iGroup].gid != iGroup) {
-				iGroup++;
-				continue;
 			}
 
 			assert(this->N[iGroup].next != iGroup); // group may not be empty
@@ -4567,19 +4585,24 @@ struct groupTree_t {
 			}
 
 			/*
-			 * Prepare layer for group and update
-			 */
-
-			newLayer.gid = iGroup;
-
-			/*
 			 * @date 2022-01-14 00:58:29
-			 * restartId will only change as a result of a nested `mergeGroup()`.
+			 * restartId will only change as a result of a nested `mergeGroups()`.
 			 * And it may point to the current `iGroup` in case a restart was requested
 			 * 
+			 * @date 2022-01-25 23:00:37
+			 * 
+			 * If iteration group is the layer, use that context
+			 * Else use a scratch context
 			 */
 			uint32_t restartId  = this->ncount;
-			updateGroup(newLayer, &restartId, /*allowForward=*/false);
+
+			if (layer.gid == iGroup) {
+				// use 
+				updateGroup(layer, &restartId, /*allowForward=*/false);
+			} else {
+				newLayer.gid = iGroup;
+				updateGroup(newLayer, &restartId, /*allowForward=*/false);
+			}
 
 			// update lowest
 			if (restartId < firstId)
