@@ -340,7 +340,7 @@ struct groupTree_t {
 	uint64_t                 cntUpdateGroupMerge;   // `updateGroup()` triggered a cascading `mergeGroup()`  
 	uint64_t                 cntApplySwapping;      // number of times to `applySwapping()` was applied
 	uint64_t                 cntApplyFolding;       // number of times to `applyFolding()` was applied
-	uint64_t                 cntMergeGroup;         // number of calls to `mergeGroup()`
+	uint64_t                 cntMergeGroups;        // number of calls to `mergeGroup()`
 	uint64_t                 cntAddNormaliseNode;   // number of calls to `addNormaliseNode()`
 	uint64_t                 cntAddBasicNode;       // number of calls to `addBasicNode()`
 	uint32_t                 cntUpdateGroup;        // number of calls to `updateGroup()`
@@ -412,7 +412,7 @@ struct groupTree_t {
 		cntUpdateGroupMerge(0),
 		cntApplySwapping(0),
 		cntApplyFolding(0),
-		cntMergeGroup(0),
+		cntMergeGroups(0),
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntUpdateGroup(0),
@@ -476,7 +476,7 @@ struct groupTree_t {
 		cntUpdateGroupMerge(0),
 		cntApplySwapping(0),
 		cntApplyFolding(0),
-		cntMergeGroup(0),
+		cntMergeGroups(0),
 		cntAddNormaliseNode(0),
 		cntAddBasicNode(0),
 		cntUpdateGroup(0),
@@ -1090,14 +1090,107 @@ struct groupTree_t {
 	};
 
 	/*
+	 * @date 2022-01-25 21:28:28
+	 * 
+	 * Orphan a node
+	 * returns the previous node in list
+	 * NOTE: set gid (if any) BEFORE calling
+	 */
+	uint32_t  orphanNode(groupLayer_t &layer, uint32_t rhs) {
+
+		groupNode_t *pNode = this->N + rhs;
+		
+		/*
+		 * remove orphan as first of under-construction list 
+		 */
+		if (layer.ucList == rhs) {
+			layer.ucList = pNode->next;
+
+			// erase list if it was only node
+			if (layer.ucList == rhs)
+				layer.ucList = IBIT;
+		}
+		
+		/*
+		 * Orphan node
+		 */
+		uint32_t prevId = pNode->prev;
+		unlinkNode(rhs);
+		
+		/*
+		 * Orphans must forward to something
+		 */
+		if (pNode->gid == IBIT) {
+			if (layer.gid != IBIT) {
+				// use group id
+				pNode->gid = layer.gid;
+				
+			} else if (layer.ucList != IBIT && this->N[layer.ucList].gid != IBIT) {
+				// use pending adoption
+				pNode->gid = this->N[layer.ucList].gid;
+				
+			} else {
+				// invalidate sid so the index will not find it
+				pNode->sid = 0;
+			}
+		}
+
+		/*
+		 * Need to update loWeight/hiSlotId?
+		 */
+
+	
+		if (layer.gid != IBIT) {
+			groupNode_t *pGroup = this->N + layer.gid;
+
+			if (pGroup->weight == pNode->weight || pGroup->hiSlotId == pNode->hiSlotId) {
+				double   gWeight   = 1.0 / 0.0; // +inf
+				uint32_t gHiSlotId = 0;
+
+				for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					const groupNode_t *pNode = this->N + iNode;
+
+					// must have valid weight
+					if (pNode->weight < gWeight)
+						gWeight   = pNode->weight;
+					if (pNode->hiSlotId > gHiSlotId)
+						gHiSlotId = pNode->hiSlotId;
+				}
+
+				// NOTE: group might be empty
+				pGroup->weight   = gWeight;
+				pGroup->hiSlotId = gHiSlotId;
+			}
+		}
+		
+		return prevId;
+	}
+
+	/*
 	 * @date 2022-01-05 17:29:57
 	 * 
 	 * Scan group and build indices
 	 */
 	void rebuildLayer(groupLayer_t &layer) {
-		// anything to rebuild
-		if (layer.gid == IBIT)
-			return; // no
+
+		// Attached to group?
+		if (layer.gid == IBIT) {
+			// no
+
+			/*
+			 * @date 2022-01-25 22:05:38
+			 * If under-construction list was adopted, then attach to its group
+			 */
+
+			if (layer.ucList != IBIT && this->N[layer.ucList].gid != IBIT) {
+				// attach
+				layer.gid    = this->N[layer.ucList].gid;
+				layer.ucList = IBIT;
+			} else {
+				// nothing to do
+				return; // no
+			}
+		}
 
 		assert(layer.ucList == IBIT); // when gid set, ucList is not allowed
 
@@ -1149,7 +1242,7 @@ struct groupTree_t {
 	 * 
 	 * NOTE: gid can be an entrypoint and should cause a group collapse.
 	 * NOTE: layer&rhs can refer to the same group.
-	 *       `mergeGroup() is entrypoint and duplicate aware.
+	 *       `mergeGroups() is entrypoint and duplicate aware.
 	 *       
 	 * layer | ucList | rhs | action
 	 * ------+--------+-----+-------
@@ -1185,7 +1278,7 @@ struct groupTree_t {
 			layer.gid    = updateToLatest(layer.ucList);
 			layer.ucList = IBIT;
 
-			// NOTE: [6] does `updateGroup()` and [7] does `mergeGroup()`. No need to rebuild layer
+			// NOTE: [6] does `updateGroup()` and [7] does `mergeGroups()`. No need to rebuild layer
 		}
 
 		/*
@@ -1239,8 +1332,7 @@ struct groupTree_t {
 
 						} else if (cmp > 0) {
 							// rhs is better (lighter weight), dismiss champion 
-							unlinkNode(champion);
-							assert(this->N[champion].gid != IBIT); // orphans must have a gid
+							orphanNode(layer, champion);
 
 						} else if (cmp == 0) {
 							assert(champion == rhs); // should have been detected
@@ -1431,7 +1523,13 @@ struct groupTree_t {
 		if (layer.gid != IBIT) {
 			// yes, finalise
 
-			if (layer.hiSlotId > layer.gid) {
+			/*
+			 * @date 2022-01-25 20:34:50
+			 * If a referenced group merges, it's id goes lower.
+			 * This leaves `hiSlotid` unchanged, making it undetected.
+			 * This optimisation needs a different mechanism
+			 */
+			if (true || layer.hiSlotId > layer.gid) {
 				resolveForwards(layer, layer.gid);
 				// gid might have outdated
 				layer.gid = updateToLatest(layer.gid);
@@ -2967,7 +3065,7 @@ struct groupTree_t {
 		this->cntAddBasicNode++;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
-			fprintf(stderr, "[%s] cntAddNormaliseNode=%lu cntAddBasicNode=%lu ncount=%u gcount=%u | cntOutdated=%lu cntRestart=%lu cntUpdateGroupCollapse=%lu cntUpdateGroupMerge=%lu cntApplySwapping=%lu cntApplyFolding=%lu cntMergeGroup=%lu\n", ctx.timeAsString(),
+			fprintf(stderr, "[%s] cntAddNormaliseNode=%lu cntAddBasicNode=%lu ncount=%u gcount=%u | cntOutdated=%lu cntRestart=%lu cntUpdateGroupCollapse=%lu cntUpdateGroupMerge=%lu cntApplySwapping=%lu cntApplyFolding=%lu cntMergeGroups=%lu\n", ctx.timeAsString(),
 				this->cntAddNormaliseNode,
 				this->cntAddBasicNode,
 				this->ncount,
@@ -2979,7 +3077,7 @@ struct groupTree_t {
 				this->cntUpdateGroupMerge,
 				this->cntApplySwapping,
 				this->cntApplyFolding,
-				this->cntMergeGroup
+				this->cntMergeGroups
 			);
 			ctx.tick = 0;
 
@@ -3113,7 +3211,9 @@ struct groupTree_t {
 				 * The offending assert can be on this recursion level or (most likely) higher.
 				 */
 				restart:
-				this->cntCproduct++;
+				
+				uint32_t cntCproduct = this->cntCproduct++;
+				(void) cntCproduct;
 
 				/*
 				 * @date 2022-01-14 02:10:15
@@ -3438,7 +3538,7 @@ struct groupTree_t {
 					// is node under construction?
 					if (this->N[nid].gid == IBIT)
 						continue; // yes, silently ignore
-	
+
 					uint32_t latest = updateToLatest(nid);
 
 					if (latest == Q || latest == Tu || latest == F) {
@@ -3489,15 +3589,7 @@ struct groupTree_t {
 
 						} else if (cmp > 0) {
 							// argument is better, dismiss champion 
-							unlinkNode(champion);
-							
-							// orphans must have a gid
-							if (this->N[champion].gid == IBIT) {
-								if (layer.gid != IBIT)
-									this->N[champion].gid = layer.gid; // make it redirect
-								else
-									this->N[champion].sid = 0; // invalidate it (creates an node leak)
-							}
+							orphanNode(layer, champion);
 
 						} else if (cmp == 0) {
 							assert(0); // should have been detected by `lookupNode()`.
@@ -3533,7 +3625,7 @@ struct groupTree_t {
 
 			/*
 			 * detect iterator-group change
-			 * this might happen when `mergeGroup()` involves an iterator group
+			 * this might happen when `mergeGroups()` involves an iterator group
 			 */
 
 			/*
@@ -3612,7 +3704,7 @@ struct groupTree_t {
 		assert(this->N[rhs].gid == rhs); // rhs must be latest header
 		assert(rhs < this->nstart || this->N[rhs].next != rhs); // rhs may not be empty (lhs may be empty for entrypoints)
 
-		this->cntMergeGroup++;
+		this->cntMergeGroups++;
 
 		/*
 		 * @date 2021-12-28 21:11:47
@@ -3641,14 +3733,14 @@ struct groupTree_t {
 			for (uint32_t iNode = this->N[rhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
-				// orphan node
-				uint32_t prevId = pNode->prev;
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink rhs=%u\n", iNode);
-				unlinkNode(iNode);
-				iNode = prevId;
 				// redirect to entrypoint
 				pNode->gid = lhs;
+
+				// orphan node
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink rhs=%u\n", iNode);
+				iNode = orphanNode(layer, iNode); // returns previous node
 			}
+
 			// let header redirect
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup redirect rhs=%u lhs=%u\n", this->N[rhs].gid, lhs);
 			this->N[rhs].gid = lhs;
@@ -3663,14 +3755,14 @@ struct groupTree_t {
 			for (uint32_t iNode = this->N[lhs].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 				groupNode_t *pNode = this->N + iNode;
 
-				// orphan node
-				uint32_t prevId = pNode->prev;
-				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink lhs=%u\n", iNode);
-				unlinkNode(iNode);
-				iNode = prevId;
 				// redirect to entrypoint
 				pNode->gid = rhs;
+
+				// orphan node
+				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink lhs=%u\n", iNode);
+				iNode = orphanNode(layer, iNode); // returns previous node
 			}
+
 			// let header redirect
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup redirect lhs=%u rhs=%u\n", this->N[lhs].gid, rhs);
 			this->N[lhs].gid = rhs;
@@ -3752,10 +3844,7 @@ struct groupTree_t {
 					// collapse, orphan
 
 					// unlink
-					uint32_t prevId = pNode->prev;
-					unlinkNode(iNode);
-					assert(this->N[iNode].gid != IBIT); // orphans must have a gid
-					iNode = prevId;
+					iNode = orphanNode(layer, iNode); // returns previous node
 				}
 			}
 
@@ -3780,11 +3869,8 @@ struct groupTree_t {
 					// collapse, orphan
 
 					// unlink
-					uint32_t prevId = pNode->prev;
 					if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("mergegroup unlink iNode=%u\n", iNode);
-					unlinkNode(iNode);
-					assert(this->N[iNode].gid != IBIT); // orphans must have a gid
-					iNode = prevId;
+					iNode = orphanNode(layer, iNode); // returns previous node
 				}
 			}
 
@@ -3906,15 +3992,14 @@ struct groupTree_t {
 				 * What theoretically happens:
 				 *  - Node A with a higher id references node B with a lower id.
 				 *  - At some point (most likely `expandSignature()`) concludes that both groups are identical.
-				 *  - `mergegroup()` will join both an "pulls" the higher id of A down to the lower id of B.
+				 *  - `mergegroups()` will join both an "pulls" the higher id of A down to the lower id of B.
 				 *  - If A directly references B it references itself basically folding to `a/[id]`.
 				 *  
 				 *  Note to myself: a self-collapse is a node collapse and should be ignored, overruling the previous assumption that it could be a group collapse.  
 				 */
 
 				if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup self=%u\n", iNode);
-				unlinkNode(iNode);
-				assert(this->N[iNode].gid != IBIT); // orphans must have a gid
+				orphanNode(layer, iNode);
 
 				continue;
 			}
@@ -3940,15 +4025,13 @@ struct groupTree_t {
 							gHiSlotId = this->N[champion].hiSlotId;
 
 						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old lose=%u champion=%u\n", iNode, champion);
-						unlinkNode(iNode);
-						assert(this->N[iNode].gid != IBIT); // orphans must have a gid
+						orphanNode(layer, iNode);
 						continue;
 
 					} else if (cmp > 0) {
 						// the original unchanged node is better, `champion` is incorrect, update it 
 						if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup old win=%u champion=%u\n", iNode, champion);
-						unlinkNode(champion);
-						assert(this->N[champion].gid != IBIT); // orphans must have a gid
+						orphanNode(layer, champion);
 
 					} else if (cmp == 0) {
 						assert(champion == iNode);
@@ -3971,8 +4054,7 @@ struct groupTree_t {
 
 			// orphan outdated node
 			if (ctx.opt_debug & context_t::DEBUGMASK_GTRACE) printf("updategroup changed=%u\n", iNode);
-			unlinkNode(iNode);
-			assert(this->N[iNode].gid != IBIT); // orphans must have a gid
+			orphanNode(layer, iNode);
 
 			/*
 			 * Finalise new node
@@ -3995,21 +4077,18 @@ struct groupTree_t {
 				// yes
 				uint32_t newGid = newSlots[0];
 
-				// orphangroup and redirect to endpoint
+				// orphan group and redirect to endpoint
 				for (uint32_t iNode = this->N[layer.gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 					groupNode_t *pNode = this->N + iNode;
 
-					// orphan node
-					uint32_t prevId = pNode->prev;
-					unlinkNode(iNode);
-					assert(this->N[iNode].gid != IBIT);
-					iNode = prevId;
-
 					// redirect to endpoint
 					pNode->gid = newGid;
+
+					// orphan node
+					iNode = orphanNode(layer, iNode); // returns previous node
 				}
 				// let header redirect
-				this->N[layer.gid].gid                                                            = newGid;
+				this->N[layer.gid].gid = newGid;
 
 				// update layer
 				layer.gid = newGid;
@@ -4092,8 +4171,7 @@ struct groupTree_t {
 
 				} else if (cmp > 0) {
 					// updated node is better, dismiss champion 
-					unlinkNode(champion);
-					assert(this->N[champion].gid != IBIT); // orphans must have a gid
+					orphanNode(layer, champion);
 
 				} else if (cmp == 0) {
 					assert(0); // should have been detected by `lookupNode()`.
@@ -4294,11 +4372,7 @@ struct groupTree_t {
 				showLine(pNode->gid, iNode, NULL, NULL, NULL);
 				printf(" break-resolveForwards\n");
 
-				// orphan node
-				uint32_t prevId = pNode->prev;
-				unlinkNode(iNode);
-				assert(this->N[iNode].gid != IBIT); // orphans must have a gid
-				iNode = prevId;
+				iNode = orphanNode(layer, iNode); // returns previous node
 
 				changed = true;
 			}
@@ -4409,8 +4483,13 @@ struct groupTree_t {
 			/*
 			 * @date 2022-01-25 11:49:09
 			 * No need to update group if it only references the past
+			 * 
+			 * @date 2022-01-25 20:34:50
+			 * If a referenced group merges, it's id goes lower.
+			 * This leaves `hiSlotid` unchanged, making it undetected.
+			 * This optimisation needs a different mechanism
 			 */
-			if (this->N[iGroup].hiSlotId > iGroup) {
+			if (false && this->N[iGroup].hiSlotId > iGroup) {
 				iGroup++;
 				continue;
 			}
@@ -5227,6 +5306,7 @@ struct groupTree_t {
 			nid = this->N[nid].gid;
 
 		// list header is non-info. Skip to next node
+		assert(this->N[nid].next != nid);
 		if (nid >= this->nstart && this->N[nid].sid == db.SID_SELF) {
 			/*
 			 * @date 2022-01-20 00:57:37

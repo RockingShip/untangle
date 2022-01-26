@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-26 14:51:17 Added: `groupTree_t::orphanNode()`.
 2022-01-25 14:47:36 Changed: Relocate C-product iterator changing group.
 2022-01-25 12:19:28 Deleted: Removed `groupLayer_t::needResolveForward`.
 2022-01-25 12:04:34 Added: (deactivated) `groupTree_t::`addNewNode()`.
