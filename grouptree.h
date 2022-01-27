@@ -1489,7 +1489,7 @@ struct groupTree_t {
 		assert(layer.gid != rhsLatest); // may not self-collapse
 
 		/*
-		 * collapse the under-constructon list
+		 * collapse the under-construction list
 		 */
 		if (layer.ucList != IBIT) {
 
@@ -3251,7 +3251,7 @@ struct groupTree_t {
 
 		// is it an argument-collapse?
 		if (Q == layer.gid || Tu == layer.gid || F == layer.gid)
-			return IBIT ^ layer.gid; // yes
+			return IBIT; // yes
 
 		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
 		assert(tlSlots[MAXSLOTS - 1] == 0);
@@ -3324,7 +3324,7 @@ struct groupTree_t {
 
 				if (cmp < 0) {
 					// existing is better
-					return layer.gid;
+					return 0;
 
 				} else if (cmp == 0) {
 					assert(0); // should have been detected by `lookupNode()`
@@ -3608,22 +3608,43 @@ struct groupTree_t {
 				}
 
 				/*
-				 * Does sid/finalSlots make a chance reaching the end mark
+				 * Does sid/finalSlots exist?
 				 */
-				{
-					// does group have a node with better sid?
-					uint32_t champion = layer.findChampion(sid);
-					if (champion != IBIT) {
-						int cmp = this->compare(champion, sid, finalSlots, weight);
 
-						if (cmp < 0) {
-							// existing is better
-							continue; // no, silently ignore
+				// lookup slots
+				nix = this->lookupNode(sid, finalSlots);
+				nid = this->nodeIndex[nix];
 
-						} else if (cmp == 0) {
-							continue; // no, duplicate
-						}
+				if (nid != 0) {
+					// is node under construction?
+					if (this->N[nid].gid == IBIT)
+						continue; // yes, silently ignore
+
+					uint32_t latest = updateToLatest(nid);
+
+					// is it a self-collapse?
+					if (layer.gid == latest)
+						continue; // yes, silently ignore
+
+					if (latest == Q || latest == Tu || latest == F || latest < this->nstart) {
+						addCollapse(layer, latest);
+						return IBIT; // return collapse
 					}
+
+					if (layer.gid == IBIT) {
+						layer.gid = latest;
+						rebuildLayer(layer);
+						continue;
+					}
+
+					if (layer.gid > latest) {
+						mergeGroups(layer, latest);
+						return IBIT;
+						
+					}
+
+					addOldNode(layer, nid);
+					continue;
 				}
 
 				signature_t *pSignature = db.signatures + sid;
@@ -3669,13 +3690,15 @@ struct groupTree_t {
 					/*
 					 * Did iterators change?
 					 */
-					if (this->N[Q].gid != Q || this->N[Tu].gid != Tu || this->N[F].gid != F)
+					if (this->N[Q].gid != Q || this->N[Tu].gid != Tu || this->N[F].gid != F) {
 						goto restart; // yes
+					}
 
 					/*
-					 * were groups merged that no becomes a self-collapse? 
-					 */if (layer.gid == Q || layer.gid == Tu || layer.gid == F)
-						return IBIT; // endpoint-collapse
+					 * were groups merged that now becomes a self-collapse? 
+					 */
+					if (layer.gid == Q || layer.gid == Tu || layer.gid == F || layer.gid < this->nstart)
+						 return IBIT; // endpoint/entrypoint-collapse
 
 					/*
 					 * did node reference in slots change group?
@@ -3685,7 +3708,7 @@ struct groupTree_t {
 
 						// did reference merge groups?
 						if (this->N[id].gid != id) {
-							//
+							// yes, recalculate `finalSLots[]`
 							printf("finalSlots restart\n");
 							goto restart;
 						}
@@ -3695,10 +3718,6 @@ struct groupTree_t {
 							return IBIT; // yes
 					}
 				}
-
-				/*
-				 * Does sid/finalSlots exist?
-				 */
 
 				// lookup slots
 				nix = this->lookupNode(sid, finalSlots);
@@ -3711,7 +3730,11 @@ struct groupTree_t {
 
 					uint32_t latest = updateToLatest(nid);
 
-					if (latest == Q || latest == Tu || latest == F) {
+					// is it a self-collapse?
+					if (layer.gid == latest)
+						continue; // yes, silently ignore
+
+					if (latest == Q || latest == Tu || latest == F || latest < this->nstart) {
 						/*
 						 * @date 2022-01-13 22:14:02
 						 * 
@@ -3730,21 +3753,34 @@ struct groupTree_t {
 						 * If `latest == layer.gid` then it is a self-collapse, otherwise it is an endpoint-collapse
 						 */
 
-						if (layer.gid != latest)
-							addCollapse(layer, latest);
+						addCollapse(layer, latest);
 
 						return IBIT; // return collapse
 					}
 
-					// add node and continue
-
-					// todo: schedule for removal: consider groupmerge a collapse (which it actually isnt)
-					uint32_t oldGid = layer.gid;
-					addOldNode(layer, nid);
-					if (layer.gid != oldGid) {
-						assert(layer.gid != IBIT);
-						return IBIT ^ layer.gid;
+					if (layer.gid == IBIT) {
+						layer.gid = latest;
+						rebuildLayer(layer);
+						continue;
 					}
+
+					/*
+					 * @date 2022-01-27 15:36:34
+					 * 
+					 * This is a weird situation.
+					 * In theory this is a connection to another group, with which it is merged
+					 * AND continue with the next Cartesian product.
+					 * 
+					 * However, if the merge would result in the gid becoming lower, there is a change loops might occur.
+					 * And this despite all the precautions that the merge results in a correct tree.
+					 */
+					if (layer.gid > latest) {
+						mergeGroups(layer, latest);
+						return IBIT;
+						
+					}
+
+					addOldNode(layer, nid);
 					continue;
 				}
 

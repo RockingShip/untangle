@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-27 19:25:20 Fixed: Cartesian product iterator change detection.
 2022-01-27 12:11:46 Fixed: `GroupTree_t::genSignature()` endpoint-collapse detection.
 2022-01-27 12:03:23 Changed: Spacing.
 2022-01-27 10:04:27 Added: Calculate exact weight (tree size) for 1n9 nodes.
