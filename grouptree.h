@@ -1193,6 +1193,8 @@ struct groupTree_t {
 				// invalidate sid so the index will not find it
 				pNode->sid = 0;
 			}
+
+			return prevId;
 		}
 
 		/*
@@ -1532,8 +1534,10 @@ struct groupTree_t {
 			this->N[layer.gid].gid = rhsLatest;
 		}
 
-		// rediret layer
+		// redirect layer
 		layer.gid = rhsLatest;
+		if (rhsLatest >= this->nstart)
+			rebuildLayer(layer);
 	}
 
 	/*
@@ -1563,10 +1567,6 @@ struct groupTree_t {
 		assert(this->N[nid].gid == IBIT); // node must be new
 
 		groupNode_t *pNode = this->N + nid;
-
-		// add node to index
-		this->nodeIndex[nix]        = nid;
-		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
 #if 1
 		// DEACTIVATE `ucList` 			
@@ -1626,6 +1626,10 @@ struct groupTree_t {
 			// append rhs node to group
 			linkNode(this->N[layer.gid].prev, nid);
 		}
+
+		// add node to index
+		this->nodeIndex[nix]        = nid;
+		this->nodeIndexVersion[nix] = this->nodeIndexVersionNr;
 
 		// add to champion index
 		layer.pChampionMap[pNode->sid]          = nid;
@@ -2371,6 +2375,14 @@ struct groupTree_t {
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
+				// endpoint collapse?
+				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT;
+				}
+
 				// call
 				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, depth + 1);
 
@@ -2391,7 +2403,7 @@ struct groupTree_t {
 				 * @date 2022-01-20 14:25:35
 				 * layer.gid might now be outdated
 				 */
-				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid)
+				if (layer.gid != IBIT)
 					rebuildLayer(layer);
 
 				/*
@@ -2406,19 +2418,6 @@ struct groupTree_t {
 					freeMap(pStack);
 					freeMap(pMap);
 					return ret;
-				}
-
-				// 
-				/*
-				 * @date 2022-01-22 17:14:12
-				 * is there an endpoint collapse?
-				 * To test this, layer.gid needs to be latest
-				 */
-				if (layer.gid != IBIT && layer.gid == newLayer.gid) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT ^ layer.gid;
 				}
 
 				// Push onto stack
@@ -2447,6 +2446,14 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
+				// endpoint collapse?
+				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT;
+				}
+
 				// NOTE: top-level, use same depth/indent as caller
 				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, depth);
 
@@ -2464,6 +2471,13 @@ struct groupTree_t {
 		assert(numStack == 1); // only result on stack
 
 		uint32_t ret = pStack[0]; // save before releasing
+
+		if (layer.gid == ret) {
+			// yes
+			freeMap(pStack);
+			freeMap(pMap);
+			return IBIT;
+		}
 
 		freeMap(pStack);
 		freeMap(pMap);
@@ -2817,6 +2831,14 @@ struct groupTree_t {
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
+				// endpoint collapse?
+				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT;
+				}
+
 				// call
 				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, depth + 1);
 
@@ -2837,7 +2859,7 @@ struct groupTree_t {
 				 * @date 2022-01-20 14:25:35
 				 * layer.gid might now be outdated
 				 */
-				if (layer.gid != IBIT && this->N[layer.gid].gid != layer.gid)
+				if (layer.gid != IBIT)
 					rebuildLayer(layer);
 
 				/*
@@ -2852,19 +2874,6 @@ struct groupTree_t {
 					freeMap(pStack);
 					freeMap(pMap);
 					return ret;
-				}
-
-				// 
-				/*
-				 * @date 2022-01-22 17:14:12
-				 * is there an endpoint collapse?
-				 * To test this, layer.gid needs to be latest
-				 */
-				if (layer.gid != IBIT && layer.gid == newLayer.gid) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT ^ layer.gid;
 				}
 
 				// Push onto stack
@@ -2893,6 +2902,14 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
+				// endpoint collapse?
+				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
+					// yes
+					freeMap(pStack);
+					freeMap(pMap);
+					return IBIT;
+				}
+
 				// NOTE: top-level, use same depth/indent as caller
 				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, depth);
 
@@ -2910,6 +2927,13 @@ struct groupTree_t {
 		assert(numStack == 1); // only result on stack
 
 		uint32_t ret = pStack[0]; // save before releasing
+
+		if (layer.gid == ret) {
+			// yes
+			freeMap(pStack);
+			freeMap(pMap);
+			return IBIT;
+		}
 
 		freeMap(pStack);
 		freeMap(pMap);
