@@ -69,6 +69,7 @@ binary-operators used in algebra can describe about 0.1% of them.
   - [Structure based compare](#structure-based-compare)
   - [Versioned memory](#versioned-memory)
   - [Member depreciation](#member-depreciation)
+  - [Database](#database)
   - [Manifest](#manifest)
   - [Requirements](#requirements)
   - [Building and Installation](#building-and-installation)
@@ -693,6 +694,102 @@ This approach reduces the overall computation to about 8 hours.
 The second challenge is the speed of updating the reference counts to update the prune ordering.  
 Sorting some 300k-700k elements is also highly time-consuming.  
 An alternative approach is to determine the relative distance in the waiting queue, and using memmove() to shift the intermediate areas.  
+
+## Database
+
+The database contains the analysis and interconnectivity of all structures within 4n9-6n9 space
+Is used to translate algebraic structures to fractal structures (and back).  
+replace "how it looks like" with "essence of what it does".  
+
+
+Algebraic structures are broken down    
+ 
+The database is a collection of sections consisting of a data and index part.  
+Indices are unique and are implemented as an open-bucket hash table with ancient origins.  
+The number of buckets must always be prime to ensure that the collision displacement will walk through all buckets.  
+The displacement is always the crc32 of the key value.  
+The contents of the bucket (index value) is the record id of the matching data.  
+An id of 0 (null) indicates that the index is free for use.  
+The code is easy extendable to handle deleting of records and index entries.
+
+The databsae sections are:
+
+  - Transform (metadata)
+  
+  - Evaluators (runtime )
+  
+  - Signatures
+    Usually referenced as `sid`.  
+    Contains the signature group representative which always has a transform id of 0 (no transform).  
+    Signature structure sizes are 4 nodes or less with 9 endpoint/placeholders (4n9). 
+    name is structure postfix notation.
+    contains structure properties.
+
+  - Swaps (structure property)
+    Symmetric signatures (communicative algebra) can swap/interchange endpoints.  
+    `Swaps` hold the transformations to perform the ordering of placeholders.
+    
+  - Imprints (associative lookup)
+    Associative lookup table for signatures.  
+    Tree evaluators can ultra high-speed determine the structure (`sid`) and relative transform alignment (`tid`).  
+    Storage size of this section is 20Gbyte.
+    There are 2.87e11 possible sid/tid combinations.
+      
+  - Members (Structure creator)
+  
+  - Patterns (Structure detector)
+    
+        
+## Preserving of information       
+
+The resulting set is the primary data with all fractal similarity removed.
+The ordering of nodes should be independent of the equation stored.
+
+operator Beweging
+waarde NULL 
+
+wat het ook doet is een dataset omzetten naar een formule.
+de interface aantal bits in en bits uit.
+bijverschijsel je kan expressie herstructureren. 
+alleen essentie wordt toegevoegd, de rest is een transformatie van reeds bekend.
+ 
+@date 2021-10-21 01:55:50
+
+`genpattern` first test run for 4n9.
+
+34311523 structures of which 5901064 are unique.
+need to apply sid swapping
+algebra redundancy
+verwijdert alle spiegelingen en transformaties.
+op lage level
+architectuur expressies uitrekenen afgewisseld met acties.
+logic niveau 3 operatoren. 
+wij hebben gekozen om informatie in termen van algebra te beschrijven en op te slaan, 
+daar zijn we voleddig op geconditioneerd.
+er is ook een ander manier, ...
+algebra legt de nadruk op variatie in operators.
+information storage like x^^^0
+ 
+
+----
+groupTree_t is the sid based 4n9 storage. (how it stores) 
+baseTree_t is the QTF (what it does) 
+groupTree has the advantage that all structures have tid=0
+Dataset for groupTree is provided by genpattern.
+Dataset for baseTree is provided by genmember.
+`Selftest` demonstrates by brutefocing all possibilities that the code is correct.
+buildX reerence implementation of examples such as hashes(md5,des), lookups(9bit) and integer numbers(adder,counter).
+`full`,`mixed`,`pure` setting for the actual QnTF (fractal) operator.
+GLOSSARY is a list of words used and their explantion.
+The list needs to be updated
+beval/beval/eval.    
+
+Complexity difference of both `compare()` implementations 
+
+groupTree also detects possible collapses between nodes.
+merging nodes trigger ripple detection across 4 recursive layers.
+ 
+
 
 ## Manifest
 

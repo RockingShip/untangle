@@ -51,6 +51,9 @@ Collection of used terms and codewords.
 
 * candidate
 
+* collapse
+   Structural collapse, most likely because a node folded resulting in a smaller structure.
+    
 * component 
 
 * coordinate
@@ -70,6 +73,10 @@ Collection of used terms and codewords.
     They are placeholder representing input variables or (more likely) the roots of other trees.
     The number of endpoints are the physical number of endpoints a tree can have. 
     The number of endpoints equals `"<number-of-nodes>*2+1"`.
+
+* fold
+
+  "Similar to "constant folding". 
    
 * footprint
 
@@ -90,7 +97,9 @@ Collection of used terms and codewords.
 * imprint
  
     Extension of `footprint` including all possible endpoint permutations.
-   
+
+* interleave 
+
 * kstart / istart / ostart / istart / nstart
     
     Tree indices indicating the start of variable groups with specific higher-level semantics.
@@ -179,6 +188,10 @@ Collection of used terms and codewords.
     
     `QTnF` representing `Q ? T : ~F` where T is never inverted and T is always inverted
  
+* recursive structures
+
+  `abc^abc^^!`=`abc^^`
+  
 * self
  
 * skin
@@ -201,7 +214,7 @@ Collection of used terms and codewords.
     the result/effect of the structure. There are two types of transforms, a forward and reverse. The reverse 
     transform is to undo the effect of the forward.
     
-* transparant skin
+* transparent skin
 
     The default skin "abcdefghi" which does not change the look or effect of a structure.
    

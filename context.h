@@ -232,7 +232,7 @@ struct context_t {
 	const char *timeAsString(void) {
 		static char tstr[64];
 
-		if (false) {
+		if (true) {
 			// relative
 			static time_t t0;
 			if (!t0)

@@ -4736,7 +4736,7 @@ struct groupTree_t {
 				}
 			}
 
-			assert(this->N[iGroup].next != iGroup); // group may not be empty
+			assert(this->N[iGroup].next != iGroup && "Most likely caused by a loop"); // group may not be empty
 
 			/*
 			 * @date 2022-01-25 11:49:09
