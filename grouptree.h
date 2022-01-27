@@ -999,7 +999,7 @@ struct groupTree_t {
 
 			freeVersion(pVersion);
 		}
-			
+
 		return nid;
 	}
 
@@ -1159,7 +1159,7 @@ struct groupTree_t {
 	uint32_t  orphanNode(groupLayer_t &layer, uint32_t rhs) {
 
 		groupNode_t *pNode = this->N + rhs;
-		
+
 		/*
 		 * remove orphan as first of under-construction list 
 		 */
@@ -1170,13 +1170,13 @@ struct groupTree_t {
 			if (layer.ucList == rhs)
 				layer.ucList = IBIT;
 		}
-		
+
 		/*
 		 * Orphan node
 		 */
 		uint32_t prevId = pNode->prev;
 		unlinkNode(rhs);
-		
+
 		/*
 		 * Orphans must forward to something
 		 */
@@ -1184,11 +1184,11 @@ struct groupTree_t {
 			if (layer.gid != IBIT) {
 				// use group id
 				pNode->gid = layer.gid;
-				
+
 			} else if (layer.ucList != IBIT && this->N[layer.ucList].gid != IBIT) {
 				// use pending adoption
 				pNode->gid = this->N[layer.ucList].gid;
-				
+
 			} else {
 				// invalidate sid so the index will not find it
 				pNode->sid = 0;
@@ -1199,7 +1199,7 @@ struct groupTree_t {
 		 * Need to update loWeight/hiSlotId?
 		 */
 
-	
+
 		if (layer.gid != IBIT) {
 			groupNode_t *pGroup = this->N + layer.gid;
 
@@ -1222,7 +1222,7 @@ struct groupTree_t {
 				pGroup->hiSlotId = gHiSlotId;
 			}
 		}
-		
+
 		return prevId;
 	}
 
@@ -1477,15 +1477,15 @@ struct groupTree_t {
 	 * 
 	 * Collapse a group
 	 */
-	
+
 	void addCollapse(groupLayer_t &layer, uint32_t rhs) {
 		assert(rhs != IBIT);
 		assert(this->N[rhs].gid != IBIT); // node must be assigned to a group (old)
 
 		uint32_t rhsLatest = updateToLatest(rhs);
-		
+
 		assert(layer.gid != rhsLatest); // may not self-collapse
-		
+
 		/*
 		 * collapse the under-constructon list
 		 */
@@ -1511,7 +1511,7 @@ struct groupTree_t {
 				pNode->gid = rhsLatest;
 			}
 		}
-		
+
 		/*
 		 * Collapse the group
 		 */
@@ -1619,7 +1619,7 @@ struct groupTree_t {
 			assert(this->N[layer.gid].gid == layer.gid); // layer must be latest
 			assert(layer.gid >= this->nstart); // entrypoints should have been handled
 			assert(layer.ucList == IBIT); // [4]/[5] list should have been merged
-			
+
 			// set gid
 			pNode->gid = layer.gid;
 
@@ -2383,7 +2383,7 @@ struct groupTree_t {
 					freeMap(pMap);
 					return IBIT ^ (IBIT - 1); // return silently-ignore
 				}
-				
+
 				// finalise
 				flushLayer(newLayer);
 
@@ -2829,7 +2829,7 @@ struct groupTree_t {
 					freeMap(pMap);
 					return IBIT ^ (IBIT - 1); // return silently-ignore
 				}
-				
+
 				// finalise
 				flushLayer(newLayer);
 
@@ -3282,7 +3282,7 @@ struct groupTree_t {
 
 			// create node
 			nid = this->newNode(tlSid, tlSlots, tlWeight);
-			
+
 			addNewNode(layer, nix, nid);
 
 			return 0; // success
@@ -3338,7 +3338,7 @@ struct groupTree_t {
 				 * The offending assert can be on this recursion level or (most likely) higher.
 				 */
 				restart:
-				
+
 				uint32_t cntCproduct = this->cntCproduct++;
 				(void) cntCproduct;
 
@@ -3651,7 +3651,7 @@ struct groupTree_t {
 					/*
 					 * were groups merged that no becomes a self-collapse? 
 					 */if (layer.gid == Q || layer.gid == Tu || layer.gid == F)
-						 return IBIT; // endpoint-collapse
+						return IBIT; // endpoint-collapse
 
 					/*
 					 * did node reference in slots change group?
@@ -3665,7 +3665,7 @@ struct groupTree_t {
 							printf("finalSlots restart\n");
 							goto restart;
 						}
-						
+
 						// is there an endpoint collapse
 						if (id == layer.gid)
 							return IBIT; // yes
