@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // usually here from within a debugger
+//#pragma GCC optimize ("O0") // usually here from within a debugger
 
 /*
  * geval.cc
@@ -87,6 +87,8 @@ struct gevalContext_t {
 	unsigned   opt_normalise;
 	/// @global {number} --seed=n, Random seed to generate evaluator test pattern
 	unsigned   opt_seed;
+	/// @var {number} --speed, Speed setting for `groupTree_t`.
+	unsigned   opt_speed;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -100,6 +102,7 @@ struct gevalContext_t {
 		opt_maxNode      = groupTree_t::DEFAULT_MAXNODE;
 		opt_normalise    = 0;
 		opt_seed         = 0x20210609;
+		opt_speed        = groupTree_t::DEFAULT_SPEED;
 		pStore           = NULL;
 	}
 
@@ -205,7 +208,10 @@ struct gevalContext_t {
 		uint32_t estart = ostart + numArgs;
 		uint32_t nstart = estart;
 
-		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, this->opt_maxDepth, ctx.flags);
+		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
+		pTree->maxDepth = this->opt_maxDepth;
+		pTree->speed = this->opt_speed;
+		
 
 		/*
 		 * Setup key/root names
@@ -263,9 +269,6 @@ struct gevalContext_t {
 				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg], pTransform + 1);
 			else
 				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg]);
-
-			pTree->dumpGroup(pTree->roots[ostart + iArg]);
-			printf("ncount=%u gcount=%u\n", pTree->ncount, pTree->gcount);
 		}
 
 		return pTree;
@@ -526,6 +529,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --maxnode=<number>      Maximum tree nodes [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet                 Say less\n");
 		fprintf(stderr, "\t   --seed=n                Random seed to generate evaluator test pattern. [Default=%u]\n", app.opt_seed);
+		fprintf(stderr, "\t   --speed=<number>        Speed setting [default=%d]\n", app.opt_speed);
 		fprintf(stderr, "\t-v --verbose               Say more\n");
 		fprintf(stderr, "\t   --timer=<seconds>       [default=%d]\n", ctx.opt_timer);
 
@@ -554,7 +558,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP     = 1, LO_DEBUG, LO_EXPLAIN, LO_MAXDEPTH, LO_MAXNODE, LO_SEED, LO_TIMER,
+			LO_HELP     = 1, LO_DEBUG, LO_EXPLAIN, LO_MAXDEPTH, LO_MAXNODE, LO_SEED, LO_SPEED, LO_TIMER,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_DATASIZE = 't', LO_NORMALISE = 'n', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -571,6 +575,7 @@ int main(int argc, char *argv[]) {
 			{"normalise",   0, 0, LO_NORMALISE},
 			{"quiet",       2, 0, LO_QUIET},
 			{"seed",        1, 0, LO_SEED},
+			{"speed",       1, 0, LO_SPEED},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
 			//
@@ -641,6 +646,9 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_SEED:
 			app.opt_seed = ::strtoul(optarg, NULL, 0);
+			break;
+		case LO_SPEED:
+			app.opt_speed = (unsigned) strtoul(optarg, NULL, 10);
 			break;
 		case LO_TIMER:
 			ctx.opt_timer = (unsigned) strtoul(optarg, NULL, 10);
