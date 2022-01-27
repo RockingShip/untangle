@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-27 10:04:27 Added: Calculate exact weight (tree size) for 1n9 nodes.
 2022-01-26 15:48:52 Changed: Tune to best results.
 2022-01-26 14:58:13 Fixed: Updating `weight`/`hiSlotIt`.
 2022-01-26 14:56:53 Fixed: Cartesian product iterator change detection.

@@ -940,6 +940,66 @@ struct groupTree_t {
 				pNode->hiSlotId = id;
 		}
 
+		/*
+		 * @date 2022-01-26 15:54:07
+		 * For 1n9, do an exact node count
+		 */
+		if (db.signatures[sid].size == 1) {
+			versionMemory_t *pVersion   = allocVersion();
+			uint32_t        thisVersion = pVersion->nextVersion();
+
+			uint32_t iGroup = 0;
+			uint32_t count = 1;
+
+			if (slots[0] >= this->nstart) {
+				if (slots[0] > iGroup)
+					iGroup = slots[0];
+				pVersion->mem[slots[0]] = thisVersion;
+			}
+
+			if (slots[1] >= this->nstart) {
+				if (slots[1] > iGroup)
+					iGroup = slots[1];
+				pVersion->mem[slots[1]] = thisVersion;
+			}
+
+			if (slots[2] != 0 && slots[2] >= this->nstart) {
+				if (slots[2] > iGroup)
+					iGroup = slots[2];
+				pVersion->mem[slots[2]] = thisVersion;
+			}
+
+			while (iGroup >= this->nstart) {
+
+				if (this->N[iGroup].gid != iGroup || pVersion->mem[iGroup] != thisVersion) {
+					iGroup--;
+					continue; // not a group header
+				}
+
+				count++;
+
+				for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+					groupNode_t *pN = this->N + iNode;
+
+					if (db.signatures[pN->sid].size != 1)
+						continue; // not 1n9
+
+					if (pVersion->mem[pN->slots[0]] != thisVersion)
+						pVersion->mem[pN->slots[0]] = thisVersion;
+					if (pVersion->mem[pN->slots[1]] != thisVersion)
+						pVersion->mem[pN->slots[1]] = thisVersion;
+					if (pN->slots[2] && pVersion->mem[pN->slots[2]] != thisVersion)
+						pVersion->mem[pN->slots[2]] = thisVersion;
+				}
+
+				iGroup--;
+			}
+
+			pNode->weight = count;
+
+			freeVersion(pVersion);
+		}
+			
 		return nid;
 	}
 
@@ -4070,7 +4130,13 @@ struct groupTree_t {
 					hasSelf = true;
 			}
 			assert(newWeight < 1.0 / 0.0); // +inf
-			pNode->weight = newWeight; // adding nodes to existing groups will change weights of references
+
+			/*
+			 * @date 2022-01-27 10:00:04
+			 * Calculating `1n9` exact weights is expensive, do NOT overwrite with a fast approximation 
+			 */
+			if (db.signatures[pNode->sid].size > 1)
+				pNode->weight = newWeight; // adding nodes to existing groups will change weights of references
 
 			// is it a self-collapse:
 			if (hasSelf) {
@@ -5061,7 +5127,7 @@ struct groupTree_t {
 				}
 
 				// node must have correct weight/hiSlotId
-				assert(pNode->weight == nWeight);
+//				assert(pNode->weight == nWeight); // 2022-01-25 20:34:50/2022-01-26 15:54:07 related
 				assert(pNode->hiSlotId == nHiSlotId);
 
 				// must have valid weight
@@ -5085,7 +5151,7 @@ struct groupTree_t {
 			}
 
 			// group must have correct weight/hiSlotId
-			assert(this->N[iGroup].weight == gWeight);
+//			assert(this->N[iGroup].weight == gWeight); // 2022-01-25 20:34:50/2022-01-26 15:54:07 related
 			assert(this->N[iGroup].hiSlotId == gHiSlotId);
 		}
 
