@@ -11,6 +11,10 @@ TODO: genpattern list
 
 ## [Unreleased]
 
+```
+2022-01-30 00:14:30 Fixed: Clear node index when `groupTree_t::lookupNode()` fails.
+```
+
 ## 2022-01-27 21:43:52 [Version 2.13.0]
 
 `groupTree_t`, the engine of untangle, is finally operational. The test wrapper being `geval`.

@@ -845,6 +845,7 @@ struct groupTree_t {
 			ctx.cntCompare++;
 			if (this->nodeIndexVersion[ix] != this->nodeIndexVersionNr) {
 				// let caller finalise index
+				this->nodeIndex[ix] = 0;
 				return ix;
 			}
 
