@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-31 20:06:43 Fixed: CRC calculation in `geval` and sync with `eval`.
 2022-01-31 16:54:35 Changed: Implement `gfold.cc`.
 2022-01-31 16:36:15 Fixed: Prefixes in transform strings.
 2022-01-31 15:31:50 Fixed: Harden `groupTree_t::loadStringSafe()` against inverted results.

@@ -100,7 +100,7 @@ struct bevalContext_t {
 		opt_force        = 0;
 		opt_maxNode      = DEFAULT_MAXNODE;
 		opt_normalise    = 0;
-		opt_seed         = 0x20210609;
+		opt_seed         = 1;
 		pStore           = NULL;
 	}
 
@@ -317,12 +317,10 @@ struct bevalContext_t {
 			}
 
 		} else {
-			// erase v[0]
-			for (unsigned i = 0; i < opt_dataSize; i++)
-				pFootprint[0][i] = 0;
+			srand(opt_seed);
 
 			// fill rest with random patterns
-			for (uint32_t iKey = 1; iKey < pTree->nstart; iKey++) {
+			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
 				uint64_t *v = pFootprint[iKey];
 
 				// craptastic random fill
@@ -333,6 +331,10 @@ struct bevalContext_t {
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
 				}
 			}
+
+			// erase v[0]
+			for (unsigned i = 0; i < opt_dataSize; i++)
+				pFootprint[0][i] = 0;
 		}
 
 		/*

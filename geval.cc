@@ -101,7 +101,7 @@ struct gevalContext_t {
 		opt_maxDepth     = groupTree_t::DEFAULT_MAXDEPTH;
 		opt_maxNode      = groupTree_t::DEFAULT_MAXNODE;
 		opt_normalise    = 0;
-		opt_seed         = 0x20210609;
+		opt_seed         = 1;
 		opt_speed        = groupTree_t::DEFAULT_SPEED;
 		pStore           = NULL;
 	}
@@ -322,9 +322,7 @@ struct gevalContext_t {
 			}
 
 		} else {
-			// erase v[0]
-			for (unsigned i = 0; i < opt_dataSize; i++)
-				pFootprint[0][i] = 0;
+			srand(opt_seed);
 
 			// fill rest with random patterns
 			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
@@ -338,6 +336,10 @@ struct gevalContext_t {
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
 				}
 			}
+
+			// erase v[0]
+			for (unsigned i = 0; i < opt_dataSize; i++)
+				pFootprint[0][i] = 0;
 		}
 
 		/*
@@ -397,7 +399,7 @@ struct gevalContext_t {
 				} else if (pNode->sid == pStore->SID_GT) {
 					Q  = pNode->slots[0];
 					Tu = pNode->slots[1];
-					Ti = 0;
+					Ti = IBIT;
 					F  = 0;
 					break;
 				} else if (pNode->sid == pStore->SID_NE) {

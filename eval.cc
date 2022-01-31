@@ -2128,19 +2128,22 @@ void initialiseVector(footprint_t *pFootprint, unsigned kstart, unsigned nstart)
 	} else {
 		srand(opt_seed);
 
-		uint64_t *v = (uint64_t *) pFootprint;
+		// fill rest with random patterns
+		for (uint32_t iKey = KSTART; iKey < nstart; iKey++) {
+			uint64_t *v = (uint64_t *) (pFootprint + iKey);
 
-		// craptastic random fill
-		for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT * nstart; i++) {
-			v[i] = (uint64_t) rand();
-			v[i] = (v[i] << 16) ^ (uint64_t) rand();
-			v[i] = (v[i] << 16) ^ (uint64_t) rand();
-			v[i] = (v[i] << 16) ^ (uint64_t) rand();
+			// craptastic random fill
+			for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++) {
+				v[i] = (uint64_t) rand();
+				v[i] = (v[i] << 16) ^ (uint64_t) rand();
+				v[i] = (v[i] << 16) ^ (uint64_t) rand();
+				v[i] = (v[i] << 16) ^ (uint64_t) rand();
+			}
 		}
 
 		// erase v[0]
-		for (int i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
-			v[i] = 0;
+		for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+			pFootprint[0].bits[i] = 0;
 
 	}
 }
