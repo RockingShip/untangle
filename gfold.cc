@@ -804,8 +804,11 @@ struct gfoldContext_t {
 				newSlotsClr[iSlot] = 0;
 			}
 
-			pMapSet[iGroup] = pTree->addNode(pNode->sid, newSlotsSet);
-			pMapClr[iGroup] = pTree->addNode(pNode->sid, newSlotsClr);
+			uint32_t Ri = 0;
+			pMapSet[iGroup] = pTree->addNode(pNode->sid, newSlotsSet, &Ri);
+			pMapSet[iGroup] ^= Ri;
+			pMapClr[iGroup] = pTree->addNode(pNode->sid, newSlotsClr, &Ri);
+			pMapClr[iGroup] ^= Ri;
 		}
 
 		/*

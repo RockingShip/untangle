@@ -2080,7 +2080,7 @@ struct groupTree_t {
 	 * Due to delayed group id creation, it is not always possible to return an id on success.
 	 * On success return 0.
 	 */
-	uint32_t __attribute__((used)) expandSignature(groupLayer_t &layer, uint32_t sid, const uint32_t *pSlots, unsigned depth) {
+	uint32_t __attribute__((used)) expandSignature(groupLayer_t &layer, uint32_t sid, const uint32_t *pSlots, unsigned depth, uint32_t *pInvert = NULL) {
 
 		signature_t *pSignature    = db.signatures + sid;
 		unsigned    numPlaceholder = pSignature->numPlaceholder;
@@ -2097,17 +2097,12 @@ struct groupTree_t {
 		uint32_t *pStack  = allocMap(); // evaluation stack
 		uint32_t *pMap    = allocMap(); // node id of intermediates
 
-		// component sid/slots
-		uint32_t cSid             = 0; // 0=error/folded
-		uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
-		assert(cSlots[MAXSLOTS - 1] == 0);
-
 		/*
 		 * Load string
 		 */
 		for (const char *pattern = pSignature->name; *pattern; pattern++) {
 
-			uint32_t Q, Tu, Ti, F;
+			uint32_t Q, T, F;
 
 			switch (*pattern) {
 			case '0': //
@@ -2164,8 +2159,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
-				Tu = 0;
-				Ti = IBIT;
+				T = IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2174,8 +2168,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = IBIT;
+				T = pStack[--numStack] ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2184,8 +2177,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
-				Tu = F;
-				Ti = IBIT;
+				T = F ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2194,8 +2186,7 @@ struct groupTree_t {
 				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = IBIT;
+				T = pStack[--numStack] ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2204,8 +2195,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = 0;
+				T = pStack[--numStack];
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2214,8 +2204,7 @@ struct groupTree_t {
 				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = 0;
+				T = pStack[--numStack];
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2226,6 +2215,14 @@ struct groupTree_t {
 			/*
 			 * Only arrive here when Q/T/F have been set 
 			 */
+
+			/*
+			 * Perform normalisation
+			 */
+
+			uint32_t Ri = normaliseQTF(Q, T, F);
+			uint32_t Tu = T & ~IBIT;
+			uint32_t Ti = T & IBIT;
 
 			/*
 			 * use the latest lists
@@ -2239,190 +2236,27 @@ struct groupTree_t {
 			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
+				assert(Ri == 0); // unknown how to handle this
 
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT ^ layer.gid;
+				return IBIT; // return collapse
 			}
 
-			/*
-			 * Perform normalisation
-			 */
-
-			/*
-			 * Level 2 normalisation: single node rewrites
-			 *
-			 * appreciated:
-			 *
-			 *  [ 0] a ? !0 : 0  ->  a
-			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
-			 *  [ 2] a ? !0 : b                  "+" OR
-			 *  [ 3] a ? !a : 0  ->  0
-			 *  [ 4] a ? !a : a  ->  a ? !a : 0
-			 *  [ 5] a ? !a : b  ->  b ? !a : b
-			 *  [ 6] a ? !b : 0                  ">" GREATER-THAN
-			 *  [ 7] a ? !b : a  ->  a ? !b : 0
-			 *  [ 8] a ? !b : b                  "^" NOT-EQUAL/XOR
-			 *  [ 9] a ? !b : c                  "!" QnTF
-			 *
-			 * depreciated:
-			 *  [10] a ?  0 : 0 -> 0
-			 *  [11] a ?  0 : a -> 0
-			 *  [12] a ?  0 : b -> b ? !a : 0
-			 *  [13] a ?  a : 0 -> a
-			 *  [14] a ?  a : a -> a ?  a : 0
-			 *  [15] a ?  a : b -> a ? !0 : b
-			 *  [16] a ?  b : 0                  "&" AND
-			 *  [17] a ?  b : a -> a ?  b : 0
-			 *  [18] a ?  b : b -> b
-			 *  [19] a ?  b : c                  "?" QTF
-			 *
-			  * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
-			  *
-			 */
-
-			/*
-			 * @date 2022-01-12 13:47:09
-			 * NOTE: for cSid==SID_SELF, `nid` will hold the id
-			 */
-			uint32_t nid = 0;
-
-			if (Q == 0) {
-				// level-1 fold
-				nid  = F;
-				cSid = db.SID_SELF;
-			} else if (Ti) {
-				if (Tu == 0) {
-					if (Q == F || F == 0) {
-						// [ 0] a ? !0 : 0  ->  a
-						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						nid  = Q;
-						cSid = db.SID_SELF;
-					} else {
-						// [ 2] a ? !0 : b  -> "+" OR
-						cSid = db.SID_OR;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-						}
-					}
-				} else if (Q == Tu) {
-					if (Q == F || F == 0) {
-						// [ 3] a ? !a : 0  ->  0
-						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						nid  = 0;
-						cSid = db.SID_SELF;
-					} else {
-						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						// WARNING: Converted LESS-THAN
-						Q    = F;
-						F    = 0;
-						cSid = db.SID_GT;
-					}
-				} else {
-					if (Q == F || F == 0) {
-						// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
-						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-						F    = 0;
-						cSid = db.SID_GT;
-					} else if (Tu == F) {
-						// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
-						cSid = db.SID_NE;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-							Tu            = savQ;
-						}
-					} else {
-						// [ 9] a ? !b : c  -> "!" QnTF
-						cSid = db.SID_QNTF;
-					}
-				}
-
-			} else {
-
-				if (Tu == 0) {
-					if (Q == F || F == 0) {
-						// [10] a ?  0 : 0 -> 0
-						// [11] a ?  0 : a -> 0
-						nid  = 0;
-						cSid = db.SID_SELF;
-					} else {
-						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						// WARNING: Converted LESS-THAN
-						Tu   = Q;
-						Ti   = IBIT;
-						Q    = F;
-						F    = 0;
-						cSid = db.SID_GT;
-					}
-				} else if (Q == Tu) {
-					if (Q == F || F == 0) {
-						// [13] a ?  a : 0 -> a
-						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						nid  = Q;
-						cSid = db.SID_SELF;
-					} else {
-						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-						Tu   = 0;
-						Ti   = IBIT;
-						cSid = db.SID_OR;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-						}
-					}
-				} else {
-					if (Q == F || F == 0) {
-						// [16] a ?  b : 0             "&" and
-						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-						F    = 0;
-						cSid = db.SID_AND;
-						// swap
-						if (Q > Tu) {
-							uint32_t savQ = Q;
-							Q             = Tu;
-							Tu            = savQ;
-						}
-					} else if (Tu == F) {
-						// [18] a ?  b : b -> b        ENDPOINT
-						nid  = F;
-						cSid = db.SID_SELF;
-					} else {
-						// [19] a ?  b : c             "?" QTF
-						cSid = db.SID_QTF;
-					}
-				}
-			}
-
-			if (cSid == db.SID_SELF) {
-				// folding occurred and result is in nid
+			if (T == F) {
+				// collapse
 
 				// Push onto stack
-				pStack[numStack++] = nid;
-				pMap[nextNode++]   = nid;
+				pStack[numStack++] = F ^ Ri;
+				pMap[nextNode++]   = F ^ Ri;
 
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
-				// endpoint collapse?
-				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT;
-				}
-
 				// call
-				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, depth + 1);
+				uint32_t ret = addBasicNode(newLayer, Q, Tu, Ti, F, depth + 1);
 
 				/*
 				 * @date 2022-01-24 19:38:12
@@ -2459,8 +2293,8 @@ struct groupTree_t {
 				}
 
 				// Push onto stack
-				pStack[numStack++] = newLayer.gid;
-				pMap[nextNode++]   = newLayer.gid;
+				pStack[numStack++] = newLayer.gid ^ Ri;
+				pMap[nextNode++]   = newLayer.gid ^ Ri;
 
 				/*
 				 * @date 2022-01-12 13:21:33
@@ -2484,19 +2318,14 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
-				// endpoint collapse?
-				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT;
-				}
-
 				// NOTE: top-level, use same depth/indent as caller
-				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, depth);
+				uint32_t ret = addBasicNode(layer, Q, Tu, Ti, F, depth);
 
 				freeMap(pStack);
 				freeMap(pMap);
+
+				if (pInvert)
+					*pInvert = Ri;
 
 				return ret;
 			}
@@ -2508,28 +2337,42 @@ struct groupTree_t {
 
 		assert(numStack == 1); // only result on stack
 
-		uint32_t ret = pStack[0]; // save before releasing
+		uint32_t R = pStack[0]; // save before releasing
+		
+		// normalization requested?
+		if (pInvert) {
+			// yes, return if result in inverted
+			*pInvert = R & IBIT;
+			// remove side-channel 
+			R &= ~IBIT;
+		} else {
+			assert(!(R & IBIT)); // caller must be prepared for this to be inverted
+		}
 
-		if (layer.gid == ret) {
+		// self-collapse
+		if (layer.gid == R) {
 			// yes
 			freeMap(pStack);
 			freeMap(pMap);
-			return IBIT;
+			assert(0); // does this happen
+			return IBIT ^ (IBIT - 1); // return silently-ignore
 		}
 
 		freeMap(pStack);
 		freeMap(pMap);
 
 		// merge result into group under construction
-		addOldNode(layer, ret);
+		addOldNode(layer, R);
 
 		return 0; // return success
 	}
 
 	/*
 	 * @date 2021-12-03 19:54:05
+	 * 
+	 * If slots need normalisation, supply `pInvert` which will hold IBIT if the result needs to be inverted
 	 */
-	uint32_t __attribute__((used)) expandMember(groupLayer_t &layer, uint32_t mid, const uint32_t *pSlots, unsigned depth) {
+	uint32_t __attribute__((used)) expandMember(groupLayer_t &layer, uint32_t mid, const uint32_t *pSlots, unsigned depth, uint32_t *pInvert = NULL) {
 
 		assert(mid != 0);
 
@@ -2549,18 +2392,13 @@ struct groupTree_t {
 		uint32_t *pStack  = allocMap(); // evaluation stack
 		uint32_t *pMap    = allocMap(); // node id of intermediates
 
-		// component sid/slots
-		uint32_t cSid             = 0; // 0=error/folded
-		uint32_t cSlots[MAXSLOTS] = {0}; // zero contents
-		assert(cSlots[MAXSLOTS - 1] == 0);
-
 		/*
 		 * Load string
 		 */
 //		printf("M %u:%s\n", mid, pMember->name);
 		for (const char *pattern = pMember->name; *pattern; pattern++) {
 
-			uint32_t Q, Tu, Ti, F;
+			uint32_t Q, T, F;
 
 			switch (*pattern) {
 			case '0': //
@@ -2620,8 +2458,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
-				Tu = 0;
-				Ti = IBIT;
+				T = IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2630,8 +2467,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = IBIT;
+				T = pStack[--numStack] ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2640,8 +2476,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = pStack[--numStack];
-				Tu = F;
-				Ti = IBIT;
+				T = F ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2650,8 +2485,7 @@ struct groupTree_t {
 				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = IBIT;
+				T = pStack[--numStack] ^ IBIT;
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2660,8 +2494,7 @@ struct groupTree_t {
 				assert(numStack >= 2);
 
 				F  = 0;
-				Tu = pStack[--numStack];
-				Ti = 0;
+				T = pStack[--numStack];
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2670,8 +2503,7 @@ struct groupTree_t {
 				assert(numStack >= 3);
 
 				F  = pStack[--numStack];
-				Tu = pStack[--numStack];
-				Ti = 0;
+				T = pStack[--numStack];
 				Q  = pStack[--numStack];
 				break;
 			}
@@ -2682,6 +2514,14 @@ struct groupTree_t {
 			/*
 			 * Only arrive here when Q/T/F have been set 
 			 */
+
+			/*
+			 * Perform normalisation
+			 */
+
+			uint32_t Ri = normaliseQTF(Q, T, F);
+			uint32_t Tu = T & ~IBIT;
+			uint32_t Ti = T & IBIT;
 
 			/*
 			 * use the latest lists
@@ -2695,190 +2535,27 @@ struct groupTree_t {
 			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
+				assert(Ri == 0); // unknown how to handle this
 
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT ^ layer.gid;
+				return IBIT; // return collapse
 			}
 
-			/*
-			 * Perform normalisation
-			 */
-
-			/*
-			 * Level 2 normalisation: single node rewrites
-			 *
-			 * appreciated:
-			 *
-			 *  [ 0] a ? !0 : 0  ->  a
-			 *  [ 1] a ? !0 : a  ->  a ? !0 : 0
-			 *  [ 2] a ? !0 : b                  "+" OR
-			 *  [ 3] a ? !a : 0  ->  0
-			 *  [ 4] a ? !a : a  ->  a ? !a : 0
-			 *  [ 5] a ? !a : b  ->  b ? !a : b
-			 *  [ 6] a ? !b : 0                  ">" GREATER-THAN
-			 *  [ 7] a ? !b : a  ->  a ? !b : 0
-			 *  [ 8] a ? !b : b                  "^" NOT-EQUAL/XOR
-			 *  [ 9] a ? !b : c                  "!" QnTF
-			 *
-			 * depreciated:
-			 *  [10] a ?  0 : 0 -> 0
-			 *  [11] a ?  0 : a -> 0
-			 *  [12] a ?  0 : b -> b ? !a : 0
-			 *  [13] a ?  a : 0 -> a
-			 *  [14] a ?  a : a -> a ?  a : 0
-			 *  [15] a ?  a : b -> a ? !0 : b
-			 *  [16] a ?  b : 0                  "&" AND
-			 *  [17] a ?  b : a -> a ?  b : 0
-			 *  [18] a ?  b : b -> b
-			 *  [19] a ?  b : c                  "?" QTF
-			 *
-			  * ./eval --raw 'a0a!' 'a0b!' 'aaa!' 'aab!' 'aba!' 'abb!' 'abc!' 'a0a?' 'a0b?' 'aaa?' 'aab?' 'aba?' 'abb?' 'abc?'
-			  *
-			 */
-
-			/*
-			 * @date 2022-01-12 13:47:09
-			 * NOTE: for cSid==SID_SELF, `nid` will hold the id
-			 */
-			uint32_t nid = 0;
-
-			if (Q == 0) {
-				// level-1 fold
-				nid  = F;
-				cSid = db.SID_SELF;
-			} else if (Ti) {
-				if (Tu == 0) {
-					if (Q == F || F == 0) {
-						// [ 0] a ? !0 : 0  ->  a
-						// [ 1] a ? !0 : a  ->  a ? !0 : 0 -> a
-						nid  = Q;
-						cSid = db.SID_SELF;
-					} else {
-						// [ 2] a ? !0 : b  -> "+" OR
-						cSid = db.SID_OR;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-						}
-					}
-				} else if (Q == Tu) {
-					if (Q == F || F == 0) {
-						// [ 3] a ? !a : 0  ->  0
-						// [ 4] a ? !a : a  ->  a ? !a : 0 -> 0
-						nid  = 0;
-						cSid = db.SID_SELF;
-					} else {
-						// [ 5] a ? !a : b  ->  b ? !a : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						// WARNING: Converted LESS-THAN
-						Q    = F;
-						F    = 0;
-						cSid = db.SID_GT;
-					}
-				} else {
-					if (Q == F || F == 0) {
-						// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
-						// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
-						F    = 0;
-						cSid = db.SID_GT;
-					} else if (Tu == F) {
-						// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
-						cSid = db.SID_NE;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-							Tu            = savQ;
-						}
-					} else {
-						// [ 9] a ? !b : c  -> "!" QnTF
-						cSid = db.SID_QNTF;
-					}
-				}
-
-			} else {
-
-				if (Tu == 0) {
-					if (Q == F || F == 0) {
-						// [10] a ?  0 : 0 -> 0
-						// [11] a ?  0 : a -> 0
-						nid  = 0;
-						cSid = db.SID_SELF;
-					} else {
-						// [12] a ?  0 : b -> b ? !a : 0  ->  ">" GREATER-THAN
-						// WARNING: Converted LESS-THAN
-						Tu   = Q;
-						Ti   = IBIT;
-						Q    = F;
-						F    = 0;
-						cSid = db.SID_GT;
-					}
-				} else if (Q == Tu) {
-					if (Q == F || F == 0) {
-						// [13] a ?  a : 0 -> a
-						// [14] a ?  a : a -> a ?  a : 0 -> a ? !0 : 0 -> a
-						nid  = Q;
-						cSid = db.SID_SELF;
-					} else {
-						// [15] a ?  a : b -> a ? !0 : b -> "+" OR
-						Tu   = 0;
-						Ti   = IBIT;
-						cSid = db.SID_OR;
-						// swap
-						if (Q > F) {
-							uint32_t savQ = Q;
-							Q             = F;
-							F             = savQ;
-						}
-					}
-				} else {
-					if (Q == F || F == 0) {
-						// [16] a ?  b : 0             "&" and
-						// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
-						F    = 0;
-						cSid = db.SID_AND;
-						// swap
-						if (Q > Tu) {
-							uint32_t savQ = Q;
-							Q             = Tu;
-							Tu            = savQ;
-						}
-					} else if (Tu == F) {
-						// [18] a ?  b : b -> b        ENDPOINT
-						nid  = F;
-						cSid = db.SID_SELF;
-					} else {
-						// [19] a ?  b : c             "?" QTF
-						cSid = db.SID_QTF;
-					}
-				}
-			}
-
-			if (cSid == db.SID_SELF) {
-				// folding occurred and result is in nid
+			if (T == F) {
+				// collapse
 
 				// Push onto stack
-				pStack[numStack++] = nid;
-				pMap[nextNode++]   = nid;
+				pStack[numStack++] = F ^ Ri;
+				pMap[nextNode++]   = F ^ Ri;
 
 			} else if (pattern[1]) {
 
 				// allocate storage for scope
 				groupLayer_t newLayer(*this, &layer);
 
-				// endpoint collapse?
-				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT;
-				}
-
 				// call
-				uint32_t ret = addBasicNode(newLayer, cSid, Q, Tu, Ti, F, depth + 1);
+				uint32_t ret = addBasicNode(newLayer, Q, Tu, Ti, F, depth + 1);
 
 				/*
 				 * @date 2022-01-24 19:38:12
@@ -2915,8 +2592,8 @@ struct groupTree_t {
 				}
 
 				// Push onto stack
-				pStack[numStack++] = newLayer.gid;
-				pMap[nextNode++]   = newLayer.gid;
+				pStack[numStack++] = newLayer.gid ^ Ri;
+				pMap[nextNode++]   = newLayer.gid ^ Ri;
 
 				/*
 				 * @date 2022-01-12 13:21:33
@@ -2940,19 +2617,14 @@ struct groupTree_t {
 			} else {
 				assert(numStack == 0);
 
-				// endpoint collapse?
-				if (layer.gid == Q || layer.gid == Tu || layer.gid == F) {
-					// yes
-					freeMap(pStack);
-					freeMap(pMap);
-					return IBIT;
-				}
-
 				// NOTE: top-level, use same depth/indent as caller
-				uint32_t ret = addBasicNode(layer, cSid, Q, Tu, Ti, F, depth);
+				uint32_t ret = addBasicNode(layer, Q, Tu, Ti, F, depth);
 
 				freeMap(pStack);
 				freeMap(pMap);
+
+				if (pInvert)
+					*pInvert = Ri;
 
 				return ret;
 			}
@@ -2964,20 +2636,32 @@ struct groupTree_t {
 
 		assert(numStack == 1); // only result on stack
 
-		uint32_t ret = pStack[0]; // save before releasing
+		uint32_t R = pStack[0]; // save before releasing
 
-		if (layer.gid == ret) {
+		// normalization requested?
+		if (pInvert) {
+			// yes, return if result in inverted
+			*pInvert = R & IBIT;
+			// remove side-channel 
+			R &= ~IBIT;
+		} else {
+			assert(!(R & IBIT)); // caller must be prepared for this to be inverted
+		}
+
+		// self-collapse
+		if (layer.gid == R) {
 			// yes
 			freeMap(pStack);
 			freeMap(pMap);
-			return IBIT;
+			assert(0); // does this happen
+			return IBIT ^ (IBIT - 1); // return silently-ignore
 		}
 
 		freeMap(pStack);
 		freeMap(pMap);
 
 		// merge result into group under construction
-		addOldNode(layer, ret);
+		addOldNode(layer, R);
 
 		return 0; // return success
 	}
@@ -2985,9 +2669,9 @@ struct groupTree_t {
 	/*
 	 * @date 2022-01-28 16:41:49
 	 */
-	uint32_t addNode (uint32_t sid, const uint32_t *pSlots) {
+	uint32_t addNode (uint32_t sid, const uint32_t *pSlots, uint32_t *pInvert = NULL) {
 
-		if ((ctx.flags & context_t::MAGICMASK_PARANOID) && sid != db.SID_SELF) {
+		if ((ctx.flags & context_t::MAGICMASK_PARANOID) && sid != db.SID_SELF && pInvert == NULL) {
 			unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
 			// may not be zero
 			assert(numPlaceholder < 1 || pSlots[0] != 0);
@@ -3033,17 +2717,28 @@ struct groupTree_t {
 		groupLayer_t layer(*this, NULL);
 
 		if (!this->useExpandMember) {
-			expandSignature(layer, sid, pSlots, 0);
+			expandSignature(layer, sid, pSlots, 0, pInvert);
+			assert(layer.gid != IBIT); // top-level calls should not be ignored
 
 		} else {
+			bool     once = true;
+			uint32_t Ri   = 0;
+			
 			for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-				uint32_t ret = expandMember(layer, mid, pSlots, 0);
-
-				// silently ignore
-				if (ret == (IBIT ^ (IBIT-1)))
-					continue;
+				expandMember(layer, mid, pSlots, 0, pInvert);
+				assert(layer.gid != IBIT); // top-level calls should not be ignored
 			}
 
+			if (pInvert) {
+				if (once) {
+					// save if result is inverted
+					Ri   = *pInvert;
+					once = false;
+				} else {
+					// must be consistent
+					assert(Ri == *pInvert);
+			}
+			}
 		}
 
 		// finalise
@@ -3318,8 +3013,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
  		 *
 		 */
 
-		uint32_t tlSid = 0;
-
 		// NOTE: Q/T/F comparisons are value based, so OR/NR/AND swapping is easily implemented 
 		if (Ti) {
 			// as you might notice, once `Ti` is set, it stays set
@@ -3331,7 +3024,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					return Q;
 				} else {
 					// [ 2] a ? !0 : b  -> "+" OR
-					tlSid = db.SID_OR;
 					// swap
 					if (Q > F) {
 						uint32_t savQ = Q;
@@ -3349,17 +3041,14 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					// WARNING: Converted LESS-THAN
 					Q     = F;
 					F     = 0;
-					tlSid = db.SID_GT;
 				}
 			} else {
 				if (Q == F || F == 0) {
 					// [ 6] a ? !b : 0  ->  ">" GREATER-THAN
 					// [ 7] a ? !b : a  ->  a ? !b : 0  ->  ">" GREATER-THAN
 					F     = 0;
-					tlSid = db.SID_GT;
 				} else if (Tu == F) {
 					// [ 8] a ? !b : b  -> "^" NOT-EQUAL/XOR
-					tlSid = db.SID_NE;
 					// swap
 					if (Q > F) {
 						uint32_t savQ = Q;
@@ -3369,7 +3058,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					}
 				} else {
 					// [ 9] a ? !b : c  -> "!" QnTF
-					tlSid = db.SID_QNTF;
 				}
 			}
 
@@ -3387,7 +3075,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					Ti    = IBIT;
 					Q     = F;
 					F     = 0;
-					tlSid = db.SID_GT;
 				}
 			} else if (Q == Tu) {
 				if (Q == F || F == 0) {
@@ -3398,7 +3085,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					// [15] a ?  a : b -> a ? !0 : b -> "+" OR
 					Tu    = 0;
 					Ti    = IBIT;
-					tlSid = db.SID_OR;
 					// swap
 					if (Q > F) {
 						uint32_t savQ = Q;
@@ -3411,7 +3097,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					// [16] a ?  b : 0             "&" and
 					// [17] a ?  b : a -> a ?  b : 0 -> "&" AND
 					F     = 0;
-					tlSid = db.SID_AND;
 					// swap
 					if (Q > Tu) {
 						uint32_t savQ = Q;
@@ -3423,7 +3108,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					return F;
 				} else {
 					// [19] a ?  b : c             "?" QTF
-					tlSid = db.SID_QTF;
 				}
 			}
 		}
@@ -3436,7 +3120,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		/*
 		 * call worker
 		 */
-		addBasicNode(layer, tlSid, Q, Tu, Ti, F, /*depth=*/0);
+		addBasicNode(layer, Q, Tu, Ti, F, /*depth=*/0);
 
 		// finalise
 		flushLayer(layer);
@@ -3483,7 +3167,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 * @param {unsigned}         depth - Recursion depth
 	 * @return {number} newly created node Id, or IBIT when collapsed.
 	 */
-	uint32_t addBasicNode(groupLayer_t &layer, uint32_t tlSid, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, unsigned depth) {
+	uint32_t addBasicNode(groupLayer_t &layer, uint32_t Q, uint32_t Tu, uint32_t Ti, uint32_t F, unsigned depth) {
 		this->cntAddBasicNode++;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK && ctx.tick) {
@@ -3524,10 +3208,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		if (Q == layer.gid || Tu == layer.gid || F == layer.gid)
 			return IBIT; // yes
 
-		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
-		assert(tlSlots[MAXSLOTS - 1] == 0);
-		double tlWeight;
-
 		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
 			printf("%.*sQ=%u T=%u%s F=%u",
 			       depth, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
@@ -3537,16 +3217,54 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			printf("\n");
 		}
 
-		// set (and order) slots
-		if (tlSid == db.SID_OR || tlSid == db.SID_NE) {
-			tlSlots[0] = Q;
-			tlSlots[1] = F;
-			tlWeight = 1 + this->N[Q].weight + this->N[F].weight;
-		} else if (tlSid == db.SID_GT || tlSid == db.SID_AND) {
+		/*
+		 * @date 2022-01-31 21:48:35
+		 * 
+		 * Determine sid/slots for node lookup
+		 * 
+		 *   a ? !0 : b   "+" OR
+		 *   a ? !b : 0   ">" GREATER-THAN
+	         *   a ? !b : b   "^" NOT-EQUAL/XOR
+		 *   a ? !b : c   "!" QnTF
+		 *   a ?  b : 0   "&" AND
+		 *   a ?  b : c   "?" QTF
+		 */
+
+		uint32_t tlSid;
+		uint32_t tlSlots[MAXSLOTS] = {0}; // zero contents
+		double   tlWeight;
+		assert(tlSlots[MAXSLOTS - 1] == 0);
+
+		if (Ti) {
+			if (Tu == 0) {
+				tlSid = db.SID_OR;
+				tlSlots[0] = Q;
+				tlSlots[1] = F;
+				tlWeight = 1 + this->N[Q].weight + this->N[F].weight;
+			} else if (F == 0) {
+				tlSid = db.SID_GT;
+				tlSlots[0] = Q;
+				tlSlots[1] = Tu;
+				tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight;
+			} else if (F == Tu) {
+				tlSid = db.SID_NE;
+				tlSlots[0] = Q;
+				tlSlots[1] = Tu;
+				tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight;
+			} else {
+				tlSid = db.SID_QNTF;
+				tlSlots[0] = Q;
+				tlSlots[1] = Tu;
+				tlSlots[2] = F;
+				tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight + this->N[F].weight;
+			}
+		} else if (F == 0) {
+			tlSid = db.SID_AND;
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
 			tlWeight = 1 + this->N[Q].weight + this->N[Tu].weight;
 		} else {
+			tlSid = db.SID_QTF;
 			tlSlots[0] = Q;
 			tlSlots[1] = Tu;
 			tlSlots[2] = F;
@@ -5829,7 +5547,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		unsigned nextLocalNodeId = 0;
 
 		/*
-		 * First node in group list is SID_SELF
+		 * First node in group list is SID_SELF (this needs to be redesigned, based on best weight first)
 		 */
 
 		// update to latest only for orphaned groups
@@ -7185,8 +6903,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				newSlotsClr[iSlot] = 0;
 			}
 
-			pMapSet[iGroup] = this->addNode(pNode->sid, newSlotsSet);
-			pMapClr[iGroup] = this->addNode(pNode->sid, newSlotsClr);
+			uint32_t Ri = 0;
+			pMapSet[iGroup] = this->addNode(pNode->sid, newSlotsSet, &Ri);
+			pMapSet[iGroup] ^= Ri;
+			pMapClr[iGroup] = this->addNode(pNode->sid, newSlotsClr, &Ri);
+			pMapClr[iGroup] ^= Ri;
 		}
 
 		/*
