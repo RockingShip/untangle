@@ -6347,9 +6347,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 			nid = addNormaliseNode(Q, Tu ^ Ti, F);
 
-			uint32_t latest = nid;
-			while (latest != this->N[latest].gid)
-				latest = this->N[latest].gid;
+			uint32_t latest = updateToLatest(nid & ~IBIT) ^ (nid & IBIT);
 
 			if (ctx.opt_debug & ctx.DEBUGMASK_GROUPEXPR)
 				printf("### %s\n", saveString(latest).c_str());
@@ -6385,8 +6383,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		/*
 		 * Return most recent group
 		 */
-		while (ret != this->N[ret].gid)
-			ret = this->N[ret].gid;
+		ret = updateToLatest(ret & ~IBIT) ^ (ret & IBIT);
 
 		return ret;
 	}
