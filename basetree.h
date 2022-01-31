@@ -3463,7 +3463,7 @@ struct baseTree_t {
 				if (!islower(*pTransform))
 					ctx.fatal("[transform string non alphabetic]\n");
 
-				transformList[t] = (value + 1) * 26 + *pTransform++ - 'a' + kstart;
+				transformList[t] = value * 26 + *pTransform++ - 'a' + kstart;
 
 			} else {
 				ctx.fatal("[bad token '%c' in transform]\n", *pTransform);
@@ -3846,7 +3846,7 @@ struct baseTree_t {
 					/*
 					 * prefixed endpoint
 					 */
-					v = this->kstart + ((v + 1) * 26 + *pattern - 'a');
+					v = this->kstart + (v * 26 + *pattern - 'a');
 
 					if (v < this->kstart || v >= this->nstart)
 						ctx.fatal("[endpoint out of range: %d]\n", v);

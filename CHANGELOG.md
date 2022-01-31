@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-31 16:36:15 Fixed: Prefixes in transform strings.
 2022-01-31 15:31:50 Fixed: Harden `groupTree_t::loadStringSafe()` against inverted results.
 2022-01-31 15:30:26 Added: `groupTree_t::useExpandMember`.
 2022-01-31 15:03:16 Changed: Lost+Found

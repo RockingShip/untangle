@@ -6098,11 +6098,14 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				if (!islower(*pTransform))
 					ctx.fatal("[transform string non alphabetic]\n");
 
-				transformList[t] = (value + 1) * 26 + *pTransform++ - 'a' + kstart;
+				transformList[t] = value * 26 + *pTransform++ - 'a' + kstart;
 
 			} else {
 				ctx.fatal("[bad token '%c' in transform]\n", *pTransform);
 			}
+			
+			if (transformList[t] >= nstart)
+				ctx.fatal("[transformed endpoint out of range endpoint=%u nstart=%u]\n", transformList[t], nstart);
 		}
 
 		if (*pTransform)

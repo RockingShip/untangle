@@ -61,7 +61,7 @@ int decodeNode(const char *pName) {
 	if (!isdigit(*pName))
 		return -1;
 
-	return (value + 1) * 10 + *pName - '0';
+	return value * 10 + *pName - '0';
 }
 
 int decodeSlot(const char *pName) {
@@ -77,7 +77,7 @@ int decodeSlot(const char *pName) {
 	if (!islower(*pName))
 		return -1;
 
-	return (value + 1) * 26 + *pName - 'a';
+	return value * 26 + *pName - 'a';
 }
 
 int main(int argc, char *const *argv) {
@@ -88,7 +88,7 @@ int main(int argc, char *const *argv) {
 	for (int i = 10; i < 10000000; i++) {
 
 		// base prefix
-		char *pName = encodePrefix(name, (i - 10) / 10);
+		char *pName = encodePrefix(name, i / 10);
 
 		// append slot
 		*pName++ = '0' + (i % 10);
