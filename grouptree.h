@@ -2983,6 +2983,81 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2022-01-28 16:41:49
+	 */
+	uint32_t addNode (uint32_t sid, const uint32_t *pSlots) {
+
+		if ((ctx.flags & context_t::MAGICMASK_PARANOID) && sid != db.SID_SELF) {
+			unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
+			// may not be zero
+			assert(numPlaceholder < 1 || pSlots[0] != 0);
+			assert(numPlaceholder < 2 || pSlots[1] != 0);
+			assert(numPlaceholder < 3 || pSlots[2] != 0);
+			assert(numPlaceholder < 4 || pSlots[3] != 0);
+			assert(numPlaceholder < 5 || pSlots[4] != 0);
+			assert(numPlaceholder < 6 || pSlots[5] != 0);
+			assert(numPlaceholder < 7 || pSlots[6] != 0);
+			assert(numPlaceholder < 8 || pSlots[7] != 0);
+			assert(numPlaceholder < 9 || pSlots[8] != 0);
+			// test referencing to group headers
+			assert(N[pSlots[0]].gid == pSlots[0]);
+			assert(N[pSlots[1]].gid == pSlots[1]);
+			assert(N[pSlots[2]].gid == pSlots[2]);
+			assert(N[pSlots[3]].gid == pSlots[3]);
+			assert(N[pSlots[4]].gid == pSlots[4]);
+			assert(N[pSlots[5]].gid == pSlots[5]);
+			assert(N[pSlots[6]].gid == pSlots[6]);
+			assert(N[pSlots[7]].gid == pSlots[7]);
+			assert(N[pSlots[8]].gid == pSlots[8]);
+			// they may not be orphaned
+			assert(pSlots[0] < nstart || N[pSlots[0]].next != pSlots[0]);
+			assert(pSlots[1] < nstart || N[pSlots[1]].next != pSlots[1]);
+			assert(pSlots[2] < nstart || N[pSlots[2]].next != pSlots[2]);
+			assert(pSlots[3] < nstart || N[pSlots[3]].next != pSlots[3]);
+			assert(pSlots[4] < nstart || N[pSlots[4]].next != pSlots[4]);
+			assert(pSlots[5] < nstart || N[pSlots[5]].next != pSlots[5]);
+			assert(pSlots[6] < nstart || N[pSlots[6]].next != pSlots[6]);
+			assert(pSlots[7] < nstart || N[pSlots[7]].next != pSlots[7]);
+			assert(pSlots[8] < nstart || N[pSlots[8]].next != pSlots[8]);
+			// Single occurrences only
+			assert(pSlots[1] == 0 || (pSlots[1] != pSlots[0]));
+			assert(pSlots[2] == 0 || (pSlots[2] != pSlots[0] && pSlots[2] != pSlots[1]));
+			assert(pSlots[3] == 0 || (pSlots[3] != pSlots[0] && pSlots[3] != pSlots[1] && pSlots[3] != pSlots[2]));
+			assert(pSlots[4] == 0 || (pSlots[4] != pSlots[0] && pSlots[4] != pSlots[1] && pSlots[4] != pSlots[2] && pSlots[4] != pSlots[3]));
+			assert(pSlots[5] == 0 || (pSlots[5] != pSlots[0] && pSlots[5] != pSlots[1] && pSlots[5] != pSlots[2] && pSlots[5] != pSlots[3] && pSlots[5] != pSlots[4]));
+			assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
+			assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
+			assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
+		}
+
+		groupLayer_t layer(*this, NULL);
+
+		if (!this->useExpandMember) {
+			expandSignature(layer, sid, pSlots, 0);
+
+		} else {
+			for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
+				uint32_t ret = expandMember(layer, mid, pSlots, 0);
+
+				// silently ignore
+				if (ret == (IBIT ^ (IBIT-1)))
+					continue;
+			}
+
+		}
+
+		// finalise
+		flushLayer(layer);
+
+		// regular calls should have a group header
+		assert(!(layer.gid & IBIT));
+
+		if (ctx.flags & context_t::MAGICMASK_PARANOID) validateTree(__LINE__);
+
+		return layer.gid;
+	}
+
+	/*
 	 * @date 2022-01-30 22:18:30
 	 * 
 	 * This is the improved inverting side-channel normalisation.
@@ -6868,6 +6943,271 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 		// make header available
 		fileHeader = &header;
+	}
+
+	/*
+	 * @date 2022-01-20 00:57:37
+	 * Find first node that matches group weight
+	 */
+	uint32_t getBestNode(uint32_t iGroup) {
+		assert(this->N[iGroup].gid == iGroup); // must be a group header
+		
+		uint32_t nid = this->N[iGroup].next;
+
+		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+			if (this->N[iNode].weight == this->N[iGroup].weight) {
+				nid = iNode;
+				break;
+			}
+		}
+
+		assert (this->N[nid].sid != db.SID_SELF);
+		return nid;
+	}
+	/*
+	 * count the number of active nodes in the tree.
+	 * Used to determine the best candidate for folding. 
+	 */
+	unsigned countActive(void) {
+		versionMemory_t *pSelect    = this->allocVersion();
+		uint32_t        thisVersion = pSelect->nextVersion();
+
+		unsigned numCount = this->nstart;
+
+		// select the heads
+		// add artificial root for system
+		for (unsigned iRoot = this->kstart; iRoot <= this->numRoots; iRoot++) {
+			uint32_t R  = (iRoot < this->numRoots) ? this->roots[iRoot] : this->system;
+			uint32_t Ru = R & ~IBIT;
+
+			if (Ru >= this->nstart && pSelect->mem[Ru] != thisVersion) {
+				numCount++;
+				pSelect->mem[Ru] = thisVersion;
+			}
+		}
+
+		for (uint32_t iGroup = this->ncount - 1; iGroup >= this->nstart; --iGroup) {
+			if (pSelect->mem[iGroup] != thisVersion)
+				continue;
+
+			uint32_t          iNode          = this->getBestNode(iGroup);
+			const groupNode_t *pNode         = this->N + iNode;
+			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+				uint32_t id = pNode->slots[iNode];
+
+				if (id >= this->nstart && pSelect->mem[id] != thisVersion) {
+					numCount++;
+					pSelect->mem[id] = thisVersion;
+				}
+			}
+		}
+
+		this->freeVersion(pSelect);
+		return numCount;
+	}
+
+	/*
+	 * Import the active area of another tree
+	 * Both trees have/need synced metrics.
+	 * Same tree-walk logic as with `saveFile()`.
+	 * Used when promoting candidate,
+	 * to cleanup and serialize the tree walking order.
+	 */
+	void importActive(groupTree_t *RHS) {
+		/*
+		 * Select  active nodes
+		 */
+
+		uint32_t        *pMap       = RHS->allocMap();
+		versionMemory_t *pSelect    = RHS->allocVersion();
+		uint32_t        thisVersion = pSelect->nextVersion();
+
+		/*
+		 * mark active
+		 */
+
+		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+			pSelect->mem[RHS->roots[iRoot] & ~IBIT] = thisVersion;
+
+		pSelect->mem[RHS->system & ~IBIT] = thisVersion;
+
+		for (uint32_t iGroup = RHS->ncount - 1; iGroup >= RHS->nstart; --iGroup) {
+			if (pSelect->mem[iGroup] == thisVersion) {
+				uint32_t          iNode          = RHS->getBestNode(iGroup);
+				const groupNode_t *pNode         = RHS->N + iNode;
+				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++)
+					pSelect->mem[pNode->slots[iSlot]] = thisVersion;
+			}
+		}
+
+		/*
+		 * Copy selected nodes
+		 */
+
+		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+			pMap[iRoot] = iRoot;
+
+		for (uint32_t iGroup = RHS->nstart; iGroup < RHS->ncount; iGroup++) {
+			if (pSelect->mem[iGroup] == thisVersion) {
+				uint32_t          iNode          = RHS->getBestNode(iGroup);
+				const groupNode_t *pNode         = RHS->N + iNode;
+				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				uint32_t newSlots[MAXSLOTS];
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++)
+					newSlots[iSlot] = pMap[pNode->slots[iSlot]];
+				for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+					newSlots[iSlot] = 0;
+
+				pMap[iGroup] = this->addNode(pNode->sid, newSlots);
+			}
+		}
+
+		/*
+		 * copy roots
+		 */
+
+		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
+
+		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
+
+		RHS->freeVersion(pSelect);
+		RHS->freeMap(pMap);
+	}
+
+	/*
+	 * @date 2021-08-18 18:04:14
+	 *
+	 * Import node and its dependencies
+	 */
+	uint32_t importNodes(groupTree_t *RHS, uint32_t nodeId) {
+		uint32_t        *pMap       = RHS->allocMap();
+		versionMemory_t *pSelect    = RHS->allocVersion();
+		uint32_t        thisVersion = pSelect->nextVersion();
+
+		/*
+		 * mark active
+		 */
+		pSelect->mem[nodeId & ~IBIT] = thisVersion;
+
+		for (uint32_t iGroup = (nodeId & ~IBIT); iGroup >= RHS->nstart; --iGroup) {
+			if (pSelect->mem[iGroup] == thisVersion) {
+				uint32_t          iNode          = RHS->getBestNode(iGroup);
+				const groupNode_t *pNode         = RHS->N + iNode;
+				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++)
+					pSelect->mem[pNode->slots[iSlot]] = thisVersion;
+			}
+		}
+
+		/*
+		 * Copy selected nodes
+		 */
+
+		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+			pMap[iRoot] = iRoot;
+
+		for (uint32_t iGroup = RHS->nstart; iGroup <= (nodeId & ~IBIT); iGroup++) {
+			if (pSelect->mem[iGroup] == thisVersion) {
+				uint32_t          iNode          = RHS->getBestNode(iGroup);
+				const groupNode_t *pNode         = RHS->N + iNode;
+				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+				uint32_t newSlots[MAXSLOTS];
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++)
+					newSlots[iSlot] = pMap[pNode->slots[iSlot]];
+				for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+					newSlots[iSlot] = 0;
+
+				pMap[iGroup] = this->addNode(pNode->sid, newSlots);
+			}
+		}
+
+		uint32_t ret = pMap[nodeId & ~IBIT] ^ (nodeId & IBIT);
+
+		RHS->freeVersion(pSelect);
+		RHS->freeMap(pMap);
+
+		return ret;
+	}
+
+	/*
+	 * import/fold
+	 */
+	void importFold(groupTree_t *RHS, uint32_t iFold) {
+
+		uint32_t *pMapSet = RHS->allocMap();
+		uint32_t *pMapClr = RHS->allocMap();
+
+		/*
+		 * Prepare tree
+		 */
+		this->rewind();
+
+		// prepare maps
+		for (unsigned iKey = 0; iKey < RHS->nstart; iKey++)
+			pMapSet[iKey] = pMapClr[iKey] = iKey;
+
+		// make fold constant
+		pMapSet[iFold] = IBIT;
+		pMapClr[iFold] = 0;
+
+		/*
+		 * Copy all nodes
+		 */
+		for (uint32_t iGroup = RHS->nstart; iGroup < RHS->ncount; iGroup++) {
+			if (RHS->N[iGroup].gid != iGroup)
+				continue; // not a group header
+
+			uint32_t          iNode          = RHS->getBestNode(iGroup);
+			const groupNode_t *pNode         = RHS->N + iNode;
+			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
+
+			uint32_t newSlotsSet[MAXSLOTS];
+			uint32_t newSlotsClr[MAXSLOTS];
+
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+				uint32_t id = pNode->slots[iSlot];
+
+				newSlotsSet[iSlot] = pMapSet[id];
+				newSlotsClr[iSlot] = pMapClr[id];
+			}
+			for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++) {
+				newSlotsSet[iSlot] = 0;
+				newSlotsClr[iSlot] = 0;
+			}
+
+			pMapSet[iGroup] = this->addNode(pNode->sid, newSlotsSet);
+			pMapClr[iGroup] = this->addNode(pNode->sid, newSlotsClr);
+		}
+
+		/*
+		 * Set roots
+		 */
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
+			uint32_t Ri = RHS->roots[iRoot] & IBIT;
+
+			this->roots[iRoot] = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+		}
+
+		if (RHS->system) {
+			uint32_t Ru = RHS->system & ~IBIT;
+			uint32_t Ri = RHS->system & IBIT;
+
+			this->system = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+		}
+
+		RHS->freeMap(pMapSet);
+		RHS->freeMap(pMapClr);
 	}
 
 	/*

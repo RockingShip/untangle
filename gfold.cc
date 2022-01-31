@@ -141,37 +141,90 @@ struct gfoldContext_t {
 	 *
 	 * Main entrypoint
 	 */
-	int main(const char *outputFilename, const char *inputFilename) {
+	int main(const char *outputFilename, const char *inputName) {
 
 		/*
 		 * Open input tree
 		 */
-		groupTree_t *pOldTree = new groupTree_t(ctx, *pStore);
+		groupTree_t *pOldTree;
 
-		if (pOldTree->loadFile(inputFilename)) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
+		if (strchr(inputName, '.') != NULL) {
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
-			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
-			pOldTree->headerInfo(jResult);
-			pOldTree->extraInfo(jResult);
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			json_delete(jResult);
-		}
+			pOldTree = new groupTree_t(ctx, *pStore);
 
-		/*
-		 * Extended roots are used to implement a stack for tree-walking.
-		 */
-		if (pOldTree->nstart > pOldTree->estart) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("extended keys not supported"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			/*
+			 * Load from file
+			 */
+			if (pOldTree->loadFile(inputName)) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputName));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+				json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputName));
+				pOldTree->headerInfo(jResult);
+				pOldTree->extraInfo(jResult);
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
+
+			/*
+			 * Extended roots are used to implement a stack for tree-walking.
+			 */
+			if (pOldTree->nstart > pOldTree->estart) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("extended keys not supported"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputName));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
+		} else {
+			/*
+			 * Load from string
+			 */
+
+			unsigned highest = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
+			const char *pTransform = strchr(inputName, '/'); // get transform
+
+			/*
+			 * Create tree
+			 */
+			uint32_t kstart = 2;
+			uint32_t ostart = kstart + highest;
+			uint32_t estart = ostart + highest;
+			uint32_t nstart = estart;
+
+			pOldTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
+//			pTree->maxDepth = this->opt_maxDepth;
+//			pTree->speed = this->opt_speed;
+
+			if (pTransform) {
+				if (!pOldTree->loadStringSafe(inputName, pTransform + 1)) {
+					fprintf(stderr, "Loading failed\n");
+					exit(1);
+				}
+			} else {
+				if (!pOldTree->loadStringSafe(inputName)) {
+					fprintf(stderr, "Loading failed\n");
+					exit(1);
+				}
+			}
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+
+				jResult = json_object();
+
+				json_object_set_new_nocheck(jResult, "kstart", json_integer(pOldTree->kstart));
+				json_object_set_new_nocheck(jResult, "nstart", json_integer(pOldTree->nstart));
+				json_object_set_new_nocheck(jResult, "ncount", json_integer(pOldTree->ncount));
+				json_object_set_new_nocheck(jResult, "numnodes", json_integer(pOldTree->ncount - pOldTree->nstart));
+
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
 		}
 
 		/*
@@ -245,17 +298,19 @@ struct gfoldContext_t {
 		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
 			pNodeRefCount[iKey] = 0;
 
-		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
+		for (uint32_t iGroup = pOldTree->nstart; iGroup < pOldTree->ncount; iGroup++) {
 
-			const groupNode_t *pNode = pOldTree->N + iNode;
-			const uint32_t    Q      = pNode->Q;
-			const uint32_t    Tu     = pNode->T & ~IBIT;
-//			const uint32_t    Ti     = pNode->T & IBIT;
-			const uint32_t    F      = pNode->F;
+			if (pOldTree->N[iGroup].gid != iGroup)
+				continue; // not a group header
 
-			pNodeRefCount[Q]++;
-			if (Tu != F) pNodeRefCount[Tu]++;
-			pNodeRefCount[F]++;
+			uint32_t          jNode          = pOldTree->getBestNode(iGroup);
+			const groupNode_t *pNode         = pOldTree->N + jNode;
+			unsigned          numPlaceholder = pStore->signatures[pNode->sid].numPlaceholder;
+
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+				uint32_t id = pNode->slots[iSlot];
+				pNodeRefCount[id]++;
+			}
 		}
 
 		// extended keys store equivalent of pMap
@@ -272,12 +327,19 @@ struct gfoldContext_t {
 		 * Two implementations of the main code
 		 */
 
-		if (1) {
+		if (0) {
 			/*
 			 * Original main-loop
 			 */
 			// nodes already tree-walk ordered
-			for (uint32_t iOldNode = pOldTree->nstart; iOldNode < pOldTree->ncount; iOldNode++) {
+			for (uint32_t iOldGroup = pOldTree->nstart; iOldGroup < pOldTree->ncount; iOldGroup++) {
+
+				if (pOldTree->N[iOldGroup].gid != iOldGroup)
+					continue; // not a group header
+
+				uint32_t          jOldNode       = pOldTree->getBestNode(iOldGroup);
+				const groupNode_t *pOldNode      = pOldTree->N + jOldNode;
+				unsigned          numPlaceholder = pStore->signatures[pOldNode->sid].numPlaceholder;
 
 				ctx.progress++;
 				if (ctx.tick && ctx.opt_verbose >= ctx.VERBOSE_TICK) {
@@ -296,28 +358,30 @@ struct gfoldContext_t {
 					ctx.tick = 0;
 				}
 
-				const groupNode_t *pNode = pOldTree->N + iOldNode;
-				const uint32_t    Q      = pNode->Q;
-				const uint32_t    Tu     = pNode->T & ~IBIT;
-				const uint32_t    Ti     = pNode->T & IBIT;
-				const uint32_t    F      = pNode->F;
-
 				/*
 				 * Add single node and release unused roots.
 				 */
-				pNewTree->roots[iOldNode] = pNewTree->addNormaliseNode(pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F]);
+
+				uint32_t newSlots[MAXSLOTS];
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = pOldNode->slots[iSlot];
+					newSlots[iSlot] = pNewTree->roots[id];
+				}
+				for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+					newSlots[iSlot] = 0;
+
+				pNewTree->roots[iOldGroup] = pNewTree->addNode(pOldNode->sid, newSlots);
 
 				// release root when no longer used
-				--pNodeRefCount[Q];
-				if (Tu != F) --pNodeRefCount[Tu];
-				--pNodeRefCount[F];
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = pOldNode->slots[iSlot];
 
-				if (pNodeRefCount[Q] == 0)
-					pNewTree->roots[Q]  = Q;
-				if (pNodeRefCount[Tu] == 0)
-					pNewTree->roots[Tu] = Tu;
-				if (pNodeRefCount[F] == 0)
-					pNewTree->roots[F]  = F;
+					--pNodeRefCount[id];
+
+					if (pNodeRefCount[id] == 0)
+						pNewTree->roots[id] = id;
+				}
 
 //				printf("inject node iNode=%d numNodes=%d\n", iOldNode, pNewTree->ncount - pNewTree->nstart);
 
@@ -333,17 +397,19 @@ struct gfoldContext_t {
 				for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
 					pNewRefCount[iKey] = 0;
 
-				for (uint32_t k = pNewTree->nstart; k < pNewTree->ncount; k++) {
-					const groupNode_t *pNode = pNewTree->N + k;
-					const uint32_t    Q      = pNode->Q;
-					const uint32_t    Tu     = pNode->T & ~IBIT;
-//					const uint32_t    Ti     = pNode->T & IBIT;
-					const uint32_t    F      = pNode->F;
+				for (uint32_t iNewGroup = pNewTree->nstart; iNewGroup < pNewTree->ncount; iNewGroup++) {
 
-					pNewRefCount[Q]++;
-					if (Tu != F)
-						pNewRefCount[Tu]++;
-					pNewRefCount[F]++;
+					if (pNewTree->N[iNewGroup].gid != iNewGroup)
+						continue; // not a group header
+
+					uint32_t          jNewNode       = pNewTree->getBestNode(iNewGroup);
+					const groupNode_t *pNewNode      = pNewTree->N + jNewNode;
+					unsigned          numPlaceholder = pStore->signatures[pNewNode->sid].numPlaceholder;
+
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+						uint32_t id = pNewNode->slots[iSlot];
+						pNewRefCount[id]++;
+					}
 				}
 
 				// populate folds
@@ -400,7 +466,14 @@ struct gfoldContext_t {
 			 */
 
 			// nodes already tree-walk ordered
-			for (uint32_t iOldNode = pOldTree->nstart; iOldNode < pOldTree->ncount; iOldNode++) {
+			for (uint32_t iOldGroup = pOldTree->nstart; iOldGroup < pOldTree->ncount; iOldGroup++) {
+
+				if (pOldTree->N[iOldGroup].gid != iOldGroup)
+					continue; // not a group header
+
+				uint32_t          jOldNode       = pOldTree->getBestNode(iOldGroup);
+				const groupNode_t *pOldNode      = pOldTree->N + jOldNode;
+				unsigned          numPlaceholder = pStore->signatures[pOldNode->sid].numPlaceholder;
 
 				ctx.progress++;
 				if (ctx.tick && ctx.opt_verbose >= ctx.VERBOSE_TICK) {
@@ -419,12 +492,6 @@ struct gfoldContext_t {
 					ctx.tick = 0;
 				}
 
-				const groupNode_t *pNode = pOldTree->N + iOldNode;
-				const uint32_t    Q      = pNode->Q;
-				const uint32_t    Tu     = pNode->T & ~IBIT;
-				const uint32_t    Ti     = pNode->T & IBIT;
-				const uint32_t    F      = pNode->F;
-
 				/*
 				 * Add single node and release unused roots.
 				 */
@@ -433,11 +500,17 @@ struct gfoldContext_t {
 				for (unsigned iRoot = pNewTree->estart; iRoot < pNewTree->numRoots; iRoot++)
 					pNewTree->roots[iRoot] = 0;
 
-				uint32_t newQ = pNewTree->importNodes(pResults, pResults->roots[Q]);
-				uint32_t newT = pNewTree->importNodes(pResults, pResults->roots[Tu] ^ Ti);
-				uint32_t newF = pNewTree->importNodes(pResults, pResults->roots[F]);
-				uint32_t newR = pNewTree->addNormaliseNode(newQ, newT, newF);
-				pNewTree->roots[iOldNode] = newR;
+				uint32_t newSlots[MAXSLOTS];
+
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = pOldNode->slots[iSlot];
+					newSlots[iSlot] = pNewTree->importNodes(pResults, pResults->roots[id]);
+				}
+				for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++)
+					newSlots[iSlot] = 0;
+
+				uint32_t newR = pNewTree->addNode(pOldNode->sid, newSlots);
+				pNewTree->roots[iOldGroup] = newR;
 
 // pNewTree->roots[iOldNode] = explainNormaliseNode(0, pNewTree->ncount, pNewTree, pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F], NULL);
 //std::string strOld = pOldTree->saveString(iOldNode, NULL);
@@ -445,24 +518,20 @@ struct gfoldContext_t {
 //std::string strQ= pNewTree->saveString(pNewTree->roots[Q], NULL);
 //std::string strT= pNewTree->saveString(pNewTree->roots[Tu] ^ Ti, NULL);
 //std::string strF= pNewTree->saveString(pNewTree->roots[F], NULL);
-//printf("../eval \"%s\" \"%s %s %s ?\" \"%s\"  # %d\n", strOld.c_str(), strQ.c_str(), strT.c_str(), strF.c_str(), strNew.c_str(), iOldNode);
+//printf("../eval \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldNode);
 
 				// release root when no longer used
-				assert(pNodeRefCount[Q]);
-				assert(pNodeRefCount[Tu]);
-				assert(pNodeRefCount[F]);
-				--pNodeRefCount[Q];
-				if (Tu != F) --pNodeRefCount[Tu];
-				--pNodeRefCount[F];
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = pOldNode->slots[iSlot];
 
-				if (pNodeRefCount[Q] == 0)
-					pResults->roots[Q]  = Q;
-				if (pNodeRefCount[Tu] == 0)
-					pResults->roots[Tu] = Tu;
-				if (pNodeRefCount[F] == 0)
-					pResults->roots[F]  = F;
+					assert(pNodeRefCount[id]);
+					--pNodeRefCount[id];
 
-				printf("inject node iNode=%d numNodes=%d\n", iOldNode, pNewTree->ncount - pNewTree->nstart);
+					if (pNodeRefCount[id] == 0)
+						pResults->roots[id] = id;
+				}
+
+				printf("inject node iGroup=%d numNodes=%d\n", iOldGroup, pNewTree->ncount - pNewTree->nstart);
 
 				//////////////// below is tree rotation.
 
@@ -476,17 +545,19 @@ struct gfoldContext_t {
 				for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
 					pNewRefCount[iKey] = 0;
 
-				for (uint32_t k = pNewTree->nstart; k < pNewTree->ncount; k++) {
-					const groupNode_t *pNode = pNewTree->N + k;
-					const uint32_t    Q      = pNode->Q;
-					const uint32_t    Tu     = pNode->T & ~IBIT;
-//					const uint32_t    Ti     = pNode->T & IBIT;
-					const uint32_t    F      = pNode->F;
+				for (uint32_t iNewGroup = pNewTree->nstart; iNewGroup < pNewTree->ncount; iNewGroup++) {
 
-					pNewRefCount[Q]++;
-					if (Tu != F)
-						pNewRefCount[Tu]++;
-					pNewRefCount[F]++;
+					if (pNewTree->N[iNewGroup].gid != iNewGroup)
+						continue; // not a group header
+
+					uint32_t          jNewNode       = pNewTree->getBestNode(iNewGroup);
+					const groupNode_t *pNewNode      = pNewTree->N + jNewNode;
+					unsigned          numPlaceholder = pStore->signatures[pNewNode->sid].numPlaceholder;
+
+					for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+						uint32_t id = pNewNode->slots[iSlot];
+						pNewRefCount[id]++;
+					}
 				}
 
 				// populate folds
@@ -625,11 +696,11 @@ struct gfoldContext_t {
 				} while (changed);
 
 				// save result
-				pResults->roots[iOldNode] = pResults->importNodes(pNewTree, pNewTree->roots[iOldNode]);
+				pResults->roots[iOldGroup] = pResults->importNodes(pNewTree, pNewTree->roots[iOldGroup]);
 
-				std::string strOld = pOldTree->saveString(iOldNode, NULL);
-				std::string strNew = pNewTree->saveString(pNewTree->roots[iOldNode], NULL);
-				printf("../eval \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldNode);
+				std::string strOld = pOldTree->saveString(iOldGroup, NULL);
+				std::string strNew = pNewTree->saveString(pNewTree->roots[iOldGroup], NULL);
+				printf("../eval \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldGroup);
 
 				pNewTree->freeMap(pNewRefCount);
 			}
@@ -711,16 +782,30 @@ struct gfoldContext_t {
 		/*
 		 * Copy all nodes
 		 */
-		for (uint32_t iNode = RHS->nstart; iNode < RHS->ncount; iNode++) {
-			const groupNode_t *pNode = RHS->N + iNode;
-			const uint32_t    Q      = pNode->Q;
-			const uint32_t    Tu     = pNode->T & ~IBIT;
-			const uint32_t    Ti     = pNode->T & IBIT;
-			const uint32_t    F      = pNode->F;
+		for (uint32_t iGroup = RHS->nstart; iGroup < RHS->ncount; iGroup++) {
 
+			if (RHS->N[iGroup].gid != iGroup)
+				continue; // must be a group header
 
-			pMapSet[iNode] = pTree->addNormaliseNode(pMapSet[Q], pMapSet[Tu] ^ Ti, pMapSet[F]);
-			pMapClr[iNode] = pTree->addNormaliseNode(pMapClr[Q], pMapClr[Tu] ^ Ti, pMapClr[F]);
+			uint32_t          jNode          = RHS->getBestNode(iGroup);
+			const groupNode_t *pNode         = RHS->N + jNode;
+			unsigned          numPlaceholder = pStore->signatures[pNode->sid].numPlaceholder;
+
+			uint32_t newSlotsSet[MAXSLOTS];
+			uint32_t newSlotsClr[MAXSLOTS];
+
+			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+				uint32_t id = pNode->slots[iSlot];
+				newSlotsSet[iSlot] = pMapSet[id];
+				newSlotsClr[iSlot] = pMapClr[id];
+			}
+			for (unsigned iSlot = numPlaceholder; iSlot < MAXSLOTS; iSlot++) {
+				newSlotsSet[iSlot] = 0;
+				newSlotsClr[iSlot] = 0;
+			}
+
+			pMapSet[iGroup] = pTree->addNode(pNode->sid, newSlotsSet);
+			pMapClr[iGroup] = pTree->addNode(pNode->sid, newSlotsClr);
 		}
 
 		/*
@@ -788,7 +873,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
@@ -920,11 +1005,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	char *outputFilename;
-	char *inputFilename;
+	char *inputName;
 
 	if (argc - optind >= 2) {
 		outputFilename = argv[optind++];
-		inputFilename  = argv[optind++];
+		inputName      = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -933,7 +1018,7 @@ int main(int argc, char *argv[]) {
 	/*
 	 * None of the outputs may exist
 	 */
-	if (!app.opt_force) {
+	if (strcmp(outputFilename, "-") != 0 && !app.opt_force) {
 		struct stat sbuf;
 		if (!stat(outputFilename, &sbuf))
 			ctx.fatal("%s already exists. Use --force to overwrite\n", outputFilename);
@@ -964,5 +1049,5 @@ int main(int argc, char *argv[]) {
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
 
-	return app.main(outputFilename, inputFilename);
+	return app.main(outputFilename, inputName);
 }
