@@ -2964,6 +2964,169 @@ struct groupTree_t {
 	}
 
 	/*
+	 * @date 2022-01-30 22:18:30
+	 * 
+	 * This is the improved inverting side-channel normalisation.
+	 * All three Q/T/F may be inverted or duplicated.
+	 * Dyadics are properly ordered.
+	 * The result is normalised with the polarisation (=result is inverted) as return value (0/IBIT)
+	 * 
+	 * NOTE: this code has been brute-force validated with `selftest.cc::performSelfTestNormaliseQTF()`.
+	 */
+	static uint32_t normaliseQTF(uint32_t &Q, uint32_t &T, uint32_t &F) {
+
+		const uint32_t I  = IBIT;
+		const uint32_t Qu = Q & ~I; // Q with side-channel Invert-bit removed
+		const uint32_t Tu = T & ~I; // T with side-channel Invert-bit removed
+		const uint32_t Fu = F & ~I; // F with side-channel Invert-bit removed
+		uint32_t       Ri; // output polarity
+
+		/*
+		 * Friendly reminder:
+		 *
+		 *   a ? !0 : b   "+" OR            (must be ordered: a<b)
+		 *   a ? !b : 0   ">" GREATER-THAN
+		 *   a ? !b : b   "^" NOT-EQUAL/XOR (must be ordered: a<b)
+		 *   a ? !b : c   "!" QnTF
+		 *   a ?  b : 0   "&" AND           (must be ordered: a<b)
+		 *   a ?  b : c   "?" QTF
+		 */
+
+		/*
+		 * "PATH" is the logic that decodes Qu/Qi Tu/Ti Fu/Fi to find the state condition
+		 *
+		 * "STATE" is the analysis of the imputs, the result after constant folding, and how that maps to the resulting Q/T/F
+		 * 
+		 * "ACTIONS" is code how to rewrite the arguments.
+		 *  Instructions are comma seperated so it all fits in a single return statement.
+		 *  All `QTF` and `QnTF` fall through as their duplicate argument detection is more complicated. 
+		 *
+		 */
+
+/*                     PATH                          */ /*              STATE                */ /* ACTIONS */
+/*---------------------------------------------------*/ /* Q  T  F  -> logical-> Q  T  F  Ri */ /*--------*/
+
+// @formatter:off
+if (Q&I) if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)	/* Q~ T~ F~ -> qft?~  -> Q  F  T  I  */         Q&=~I,T=Fu,F=Tu,Ri=I; // fallthrough
+else							/* Q~ T~ 0~ -> tq>~   -> T  Q~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (T=Q,Q=Tu,F=0,I);
+else if (Fu)						/* Q~ T~ F  -> qft!~  -> Q  F~ T  I  */         Q&=~I,T=Fu|I,F=Tu,Ri=I; // fallthrough
+else							/* Q~ T~ 0  -> qt+~   -> Q  0~ T  I  */  return (Qu==Tu) ? (Q=T=F=Qu,I) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,I) : (Q&=~I,T=I,F=Tu,I);
+else if (F&I) if (Fu)					/* Q~ 0~ F~ -> fq&~   -> Q  F  0  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=I) : (Q&=~I,T=Fu,F=0,Ri=I);
+else							/* Q~ 0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* Q~ 0~ F  -> qf>~   -> Q  F~ 0  I  */  return (Qu==Fu) ? (Q=T=F=0,I) : (Q&=~I,T=Fu|I,F=0,I);
+else							/* Q~ 0~ 0  -> q~     -> Q  Q  Q  I  */  return Q=T=F=Qu,I;
+else if (Tu) if (F&I) if (Fu) 				/* Q~ T  F~ -> qft!   -> Q  F~ T  0  */         Q&=~I,T=F,F=Tu,Ri=0; // fallthrough
+else							/* Q~ T  0~ -> qt+    -> Q  0~ T  0  */  return (Qu==Tu) ? (Q=T=F=Qu,0) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,0) : (Q&=~I,T=I,F=Tu,0);
+else if (Fu)						/* Q~ T  F  -> qft?   -> Q  F  T  0  */         Q&=~I,T=F,F=Tu,Ri=0; // fallthrough
+else							/* Q~ T  0  -> tq>    -> T  Q~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (T=Q,Q=Tu,F=0,0);
+else if (F&I) if (Fu)					/* Q~ 0  F~ -> qf>    -> Q  F~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q&=~I,T=F,F=0,0);
+else							/* Q~ 0  0~ -> q      -> Q  Q  Q  0  */  return Q=T=F=Qu,0;
+else if (Fu)						/* Q~ 0  F  -> fq&    -> Q  F  0  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=0) : (Q&=~I,T=Fu,F=0,Ri=0);
+else							/* Q~ 0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (T&I) if (Tu) if (F&I) if (Fu)			/* 0~ T~ F~ -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
+else							/* 0~ T~ 0~ -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
+else if (Fu)						/* 0~ T~ F  -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
+else							/* 0~ T~ 0  -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
+else if (F&I) if (Fu)					/* 0~ 0~ F~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else							/* 0~ 0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* 0~ 0~ F  -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else							/* 0~ 0~ 0  -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Tu) if (F&I) if (Fu)				/* 0~ T  F~ -> t      -> T  T  T  0  */  return Q=T=F=Tu,0;
+else							/* 0~ T  0~ -> t      -> T  T  T  0  */  return Q=T=F=Tu,0;
+else if (Fu)						/* 0~ T  F  -> t      -> T  T  T  0  */  return Q=T=F=Tu,0;
+else							/* 0~ T  0  -> t      -> T  T  T  0  */  return Q=T=F=Tu,0;
+else if (F&I) if (Fu)					/* 0~ 0  F~ -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else							/* 0~ 0  0~ -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (Fu)						/* 0~ 0  F  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else							/* 0~ 0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)		/* Q  T~ F~ -> qtf?~  -> Q  T  F  I  */         T&=~I,F&=~I,Ri=I; // fallthrough
+else							/* Q  T~ 0~ -> qt&~   -> Q  T  0  I  */  return (Qu==Tu) ? (Q=T=F=Tu,I) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=I) : (T=Tu,F=0,Ri=I);
+else if (Fu)						/* Q  T~ F  -> qtf!   -> Q  T~ F  0  */         Ri=0; // fallthrough
+else							/* Q  T~ 0  -> qt>    -> Q  T~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (Q&=~I,F=0,0);
+else if (F&I) if (Fu)					/* Q  0~ F~ -> fq>~   -> F  Q~ 0  I  */  return (Qu==Fu) ? (Q=T=F=0,I) : (Q=Fu,T=Qu|I,F=0,I);
+else							/* Q  0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* Q  0~ F  -> fq+    -> Q  0~ F  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,0) : (Q&=~I,T=I,F=Fu,0);
+else							/* Q  0~ 0  -> q      -> Q  Q  Q  0  */  return Q=T=F=Qu,0;
+else if (Tu) if (F&I) if (Fu)				/* Q  T  F~ -> qtf!~  -> Q  T~ F  I  */         T|=I,F&=~I,Ri=I; // fallthrough
+else							/* Q  T  0~ -> qt>~   -> Q  T~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (T|=I,F=0,I);
+else if (Fu)						/* Q  T  F  -> qtf?   -> Q  T  F  0  */         Ri=0; // fallthrough
+else							/* Q  T  0  -> qt&    -> Q  T  0  0  */  return (Qu==Tu) ? (Q=T=F=Tu,0) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=0) : (T=Tu,F=0,Ri=0);
+else if (F&I) if (Fu)					/* Q  0  F~ -> fq+~   -> Q  0~ F  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,I) : (Q&=~I,T=I,F=Fu,I);
+else							/* Q  0  0~ -> q~     -> Q  Q  Q  I  */  return Q=T=F=Qu,I;
+else if (Fu)						/* Q  0  F  -> fq>    -> F  Q~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q=F,T=Qu|I,F=0,0);
+else							/* Q  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (T&I) if (Tu) if (F&I) if (Fu)			/* 0  T~ F~ -> f~     -> F  F  F  I  */  return Q=T=F=Fu,I;
+else							/* 0  T~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* 0  T~ F  -> f      -> F  F  F  0  */  return Q=T=F=Fu,0;
+else							/* 0  T~ 0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (F&I) if (Fu)					/* 0  0~ F~ -> f~     -> F  F  F  I  */  return Q=T=F=Fu,I;
+else							/* 0  0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* 0  0~ F  -> f      -> F  F  F  0  */  return Q=T=F=Fu,0;
+else							/* 0  0~ 0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (Tu) if (F&I) if (Fu)				/* 0  T  F~ -> f~     -> F  F  F  I  */  return Q=T=F=Fu,I;
+else							/* 0  T  0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* 0  T  F  -> f      -> F  F  F  0  */  return Q=T=F=Fu,0;
+else							/* 0  T  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+else if (F&I) if (Fu)					/* 0  0  F~ -> f~     -> F  F  F  I  */  return Q=T=F=Fu,I;
+else							/* 0  0  0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
+else if (Fu)						/* 0  0  F  -> f      -> F  F  F  0  */  return Q=T=F=Fu,0;
+else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
+// @formatter:on
+
+		/*
+		 * Duplicate argument detection
+		 */
+
+		// @formatter:off
+		if (T & I) {
+			const uint32_t Tu = T & ~IBIT; // shadow first (now outdated) declaration
+
+			// QnTF
+
+			if (Q == F) {
+				if (Q == Tu)
+					return Q=T=F=0,Ri; // qqq! -> 0
+				else
+					return F=0,Ri;   // qtq! -> qt>
+			} else if (Q == Tu) {
+				return Q=F,F=0,Ri; // qqf! -> fq>
+			} else if (Tu == F) {
+				if (Q > F)
+					return F=Q,Q=Tu,T=F|I,Ri; // qff! -> fq^
+				else
+					return Ri; // qff! -> qf^
+			} else {
+				return Ri; // qtf!
+			}
+
+		} else {
+
+			// QTF
+
+			if (Q == F) {
+				if (Q == T)
+					return T=F=Q,Ri; // qqq? -> q
+				else if (Q > T)
+					return Q=T,T=F,F=0,Ri;   // qtq? -> tq&
+				else	
+					return F=0,Ri;   // qtq? -> qt&
+			} else if (Q == T) {
+				if (Q > F)
+					return Q=F,F=T,T=I,Ri; // qqf? -> fq+
+				else
+					return T=I,Ri; // qqf? -> qf+
+			} else if (T == F) {
+				return Q=T=F,Ri; // qff? -> f
+			} else {
+				return Ri; // qtf?
+			}
+
+		}
+		// @formatter:on
+
+	}
+	
+	/*
 	 * @date 2021-11-04 00:44:47
 	 *
 	 * lookup/create and normalise any combination of Q, T and F, inverted or not.

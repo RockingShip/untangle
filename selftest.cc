@@ -47,6 +47,7 @@
 #include "database.h"
 #include "dbtool.h"
 #include "generator.h"
+#include "grouptree.h"
 #include "metrics.h"
 #include "restartdata.h"
 #include "tinytree.h"
@@ -326,6 +327,87 @@ struct selftestContext_t : dbtool_t {
 			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
 	}
 
+	/**
+	 * @date 2022-01-30 22:27:02
+	 * 
+	 * Validate that `groupTree_t::normaliseQTF()` properly folds inverted and duplicate inpute 
+	 */
+	void performSelfTestNormaliseQTF(void) {
+
+		unsigned testNr    = 0;
+		unsigned numPassed = 0;
+
+		ctx.flags = context_t::MAGICMASK_PARANOID;
+		tinyTree_t tree(ctx);
+		
+		/*
+		 * Preset entrypoints as how `normaliseQTF()` returns folded arguments.
+		 */
+		for (uint32_t iEntry = 0; iEntry < tree.TINYTREE_NSTART; iEntry++)
+			tree.N[iEntry].Q = tree.N[iEntry].T = tree.N[iEntry].F = iEntry;
+
+		/*
+		 * Test all operand combinations.
+		 */
+
+		// @formatter:off
+		for (unsigned Fu = 0; Fu < tinyTree_t::TINYTREE_KSTART + 3; Fu++) // operand of F: 0, a, b, c
+		for (unsigned Fi = 0; Fi < 2; Fi++)                               // inverting of F
+		for (unsigned Tu = 0; Tu < tinyTree_t::TINYTREE_KSTART + 3; Tu++)
+		for (unsigned Ti = 0; Ti < 2; Ti++)
+		for (unsigned Qu = 0; Qu < tinyTree_t::TINYTREE_KSTART + 3; Qu++)
+		for (unsigned Qi = 0; Qi < 2; Qi++) {
+		// @formatter:on
+
+			// bump test number
+			testNr++;
+
+			/*
+			 * Construct arguments
+			 */
+
+			uint32_t Q = Qu ^ (Qi ? IBIT : 0);
+			uint32_t T = Tu ^ (Ti ? IBIT : 0);
+			uint32_t F = Fu ^ (Fi ? IBIT : 0);
+
+			/*
+			 * Load raw result into tree (this has already been validated as working)
+			 */
+			tree.clearTree();
+			tree.root = tree.addNormaliseNode(Q, T, F);
+
+			/*
+			 * Perform test
+			 */
+			uint32_t invert = groupTree_t::normaliseQTF(Q, T, F);
+
+			/*
+			 * Process outcome
+			 */
+			if (Q != tree.N[tree.root & ~IBIT].Q || T != tree.N[tree.root & ~IBIT].T || F != tree.N[tree.root & ~IBIT].F || (tree.root & IBIT) != invert) {
+				printf("{\"error\":\"compare failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"input\":{\"Q\":\"%s%c\",\"T\":\"%s%c\",\"F\":\"%s%c\"},\"expected\":{\"Q\":\"%s%c\",\"T\":\"%s%c\",\"F\":\"%s%c\",\"Ri\":\"%c\"},\"encountered\":{\"Q\":\"%s%c\",\"T\":\"%s%c\",\"F\":\"%s%c\",\"Ri\":\"%c\"}}\n",
+				       __FUNCTION__, __FILE__, __LINE__, testNr,
+				       Qi ? "~" : "", "0abc"[Qu],
+				       Ti ? "~" : "", "0abc"[Tu],
+				       Fi ? "~" : "", "0abc"[Fu],
+				       tree.N[tree.root & ~IBIT].Q & IBIT ? "~" : "", "0abc"[tree.N[tree.root & ~IBIT].Q & ~IBIT],
+				       tree.N[tree.root & ~IBIT].T & IBIT ? "~" : "", "0abc"[tree.N[tree.root & ~IBIT].T & ~IBIT],
+				       tree.N[tree.root & ~IBIT].F & IBIT ? "~" : "", "0abc"[tree.N[tree.root & ~IBIT].F & ~IBIT],
+				       (tree.root & IBIT) ? 'I' : '0',
+				       Q & IBIT ? "~" : "", "0abc"[Q & ~IBIT],
+				       T & IBIT ? "~" : "", "0abc"[T & ~IBIT],
+				       F & IBIT ? "~" : "", "0abc"[F & ~IBIT],
+				       invert ? 'I' : '0');
+				exit(1);
+			}
+			numPassed++;
+
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			fprintf(stderr, "[%s] %s() passed %u tests\n", ctx.timeAsString(), __FUNCTION__, numPassed);
+	}
+	
 	/**
 	 * @date 2020-03-21 17:25:47
 	 *
@@ -2000,6 +2082,11 @@ int main(int argc, char *argv[]) {
 	 * Test that evaluating `tinyTree_t` is working as expected
 	 */
 	app.performSelfTestTreeEval();
+
+	/*
+	 * Test that evaluating `groupTree_t::normaliseQTF` is working as expected
+	 */
+	app.performSelfTestNormaliseQTF();
 
 	/*
 	 * Test that generator restart/windowing is working as expected
