@@ -562,7 +562,7 @@ struct validateContext_t {
 				/*
 				 * @date 2021-05-30 12:57:24
 				 * The expression has been applied to all bits the register.
-				 * The final result is either all bits clear (0) or all bits set (~0)
+				 * The final result is either all bits clear (0) or all bits set (~0U)
 				 */
 
 				uint32_t expected    = pFull[iRoot];

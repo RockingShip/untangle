@@ -102,7 +102,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * @param {userArguments_t} args - argument context
  */
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <input.db> <numnode> [<output.db>]  -- Add signatures of given node size\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.db> <input.json>\n", argv[0]);
 
 	if (verbose) {
 		fprintf(stderr, "\n");

@@ -12,6 +12,8 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-31 15:03:16 Changed: Lost+Found
+2022-01-31 00:49:07 Added: `groupTree_t::normaliseQTF()` which is a totally revised Q/T/F normalisation method.
 2022-01-30 00:14:30 Fixed: Clear node index when `groupTree_t::lookupNode()` fails.
 ```
 
@@ -27,7 +29,6 @@ Some known issues:
   
 
 ```
-2022-01-31 00:49:07 Added: `groupTree_t::normaliseQTF()` which is a totally revised Q/T/F normalisation method.
 2022-01-27 19:30:26 Fixed: Faster... Better... Working...
 2022-01-27 19:25:20 Fixed: Cartesian product iterator change detection.
 2022-01-27 12:11:46 Fixed: `GroupTree_t::genSignature()` endpoint-collapse detection.

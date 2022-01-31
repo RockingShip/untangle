@@ -127,8 +127,8 @@ struct kextractContext_t {
 		/*
 		 * Find key
 		 */
-		unsigned      argKey = 0;
-		for (unsigned iKey   = pOldTree->kstart; iKey < pOldTree->estart; iKey++) {
+		uint32_t argKey = 0;
+		for (unsigned iKey = pOldTree->kstart; iKey < pOldTree->estart; iKey++) {
 			if (pOldTree->keyNames[iKey].compare(keyName) == 0) {
 				argKey = iKey;
 				break;
@@ -217,7 +217,7 @@ struct kextractContext_t {
 kextractContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.json> <input.dat> <keyName>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.dat> <input.dat> <keyName>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};

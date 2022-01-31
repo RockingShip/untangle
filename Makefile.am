@@ -56,7 +56,7 @@ gentransform_SOURCES = gentransform.cc gentransform.h database.h datadef.h conte
 gentransform_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2020-04-21 23:30:30
-selftest_SOURCES = selftest.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
+selftest_SOURCES = selftest.cc database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h  grouptree.h
 selftest_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2020-04-07 16:25:18
@@ -192,10 +192,10 @@ validaterewrite_SOURCES = validaterewrite.cc rewritedata.h basetree.h context.h 
 validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
 
 ##
-## This section for detector patterns
+## This section for groupTree front-ends
 ##
 
-PROGRAMS_PART5 = genpattern geval glookup
+PROGRAMS_PART5 = genpattern geval gfold gload glookup
 EXTRA_PART5 =
 
 # @date 2021-11-02 22:32:07
@@ -205,6 +205,14 @@ geval_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-10-17 17:51:31
 genpattern_SOURCES = genpattern.cc genpattern.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h
 genpattern_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2022-01-28 15:37:52
+gfold_SOURCES = gfold.cc grouptree.h context.h database.h datadef.h dbtool.h 
+gfold_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2022-01-28 19:47:44
+gload_SOURCES = gload.cc grouptree.h context.h database.h datadef.h dbtool.h 
+gload_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-11-26 23:18:07
 glookup_SOURCES = glookup.cc database.h datadef.h dbtool.h context.h tinytree.h basetree.h grouptree.h

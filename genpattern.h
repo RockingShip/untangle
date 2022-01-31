@@ -741,7 +741,11 @@ struct genpatternContext_t : dbtool_t {
 		assert(tidSlotR != IBIT);
 		assert(tidSlotT != IBIT);
 		assert(tidSlotF != IBIT);
-		
+
+		// for logging
+		uint32_t tidSlotT0 = tidSlotT;
+		uint32_t tidSlotF0 = tidSlotF;
+
 		/*
 		 * @date 2021-11-07 01:34:52
 		 * 
@@ -875,17 +879,52 @@ struct genpatternContext_t : dbtool_t {
 				 * @date 2021-10-25 19:29:56
 				 * Be very verbose.
 				 * This is a very nasty situation that may arise hours into the run.
+				 * 
+				 * @date 2022-01-29 15:39:55
+				 * This QTF combo has two parts:
+				 *   - finding a match
+				 *   - converting it so `groupTree_t::constructSlots()` can it.
+				 *   
+				 * This has been validated many times, yet to be sure, check part 1
+				 *  - Manually construct  "<sid/tid-Q> <sid/tid-T> <sid/tid-F> ?" and compare them with `slookup`
+				 *  - Check that sidR/tidR matches. This verifies that `lookupImprintAssociative()` is correct
+				 *  - Manually construct  "<sid-Q> <sid-T/tidSlotT> <sid-F/tidSlotF> ?" and compare them with `slookup`
+				 *  - If doesn't match, and tidSlotT/T0,F/F0 differ, then problem is `sidSwapTid()` related. 
+				 *  - Check that sidR matches. This verifies that `constructSlots()` found the right match.
+				 *  
+				 *  Now comes the tricky part
+				 *  `constructSlots()` needs to extract from `slotsR[]` in such a way that the outcome has `tidR=0`.
+				 *  This is done by determining which tid is needed to extract.
+				 *  And this tid needs to be sidSwapped to avoid colllisions.
+				 * 
+				 * Ah, found it!
+				 * This time it is because oldTidSlotR/tidSlotR are not fully sid swapped
+				 * In this situation: "name":"abcd!edc!!cbe!^","oldTidSlotR":"90:cdeab","tidSlotR:68:bedac"
+				 * `slookup "abcd!edc!!cbe!^" --swaps` shows: `[55:baedc,82:ceadb]
+				 * Applying all swap possibilities onto "90:cdeab"
+				 * apply 55:baedc results in dcbae
+				 * apply 82:ceadb results in bedac, which is a collision.
+				 * However, `bedac` has the best ordering of all three, so `90:cdeab` is incorrect.
 				 */
+
 				fprintf(stderr, "{\"error\":\"addPatternToDatabase\",\"progress\":\"%lu\",\"name\":\"%s\",\"idFirst\":\"%u\",\"idSecond\":\"%u\","
-						"\"oldSidR\":\"%u:%s\",\"sidR:%u:%s\","
+						"\"oldSidR\":\"%u:%s\","
+						"\"sidR\":%u:%s\","
+						"\"tidR\":%u:%.*s\","
 						"\"oldTidSlotR\":\"%u:%.*s\",\"tidSlotR:%u:%.*s\","
-						"\"sidQ\":\"%u:%s\",\"tidQ\":\"%u:%.*s\",\"sidT\":\"%u:%s%s\",\"tidT\":\"%u:%.*s\",\"sidF:%u:%s\",\"tidF\":\"%u:%.*s\","
-						"\"tidSlotT\":\"%u:%.*s\",\"tidSlotF\":\"%u:%.*s\","
+						"\"sidQ\":\"%u:%s\",\"tidQ\":\"%u:%.*s\","
+						"\"sidT\":\"%u:%s%s\",\"tidT\":\"%u:%.*s\","
+						"\"sidF:%u:%s\",\"tidF\":\"%u:%.*s\","
+						"\"tidSlotT0\":\"%u:%.*s\","
+						"\"tidSlotT\":\"%u:%.*s\","
+						"\"tidSlotF0\":\"%u:%.*s\","
+						"\"tidSlotF\":\"%u:%.*s\","
 						"\"slotsQ\":\"%s\",\"slotsT\":\"%s\",\"slotsF\":\"%s\",\"slotsR:%s\"}\n",
 					ctx.progress, pNameR, idFirst, idSecond,
 
 					patternSecond->sidR, pStore->signatures[patternSecond->sidR].name,
 					sidR, pStore->signatures[sidR].name,
+					tidR, pStore->signatures[sidR].numPlaceholder, pStore->fwdTransformNames[tidR],
 					patternSecond->tidExtract, pStore->signatures[patternSecond->sidR].numPlaceholder, pStore->fwdTransformNames[patternSecond->tidExtract],
 					tidExtract, pStore->signatures[sidR].numPlaceholder, pStore->fwdTransformNames[tidExtract],
 
@@ -899,7 +938,9 @@ struct genpatternContext_t : dbtool_t {
 					sidF, pStore->signatures[sidF].name,
 					tidF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidF],
 
+					tidSlotT0, pStore->signatures[sidT & ~IBIT].numPlaceholder, pStore->fwdTransformNames[tidSlotT0],
 					tidSlotT, pStore->signatures[sidT & ~IBIT].numPlaceholder, pStore->fwdTransformNames[tidSlotT],
+					tidSlotF0, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidSlotF0],
 					tidSlotF, pStore->signatures[sidF].numPlaceholder, pStore->fwdTransformNames[tidSlotF],
 
 					slotsQ,

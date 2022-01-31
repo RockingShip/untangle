@@ -1100,7 +1100,7 @@ struct gensignatureContext_t : dbtool_t {
 			}
 
 			/*
-			 * Calculate slot set to ~0
+			 * Calculate slot set to ~0U
 			 */
 			for (unsigned iSlot = 0; iSlot < MAXSLOTS; iSlot++) {
 

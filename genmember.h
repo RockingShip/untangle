@@ -2305,8 +2305,6 @@ struct genmemberContext_t : dbtool_t {
 						}
 					}
 
-					if (strcmp(name, "aaabc!d!d!") == 0)
-						fprintf(stderr,".");
 					/*
 					 * call `foundTreeMember()`
 					 */

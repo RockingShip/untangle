@@ -751,10 +751,8 @@ struct genswapContext_t : dbtool_t {
 			}
 
 			signature_t *pSignature = pStore->signatures + iSid;
-			if (!pSignature->swapId) {
-				uint32_t swapId = foundSignatureSwap(pStore->signatures[iSid].name);
-				pSignature->swapId = swapId;
-			}
+			uint32_t swapId = foundSignatureSwap(pStore->signatures[iSid].name);
+			pSignature->swapId = swapId;
 
 			ctx.progress++;
 		}

@@ -159,7 +159,7 @@ struct baseTree_t {
 	// resources
 	context_t                &ctx;                  // resource context
 	int                      hndl;                  // file handle
-	uint8_t                  *rawData;          // base location of mmap segment
+	uint8_t                  *rawData;              // base location of mmap segment
 	baseTreeHeader_t         *fileHeader;           // file header
 	// meta
 	uint32_t                 flags;                 // creation constraints
@@ -206,7 +206,7 @@ struct baseTree_t {
 	uint64_t                 numCompare;            // number of compares performed
 	// rewrite normalisation
 	uint32_t                 *rewriteMap;           // results of intermediate lookups
-	uint32_t                 *rewriteVersion;	// versioned memory for rewrites
+	uint32_t                 *rewriteVersion;       // versioned memory for rewrites
 	uint32_t                 iVersionRewrite;       // active version number
 	uint64_t                 numRewrite;            // number of rewrites performed
 
@@ -4385,10 +4385,11 @@ struct baseTree_t {
 		assert(numRoots > 0);
 
 		/*
-		 * File header
+		 * File header.
+		 * Needs to be static because its address is returned
 		 */
 
-		baseTreeHeader_t header;
+		static baseTreeHeader_t header;
 		memset(&header, 0, sizeof header);
 
 		// zeros for alignment

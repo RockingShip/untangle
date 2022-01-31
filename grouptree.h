@@ -532,16 +532,18 @@ struct groupTree_t {
 	 */
 	virtual ~groupTree_t() {
 		// check if entrypoints are compromised
-		assert(this->N[0].gid == 0);
-		assert(this->N[0].next == 0);
-		assert(this->N[0].prev == 0);
-		assert(this->N[0].weight == 0);
-		for (uint32_t iNode = this->kstart; iNode < this->nstart; iNode++) {
-			groupNode_t *pNode = this->N + iNode;
-			assert(pNode->gid == iNode);
-			assert(pNode->next == iNode);
-			assert(pNode->prev == iNode);
-			assert(pNode->weight == 1);
+		if (this->N) {
+			assert(this->N[0].gid == 0);
+			assert(this->N[0].next == 0);
+			assert(this->N[0].prev == 0);
+			assert(this->N[0].weight == 0);
+			for (uint32_t iNode = this->kstart; iNode < this->nstart; iNode++) {
+				groupNode_t *pNode = this->N + iNode;
+				assert(pNode->gid == iNode);
+				assert(pNode->next == iNode);
+				assert(pNode->prev == iNode);
+				assert(pNode->weight == 1);
+			}
 		}
 
 		// release allocations if not mmapped
@@ -5748,7 +5750,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			nid = this->N[nid].gid;
 
 		// list header is non-info. Skip to next node
-		assert(this->N[nid].next != nid);
 		if (nid >= this->nstart && this->N[nid].sid == db.SID_SELF) {
 			/*
 			 * @date 2022-01-20 00:57:37
