@@ -203,6 +203,19 @@ struct groupTree_t {
 	 */
 
 	/**
+	 * Select either `expandSignature()` or `exandMember()`.
+	 * 
+	 * Signatures are the reference signatures, 
+	 *
+	 * NOTE: for `groupTree_t` this will allocate at least 11 arrays of DEFAULT_MAXNODE*sizeof(uint32_t)
+	 *
+	 * @constant {bool} GROUPTREE_DEFAULT_EXPANDMEMBER
+	 */
+	#if !defined(GROUPTREE_DEFAULT_EXPANDMEMBER)
+	#define GROUPTREE_DEFAULT_EXPANDMEMBER true
+	#endif
+
+	/**
 	 * Part of the core algorithm in detecting identical groups, is to expand nodes based on signature members.
 	 * Members are considered the minimal collection of structures and their components to reach all signature id's.
 	 * Recursively expanding structures turns out to escalate and requires some form of dampening.
@@ -270,10 +283,11 @@ struct groupTree_t {
 	#endif
 
 	enum {
-		DEFAULT_MAXDEPTH = GROUPTREE_DEFAULT_MAXDEPTH,
-		DEFAULT_MAXNODE  = GROUPTREE_DEFAULT_MAXNODE,
-		DEFAULT_SPEED    = GROUPTREE_DEFAULT_SPEED,
-		MAXPOOLARRAY     = GROUPTREE_DEFAULT_MAXPOOLARRAY,
+		DEFAULT_EXPANDMEMBER = GROUPTREE_DEFAULT_EXPANDMEMBER,
+		DEFAULT_MAXDEPTH     = GROUPTREE_DEFAULT_MAXDEPTH,
+		DEFAULT_MAXNODE      = GROUPTREE_DEFAULT_MAXNODE,
+		DEFAULT_SPEED        = GROUPTREE_DEFAULT_SPEED,
+		MAXPOOLARRAY         = GROUPTREE_DEFAULT_MAXPOOLARRAY,
 	};
 
 	/*
@@ -305,6 +319,7 @@ struct groupTree_t {
 	uint32_t                 system;                // node of balanced system
 	unsigned                 maxDepth;              // Max node expansion depth
 	unsigned		 speed;			// Speed setting
+	bool			 useExpandMember;	// select between `expandSignature()`/`expandMember()`.
 	// primary fields
 	uint32_t                 kstart;                // first input key id.
 	uint32_t                 ostart;                // first output key id.
@@ -378,6 +393,7 @@ struct groupTree_t {
 		system(0),
 		maxDepth(DEFAULT_MAXDEPTH),
 		speed(DEFAULT_SPEED),
+		useExpandMember(DEFAULT_EXPANDMEMBER),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -443,6 +459,7 @@ struct groupTree_t {
 		system(0),
 		maxDepth(DEFAULT_MAXDEPTH),
 		speed(DEFAULT_SPEED),
+		useExpandMember(DEFAULT_EXPANDMEMBER),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -3000,7 +3017,7 @@ struct groupTree_t {
 		 * "STATE" is the analysis of the imputs, the result after constant folding, and how that maps to the resulting Q/T/F
 		 * 
 		 * "ACTIONS" is code how to rewrite the arguments.
-		 *  Instructions are comma seperated so it all fits in a single return statement.
+		 *  Instructions are comma seperated, so it all fits in a single return statement.
 		 *  All `QTF` and `QnTF` fall through as their duplicate argument detection is more complicated. 
 		 *
 		 */
@@ -3081,7 +3098,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 		// @formatter:off
 		if (T & I) {
-			const uint32_t Tu = T & ~IBIT; // shadow first (now outdated) declaration
+			const uint32_t Tu = T & ~IBIT; // shadow (now outdated) declaration
 
 			// QnTF
 
@@ -3335,11 +3352,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				}
 			}
 		}
-
-		// update to latest
-		Q  = updateToLatest(Q);
-		Tu = updateToLatest(Tu);
-		F  = updateToLatest(F);
 
 		/*
 		 * allocate storage for `addBasicNode()`
@@ -3861,7 +3873,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				 */
 				if (depth + 1 < this->maxDepth && pSignature->size > 1) {
 
-					if (false) {
+					if (!this->useExpandMember) {
 						uint32_t ret = expandSignature(layer, sid, finalSlots, depth + 1);
 
 						// silently ignore
@@ -6706,7 +6718,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				if (this->N[iGroup].gid != iGroup)
 					continue; // not start of list
 
-				groupNode_t *pNode = this->N + iGroup;
+				groupNode_t *pNode = this->N + iGroup; // todo: saving only headers is insufficient
 
 				/*
 				 * Output remapped header

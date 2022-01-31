@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-01-31 15:30:26 Added: `groupTree_t::useExpandMember`.
 2022-01-31 15:03:16 Changed: Lost+Found
 2022-01-31 00:49:07 Added: `groupTree_t::normaliseQTF()` which is a totally revised Q/T/F normalisation method.
 2022-01-30 00:14:30 Fixed: Clear node index when `groupTree_t::lookupNode()` fails.
