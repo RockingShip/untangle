@@ -187,7 +187,6 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --[no-]generate                 Invoke generator for new candidates [default=%s]\n", app.opt_generate ? "enabled" : "disabled");
 		fprintf(stderr, "\t-h --help                          This list\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file [default=%s]\n", app.opt_load ? app.opt_load : "");
-		fprintf(stderr, "\t   --lookupsafe                    Only lookup signatures are safe\n");
 		fprintf(stderr, "\t   --mode=<number>                 Operational mode [default=%u]\n", app.opt_mode);
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --reverse                       Reverse order of signatures\n");
@@ -255,7 +254,6 @@ int main(int argc, char *argv[]) {
 			LO_FORCE,
 			LO_GENERATE,
 			LO_LOAD,
-			LO_LOOKUPSAFE,
 			LO_MODE,
 			LO_NOGENERATE,
 			LO_REVERSE,
@@ -311,7 +309,6 @@ int main(int argc, char *argv[]) {
 			{"burst",              1, 0, LO_BURST},
 			{"generate",           0, 0, LO_GENERATE},
 			{"load",               1, 0, LO_LOAD},
-			{"lookupsafe",         0, 0, LO_LOOKUPSAFE},
 			{"mode",               1, 0, LO_MODE},
 			{"reverse",            0, 0, LO_REVERSE},
 			{"text",               2, 0, LO_TEXT},
@@ -411,9 +408,6 @@ int main(int argc, char *argv[]) {
 			break;
 		case LO_LOAD:
 			app.opt_load = optarg;
-			break;
-		case LO_LOOKUPSAFE:
-			app.opt_lookupSafe++;
 			break;
 		case LO_MODE:
 			app.opt_mode = ::strtoul(optarg, NULL, 0);
@@ -925,6 +919,7 @@ int main(int argc, char *argv[]) {
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
+		db.creationFlags = ctx.flags;
 		db.save(app.arg_outputDatabase);
 	}
 

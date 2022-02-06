@@ -1044,6 +1044,17 @@ struct genmemberContext_t : dbtool_t {
 			/*
 			 * @date 2021-07-31 17:33:50
 			 * Don't add unnecessary placeholders
+			 * 
+			 * @date 2022-02-02 18:48:24
+			 * Although this might be smart for "endpoint" signatures,
+			 *   when used as component, these placeholders might be valid
+			 * For example in  the replacement of "ab^ca?" which is "abacb!!abc!cb!a!"
+			 * The only possibility for "ab^" is "abacb!!" which would be otherwise rejected because of this test
+			 * 
+			 * @date 2022-02-05 18:39:44
+			 * 
+			 * Idea was nice, but this will crash `groupTree_t::expandMember()`
+			 * So keep unchanged
 			 */
 			cmp = '*'; // reject
 		} else if (pSignature->flags & signature_t::SIGMASK_SAFE) {
@@ -1893,7 +1904,8 @@ struct genmemberContext_t : dbtool_t {
 				numEmpty++;
 			else if (!(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numUnsafe++;
-			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+
+			if (!(pSignature->flags & signature_t::SIGMASK_OPTIONAL) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				numIncomplete++;
 		}
 

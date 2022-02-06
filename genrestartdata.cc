@@ -577,14 +577,14 @@ int main(int argc, char *argv[]) {
 			app.opt_taskId = p ? atoi(p) : 0;
 			if (app.opt_taskId < 1) {
 				fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-				exit(0);
+				exit(1);
 			}
 
 			p = getenv("SGE_TASK_LAST");
 			app.opt_taskLast = p ? atoi(p) : 0;
 			if (app.opt_taskLast < 1) {
 				fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-				exit(0);
+				exit(1);
 			}
 
 			if (app.opt_taskId > app.opt_taskLast) {

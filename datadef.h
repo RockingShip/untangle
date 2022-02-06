@@ -167,13 +167,13 @@ struct signature_t {
 		SIGFLAG_SAFE     = 0, // It is safe to use the display name to reconstruct structures
 		SIGFLAG_PROVIDES = 1, // this signature provides as an operand
 		SIGFLAG_REQUIRED = 2, // this signature is used as an operand
-		SIGFLAG_KEY      = 3, // this signature is used as key/lookup for `rewriteData[]`
+		SIGFLAG_OPTIONAL = 3, // this signature is optional and may become empty during compacting
 
 		// @formatter: off
 		SIGMASK_SAFE     = 1 << SIGFLAG_SAFE,
 		SIGMASK_PROVIDES = 1 << SIGFLAG_PROVIDES,
 		SIGMASK_REQUIRED = 1 << SIGFLAG_REQUIRED,
-		SIGMASK_KEY      = 1 << SIGFLAG_KEY,
+		SIGMASK_OPTIONAL = 1 << SIGFLAG_OPTIONAL,
 		// @formatter: on
 	};
 

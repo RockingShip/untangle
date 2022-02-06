@@ -106,8 +106,8 @@ struct genportContext_t : dbtool_t {
 				signatureCRC = crc32Name(signatureCRC, "P");
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 				signatureCRC = crc32Name(signatureCRC, "R");
-			if (pSignature->flags & signature_t::SIGMASK_KEY)
-				signatureCRC = crc32Name(signatureCRC, "K");
+			if (pSignature->flags & signature_t::SIGMASK_OPTIONAL)
+				signatureCRC = crc32Name(signatureCRC, "O");
 		}
 
 		return signatureCRC;
@@ -321,8 +321,8 @@ struct genportContext_t : dbtool_t {
 				fprintf(f, "P");
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 				fprintf(f, "R");
-			if (pSignature->flags & signature_t::SIGMASK_KEY)
-				fprintf(f, "K");
+			if (pSignature->flags & signature_t::SIGMASK_OPTIONAL)
+				fprintf(f, "O");
 
 			fprintf(f, "\"]\n");
 		}
@@ -405,8 +405,8 @@ struct genportContext_t : dbtool_t {
 					pSignature->flags |= signature_t::SIGMASK_PROVIDES;
 				else if (*pFlags == 'R')
 					pSignature->flags |= signature_t::SIGMASK_REQUIRED;
-				else if (*pFlags == 'K')
-					pSignature->flags |= signature_t::SIGMASK_KEY;
+				else if (*pFlags == 'O')
+					pSignature->flags |= signature_t::SIGMASK_OPTIONAL;
 				else
 					ctx.fatal("\n{\"error\":\"unknown flag\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
 
@@ -441,8 +441,8 @@ struct genportContext_t : dbtool_t {
 		uint32_t expectedCRC = json_integer_value(json_object_get(jInput, "signatureCRC"));
 		uint32_t encounteredCRC = calcCRCsignatures();
 
-		if (expectedCRC != encounteredCRC) {
-			ctx.fatal("\n{\"error\":\"signature CRC failed\",\"where\":\"%s:%s:%d\",\"expected\":%u,\"encountered\":%u}\n", __FUNCTION__, __FILE__, __LINE__, expectedCRC, encounteredCRC);
+		if (encounteredCRC != expectedCRC) {
+			ctx.fatal("\n{\"error\":\"signature CRC failed\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, encounteredCRC, expectedCRC);
 		}
 	}
 
@@ -574,8 +574,8 @@ struct genportContext_t : dbtool_t {
 		uint32_t expectedCRC = json_integer_value(json_object_get(jInput, "swapCRC"));
 		uint32_t encounteredCRC = calcCRCswaps();
 
-		if (expectedCRC != encounteredCRC) {
-			ctx.fatal("\n{\"error\":\"swap CRC failed\",\"where\":\"%s:%s:%d\",\"expected\":%u,\"encountered\":%u}\n", __FUNCTION__, __FILE__, __LINE__, expectedCRC, encounteredCRC);
+		if (encounteredCRC != expectedCRC) {
+			ctx.fatal("\n{\"error\":\"swap CRC failed\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, encounteredCRC, expectedCRC);
 		}
 	}
 
@@ -785,8 +785,8 @@ struct genportContext_t : dbtool_t {
 		uint32_t expectedCRC = json_integer_value(json_object_get(jInput, "memberCRC"));
 		uint32_t encounteredCRC = calcCRCmembers();
 
-		if (expectedCRC != encounteredCRC) {
-			ctx.fatal("\n{\"error\":\"member CRC failed\",\"where\":\"%s:%s:%d\",\"expected\":%u,\"encountered\":%u}\n", __FUNCTION__, __FILE__, __LINE__, expectedCRC, encounteredCRC);
+		if (encounteredCRC != expectedCRC) {
+			ctx.fatal("\n{\"error\":\"member CRC failed\",\"where\":\"%s:%s:%d\",\"encountered\":%u,\"expected\":%u}\n", __FUNCTION__, __FILE__, __LINE__, encounteredCRC, expectedCRC);
 		}
 	}
 

@@ -573,14 +573,14 @@ int main(int argc, char *argv[]) {
 				app.opt_taskId = p ? atoi(p) : 0;
 				if (app.opt_taskId < 1) {
 					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-					exit(0);
+					exit(1);
 				}
 
 				p = getenv("SGE_TASK_LAST");
 				app.opt_taskLast = p ? atoi(p) : 0;
 				if (app.opt_taskLast < 1) {
 					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-					exit(0);
+					exit(1);
 				}
 
 				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
@@ -1004,8 +1004,6 @@ int main(int argc, char *argv[]) {
 					else
 						printf("s");
 				}
-				if (db.signatures[pMember->sid].flags & signature_t::SIGMASK_KEY)
-					printf("K");
 				if (pMember->flags & member_t::MEMMASK_COMP)
 					printf("C");
 				if (pMember->flags & member_t::MEMMASK_LOCKED)
@@ -1052,6 +1050,7 @@ int main(int argc, char *argv[]) {
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
+		db.creationFlags = ctx.flags;
 		db.save(app.arg_outputDatabase);
 	}
 

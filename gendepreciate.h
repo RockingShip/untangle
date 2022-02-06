@@ -164,8 +164,6 @@ struct gendepreciateContext_t : dbtool_t {
 	unsigned   opt_reverse;
 	/// @var {number} --text, textual output instead of binary database
 	unsigned opt_text;
-	/// @var {string} only lookup signatures are safe
-	unsigned opt_lookupSafe;
 
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
@@ -208,7 +206,6 @@ struct gendepreciateContext_t : dbtool_t {
 		opt_load           = NULL;
 		opt_reverse        = 0;
 		opt_text           = 0;
-		opt_lookupSafe     = 0;
 
 		pStore      = NULL;
 
@@ -409,7 +406,7 @@ struct gendepreciateContext_t : dbtool_t {
 			}
 
 			if (cntActive == 0) {
-				if (!opt_lookupSafe || (pSignature->flags & signature_t::SIGMASK_KEY))
+				if (!(pSignature->flags & signature_t::SIGMASK_OPTIONAL))
 					ctx.fatal("\n{\"error\":\"signature becomes empty\",\"where\":\"%s:%s:%d\",\"linenr\":%lu,\"sid\":%u,\"name\":\"%s\"}\n",
 						  __FUNCTION__, __FILE__, __LINE__, ctx.progress, iSid, pSignature->name);
 			}
@@ -477,7 +474,7 @@ struct gendepreciateContext_t : dbtool_t {
 		for (uint32_t iSid = pStore->numSignature - 1; iSid >= pStore->IDFIRST; --iSid) {
 			signature_t *pSignature = pStore->signatures + iSid;
 
-			if (opt_lookupSafe && !(pSignature->flags & signature_t::SIGMASK_KEY))
+			if (pSignature->flags & signature_t::SIGMASK_OPTIONAL)
 				continue;
 
 			unsigned cntActive  = 0; // number of active members for this signature
@@ -808,7 +805,7 @@ struct gendepreciateContext_t : dbtool_t {
 			 * This may give different results for different burst settings
 			 */
 
-			// reset burst when all members are exausted.
+			// reset burst when all members are exhausted.
 			if (burstSize == 0)
 				burstSize = opt_burst;
 
@@ -834,18 +831,13 @@ struct gendepreciateContext_t : dbtool_t {
 			 * In such a case, anticipate this by reducing the burst size too (or the next round is certain to fail).
 			 */
 			bool allSafe = true;
-			if (opt_lookupSafe) {
-				// only the lookup signatures must be safe
-				for (uint32_t k = pStore->IDFIRST; k < pStore->numSignature; k++) {
-					if (pStore->signatures[k].flags & signature_t::SIGMASK_KEY)
-						if (pSafeSid[k] != iVersionSafe) {
-							allSafe = false; // rewrites must be safe
-							break;
-						}
-				}
-			} else {
-				// all signature groups must be safe
-				allSafe = (cntSid == pStore->numSignature - pStore->IDFIRST);
+
+			for (uint32_t k = pStore->IDFIRST; k < pStore->numSignature; k++) {
+				if (!(pStore->signatures[k].flags & signature_t::SIGMASK_OPTIONAL))
+					if (pSafeSid[k] != iVersionSafe) {
+						allSafe = false; // rewrites must be safe
+						break;
+					}
 			}
 
 			if (allSafe) {

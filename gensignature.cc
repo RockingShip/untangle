@@ -264,6 +264,7 @@ void usage(char *argv[], bool verbose) {
 		fprintf(stderr, "\t   --listused                      List used/non-empty signatures, for inclusion\n");
 		fprintf(stderr, "\t   --load=<file>                   Read candidates from file [default=%s]\n", app.opt_load ? app.opt_load : "");
 		fprintf(stderr, "\t   --markmixed                     Flag signatures that have pure with top-level mixed members\n");
+		fprintf(stderr, "\t   --markoptional                  Flag signatures are optional and may become compressed\n");
 		fprintf(stderr, "\t-q --quiet                         Say less\n");
 		fprintf(stderr, "\t   --text[=1]                      Brief accepted `foundTree()` candidates\n");
 		fprintf(stderr, "\t   --text=2                        Verbose accepted `foundTree()` candidates\n");
@@ -339,6 +340,7 @@ int main(int argc, char *argv[]) {
 			LO_LISTUSED,
 			LO_LOAD,
 			LO_MARKMIXED,
+			LO_MARKOPTIONAL,
 			LO_NOGENERATE,
 			LO_TEXT,
 			LO_TIMER,
@@ -397,6 +399,7 @@ int main(int argc, char *argv[]) {
 			{"listused",           0, 0, LO_LISTUSED},
 			{"load",               1, 0, LO_LOAD},
 			{"markmixed",          0, 0, LO_MARKMIXED},
+			{"markoptional",       0, 0, LO_MARKOPTIONAL},
 			{"no-generate",        0, 0, LO_NOGENERATE},
 			{"text",               2, 0, LO_TEXT},
 			{"truncate",           0, 0, LO_TRUNCATE},
@@ -513,6 +516,9 @@ int main(int argc, char *argv[]) {
 		case LO_MARKMIXED:
 			app.opt_markMixed++;
 			break;
+		case LO_MARKOPTIONAL:
+			app.opt_markOptional++;
+			break;
 		case LO_NOGENERATE:
 			app.opt_generate = 0;
 			break;
@@ -565,14 +571,14 @@ int main(int argc, char *argv[]) {
 				app.opt_taskId = p ? atoi(p) : 0;
 				if (app.opt_taskId < 1) {
 					fprintf(stderr, "Missing environment SGE_TASK_ID\n");
-					exit(0);
+					exit(1);
 				}
 
 				p = getenv("SGE_TASK_LAST");
 				app.opt_taskLast = p ? atoi(p) : 0;
 				if (app.opt_taskLast < 1) {
 					fprintf(stderr, "Missing environment SGE_TASK_LAST\n");
-					exit(0);
+					exit(1);
 				}
 
 				if (app.opt_taskId < 1 || app.opt_taskId > app.opt_taskLast) {
@@ -894,11 +900,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (app.opt_listIncomplete) {
-		// list sigatures used for lookups but are not SAFE
+		// list signatures used for lookups but are not SAFE
 		for (uint32_t iSid = db.IDFIRST; iSid < db.numSignature; iSid++) {
 			signature_t *pSignature = db.signatures + iSid;
 
-			if ((pSignature->flags & signature_t::SIGMASK_KEY) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
+			if (!(pSignature->flags & signature_t::SIGMASK_OPTIONAL) && !(pSignature->flags & signature_t::SIGMASK_SAFE))
 				app.signatureLine(pSignature);
 		}
 		exit(0);
@@ -1057,8 +1063,8 @@ int main(int argc, char *argv[]) {
 				putchar('P');
 			if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 				putchar('R');
-			if (pSignature->flags & signature_t::SIGMASK_KEY)
-				putchar('K');
+			if (pSignature->flags & signature_t::SIGMASK_OPTIONAL)
+				putchar('O');
 			putchar('\n');
 		}
 	}
@@ -1099,6 +1105,7 @@ int main(int argc, char *argv[]) {
 		signal(SIGINT, sigintHandler);
 		signal(SIGHUP, sigintHandler);
 
+		db.creationFlags = ctx.flags;
 		db.save(app.arg_outputDatabase);
 	}
 

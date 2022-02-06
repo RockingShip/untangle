@@ -219,8 +219,10 @@ struct gensignatureContext_t : dbtool_t {
 	unsigned   opt_listUsed;
 	/// @var {string} name of file containing members
 	const char *opt_load;
-	/// @var {number} flag signatures that have pure with top-level mixed members
+	/// @var {number} Flag signatures that have pure with top-level mixed members
 	unsigned opt_markMixed;
+	/// @var {number} Flag signatures are optional and may become compressed
+	unsigned opt_markOptional;
 	/// @var {number} --mixed, consider/accept top-level mixed
 	unsigned opt_mixed;
 	/// @var {number} task Id. First task=1
@@ -264,6 +266,7 @@ struct gensignatureContext_t : dbtool_t {
 		opt_listUsed       = 0;
 		opt_load           = NULL;
 		opt_markMixed      = 0;
+		opt_markOptional   = 0;
 		opt_mixed          = 0;
 		opt_taskId         = 0;
 		opt_taskLast       = 0;
@@ -480,8 +483,8 @@ struct gensignatureContext_t : dbtool_t {
 
 				signature_t *pSignature = pStore->signatures + sid;
 				pSignature->flags = 0;
-				if (opt_markMixed && area != FULL)
-					pSignature->flags |= signature_t::SIGMASK_KEY;
+				if (opt_markOptional)
+					pSignature->flags |= signature_t::SIGMASK_OPTIONAL;
 				pSignature->size  = treeR.count - tinyTree_t::TINYTREE_NSTART;
 
 				pSignature->numPlaceholder = numPlaceholder;
@@ -493,11 +496,6 @@ struct gensignatureContext_t : dbtool_t {
 		}
 
 		signature_t *pSignature = pStore->signatures + sid;
-
-		if (opt_markMixed && area != FULL && !this->readOnlyMode) {
-			// update flags
-			pSignature->flags |= signature_t::SIGMASK_KEY;
-		}
 
 		/*
 		 * !! NOTE: The following selection is just for the display name.
@@ -738,8 +736,8 @@ struct gensignatureContext_t : dbtool_t {
 			putchar('P');
 		if (pSignature->flags & signature_t::SIGMASK_REQUIRED)
 			putchar('R');
-		if (pSignature->flags & signature_t::SIGMASK_KEY)
-			putchar('K');
+		if (pSignature->flags & signature_t::SIGMASK_OPTIONAL)
+			putchar('O');
 		putchar('\n');
 	}
 
@@ -813,7 +811,7 @@ struct gensignatureContext_t : dbtool_t {
 			// calculate values
 			unsigned        newPlaceholder = 0, newEndpoint = 0, newBackRef = 0;
 			unsigned        beenThere      = 0;
-			for (const char *p             = pName; *p; p++) {
+			for (const char *p = pName; *p; p++) {
 				if (::islower(*p)) {
 					if (!(beenThere & (1 << (*p - 'a')))) {
 						newPlaceholder++;
@@ -853,8 +851,8 @@ struct gensignatureContext_t : dbtool_t {
 							pSignature->flags |= signature_t::SIGMASK_PROVIDES;
 						} else if (*pFlags == 'R') {
 							pSignature->flags |= signature_t::SIGMASK_REQUIRED;
-						} else if (*pFlags == 'K') {
-							pSignature->flags |= signature_t::SIGMASK_KEY;
+						} else if (*pFlags == 'O') {
+							pSignature->flags |= signature_t::SIGMASK_OPTIONAL;
 						} else
 							ctx.fatal("\n{\"error\":\"unknown flag\",\"where\":\"%s:%s:%d\",\"name\":\"%s\"}\n", __FUNCTION__, __FILE__, __LINE__, pName);
 
