@@ -314,8 +314,8 @@ struct selftestContext_t : dbtool_t {
 						encountered ^= 1; // invert result
 
 					if (expected != encountered) {
-						printf("{\"error\":\"compare failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"expected\":\"%08x\",\"encountered\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
-						       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, expected, encountered, Qi ? '~' : ' ', Qu, Ti ? '~' : ' ', Tu, Fi ? '~' : ' ', Fu, q, t, f, c, b, a, treeName);
+						printf("{\"error\":\"compare failed\",\"where\":\"%s:%s:%d\",\"testNr\":%u,\"iFast\":%u,\"iQnTF\":%u,\"iSkin\":%u,\"encountered\":\"%08x\",\"expected\":\"%08x\",\"Q\":\"%c%x\",\"T\":\"%c%x\",\"F\":\"%c%x\",\"q\":\"%x\",\"t\":\"%x\",\"f\":\"%x\",\"c\":\"%x\",\"b\":\"%x\",\"a\":\"%x\",\"tree\":\"%s\"}\n",
+						       __FUNCTION__, __FILE__, __LINE__, testNr, iFast, iPure, iSkin, encountered, expected, Qi ? '~' : ' ', Qu, Ti ? '~' : ' ', Tu, Fi ? '~' : ' ', Fu, q, t, f, c, b, a, treeName);
 						exit(1);
 					}
 					numPassed++;

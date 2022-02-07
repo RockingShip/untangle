@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-07 10:47:27 Fixed: Typos.
 2022-02-06 20:30:31 Fixed: Changes for next dataset.
 2022-01-31 22:14:23 Changed: Let `groupTree_t::addbasicNode()` determine its own sid.
 2022-01-31 20:06:43 Fixed: CRC calculation in `geval` and sync with `eval`/`beval`.

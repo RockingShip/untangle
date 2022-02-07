@@ -6713,7 +6713,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
 			for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
-				uint32_t id = pNode->slots[iNode];
+				uint32_t id = pNode->slots[iSlot];
 
 				if (id >= this->nstart && pSelect->mem[id] != thisVersion) {
 					numCount++;
@@ -6746,7 +6746,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * mark active
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
 			pSelect->mem[RHS->roots[iRoot] & ~IBIT] = thisVersion;
 
 		pSelect->mem[RHS->system & ~IBIT] = thisVersion;

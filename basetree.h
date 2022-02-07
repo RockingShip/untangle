@@ -4063,7 +4063,7 @@ struct baseTree_t {
 		 * mark active
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
 			pSelect[RHS->roots[iRoot] & ~IBIT] = thisVersion;
 
 		pSelect[RHS->system & ~IBIT]               = thisVersion;

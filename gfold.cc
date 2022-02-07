@@ -277,14 +277,14 @@ struct gfoldContext_t {
 		pTemp->rootNames    = pNewTree->rootNames;
 
 		// set roots to self-reference
-		for (unsigned iRoot = 0; iRoot < pOldTree->estart; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++) {
 			pNewTree->roots[iRoot] = iRoot;
 			pResults->roots[iRoot] = iRoot;
 			pTemp->roots[iRoot]    = iRoot;
 		}
 
-		// set node results to zero
-		for (unsigned iRoot = pOldTree->estart; iRoot < pOldTree->numRoots; iRoot++) {
+		// set default output values to zero
+		for (unsigned iRoot = pNewTree->nstart; iRoot < pNewTree->numRoots; iRoot++) {
 			pNewTree->roots[iRoot] = 0;
 			pResults->roots[iRoot] = 0;
 			pTemp->roots[iRoot]    = 0;
@@ -295,7 +295,7 @@ struct gfoldContext_t {
 		 */
 		uint32_t *pNodeRefCount = pOldTree->allocMap();
 
-		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
+		for (uint32_t iKey = 0; iKey < pOldTree->ncount; iKey++)
 			pNodeRefCount[iKey] = 0;
 
 		for (uint32_t iGroup = pOldTree->nstart; iGroup < pOldTree->ncount; iGroup++) {
