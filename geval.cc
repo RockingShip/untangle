@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // usually here from within a debugger
+#pragma GCC optimize ("O0") // usually here from within a debugger
 
 /*
  * geval.cc
@@ -183,103 +183,78 @@ struct gevalContext_t {
 	 *
 	 * Create/load tree based on arguments
 	 */
-	groupTree_t *main(unsigned numArgs, char *inputArgs[]) {
+	void handleArgument(const char *inputName) {
 
 		/*
-		 * Determine number of keys
+		 * Open input tree
 		 */
-		unsigned      numKeys = 0;
-		for (unsigned iArg    = 0; iArg < numArgs; iArg++) {
-			unsigned highest = groupTree_t::highestEndpoint(ctx, inputArgs[iArg]);
-
-			if (highest + 1 > numKeys)
-				numKeys = highest + 1;
-		}
-
-		// number of keys must be at least that of `tinyTree_t` so that CRC's are compatible
-		if (numKeys < MAXSLOTS)
-			numKeys = MAXSLOTS;
+		groupTree_t *pTree;
 
 		/*
 		 * Create tree
 		 */
-		uint32_t kstart = 2;
-		uint32_t ostart = kstart + numKeys;
-		uint32_t estart = ostart + numArgs;
-		uint32_t nstart = estart;
+		unsigned   highest     = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
+		const char *pTransform = strchr(inputName, '/'); // get transform
 
-		groupTree_t *pTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
+		uint32_t kstart = 2;
+		uint32_t nstart = kstart + highest + 1; // inputs
+
+		pTree = new groupTree_t(ctx, *pStore, kstart, /*ostart=*/nstart, /*estart*/nstart, nstart, opt_maxNode, ctx.flags);
 		pTree->maxDepth = this->opt_maxDepth;
 		pTree->speed = this->opt_speed;
-		
+
+		if (pTransform) {
+			pTree->loadStringSafe(inputName, pTransform + 1);
+		} else {
+			pTree->loadStringSafe(inputName);
+		}
 
 		/*
 		 * Setup entry/root names
 		 */
-		pTree->entryNames[0] = "ZERO";
-		pTree->entryNames[1] = "ERROR";
 
-		/*
-		 * entrypoints
-		 */
-		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++) {
-			// creating is right-to-left. Storage to reverse
-			char     stack[10], *pStack = stack;
-			// value to be encoded
+		pTree->entryNames[0] = "0";
+
+		// add errors
+		for (unsigned iEntry = 1; iEntry < pTree->kstart; iEntry++)
+			pTree->entryNames[iEntry] = "ERROR";
+
+		// add default names
+		for (unsigned iEntry = kstart; iEntry < pTree->nstart; iEntry++) {
+			std::string name;
 			uint32_t value = iEntry - pTree->kstart;
 
-			// push terminator
-			*pStack++ = 0;
+			if ((iEntry - pTree->kstart) >= 26)
+				pTree->encodePrefix(name, value / 26);
+			name += (char) ('a' + (value % 26));
 
-			*pStack++ = 'a' + (value % 26);
-			value /= 26;
-
-			// process the value
-			while (value) {
-				*pStack++ = 'A' + (value % 26);
-				value /= 26;
-			}
-
-			// append, including trailing zero
-			while (*--pStack) {
-				pTree->entryNames[iEntry] += *pStack;
-			}
+			pTree->entryNames[iEntry] = name;
 		}
 
-		/*
-		 * Outputs
-		 */
-		for (unsigned iEntry = ostart; iEntry < estart; iEntry++) {
-			char str[16];
+		if (pTree->numRoots > pTree->rootNames.size())
+			pTree->rootNames.resize(pTree->numRoots);
 
-			sprintf(str, "o%d", iEntry - ostart);
-			pTree->entryNames[iEntry] = str;
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
+			char name[16];
+
+			sprintf(name, "r%d", iRoot);
+			pTree->rootNames[iRoot] = name;
 		}
 
-		pTree->rootNames = pTree->entryNames;
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+			json_t *jResult = json_object();
 
-		/*
-		 * Load arguments
-		 */
-		for (unsigned iArg = 0; iArg < numArgs; iArg++) {
-			// find transform delimiter
-			const char *pTransform = strchr(inputArgs[iArg], '/');
+			jResult = json_object();
 
-			if (pTransform)
-				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg], pTransform + 1);
-			else
-				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg]);
+			json_object_set_new_nocheck(jResult, "kstart", json_integer(pTree->kstart));
+			json_object_set_new_nocheck(jResult, "nstart", json_integer(pTree->nstart));
+			json_object_set_new_nocheck(jResult, "ncount", json_integer(pTree->ncount));
+			json_object_set_new_nocheck(jResult, "size", json_integer(pTree->ncount - pTree->nstart));
+
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			json_delete(jResult);
 		}
 
-		return pTree;
-	}
-
-	/**
-	 * @date 2021-06-08 21:01:18
-	 *
-	 * What `eval` does
-	 */
-	int main(groupTree_t *pTree) {
 		/*
 		 * Record footprints for each node to maintain the results to compare trees
 		 * Each bit is an independent test.
@@ -451,7 +426,7 @@ struct gevalContext_t {
 		uint32_t firstcrc = 0;
 		bool     differ   = false;
 
-		for (unsigned iRoot = pTree->ostart; iRoot < pTree->estart; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
 			std::string name;
 			std::string transform;
 
@@ -507,7 +482,7 @@ struct gevalContext_t {
 				exit(1);
 		}
 
-		return 0;
+		delete pTree;
 	}
 
 };
@@ -753,7 +728,10 @@ int main(int argc, char *argv[]) {
 		app.opt_maxNode = db.numSignature;
 	}
 
-	groupTree_t *pTree = app.main(argc - optind, argv + optind);
+	while (optind < argc) {
+		app.handleArgument(argv[optind]);
+		optind++;
+	}
 
-	return app.main(pTree);
+	return 0;
 }

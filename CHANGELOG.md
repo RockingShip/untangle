@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-07 17:39:08 Changed: Allow multi-rooted `groupTree_t` trees as strings.
 2022-02-07 22:11:44 Fixed: Code indenting in `groupTree_t::addNode()`.
 2022-02-07 10:52:07 Changed: Renamed `key` to `entry` (no code change).
 2022-02-07 10:47:27 Fixed: Typos.

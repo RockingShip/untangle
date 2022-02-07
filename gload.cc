@@ -144,7 +144,7 @@ struct gloadContext_t {
 		 * Create a real tree
 		 */
 
-		groupTree_t newTree(ctx, *pStore, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, ctx.flags);
+		groupTree_t newTree(ctx, *pStore, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, opt_maxNode, ctx.flags);
 
 		newTree.entryNames = jsonTree.entryNames;
 		newTree.rootNames  = jsonTree.rootNames;
@@ -203,7 +203,7 @@ struct gloadContext_t {
 
 			// is there a transform?
 			const char *pSlash = strchr(rootValue, '/');
-			newTree.roots[iRoot] = newTree.loadStringSafe(rootValue, pSlash ? pSlash + 1 : NULL);
+			newTree.loadStringSafe(rootValue, pSlash ? pSlash + 1 : NULL);
 
 			/* use key and value ... */
 			iter = json_object_iter_next(jData, iter);
@@ -218,7 +218,8 @@ struct gloadContext_t {
 
 			// is there a transform?
 			const char *pSlash = strchr(systemValue, '/');
-			newTree.system = newTree.loadStringSafe(systemValue, pSlash ? pSlash + 1 : NULL);
+			assert(!"todo: system");
+			/* newTree.system = */ newTree.loadStringSafe(systemValue, pSlash ? pSlash + 1 : NULL);
 		}
 
 		/*

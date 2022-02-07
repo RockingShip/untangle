@@ -196,20 +196,14 @@ struct gfoldContext_t {
 			uint32_t estart = ostart + highest;
 			uint32_t nstart = estart;
 
-			pOldTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
+			pOldTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, opt_maxNode, ctx.flags);
 //			pTree->maxDepth = this->opt_maxDepth;
 //			pTree->speed = this->opt_speed;
 
 			if (pTransform) {
-				if (!pOldTree->loadStringSafe(inputName, pTransform + 1)) {
-					fprintf(stderr, "Loading failed\n");
-					exit(1);
-				}
+				pOldTree->loadStringSafe(inputName, pTransform + 1);
 			} else {
-				if (!pOldTree->loadStringSafe(inputName)) {
-					fprintf(stderr, "Loading failed\n");
-					exit(1);
-				}
+				pOldTree->loadStringSafe(inputName);
 			}
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
@@ -230,9 +224,9 @@ struct gfoldContext_t {
 		/*
 		 * Create new tree
 		 */
-		groupTree_t *pNewTree = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		groupTree_t *pResults = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		groupTree_t *pTemp    = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		groupTree_t *pNewTree = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, opt_maxNode, ctx.flags);
+		groupTree_t *pResults = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, opt_maxNode, ctx.flags);
+		groupTree_t *pTemp    = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, opt_maxNode, ctx.flags);
 
 		/*
 		 * Setup entry/root names
@@ -729,7 +723,7 @@ struct gfoldContext_t {
 		 * Copy result to new tree without extended roots
 		 */
 		delete pTemp;
-		pTemp = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
+		pTemp = new groupTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, opt_maxNode, ctx.flags);
 		pTemp->entryNames = pOldTree->entryNames;
 		pTemp->rootNames  = pOldTree->rootNames;
 		pTemp->importActive(pNewTree);

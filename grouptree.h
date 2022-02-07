@@ -253,7 +253,7 @@ struct groupTree_t {
 	 */
 	// todo: measure runtime usage to tune this value
 	#if !defined(GROUPTREE_DEFAULT_MAXNODE)
-	#define GROUPTREE_DEFAULT_MAXNODE 200000000
+	#define GROUPTREE_DEFAULT_MAXNODE 100000000
 	#endif
 
 	/**
@@ -447,7 +447,7 @@ struct groupTree_t {
 	/*
 	 * Create a memory stored tree
 	 */
-	groupTree_t(context_t &ctx, database_t &db, uint32_t kstart, uint32_t ostart, uint32_t estart, uint32_t nstart, uint32_t numRoots, uint32_t maxNodes, uint32_t flags) :
+	groupTree_t(context_t &ctx, database_t &db, uint32_t kstart, uint32_t ostart, uint32_t estart, uint32_t nstart, uint32_t maxNodes, uint32_t flags) :
 		ctx(ctx),
 		db(db),
 		hndl(-1),
@@ -468,13 +468,13 @@ struct groupTree_t {
 		ncount(nstart),
 		gcount(0),
 		maxNodes(maxNodes),
-		numRoots(numRoots),
+		numRoots(0),
 		// names
 		entryNames(),
 		rootNames(),
 		// primary storage (allocated by storage context)
 		N((groupNode_t *) ctx.myAlloc("groupTree_t::N", maxNodes, sizeof *N)),
-		roots((uint32_t *) ctx.myAlloc("groupTree_t::roots", numRoots, sizeof *roots)),
+		roots((uint32_t *) ctx.myAlloc("groupTree_t::roots", maxNodes, sizeof *roots)),
 		// history
 		numHistory(0),
 		posHistory(0),
@@ -519,9 +519,8 @@ struct groupTree_t {
 
 		// make all `entryNames`+`rootNames` indices valid
 		entryNames.resize(nstart);
-		rootNames.resize(numRoots);
 
-		// setup default keys
+		// setup default entrypoints
 		memset(this->N + 0, 0, sizeof(*this->N));
 		this->N[0].sid = db.SID_ZERO;
 
@@ -538,10 +537,6 @@ struct groupTree_t {
 			pNode->sid      = db.SID_SELF;
 			pNode->slots[0] = iEntry;
 		}
-
-		// setup default roots
-		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
-			roots[iRoot] = iRoot;
 	}
 
 	/*
@@ -626,7 +621,8 @@ struct groupTree_t {
 	void rewind(void) {
 		// rewind nodes
 		this->ncount = this->nstart;
-
+		// release roots
+		this->numRoots = 0;
 		// invalidate lookup cache
 		++this->nodeIndexVersionNr;
 	}
@@ -5910,26 +5906,26 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	/*
 	 * @date 2021-05-22 21:22:41
 	 *
-	 * NOTE: !!! Apply any changes here also to `loadBasicString()`
-	 *
 	 * Import/add a string into tree.
-	 * NOTE: Will use `normaliseNode()`.
+	 * root names remain unchanged, Caller needs to add the missing
 	 */
-	uint32_t loadStringSafe(const char *pName, const char *pSkin = NULL) {
+	void loadStringSafe(const char *pName, const char *pSkin = NULL) {
 		assert(pName[0]); // disallow empty name
 
 		// modify if transform is present
 		uint32_t *transformList = NULL;
 		if (pSkin && *pSkin)
-			transformList = decodeTransform(ctx, kstart, nstart, pSkin);
+			transformList = decodeTransform(ctx, this->kstart, this->nstart, pSkin);
 
 		/*
 		 * init
+		 * Formerly, `pStack` was separately allocated. Now it goes directly into the roots
+		 * Now, 
 		 */
 
-		uint32_t numStack = 0;
+		uint32_t numStack = this->numRoots;
 		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap();
+		uint32_t *pStack  = roots;
 		uint32_t *pMap    = allocMap();
 		uint32_t nid;
 
@@ -5961,7 +5957,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 				if (v < this->nstart || v >= nextNode)
 					ctx.fatal("[node out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if (numStack >= this->maxNodes)
 					ctx.fatal("[stack overflow]\n");
 
 				pStack[numStack++] = pMap[v];
@@ -5985,7 +5981,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 				if (v < this->kstart || v >= this->nstart)
 					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if (numStack >= this->maxNodes)
 					ctx.fatal("[stack overflow]\n");
 
 				if (transformList)
@@ -6020,7 +6016,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 					if (v < this->nstart || v >= nextNode)
 						ctx.fatal("[node out of range: %d]\n", v);
-					if (numStack >= this->ncount)
+					if (numStack >= this->maxNodes)
 						ctx.fatal("[stack overflow]\n");
 
 					pStack[numStack++] = pMap[v];
@@ -6032,7 +6028,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 					if (v < this->kstart || v >= this->nstart)
 						ctx.fatal("[endpoint out of range: %d]\n", v);
-					if (numStack >= this->ncount)
+					if (numStack >= this->maxNodes)
 						ctx.fatal("[stack overflow]\n");
 
 					if (transformList)
@@ -6047,7 +6043,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 			case '+': {
 				// OR (appreciated)
-				if (numStack < 2)
+				if (numStack - this->numRoots < 2)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = pStack[--numStack];
@@ -6058,7 +6054,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '>': {
 				// GT (appreciated)
-				if (numStack < 2)
+				if (numStack - this->numRoots < 2)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = 0;
@@ -6069,7 +6065,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '^': {
 				// XOR/NE (appreciated)
-				if (numStack < 2)
+				if (numStack - this->numRoots < 2)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = pStack[--numStack];
@@ -6080,7 +6076,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '!': {
 				// QnTF (appreciated)
-				if (numStack < 3)
+				if (numStack - this->numRoots < 3)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = pStack[--numStack];
@@ -6091,7 +6087,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '&': {
 				// AND (depreciated)
-				if (numStack < 2)
+				if (numStack - this->numRoots < 2)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = 0;
@@ -6102,7 +6098,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '?': {
 				// QTF (depreciated)
-				if (numStack < 3)
+				if (numStack - this->numRoots < 3)
 					ctx.fatal("[stack underflow]\n");
 
 				F  = pStack[--numStack];
@@ -6113,7 +6109,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 			case '~': {
 				// NOT (support)
-				if (numStack < 1)
+				if (numStack - this->numRoots < 1)
 					ctx.fatal("[stack underflow]\n");
 
 				pStack[numStack - 1] ^= IBIT;
@@ -6131,7 +6127,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			default:
 				ctx.fatal("[bad token '%c']\n", *pattern);
 			}
-			assert(numStack >= 0);
 
 			/*
 			 * Only arrive here when Q/T/F have been set 
@@ -6163,37 +6158,15 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			pStack[numStack++] = nid;
 			pMap[nextNode++]   = nid;
 
-			if ((unsigned) numStack > maxNodes)
+			if (numStack > this->maxNodes)
 				ctx.fatal("[stack overflow]\n");
 		}
-		if (numStack != 1)
-			ctx.fatal("[stack not empty]\n");
+		
+		this->numRoots = numStack;
 
-		uint32_t ret = pStack[numStack - 1];
-
-		freeMap(pStack);
 		freeMap(pMap);
 		if (transformList)
 			ctx.myFree("groupTree_t::transformList", transformList);
-
-		/*
-		 * Return most recent group
-		 */
-		ret = updateToLatest(ret & ~IBIT) ^ (ret & IBIT);
-
-		return ret;
-	}
-
-	/*
-	 * @date 2021-05-26 21:01:25
-	 *
-	 * NOTE: !!! Apply any changes here also to `loadNormaliseString()`
-	 *
-	 * Import/add a string into tree.
-	 * NOTE: Will use `basicNode()`.
-	 */
-	uint32_t loadStringFast(const char *pName, const char *pSkin = NULL) {
-		return loadStringSafe(pName, pSkin);
 	}
 
 	/*
@@ -6366,7 +6339,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * File header
 		 */
 
-		groupTreeHeader_t header;
+		static groupTreeHeader_t header; // needs to be static as it will leave its scope
 		memset(&header, 0, sizeof header);
 
 		// zeros for alignment
@@ -6457,6 +6430,8 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			// output entrypoints and nodes
 			for (uint32_t iNode = 0; iNode < this->ncount; iNode++) {
 				const groupNode_t *pNode = this->N + iNode;
+
+				pMap[iNode] = iNode;
 
 				size_t len = sizeof(*pNode);
 				fwrite(pNode, len, 1, outf);
