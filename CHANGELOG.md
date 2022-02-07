@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-07 22:11:44 Fixed: Code indenting in `groupTree_t::addNode()`.
 2022-02-07 10:52:07 Changed: Renamed `key` to `entry` (no code change).
 2022-02-07 10:47:27 Fixed: Typos.
 2022-02-06 20:30:31 Fixed: Changes for next dataset.
@@ -31,7 +32,7 @@ TODO: genpattern list
 `groupTree_t`, the engine of untangle, is finally operational. The test wrapper being `geval`.
 
 Some known issues:
- - The ways of self-modifying recursive structures are sometimes weird and unpected.collapse
+ - The ways of self-modifying recursive structures are sometimes weird and unexpected.
  - Sometimes it throws an assert at unexpected moments, even after hours worth of crunch
  - An alternative non-destructive layer merging mechanism is on the agenda
  - A better speed/weight balancing system: save the top-N best weights of each signature size to limit the C-products

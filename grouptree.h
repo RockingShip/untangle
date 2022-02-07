@@ -2723,21 +2723,21 @@ struct groupTree_t {
 		} else {
 			bool     once = true;
 			uint32_t Ri   = 0;
-			
+
 			for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
 				expandMember(layer, mid, pSlots, 0, pInvert);
 				assert(layer.gid != IBIT); // top-level calls should not be ignored
-			}
 
-			if (pInvert) {
-				if (once) {
-					// save if result is inverted
-					Ri   = *pInvert;
-					once = false;
-				} else {
-					// must be consistent
-					assert(Ri == *pInvert);
-			}
+				if (pInvert) {
+					if (once) {
+						// save if result is inverted
+						Ri   = *pInvert;
+						once = false;
+					} else {
+						// must be consistent
+						assert(Ri == *pInvert);
+					}
+				}
 			}
 		}
 
