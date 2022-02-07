@@ -294,7 +294,7 @@ struct groupTree_t {
 	 * Flags to indicate if sections were allocated or mapped
 	 */
 	enum {
-		ALLOCFLAG_NAMES = 0,    // key/root names
+		ALLOCFLAG_NAMES = 0,    // entry/root names
 		ALLOCFLAG_NODES,        // nodes
 		ALLOCFLAG_ROOTS,        // roots
 		ALLOCFLAG_HISTORY,      // history
@@ -330,7 +330,7 @@ struct groupTree_t {
 	uint32_t                 maxNodes;              // maximum tree capacity
 	uint32_t                 numRoots;              // entries in roots[]
 	// names
-	std::vector<std::string> keyNames;              // sliced version of `keyNameData`
+	std::vector<std::string> entryNames;            // sliced version of `entryNameData`
 	std::vector<std::string> rootNames;             // sliced version of `rootNameData`
 	// primary storage
 	groupNode_t              *N;                    // nodes
@@ -404,7 +404,7 @@ struct groupTree_t {
 		maxNodes(0),
 		numRoots(0),
 		// names
-		keyNames(),
+		entryNames(),
 		rootNames(),
 		// primary storage (allocated by storage context)
 		N(NULL),
@@ -470,7 +470,7 @@ struct groupTree_t {
 		maxNodes(maxNodes),
 		numRoots(numRoots),
 		// names
-		keyNames(),
+		entryNames(),
 		rootNames(),
 		// primary storage (allocated by storage context)
 		N((groupNode_t *) ctx.myAlloc("groupTree_t::N", maxNodes, sizeof *N)),
@@ -517,26 +517,26 @@ struct groupTree_t {
 		if (this->nodeIndex)
 			allocFlags |= ALLOCMASK_INDEX;
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
 		// setup default keys
 		memset(this->N + 0, 0, sizeof(*this->N));
 		this->N[0].sid = db.SID_ZERO;
 
-		for (unsigned iKey = 1; iKey < nstart; iKey++) {
-			groupNode_t *pNode = this->N + iKey;
+		for (unsigned iEntry = 1; iEntry < nstart; iEntry++) {
+			groupNode_t *pNode = this->N + iEntry;
 
 			memset(pNode, 0, sizeof(*pNode));
 
-			pNode->gid      = iKey;
-			pNode->next     = iKey;
-			pNode->prev     = iKey;
+			pNode->gid      = iEntry;
+			pNode->next     = iEntry;
+			pNode->prev     = iEntry;
 			pNode->weight   = 1;
-			pNode->hiSlotId = iKey;
+			pNode->hiSlotId = iEntry;
 			pNode->sid      = db.SID_SELF;
-			pNode->slots[0] = iKey;
+			pNode->slots[0] = iEntry;
 		}
 
 		// setup default roots
@@ -6204,7 +6204,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 * return 0 for ok.
 	 */
 	unsigned loadFile(const char *fileName, bool shared = true) {
-		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
+		if (!entryNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
 			ctx.fatal("groupTree_t::loadFile() on non-initial tree\n");
 
 		/*
@@ -6317,20 +6317,20 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		slotVersion   = allocMap(); // allocate as node-id map because of local version numbering
 		slotVersionNr = 1;
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
 		// slice names
 		{
 			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
-			for (uint32_t iKey  = 0; iKey < nstart; iKey++) {
+			for (unsigned iEntry  = 0; iEntry < nstart; iEntry++) {
 				assert(*pData != 0);
-				keyNames[iKey] = pData;
+				entryNames[iEntry] = pData;
 				pData += strlen(pData) + 1;
 			}
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
 				assert(*pData != 0);
 				rootNames[iRoot] = pData;
 				pData += strlen(pData) + 1;
@@ -6410,11 +6410,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 */
 		header.offNames = fpos;
 
-		// write keyNames
+		// write entryNames
 		for (uint32_t i = 0; i < nstart; i++) {
-			size_t len = keyNames[i].length() + 1;
+			size_t len = entryNames[i].length() + 1;
 			assert(len > 1);
-			fwrite(keyNames[i].c_str(), len, 1, outf);
+			fwrite(entryNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
 		// write rootNames
@@ -6746,7 +6746,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * mark active
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++)
 			pSelect->mem[RHS->roots[iRoot] & ~IBIT] = thisVersion;
 
 		pSelect->mem[RHS->system & ~IBIT] = thisVersion;
@@ -6766,7 +6766,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * Copy selected nodes
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->nstart; iRoot++)
 			pMap[iRoot] = iRoot;
 
 		for (uint32_t iGroup = RHS->nstart; iGroup < RHS->ncount; iGroup++) {
@@ -6790,7 +6790,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * copy roots
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
 			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
 
 		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
@@ -6829,7 +6829,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * Copy selected nodes
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->nstart; iRoot++)
 			pMap[iRoot] = iRoot;
 
 		for (uint32_t iGroup = RHS->nstart; iGroup <= (nodeId & ~IBIT); iGroup++) {
@@ -6871,8 +6871,8 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		this->rewind();
 
 		// prepare maps
-		for (unsigned iKey = 0; iKey < RHS->nstart; iKey++)
-			pMapSet[iKey] = pMapClr[iKey] = iKey;
+		for (unsigned iEntry = 0; iEntry < RHS->nstart; iEntry++)
+			pMapSet[iEntry] = pMapClr[iEntry] = iEntry;
 
 		// make fold constant
 		pMapSet[iFold] = IBIT;
@@ -6913,7 +6913,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		/*
 		 * Set roots
 		 */
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
@@ -6939,7 +6939,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 * NOTE: `inputFilename` is only for error messages
 	 */
 	void loadFileJson(json_t *jInput, const char *inputFilename) {
-		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
+		if (!entryNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
 			ctx.fatal("groupTree_t::loadFileJson() on non-initial tree\n");
 
 		/*
@@ -7004,15 +7004,15 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			exit(1);
 		}
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
 		/*
 		 * Reserved names
 		 */
-		keyNames[0]            = "0";
-		keyNames[1 /*KERROR*/] = "KERROR";
+		entryNames[0]            = "0";
+		entryNames[1 /*KERROR*/] = "KERROR";
 
 		/*
 		 * import knames
@@ -7039,7 +7039,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import onames
@@ -7066,7 +7066,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import enames
@@ -7093,7 +7093,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import rnames (extended root names)
@@ -7101,7 +7101,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 		// copy fixed part
 		for (unsigned iRoot = 0; iRoot < estart; iRoot++)
-			rootNames[iRoot] = keyNames[iRoot];
+			rootNames[iRoot] = entryNames[iRoot];
 
 		jNames = json_object_get(jInput, "rnames");
 		if (!jNames) {
@@ -7126,7 +7126,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				exit(1);
 			}
 			// copy collection
-			rootNames = keyNames;
+			rootNames = entryNames;
 		} else if (numNames != numRoots - estart) {
 			// count mismatch
 			json_t *jError = json_object();
@@ -7180,34 +7180,34 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			jResult = json_object();
 
 		/*
-		 * Key/root names
+		 * entry/root names
 		 */
-		json_t *jKeyNames = json_array();
+		json_t *jEntrynames = json_array();
 
-		// input key names
-		for (uint32_t iKey = kstart; iKey < ostart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "knames", jKeyNames);
+		// input entry names
+		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "knames", jEntrynames);
 
-		jKeyNames = json_array();
+		jEntrynames = json_array();
 
-		// output key names
-		for (uint32_t iKey = ostart; iKey < estart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "onames", jKeyNames);
+		// output entry names
+		for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "onames", jEntrynames);
 
-		jKeyNames = json_array();
+		jEntrynames = json_array();
 
-		// extended key names
-		for (uint32_t iKey = estart; iKey < nstart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "enames", jKeyNames);
+		// extended entry names
+		for (unsigned iEntry = estart; iEntry < nstart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "enames", jEntrynames);
 
 		// extended root names (which might be identical to enames)
 		bool rootsDiffer = (nstart != numRoots);
 		if (!rootsDiffer) {
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				if (keyNames[iKey].compare(rootNames[iKey]) != 0) {
+			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
+				if (entryNames[iEntry].compare(rootNames[iEntry]) != 0) {
 					rootsDiffer = true;
 					break;
 				}
@@ -7216,11 +7216,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 		if (rootsDiffer) {
 			// either roots are different or an empty set.
-			jKeyNames = json_array();
+			jEntrynames = json_array();
 
-			for (uint32_t iRoot = estart; iRoot < numRoots; iRoot++)
-				json_array_append_new(jKeyNames, json_string_nocheck(rootNames[iRoot].c_str()));
-			json_object_set_new_nocheck(jResult, "rnames", jKeyNames);
+			for (unsigned iRoot = estart; iRoot < numRoots; iRoot++)
+				json_array_append_new(jEntrynames, json_string_nocheck(rootNames[iRoot].c_str()));
+			json_object_set_new_nocheck(jResult, "rnames", jEntrynames);
 		} else {
 			json_object_set_new_nocheck(jResult, "rnames", json_string_nocheck("enames"));
 		}
@@ -7233,7 +7233,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 
 		for (uint32_t i = 0; i < this->numHistory; i++) {
-			json_array_append_new(jHistory, json_string_nocheck(keyNames[this->history[i]].c_str()));
+			json_array_append_new(jHistory, json_string_nocheck(entryNames[this->history[i]].c_str()));
 		}
 
 		json_object_set_new_nocheck(jResult, "history", jHistory);

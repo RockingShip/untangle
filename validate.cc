@@ -79,7 +79,7 @@ struct validateContext_t {
 	// NOTE: Trees may have additional extended keys which will effect the following 
 	uint32_t                 nstart;
 	uint32_t                 numRoots;
-	std::vector<std::string> keyNames;
+	std::vector<std::string> entryNames;
 	std::vector<std::string> rootNames;
 
 
@@ -151,13 +151,13 @@ struct validateContext_t {
 		/*
 		 * import dimensions
 		 */
-		kstart    = jsonTree.kstart;
-		ostart    = jsonTree.ostart;
-		estart    = jsonTree.estart;
-		nstart    = jsonTree.nstart;
-		numRoots  = jsonTree.numRoots;
-		keyNames  = jsonTree.keyNames;
-		rootNames = jsonTree.rootNames;
+		kstart     = jsonTree.kstart;
+		ostart     = jsonTree.ostart;
+		estart     = jsonTree.estart;
+		nstart     = jsonTree.nstart;
+		numRoots   = jsonTree.numRoots;
+		entryNames = jsonTree.entryNames;
+		rootNames  = jsonTree.rootNames;
 
 		/*
 		 * Import tests
@@ -355,13 +355,13 @@ struct validateContext_t {
 
 		// check names
 		for (uint32_t iName = kstart; iName < estart; iName++) {
-			if (keyNames[iName].compare(tree.keyNames[iName]) != 0) {
+			if (entryNames[iName].compare(tree.entryNames[iName]) != 0) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 				json_object_set_new_nocheck(jError, "filename", json_string(fname));
 				json_object_set_new_nocheck(jError, "kid", json_integer(iName));
-				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(keyNames[iName].c_str()));
-				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.keyNames[iName].c_str()));
+				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(entryNames[iName].c_str()));
+				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.entryNames[iName].c_str()));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 		}
@@ -389,7 +389,7 @@ struct validateContext_t {
 			if (tree.system) {
 				json_array_append_new(jList, json_string_nocheck("system"));
 			} else {
-				for (uint32_t iRoot = kstart; iRoot < estart; iRoot++) {
+				for (unsigned iRoot = kstart; iRoot < estart; iRoot++) {
 					if (tree.roots[iRoot] != iRoot)
 						json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
 				}
@@ -429,27 +429,27 @@ struct validateContext_t {
 			 * For validation, either all bits are set or all bits are clear
 			 */
 
-			for (uint32_t iKey = 0; iKey < tree.ncount; iKey++)
-				pFull[iKey] = 0x5a5a5a5a; // set to invalid value
+			for (unsigned iEntry = 0; iEntry < tree.ncount; iEntry++)
+				pFull[iEntry] = 0x5a5a5a5a; // set to invalid value
 
 			pFull[0] = 0; // only zero is defined
 
 			// load the test data
 			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
 
-			for (uint32_t iKey = kstart; iKey < ostart; iKey++)
-				pFull[iKey] = pData[iKey - kstart] ? ~0U : 0;
+			for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
+				pFull[iEntry] = pData[iEntry - kstart] ? ~0U : 0;
 
 			pData = gTestRoots + iTest * (estart - ostart);
 
-			for (uint32_t iKey = ostart; iKey < estart; iKey++)
-				pFull[iKey] = pData[iKey - ostart] ? ~0U : 0;
+			for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
+				pFull[iEntry] = pData[iEntry - ostart] ? ~0U : 0;
 
 			/*
 			 * Copy undefined-roots to data vector.
 			 * If roots defined, then they are not allowed to be read.
 			 */
-			for (uint32_t iRoot = 0; iRoot < nstart; iRoot++)
+			for (unsigned iRoot = 0; iRoot < nstart; iRoot++)
 				pEval[iRoot] = (tree.roots[iRoot] == iRoot) ? pFull[iRoot] : 0x5a5a5a5a;
 
 			/*
@@ -542,7 +542,7 @@ struct validateContext_t {
 			/*
 			 * Compare the results for the provides
 			 */
-			for (uint32_t iRoot = kstart; iRoot < nstart; iRoot++) {
+			for (unsigned iRoot = kstart; iRoot < nstart; iRoot++) {
 				uint32_t R = tree.roots[iRoot];
 
 				if (R == iRoot)

@@ -3,7 +3,7 @@
 /*
  * kjoin.cc
  *      Join a collection of smaller trees into a larger
- *      All trees should have identical key/root allocations
+ *      All trees should have identical entry/root allocations
  *      Intermediate extended keys are substituted
  */
 
@@ -150,12 +150,12 @@ struct kjoinContext_t {
 		 * For this reason, `pEid[]` is used to shadow `pMap[]` with extended id's set to zero
 		 *
 		 */
-		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++) {
-			pKeyRefCount[iKey] = 0; // init refcount
-			pEid[iKey]         = iKey; // mark as self
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++) {
+			pKeyRefCount[iEntry] = 0; // init refcount
+			pEid[iEntry] = iEntry; // mark as self
 		}
-		for (uint32_t iKey = pOldTree->estart; iKey < pOldTree->nstart; iKey++)
-			pEid[iKey] = 0; // mark as undefined
+		for (unsigned iEntry = pOldTree->estart; iEntry < pOldTree->nstart; iEntry++)
+			pEid[iEntry] = 0; // mark as undefined
 
 		/*
 		 * Create newTree
@@ -167,22 +167,22 @@ struct kjoinContext_t {
 		else
 			pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart, pOldTree->estart, opt_maxNode, opt_flags);
 
-		// Setup key/root names
-		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
-			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
+		// Setup entry/root names
+		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
 
 		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++)
 			pNewTree->rootNames[iRoot] = pOldTree->rootNames[iRoot];
 
 		// default roots
-		for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
-			pNewTree->roots[iKey] = iKey;
+		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
+			pNewTree->roots[iRoot] = iRoot;
 
 		// allocate a node remapper
 		uint32_t *pMap = pNewTree->allocMap();
 
-		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
-			pMap[iKey] = iKey; // mark as self
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
+			pMap[iEntry] = iEntry; // mark as self
 
 		// reset ticker
 		ctx.setupSpeed(numInputs);
@@ -244,13 +244,13 @@ struct kjoinContext_t {
 
 				// check names
 				for (uint32_t iName = 0; iName < pNewTree->nstart; iName++) {
-					if (pOldTree->keyNames[iName].compare(pNewTree->keyNames[iName]) != 0) {
+					if (pOldTree->entryNames[iName].compare(pNewTree->entryNames[iName]) != 0) {
 						json_t *jError = json_object();
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
 						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 						json_object_set_new_nocheck(jError, "kid", json_integer(iName));
-						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->keyNames[iName].c_str()));
-						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->keyNames[iName].c_str()));
+						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->entryNames[iName].c_str()));
+						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->entryNames[iName].c_str()));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 				}

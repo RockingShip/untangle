@@ -183,46 +183,46 @@ struct kfoldContext_t {
 		rewriteTree_t *pTemp    = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
 
 		/*
-		 * Setup key/root names
+		 * Setup entry/root names
 		 */
 
-		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++) {
-			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
-			pResults->keyNames[iKey] = pOldTree->keyNames[iKey];
-			pTemp->keyNames[iKey]    = pOldTree->keyNames[iKey];
+		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++) {
+			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
+			pResults->entryNames[iEntry] = pOldTree->entryNames[iEntry];
+			pTemp->entryNames[iEntry]    = pOldTree->entryNames[iEntry];
 		}
 
-		// Determine keyname length
-		unsigned keyNameLength;
+		// Determine entryName length
+		unsigned entryNameLength;
 		if (pNewTree->ncount < 10)
-			keyNameLength = 1;
+			entryNameLength = 1;
 		else if (pNewTree->ncount < 100)
-			keyNameLength = 2;
+			entryNameLength = 2;
 		else if (pNewTree->ncount < 1000)
-			keyNameLength = 3;
+			entryNameLength = 3;
 		else if (pNewTree->ncount < 10000)
-			keyNameLength = 4;
+			entryNameLength = 4;
 		else if (pNewTree->ncount < 100000)
-			keyNameLength = 5;
+			entryNameLength = 5;
 		else if (pNewTree->ncount < 1000000)
-			keyNameLength = 6;
+			entryNameLength = 6;
 		else
-			keyNameLength = 7;
+			entryNameLength = 7;
 
 		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->rootNames[iRoot] = pNewTree->keyNames[iRoot];
+			pNewTree->rootNames[iRoot] = pNewTree->entryNames[iRoot];
 
 		for (unsigned iRoot = pNewTree->estart; iRoot < pNewTree->numRoots; iRoot++) {
 			char sbuf[32];
-			sprintf(sbuf, "n%0*d", keyNameLength, iRoot);
+			sprintf(sbuf, "n%0*d", entryNameLength, iRoot);
 			pNewTree->rootNames[iRoot] = sbuf;
 		}
 
 		// same with tmp
-		pResults->keyNames  = pNewTree->keyNames;
-		pResults->rootNames = pNewTree->rootNames;
-		pTemp->keyNames     = pNewTree->keyNames;
-		pTemp->rootNames    = pNewTree->rootNames;
+		pResults->entryNames = pNewTree->entryNames;
+		pResults->rootNames  = pNewTree->rootNames;
+		pTemp->entryNames    = pNewTree->entryNames;
+		pTemp->rootNames     = pNewTree->rootNames;
 
 		// set roots to self-reference
 		for (unsigned iRoot = 0; iRoot < pOldTree->estart; iRoot++) {
@@ -243,8 +243,8 @@ struct kfoldContext_t {
 		 */
 		uint32_t *pNodeRefCount = pOldTree->allocMap();
 
-		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
-			pNodeRefCount[iKey] = 0;
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
+			pNodeRefCount[iEntry] = 0;
 
 		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
 
@@ -331,8 +331,8 @@ struct kfoldContext_t {
 				fold_t   lstFolds[pNewTree->nstart];
 				unsigned numFolds;
 
-				for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
-					pNewRefCount[iKey] = 0;
+				for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+					pNewRefCount[iEntry] = 0;
 
 				for (uint32_t k = pNewTree->nstart; k < pNewTree->ncount; k++) {
 					const baseNode_t *pNode = pNewTree->N + k;
@@ -349,9 +349,9 @@ struct kfoldContext_t {
 
 				// populate folds
 				numFolds = 0;
-				for (uint32_t iKey = pNewTree->kstart; iKey < pNewTree->nstart; iKey++) {
-					if (pNewRefCount[iKey] > 0) {
-						lstFolds[numFolds].key     = iKey;
+				for (unsigned iEntry = pNewTree->kstart; iEntry < pNewTree->nstart; iEntry++) {
+					if (pNewRefCount[iEntry] > 0) {
+						lstFolds[numFolds].key     = iEntry;
 						lstFolds[numFolds].version = 0;
 						lstFolds[numFolds].count   = 1;
 						numFolds++;
@@ -373,13 +373,13 @@ struct kfoldContext_t {
 						pFold->count   = pTemp->countActive();
 						pFold->version = 1;
 
-//						printf("prefold %s active=%d numnodes=%d numFolds=%d\n", pNewTree->keyNames[pFold->key].c_str(), pFold->count, pTemp->ncount - pTemp->nstart, numFolds);
+//						printf("prefold %s active=%d numnodes=%d numFolds=%d\n", pNewTree->entryNames[pFold->key].c_str(), pFold->count, pTemp->ncount - pTemp->nstart, numFolds);
 
 						qsort_r(lstFolds, numFolds, sizeof *lstFolds, comparFold, this);
 					}
 
 //					uint32_t iFold = lstFolds[numFolds - 1].key;
-//					printf("%d fold %s %d\n", numFolds, pNewTree->keyNames[iFold].c_str(), lstFolds[numFolds - 1].count);
+//					printf("%d fold %s %d\n", numFolds, pNewTree->entryNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
 					pTemp->rewind();
 					pTemp->importFold(pNewTree, lstFolds[numFolds - 1].key);
@@ -474,8 +474,8 @@ struct kfoldContext_t {
 				fold_t   lstFolds[pNewTree->nstart];
 				unsigned numFolds;
 
-				for (uint32_t iKey = 0; iKey < pNewTree->nstart; iKey++)
-					pNewRefCount[iKey] = 0;
+				for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+					pNewRefCount[iEntry] = 0;
 
 				for (uint32_t k = pNewTree->nstart; k < pNewTree->ncount; k++) {
 					const baseNode_t *pNode = pNewTree->N + k;
@@ -492,9 +492,9 @@ struct kfoldContext_t {
 
 				// populate folds
 				numFolds = 0;
-				for (uint32_t iKey = pNewTree->kstart; iKey < pNewTree->nstart; iKey++) {
-					if (pNewRefCount[iKey] > 0) {
-						lstFolds[numFolds].key     = iKey;
+				for (unsigned iEntry = pNewTree->kstart; iEntry < pNewTree->nstart; iEntry++) {
+					if (pNewRefCount[iEntry] > 0) {
+						lstFolds[numFolds].key     = iEntry;
 						lstFolds[numFolds].version = 0;
 						lstFolds[numFolds].count   = 1;
 						numFolds++;
@@ -563,13 +563,13 @@ struct kfoldContext_t {
 						pFold->count   = pTemp->countActive();
 						pFold->version = 1;
 
-//						printf("prefold %s active=%d numnodes=%d numFolds=%d\n", pNewTree->keyNames[pFold->key].c_str(), pFold->count, pTemp->ncount - pTemp->nstart, numFolds);
+//						printf("prefold %s active=%d numnodes=%d numFolds=%d\n", pNewTree->entryNames[pFold->key].c_str(), pFold->count, pTemp->ncount - pTemp->nstart, numFolds);
 
 						qsort_r(lstFolds, numFolds, sizeof *lstFolds, comparFold, this);
 					}
 
 					uint32_t iFold = lstFolds[numFolds - 1].key;
-//					printf("%d fold %s %d\n", numFolds, pNewTree->keyNames[iFold].c_str(), lstFolds[numFolds - 1].count);
+//					printf("%d fold %s %d\n", numFolds, pNewTree->entryNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
 					pTemp->rewind();
 					this->importFold(pTemp, pNewTree, iFold);
@@ -641,12 +641,12 @@ struct kfoldContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		// verify all intermediates released
-		for (uint32_t iKey = 0; iKey < pOldTree->ncount; iKey++) {
-			assert(pNodeRefCount[iKey] == 0);
+		for (unsigned iEntry = 0; iEntry < pOldTree->ncount; iEntry++) {
+			assert(pNodeRefCount[iEntry] == 0);
 		}
 
 		// assign roots
-		for (uint32_t iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
 			uint32_t R = pOldTree->roots[iRoot];
 
 			pNewTree->roots[iRoot] = pNewTree->importNodes(pResults, pResults->roots[R & ~IBIT]) ^ (R & IBIT);
@@ -660,8 +660,8 @@ struct kfoldContext_t {
 		 */
 		delete pTemp;
 		pTemp = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
-		pTemp->keyNames  = pOldTree->keyNames;
-		pTemp->rootNames = pOldTree->rootNames;
+		pTemp->entryNames = pOldTree->entryNames;
+		pTemp->rootNames  = pOldTree->rootNames;
 		pTemp->importActive(pNewTree);
 
 		delete pNewTree;
@@ -702,8 +702,8 @@ struct kfoldContext_t {
 		pTree->rewind();
 
 		// prepare maps
-		for (unsigned iKey = 0; iKey < RHS->nstart; iKey++)
-			pMapSet[iKey] = pMapClr[iKey] = iKey;
+		for (unsigned iEntry = 0; iEntry < RHS->nstart; iEntry++)
+			pMapSet[iEntry] = pMapClr[iEntry] = iEntry;
 
 		// make fold constant
 		pMapSet[iFold] = IBIT;
@@ -727,7 +727,7 @@ struct kfoldContext_t {
 		/*
 		 * Set roots
 		 */
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 

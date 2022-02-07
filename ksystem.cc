@@ -129,14 +129,14 @@ struct kextractContext_t {
 		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
 
 		/*
-		 * Setup key/root names
+		 * Setup entry/root names
 		 */
 
-		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
-			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
+		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
 
 		// root has same names as keys
-		pNewTree->rootNames = pNewTree->keyNames;
+		pNewTree->rootNames = pNewTree->entryNames;
 
 		/*
 		 * Allocate map
@@ -144,8 +144,8 @@ struct kextractContext_t {
 
 		uint32_t *pMap = pOldTree->allocMap();
 
-		for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++)
-			pMap[iKey] = iKey;
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
+			pMap[iEntry] = iEntry;
 
 		/*
 		 * (Simple) Copy all nodes
@@ -183,15 +183,15 @@ struct kextractContext_t {
 			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
-		// merge all keys into system
-		for (unsigned iKey = pOldTree->kstart; iKey < pOldTree->nstart; iKey++) {
-			uint32_t R  = pOldTree->roots[iKey];
+		// merge all entrypoints into system
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
+			uint32_t R  = pOldTree->roots[iEntry];
 			uint32_t Ru = R & ~IBIT;
 			uint32_t Ri = R & IBIT;
 
-			if (R != iKey) {
+			if (R != iEntry) {
 				// create `keyN ^ roots[keyN]`
-				uint32_t term = pNewTree->addNormaliseNode(iKey, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
+				uint32_t term = pNewTree->addNormaliseNode(iEntry, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
 
 				// append term as `OR` to system
 				pNewTree->system = pNewTree->addNormaliseNode(pNewTree->system, IBIT, term);
@@ -203,8 +203,8 @@ struct kextractContext_t {
 			fprintf(stderr, "\r\e[K");
 
 		// all roots are defaults
-		for (unsigned iKey = pNewTree->kstart; iKey < pNewTree->nstart; iKey++)
-			pNewTree->roots[iKey] = iKey;
+		for (unsigned iRoot = pNewTree->kstart; iRoot < pNewTree->nstart; iRoot++)
+			pNewTree->roots[iRoot] = iRoot;
 
 		/*
 		 * Save data

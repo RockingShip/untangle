@@ -94,7 +94,7 @@ struct kextractContext_t {
 	 *
 	 * Main entrypoint
 	 */
-	int main(const char *outputFilename, const char *inputFilename, const char *keyName) {
+	int main(const char *outputFilename, const char *inputFilename, const char *entryName) {
 
 		/*
 		 * Open input tree
@@ -127,18 +127,18 @@ struct kextractContext_t {
 		/*
 		 * Find key
 		 */
-		uint32_t argKey = 0;
-		for (unsigned iKey = pOldTree->kstart; iKey < pOldTree->estart; iKey++) {
-			if (pOldTree->keyNames[iKey].compare(keyName) == 0) {
-				argKey = iKey;
+		uint32_t argEntry = 0;
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->estart; iEntry++) {
+			if (pOldTree->entryNames[iEntry].compare(entryName) == 0) {
+				argEntry = iEntry;
 				break;
 			}
 		}
-		if (!argKey) {
+		if (!argEntry) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("key not found"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "key", json_string(keyName));
+			json_object_set_new_nocheck(jError, "key", json_string(entryName));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -148,24 +148,24 @@ struct kextractContext_t {
 		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
 
 		/*
-		 * Setup key/root names
+		 * Setup entry/root names
 		 */
 
-		for (unsigned iKey = 0; iKey < pNewTree->nstart; iKey++)
-			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
+		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
 
 		// root has same names as keys
-		pNewTree->rootNames = pNewTree->keyNames;
+		pNewTree->rootNames = pNewTree->entryNames;
 
 		/*
 		 * Crete map and zero key
 		 */
 		uint32_t *pMap = pOldTree->allocMap();
 
-		for (unsigned iKey = 0; iKey < pOldTree->nstart; iKey++)
-			pMap[iKey] = iKey;
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
+			pMap[iEntry] = iEntry;
 
-		pMap[argKey] = 0;
+		pMap[argEntry] = 0;
 
 		/*
 		 * Copy all nodes
@@ -185,7 +185,7 @@ struct kextractContext_t {
 			pNewTree->roots[iRoot] = iRoot;
 
 		// requested key equals unbalanced system
-		pNewTree->roots[argKey] = pMap[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
+		pNewTree->roots[argEntry] = pMap[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
 
 		/*
 		 * Save data
@@ -217,7 +217,7 @@ struct kextractContext_t {
 kextractContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.dat> <input.dat> <keyName>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.dat> <input.dat> <entryname>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
@@ -371,12 +371,12 @@ int main(int argc, char *argv[]) {
 
 	char *outputFilename;
 	char *inputFilename;
-	char *keyName;
+	char *entryName;
 
 	if (argc - optind >= 3) {
 		outputFilename = argv[optind++];
 		inputFilename  = argv[optind++];
-		keyName        = argv[optind++];
+		entryName      = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -401,5 +401,5 @@ int main(int argc, char *argv[]) {
 		::alarm(ctx.opt_timer);
 	}
 
-	return app.main(outputFilename, inputFilename, keyName);
+	return app.main(outputFilename, inputFilename, entryName);
 }

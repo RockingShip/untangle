@@ -2129,8 +2129,8 @@ void initialiseVector(footprint_t *pFootprint, unsigned kstart, unsigned nstart)
 		srand(opt_seed);
 
 		// fill rest with random patterns
-		for (uint32_t iKey = KSTART; iKey < nstart; iKey++) {
-			uint64_t *v = (uint64_t *) (pFootprint + iKey);
+		for (unsigned iEntry = KSTART; iEntry < nstart; iEntry++) {
+			uint64_t *v = (uint64_t *) (pFootprint + iEntry);
 
 			// craptastic random fill
 			for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++) {

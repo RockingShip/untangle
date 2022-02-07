@@ -43,7 +43,7 @@ context_t ctx;
 #define TABLEBITS 9
 #define TABLESIZE (1 << TABLEBITS)
 
-// used key/root names
+// used entry/root names
 enum {
 	kZero = 0, kError, // reserved
 	k0, k1, k2, k3, k4, k5, k6, k7, k8, // keys
@@ -205,9 +205,9 @@ struct build9bitTableContext_t {
 
 		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
 
-		// setup key names
-		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++)
-			gTree->keyNames[iKey] = allNames[iKey];
+		// setup entrypoint  names
+		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++)
+			gTree->entryNames[iEntry] = allNames[iEntry];
 
 		// setup root names
 		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {

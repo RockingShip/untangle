@@ -233,12 +233,12 @@ struct genrestartdataContext_t : callable_t {
 	 * @return {boolean} return `true` to continue with recursion (this should be always the case except for `genrestartdata`)
 	 */
 	bool foundTreePrintTab(tinyTree_t &noname, const char *pName, unsigned numPlaceholder, unsigned numEndpoint, unsigned numBackRef) {
-		static char keyName[tinyTree_t::TINYTREE_NEND * 4 + 1];
+		static char entryName[tinyTree_t::TINYTREE_NEND * 4 + 1];
 
 		/*
-		 * Translate to key/display name
+		 * Translate to entry/display name
 		 */
-		char *pKeyName = keyName;
+		char *pEntryname = entryName;
 		for (unsigned iNode = tinyTree_t::TINYTREE_NSTART; iNode < generator.buildTree.count; iNode++) {
 			unsigned qtf = generator.packedN[iNode];
 			unsigned Q   = (qtf >> generator_t::PACKED_QPOS) & generator_t::PACKED_MASK;
@@ -247,20 +247,20 @@ struct genrestartdataContext_t : callable_t {
 			unsigned Ti  = (qtf & generator_t::PACKED_TIMASK) ? 1 : 0;
 
 			if (Q >= tinyTree_t::TINYTREE_NSTART)
-				*pKeyName++ = "123456789"[Q - tinyTree_t::TINYTREE_NSTART ];
+				*pEntryname++ = "123456789"[Q - tinyTree_t::TINYTREE_NSTART ];
 			else
-				*pKeyName++ = "0abcdefghi"[Q];
+				*pEntryname++ = "0abcdefghi"[Q];
 			if (Tu >= tinyTree_t::TINYTREE_NSTART)
-				*pKeyName++ = "123456789"[Tu - tinyTree_t::TINYTREE_NSTART];
+				*pEntryname++ = "123456789"[Tu - tinyTree_t::TINYTREE_NSTART];
 			else
-				*pKeyName++ = "0abcdefghi"[Tu];
+				*pEntryname++ = "0abcdefghi"[Tu];
 			if (F >= tinyTree_t::TINYTREE_NSTART)
-				*pKeyName++ = "123456789"[F - tinyTree_t::TINYTREE_NSTART];
+				*pEntryname++ = "123456789"[F - tinyTree_t::TINYTREE_NSTART];
 			else
-				*pKeyName++ = "0abcdefghi"[F];
-			*pKeyName++ = Ti ? '!' : '?';
+				*pEntryname++ = "0abcdefghi"[F];
+			*pEntryname++ = Ti ? '!' : '?';
 		}
-		*pKeyName++ = 0;
+		*pEntryname++ = 0;
 
 		/*
 		 * Simply count how often called
@@ -281,14 +281,14 @@ struct genrestartdataContext_t : callable_t {
 				int etaS = eta;
 
 				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% eta=%d:%02d:%02d %s",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, keyName);
+					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, entryName);
 			}
 
 			ctx.tick = 0;
 		}
 
 		// tree is incomplete and requires a slightly different notation
-		printf("%12ldLL/*%s*/,", ctx.progress, keyName);
+		printf("%12ldLL/*%s*/,", ctx.progress, entryName);
 
 		// `genprogress` needs to know how many restart points are generated.
 		this->numRestart++;

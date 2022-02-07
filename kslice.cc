@@ -184,42 +184,42 @@ struct ksliceContext_t {
 		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart + numExtended/*nstart*/, pOldTree->numRoots + numExtended/*numRoots*/, opt_maxNode, opt_flags);
 
 		/*
-		 * Determine keyname length
+		 * Determine entryName length
 		 */
-		unsigned keyNameLength;
+		unsigned entryNameLength;
 		if (pNewTree->nstart < 10)
-			keyNameLength = 1;
+			entryNameLength = 1;
 		else if (pNewTree->nstart < 100)
-			keyNameLength = 2;
+			entryNameLength = 2;
 		else if (pNewTree->nstart < 1000)
-			keyNameLength = 3;
+			entryNameLength = 3;
 		else if (pNewTree->nstart < 10000)
-			keyNameLength = 4;
+			entryNameLength = 4;
 		else if (pNewTree->nstart < 100000)
-			keyNameLength = 5;
+			entryNameLength = 5;
 		else if (pNewTree->nstart < 1000000)
-			keyNameLength = 6;
+			entryNameLength = 6;
 		else
-			keyNameLength = 7;
+			entryNameLength = 7;
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
 			fprintf(stderr, "[%s] New kstart=%d ostart=%d estart=%d nstart=%d\n", ctx.timeAsString(), pNewTree->kstart, pNewTree->ostart, pNewTree->estart, pNewTree->nstart);
 
 		/*
-		 * Setup key/root names
+		 * Setup entry/root names
 		 */
 
-		for (unsigned iKey = 0; iKey < pNewTree->estart; iKey++)
-			pNewTree->keyNames[iKey] = pOldTree->keyNames[iKey];
+		for (unsigned iEntry = 0; iEntry < pNewTree->estart; iEntry++)
+			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
 
-		for (unsigned iKey = pNewTree->estart; iKey < pNewTree->nstart; iKey++) {
+		for (unsigned iEntry = pNewTree->estart; iEntry < pNewTree->nstart; iEntry++) {
 			char sbuf[32];
-			sprintf(sbuf, "e%0*d", keyNameLength, iKey);
-			pNewTree->keyNames[iKey] = sbuf;
+			sprintf(sbuf, "e%0*d", entryNameLength, iEntry);
+			pNewTree->entryNames[iEntry] = sbuf;
 		}
 
 		// root has same names as keys
-		pNewTree->rootNames = pNewTree->keyNames;
+		pNewTree->rootNames = pNewTree->entryNames;
 
 		/*
 		 * All preparations done
@@ -269,7 +269,7 @@ struct ksliceContext_t {
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("file already exists. Use --force to overwrite"));
 					json_object_set_new_nocheck(jError, "filename", json_string(filename));
 					char info[64];
-					sprintf(info, "you might need to add '%%0%dd' to the filename", keyNameLength);
+					sprintf(info, "you might need to add '%%0%dd' to the filename", entryNameLength);
 					json_object_set_new_nocheck(jError, "info", json_string(info));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
@@ -334,10 +334,10 @@ struct ksliceContext_t {
 			 * Copy nodes to new tree
 			 */
 
-			// de-select keys so sql output can detect first occurrence
-			for (uint32_t iKey = 0; iKey < pOldTree->nstart; iKey++) {
-				pSelect[iKey] = 0;
-				pMap[iKey]    = iKey;
+			// de-select entrypoints so sql output can detect first occurrence
+			for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++) {
+				pSelect[iEntry] = 0;
+				pMap[iEntry]    = iEntry;
 			}
 
 			// copy nodes

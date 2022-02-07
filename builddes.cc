@@ -732,13 +732,13 @@ struct builddesContext_t {
 		// basic keys
 		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxNode, opt_flags);
 
-		// setup key names
-		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+		// setup entry names
+		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++) {
 			// key name
-			gTree->keyNames[iKey] = allNames[iKey];
+			gTree->entryNames[iEntry] = allNames[iEntry];
 
 			// key variable
-			V[iKey].id = iKey;
+			V[iEntry].id = iEntry;
 		}
 
 		// setup root names

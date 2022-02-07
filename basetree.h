@@ -142,7 +142,7 @@ struct baseTree_t {
 	 */
 	enum {
 		//@formatter:off
-		ALLOCFLAG_NAMES = 0,	// key/root names
+		ALLOCFLAG_NAMES = 0,	// entry/root names
 		ALLOCFLAG_NODES,	// nodes
 		ALLOCFLAG_ROOTS,	// roots
 		ALLOCFLAG_HISTORY,	// history
@@ -175,7 +175,7 @@ struct baseTree_t {
 	uint32_t                 maxNodes;              // maximum tree capacity
 	uint32_t                 numRoots;              // entries in roots[]
 	// names
-	std::vector<std::string> keyNames;              // sliced version of `keyNameData`
+	std::vector<std::string> entryNames;            // sliced version of `entryNameData`
 	std::vector<std::string> rootNames;             // sliced version of `rootNameData`
 	// primary storage
 	baseNode_t               *N;                    // nodes
@@ -241,7 +241,7 @@ struct baseTree_t {
 		maxNodes(0),
 		numRoots(0),
 		// names
-		keyNames(),
+		entryNames(),
 		rootNames(),
 		// primary storage (allocated by storage context)
 		N(NULL),
@@ -300,7 +300,7 @@ struct baseTree_t {
 		maxNodes(maxNodes),
 		numRoots(numRoots),
 		// names
-		keyNames(),
+		entryNames(),
 		rootNames(),
 		// primary storage (allocated by storage context)
 		N((baseNode_t *) ctx.myAlloc("baseTree_t::N", maxNodes, sizeof *N)),
@@ -345,15 +345,15 @@ struct baseTree_t {
 		if (this->nodeIndex)
 			allocFlags |= ALLOCMASK_INDEX;
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
-		// setup default keys
-		for (unsigned iKey = 0; iKey < nstart; iKey++) {
-			N[iKey].Q = 0;
-			N[iKey].T = IBIT;
-			N[iKey].F = iKey;
+		// setup default entrypoints
+		for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
+			N[iEntry].Q = 0;
+			N[iEntry].T = IBIT;
+			N[iEntry].F = iEntry;
 		}
 
 		// setup default roots
@@ -4063,7 +4063,7 @@ struct baseTree_t {
 		 * mark active
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++)
 			pSelect[RHS->roots[iRoot] & ~IBIT] = thisVersion;
 
 		pSelect[RHS->system & ~IBIT]               = thisVersion;
@@ -4082,7 +4082,7 @@ struct baseTree_t {
 		 * Copy selected nodes
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->nstart; iRoot++)
 			pMap[iRoot] = iRoot;
 
 		for (uint32_t iNode = RHS->nstart; iNode < RHS->ncount; iNode++) {
@@ -4101,7 +4101,7 @@ struct baseTree_t {
 		 * copy roots
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
 			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
 
 		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
@@ -4145,7 +4145,7 @@ struct baseTree_t {
 		 * Copy selected nodes
 		 */
 
-		for (uint32_t iRoot = 0; iRoot < RHS->nstart; iRoot++)
+		for (unsigned iRoot = 0; iRoot < RHS->nstart; iRoot++)
 			pMap[iRoot] = iRoot;
 
 		for (uint32_t iNode = RHS->nstart; iNode <= (nodeId & ~IBIT); iNode++) {
@@ -4182,8 +4182,8 @@ struct baseTree_t {
 		this->rewind();
 
 		// prepare maps
-		for (unsigned iKey = 0; iKey < RHS->nstart; iKey++)
-			pMapSet[iKey] = pMapClr[iKey] = iKey;
+		for (unsigned iEntry = 0; iEntry < RHS->nstart; iEntry++)
+			pMapSet[iEntry] = pMapClr[iEntry] = iEntry;
 
 		// make fold constant
 		pMapSet[iFold] = IBIT;
@@ -4206,7 +4206,7 @@ struct baseTree_t {
 		/*
 		 * Set roots
 		 */
-		for (uint32_t iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
@@ -4233,7 +4233,7 @@ struct baseTree_t {
 	 */
 	unsigned loadFile(const char *fileName, bool shared = true) {
 
-		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
+		if (!entryNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
 			ctx.fatal("baseTree_t::loadFile() on non-initial tree\n");
 
 		/*
@@ -4347,20 +4347,20 @@ struct baseTree_t {
 		compVersionR  = allocMap();  // allocate as node-id map because of local version numbering
 		compVersionNr = 1;
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
 		// slice names
 		{
 			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
-			for (uint32_t iKey  = 0; iKey < nstart; iKey++) {
+			for (unsigned iEntry  = 0; iEntry < nstart; iEntry++) {
 				assert(*pData != 0);
-				keyNames[iKey] = pData;
+				entryNames[iEntry] = pData;
 				pData += strlen(pData) + 1;
 			}
-			for (uint32_t iRoot = 0; iRoot < numRoots; iRoot++) {
+			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
 				assert(*pData != 0);
 				rootNames[iRoot] = pData;
 				pData += strlen(pData) + 1;
@@ -4433,11 +4433,11 @@ struct baseTree_t {
 		 */
 		header.offNames = fpos;
 
-		// write keyNames
+		// write entryNames
 		for (uint32_t i = 0; i < nstart; i++) {
-			size_t len = keyNames[i].length() + 1;
+			size_t len = entryNames[i].length() + 1;
 			assert(len > 1);
-			fwrite(keyNames[i].c_str(), len, 1, outf);
+			fwrite(entryNames[i].c_str(), len, 1, outf);
 			fpos += len;
 		}
 		// write rootNames
@@ -4477,15 +4477,15 @@ struct baseTree_t {
 			 * In case of emergency and the tree needs to be saved verbatim
 			 */
 
-			// output keys
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
+			// output entrypoints
+			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
 				// get remapped
 				baseNode_t wrtNode;
 				wrtNode.Q = 0;
 				wrtNode.T = IBIT;
-				wrtNode.F = iKey;
+				wrtNode.F = iEntry;
 
-				pMap[iKey] = nextId++;
+				pMap[iEntry] = nextId++;
 
 				size_t len = sizeof wrtNode;
 				fwrite(&wrtNode, len, 1, outf);
@@ -4497,7 +4497,7 @@ struct baseTree_t {
 
 			}
 
-			// output keys
+			// output nodes
 			for (uint32_t iNode = nstart; iNode < ncount; iNode++) {
 				const baseNode_t *pNode = this->N + iNode;
 				const uint32_t   Q      = pNode->Q;
@@ -4534,22 +4534,22 @@ struct baseTree_t {
 				thisVersion = ++mapVersionNr;
 			}
 
-			// output keys
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				pVersion[iKey] = thisVersion;
-				pMap[iKey]     = iKey;
+			// output entrypoints
+			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
+				pVersion[iEntry] = thisVersion;
+				pMap[iEntry]     = iEntry;
 
 				// get remapped
 				baseNode_t wrtNode;
 				wrtNode.Q = 0;
 				wrtNode.T = IBIT;
-				wrtNode.F = iKey;
+				wrtNode.F = iEntry;
 
 				size_t len = sizeof wrtNode;
 				fwrite(&wrtNode, len, 1, outf);
 				fpos += len;
 
-				pMap[iKey] = nextId++;
+				pMap[iEntry] = nextId++;
 
 				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.Q));
 				__asm__ __volatile__ ("crc32l %1, %0" : "+r"(crc32) : "rm"(wrtNode.T));
@@ -4563,7 +4563,7 @@ struct baseTree_t {
 			 * trace roots, one at a time.
 			 * Last root is a artificial root representing "system"
 			 */
-			for (uint32_t iRoot = 0; iRoot <= numRoots; iRoot++) {
+			for (unsigned iRoot = 0; iRoot <= numRoots; iRoot++) {
 
 				uint32_t R = (iRoot < numRoots) ? roots[iRoot] : system;
 
@@ -4740,7 +4740,7 @@ struct baseTree_t {
 	 */
 	void loadFileJson(json_t *jInput, const char *inputFilename) {
 
-		if (!keyNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
+		if (!entryNames.empty() || !rootNames.empty() || allocFlags || hndl >= 0)
 			ctx.fatal("baseTree_t::loadFileJson() on non-initial tree\n");
 
 		/*
@@ -4805,15 +4805,15 @@ struct baseTree_t {
 			exit(1);
 		}
 
-		// make all `keyNames`+`rootNames` indices valid
-		keyNames.resize(nstart);
+		// make all `entryNames`+`rootNames` indices valid
+		entryNames.resize(nstart);
 		rootNames.resize(numRoots);
 
 		/*
 		 * Reserved names
 		 */
-		keyNames[0]            = "0";
-		keyNames[1 /*KERROR*/] = "KERROR";
+		entryNames[0]            = "0";
+		entryNames[1 /*KERROR*/] = "KERROR";
 
 		/*
 		 * import knames
@@ -4840,7 +4840,7 @@ struct baseTree_t {
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import onames
@@ -4867,7 +4867,7 @@ struct baseTree_t {
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import enames
@@ -4894,7 +4894,7 @@ struct baseTree_t {
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			keyNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
 		 * import rnames (extended root names)
@@ -4902,7 +4902,7 @@ struct baseTree_t {
 
 		// copy fixed part
 		for (unsigned iRoot = 0; iRoot < estart; iRoot++)
-			rootNames[iRoot] = keyNames[iRoot];
+			rootNames[iRoot] = entryNames[iRoot];
 
 		jNames = json_object_get(jInput, "rnames");
 		if (!jNames) {
@@ -4927,7 +4927,7 @@ struct baseTree_t {
 				exit(1);
 			}
 			// copy collection
-			rootNames = keyNames;
+			rootNames = entryNames;
 		} else if (numNames != numRoots - estart) {
 			// count mismatch
 			json_t *jError = json_object();
@@ -4979,34 +4979,34 @@ struct baseTree_t {
 			jResult = json_object();
 
 		/*
-		 * Key/root names
+		 * entry/root names
 		 */
-		json_t *jKeyNames = json_array();
+		json_t *jEntrynames = json_array();
 
-		// input key names
-		for (uint32_t iKey = kstart; iKey < ostart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "knames", jKeyNames);
+		// input entry names
+		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "knames", jEntrynames);
 
-		jKeyNames = json_array();
+		jEntrynames = json_array();
 
-		// output key names
-		for (uint32_t iKey = ostart; iKey < estart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "onames", jKeyNames);
+		// output entry names
+		for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "onames", jEntrynames);
 
-		jKeyNames = json_array();
+		jEntrynames = json_array();
 
-		// extended key names
-		for (uint32_t iKey = estart; iKey < nstart; iKey++)
-			json_array_append_new(jKeyNames, json_string_nocheck(keyNames[iKey].c_str()));
-		json_object_set_new_nocheck(jResult, "enames", jKeyNames);
+		// extended entry names
+		for (unsigned iEntry = estart; iEntry < nstart; iEntry++)
+			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "enames", jEntrynames);
 
 		// extended root names (which might be identical to enames)
 		bool rootsDiffer = (nstart != numRoots);
 		if (!rootsDiffer) {
-			for (uint32_t iKey = 0; iKey < nstart; iKey++) {
-				if (keyNames[iKey].compare(rootNames[iKey]) != 0) {
+			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
+				if (entryNames[iEntry].compare(rootNames[iEntry]) != 0) {
 					rootsDiffer = true;
 					break;
 				}
@@ -5015,11 +5015,11 @@ struct baseTree_t {
 
 		if (rootsDiffer) {
 			// either roots are different or an empty set.
-			jKeyNames = json_array();
+			jEntrynames = json_array();
 
-			for (uint32_t iRoot = estart; iRoot < numRoots; iRoot++)
-				json_array_append_new(jKeyNames, json_string_nocheck(rootNames[iRoot].c_str()));
-			json_object_set_new_nocheck(jResult, "rnames", jKeyNames);
+			for (unsigned iRoot = estart; iRoot < numRoots; iRoot++)
+				json_array_append_new(jEntrynames, json_string_nocheck(rootNames[iRoot].c_str()));
+			json_object_set_new_nocheck(jResult, "rnames", jEntrynames);
 		} else {
 			json_object_set_new_nocheck(jResult, "rnames", json_string_nocheck("enames"));
 		}
@@ -5055,7 +5055,7 @@ struct baseTree_t {
 
 
 		for (uint32_t i = 0; i < this->numHistory; i++) {
-			json_array_append_new(jHistory, json_string_nocheck(keyNames[this->history[i]].c_str()));
+			json_array_append_new(jHistory, json_string_nocheck(entryNames[this->history[i]].c_str()));
 		}
 
 		json_object_set_new_nocheck(jResult, "history", jHistory);
@@ -5066,8 +5066,8 @@ struct baseTree_t {
 
 		uint32_t *pRefCount = allocMap();
 
-		for (uint32_t iKey = 0; iKey < this->nstart; iKey++)
-			pRefCount[iKey] = 0;
+		for (unsigned iEntry = 0; iEntry < this->nstart; iEntry++)
+			pRefCount[iEntry] = 0;
 
 		for (uint32_t k = this->nstart; k < this->ncount; k++) {
 			const baseNode_t *pNode = this->N + k;
@@ -5084,9 +5084,9 @@ struct baseTree_t {
 
 		json_t *jRefCount = json_object();
 
-		for (uint32_t iKey = this->kstart; iKey < this->nstart; iKey++) {
-			if (pRefCount[iKey])
-				json_object_set_new_nocheck(jRefCount, keyNames[iKey].c_str(), json_integer(pRefCount[iKey]));
+		for (unsigned iEntry = this->kstart; iEntry < this->nstart; iEntry++) {
+			if (pRefCount[iEntry])
+				json_object_set_new_nocheck(jRefCount, entryNames[iEntry].c_str(), json_integer(pRefCount[iEntry]));
 		}
 		json_object_set_new_nocheck(jResult, "refcount", jRefCount);
 

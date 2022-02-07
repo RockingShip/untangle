@@ -146,8 +146,8 @@ struct gloadContext_t {
 
 		groupTree_t newTree(ctx, *pStore, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, ctx.flags);
 
-		newTree.keyNames  = jsonTree.keyNames;
-		newTree.rootNames = jsonTree.rootNames;
+		newTree.entryNames = jsonTree.entryNames;
+		newTree.rootNames  = jsonTree.rootNames;
 
 		/*
 		 * Set defaults

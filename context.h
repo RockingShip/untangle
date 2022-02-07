@@ -37,7 +37,7 @@
 #include <unistd.h>
 
 /**
- * Which bit of node/key/root ID's is reserved to flag that the result needs to be inverted
+ * Which bit of node/entry/root ID's is reserved to flag that the result needs to be inverted
  *
  * @constant {number} IBIT
  */

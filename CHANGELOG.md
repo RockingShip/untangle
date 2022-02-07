@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-07 10:52:07 Changed: Renamed `key` to `entry` (no code change).
 2022-02-07 10:47:27 Fixed: Typos.
 2022-02-06 20:30:31 Fixed: Changes for next dataset.
 2022-01-31 22:14:23 Changed: Let `groupTree_t::addbasicNode()` determine its own sid.

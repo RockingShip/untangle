@@ -158,7 +158,7 @@ struct buildmd5Context_t {
 
 	void F1(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
 		if ((opt_flags & ctx.MAGICMASK_CASCADE) && ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			printf("[%s] F1 %s\n", ctx.timeAsString(), gTree->keyNames[K].c_str());
+			printf("[%s] F1 %s\n", ctx.timeAsString(), gTree->entryNames[K].c_str());
 
 		NODE W[32];
 		NODE ovf = 0;
@@ -217,7 +217,7 @@ struct buildmd5Context_t {
 
 	void F2(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
 		if ((opt_flags & ctx.MAGICMASK_CASCADE) && ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			printf("[%s] F2 %s\n", ctx.timeAsString(), gTree->keyNames[K].c_str());
+			printf("[%s] F2 %s\n", ctx.timeAsString(), gTree->entryNames[K].c_str());
 
 		NODE W[32];
 		NODE ovf = 0;
@@ -276,7 +276,7 @@ struct buildmd5Context_t {
 
 	void F3(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
 		if ((opt_flags & ctx.MAGICMASK_CASCADE) && ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			printf("[%s] F3 %s\n", ctx.timeAsString(), gTree->keyNames[K].c_str());
+			printf("[%s] F3 %s\n", ctx.timeAsString(), gTree->entryNames[K].c_str());
 
 		NODE W[32];
 		NODE ovf = 0;
@@ -335,7 +335,7 @@ struct buildmd5Context_t {
 
 	void F4(NODE *V, int Q, int A, int B, int C, int D, int K, unsigned int VAL, int R) {
 		if ((opt_flags & ctx.MAGICMASK_CASCADE) && ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			printf("[%s] F4 %s\n", ctx.timeAsString(), gTree->keyNames[K].c_str());
+			printf("[%s] F4 %s\n", ctx.timeAsString(), gTree->entryNames[K].c_str());
 
 		NODE W[32];
 		NODE ovf = 0;
@@ -493,13 +493,13 @@ struct buildmd5Context_t {
 		// basic keys
 		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxNode, opt_flags);
 
-		// setup key names
-		for (unsigned iKey = 0; iKey < gTree->nstart; iKey++) {
+		// setup entry names
+		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++) {
 			// key name
-			gTree->keyNames[iKey] = allNames[iKey];
+			gTree->entryNames[iEntry] = allNames[iEntry];
 
 			// key variable
-			V[iKey].id = iKey;
+			V[iEntry].id = iEntry;
 		}
 
 		// setup root names

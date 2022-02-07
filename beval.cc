@@ -209,19 +209,19 @@ struct bevalContext_t {
 		rewriteTree_t *pTree = new rewriteTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
 
 		/*
-		 * Setup key/root names
+		 * Setup entry/root names
 		 */
-		pTree->keyNames[0] = "ZERO";
-		pTree->keyNames[1] = "ERROR";
+		pTree->entryNames[0] = "ZERO";
+		pTree->entryNames[1] = "ERROR";
 
 		/*
-		 * keys
+		 * entrypoints
 		 */
-		for (uint32_t iKey = kstart; iKey < ostart; iKey++) {
+		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++) {
 			// creating is right-to-left. Storage to reverse
 			char     stack[10], *pStack = stack;
 			// value to be encoded
-			uint32_t value              = iKey - pTree->kstart;
+			uint32_t value = iEntry - pTree->kstart;
 
 			// push terminator
 			*pStack++ = 0;
@@ -237,21 +237,21 @@ struct bevalContext_t {
 
 			// append, including trailing zero
 			while (*--pStack) {
-				pTree->keyNames[iKey] += *pStack;
+				pTree->entryNames[iEntry] += *pStack;
 			}
 		}
 
 		/*
 		 * Outputs
 		 */
-		for (unsigned iKey = ostart; iKey < estart; iKey++) {
+		for (unsigned iEntry = ostart; iEntry < estart; iEntry++) {
 			char str[16];
 
-			sprintf(str, "o%d", iKey - ostart);
-			pTree->keyNames[iKey] = str;
+			sprintf(str, "o%d", iEntry - ostart);
+			pTree->entryNames[iEntry] = str;
 		}
 
-		pTree->rootNames = pTree->keyNames;
+		pTree->rootNames = pTree->entryNames;
 
 		/*
 		 * Load arguments
@@ -320,8 +320,8 @@ struct bevalContext_t {
 			srand(opt_seed);
 
 			// fill rest with random patterns
-			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
-				uint64_t *v = pFootprint[iKey];
+			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
+				uint64_t *v = pFootprint[iEntry];
 
 				// craptastic random fill
 				for (unsigned i = 0; i < opt_dataSize; i++) {

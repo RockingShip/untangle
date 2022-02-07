@@ -178,18 +178,18 @@ struct ksaveContext_t {
 		for (uint32_t iNode = 0; iNode < pTree->ncount; iNode++)
 			pRootRef[iNode] = 0;
 
-		for (uint32_t iRoot = 0; iRoot < pTree->numRoots; iRoot++)
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++)
 			pRootRef[pTree->roots[iRoot] & ~IBIT]++;
 
 		pRootRef[pTree->system & ~IBIT]++;
 
 		fprintf(f, "N[]=");
-		for (uint32_t iKey = 0; iKey < pTree->kstart; iKey++)
-			fprintf(f, "%c%d", (iKey ? ',' : '{'), iKey);
+		for (unsigned iEntry = 0; iEntry < pTree->kstart; iEntry++)
+			fprintf(f, "%c%d", (iEntry ? ',' : '{'), iEntry);
 		fprintf(f, ",\n");
 
-		for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
-			fprintf(f, "%s,", pTree->keyNames[iKey].c_str());
+		for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
+			fprintf(f, "%s,", pTree->entryNames[iEntry].c_str());
 		}
 		fprintf(f, "\n");
 
@@ -198,7 +198,7 @@ struct ksaveContext_t {
 			if (pRootRef[iNode]) {
 				fprintf(f, "// ");
 				// scan roots
-				for (uint32_t iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
+				for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
 					int32_t R = pTree->roots[iRoot];
 
 					if ((R & ~IBIT) == iNode) {
