@@ -190,69 +190,101 @@ struct gevalContext_t {
 		 */
 		groupTree_t *pTree;
 
-		/*
-		 * Create tree
-		 */
-		unsigned   highest     = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
-		const char *pTransform = strchr(inputName, '/'); // get transform
+		if (strchr(inputName, '.') != NULL) {
 
-		uint32_t kstart = 2;
-		uint32_t nstart = kstart + highest + 1; // inputs
+			pTree = new groupTree_t(ctx, *pStore);
 
-		pTree = new groupTree_t(ctx, *pStore, kstart, /*ostart=*/nstart, /*estart*/nstart, nstart, opt_maxNode, ctx.flags);
-		pTree->maxDepth = this->opt_maxDepth;
-		pTree->speed = this->opt_speed;
+			/*
+			 * Load from file
+			 */
+			if (pTree->loadFile(inputName)) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputName));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
 
-		if (pTransform) {
-			pTree->loadStringSafe(inputName, pTransform + 1);
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+				json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputName));
+				pTree->headerInfo(jResult);
+				pTree->extraInfo(jResult);
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
+
 		} else {
-			pTree->loadStringSafe(inputName);
-		}
+			/*
+			 * Load from string
+			 */
 
-		/*
-		 * Setup entry/root names
-		 */
+			unsigned   highest     = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
+			const char *pTransform = strchr(inputName, '/'); // get transform
 
-		pTree->entryNames[0] = "0";
+			/*
+			 * Create tree
+			 */
 
-		// add errors
-		for (unsigned iEntry = 1; iEntry < pTree->kstart; iEntry++)
-			pTree->entryNames[iEntry] = "ERROR";
+			uint32_t kstart = 2;
+			uint32_t nstart = kstart + highest + 1; // inputs
 
-		// add default names
-		for (unsigned iEntry = kstart; iEntry < pTree->nstart; iEntry++) {
-			std::string name;
-			uint32_t value = iEntry - pTree->kstart;
+			pTree = new groupTree_t(ctx, *pStore, kstart, /*ostart=*/nstart, /*estart*/nstart, nstart, opt_maxNode, ctx.flags);
+			pTree->maxDepth = this->opt_maxDepth;
+			pTree->speed    = this->opt_speed;
 
-			if ((iEntry - pTree->kstart) >= 26)
-				pTree->encodePrefix(name, value / 26);
-			name += (char) ('a' + (value % 26));
+			if (pTransform) {
+				pTree->loadStringSafe(inputName, pTransform + 1);
+			} else {
+				pTree->loadStringSafe(inputName);
+			}
 
-			pTree->entryNames[iEntry] = name;
-		}
+			/*
+			 * Setup entry/root names
+			 */
 
-		if (pTree->numRoots > pTree->rootNames.size())
-			pTree->rootNames.resize(pTree->numRoots);
+			pTree->entryNames[0] = "0";
 
-		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
-			char name[16];
+			// add errors
+			for (unsigned iEntry = 1; iEntry < pTree->kstart; iEntry++)
+				pTree->entryNames[iEntry] = "ERROR";
 
-			sprintf(name, "r%d", iRoot);
-			pTree->rootNames[iRoot] = name;
-		}
+			// add default names
+			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
+				std::string name;
+				uint32_t value = iEntry - pTree->kstart;
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
-			json_t *jResult = json_object();
+				if ((iEntry - pTree->kstart) >= 26)
+					pTree->encodePrefix(name, value / 26);
+				name += (char) ('a' + (value % 26));
 
-			jResult = json_object();
+				pTree->entryNames[iEntry] = name;
+			}
 
-			json_object_set_new_nocheck(jResult, "kstart", json_integer(pTree->kstart));
-			json_object_set_new_nocheck(jResult, "nstart", json_integer(pTree->nstart));
-			json_object_set_new_nocheck(jResult, "ncount", json_integer(pTree->ncount));
-			json_object_set_new_nocheck(jResult, "size", json_integer(pTree->ncount - pTree->nstart));
+			// add root names
 
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			json_delete(jResult);
+			if (pTree->numRoots > pTree->rootNames.size())
+				pTree->rootNames.resize(pTree->numRoots);
+
+			for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
+				char name[16];
+
+				sprintf(name, "r%d", iRoot);
+				pTree->rootNames[iRoot] = name;
+			}
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+
+				jResult = json_object();
+
+				json_object_set_new_nocheck(jResult, "kstart", json_integer(pTree->kstart));
+				json_object_set_new_nocheck(jResult, "nstart", json_integer(pTree->nstart));
+				json_object_set_new_nocheck(jResult, "ncount", json_integer(pTree->ncount));
+				json_object_set_new_nocheck(jResult, "size", json_integer(pTree->ncount - pTree->nstart));
+
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
 		}
 
 		/*
@@ -262,49 +294,55 @@ struct gevalContext_t {
 		 */
 
 		// setup a data vector for evaluation
-		uint64_t **pFootprint = (uint64_t **) ctx.myAlloc("pFootprint", pTree->ncount, sizeof(*pFootprint));
-
-		for (unsigned i = 0; i < pTree->ncount; i++) {
-			pFootprint[i] = (uint64_t *) ctx.myAlloc("pFootprint", opt_dataSize, sizeof(**pFootprint));
-		}
+		footprint_t *pFootprint = (footprint_t *) ctx.myAlloc("pFootprint", pTree->ncount, sizeof(*pFootprint));
 
 		/*
 		 * Initialise data/footprint vector
 		 */
-		if (pTree->ostart - pTree->kstart == MAXSLOTS) {
+		if (pTree->nstart - pTree->kstart <= MAXSLOTS) {
 			/*
 			 * If there are MAXSLOTS keys, then be `eval`/`tinyTree_t` compatible
 			 */
-			unsigned kstart = pTree->kstart;
+			uint32_t kstart = pTree->kstart;
+			uint32_t nstart = pTree->nstart;
+
+			uint64_t *v = (uint64_t *) pFootprint;
 
 			// set 64bit slice to zero
-			for (unsigned j = 0; j < QUADPERFOOTPRINT; j++)
-				pFootprint[0][j] = 0;
+			memset(pFootprint, 0, kstart * sizeof(*pFootprint));
 
 			// set footprint for 64bit slice
 			assert(MAXSLOTS == 9);
 			for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
-				// v[(i/64)+0*4] should be 0
-				if (i & (1 << 0)) pFootprint[kstart + 0][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 1)) pFootprint[kstart + 1][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 2)) pFootprint[kstart + 2][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 3)) pFootprint[kstart + 3][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 4)) pFootprint[kstart + 4][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 5)) pFootprint[kstart + 5][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 6)) pFootprint[kstart + 6][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 7)) pFootprint[kstart + 7][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 8)) pFootprint[kstart + 8][(i / 64)] |= 1LL << (i % 64);
+				if (kstart + 0 < nstart)
+					if (i & (1 << 0)) v[(i / 64) + (kstart + 0) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 1 < nstart)
+					if (i & (1 << 1)) v[(i / 64) + (kstart + 1) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 2 < nstart)
+					if (i & (1 << 2)) v[(i / 64) + (kstart + 2) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 3 < nstart)
+					if (i & (1 << 3)) v[(i / 64) + (kstart + 3) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 4 < nstart)
+					if (i & (1 << 4)) v[(i / 64) + (kstart + 4) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 5 < nstart)
+					if (i & (1 << 5)) v[(i / 64) + (kstart + 5) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 6 < nstart)
+					if (i & (1 << 6)) v[(i / 64) + (kstart + 6) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 7 < nstart)
+					if (i & (1 << 7)) v[(i / 64) + (kstart + 7) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 8 < nstart)
+					if (i & (1 << 8)) v[(i / 64) + (kstart + 8) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
 			}
 
 		} else {
 			srand(opt_seed);
 
 			// fill rest with random patterns
-			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
-				uint64_t *v = pFootprint[iEntry];
+			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
+				uint64_t *v = (uint64_t *) (pFootprint + iKey);
 
 				// craptastic random fill
-				for (unsigned i = 0; i < opt_dataSize; i++) {
+				for (unsigned i = 0; i < QUADPERFOOTPRINT; i++) {
 					v[i] = (uint64_t) rand();
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -313,8 +351,8 @@ struct gevalContext_t {
 			}
 
 			// erase v[0]
-			for (unsigned i = 0; i < opt_dataSize; i++)
-				pFootprint[0][i] = 0;
+			for (unsigned i = 0; i < QUADPERFOOTPRINT; i++)
+				pFootprint[0].bits[i] = 0;
 		}
 
 		/*
@@ -358,7 +396,7 @@ struct gevalContext_t {
 				continue; // not a group header
 
 			// top-level components	
-			uint32_t Q = 0, Tu = 0, Ti = 0, F = 0;
+			uint32_t Q = 0, Ti = 0, Tu = 0, F = 0;
 
 			// walk through group list in search of a `1n9` node
 			for (uint32_t iNode = pTree->N[iGroup].next; iNode != iGroup; iNode = pTree->N[iNode].next) {
@@ -367,38 +405,38 @@ struct gevalContext_t {
 				// catch `1n9`
 				if (pNode->sid == pStore->SID_OR) {
 					Q  = pNode->slots[0];
-					Tu = 0;
 					Ti = IBIT;
+					Tu = 0;
 					F  = pNode->slots[1];
 					break;
 				} else if (pNode->sid == pStore->SID_GT) {
 					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
 					Ti = IBIT;
+					Tu = pNode->slots[1];
 					F  = 0;
 					break;
 				} else if (pNode->sid == pStore->SID_NE) {
 					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
 					Ti = IBIT;
+					Tu = pNode->slots[1];
 					F  = pNode->slots[1];
 					break;
 				} else if (pNode->sid == pStore->SID_AND) {
 					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
 					Ti = 0;
+					Tu = pNode->slots[1];
 					F  = 0;
 					break;
 				} else if (pNode->sid == pStore->SID_QNTF) {
 					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
 					Ti = IBIT;
+					Tu = pNode->slots[1];
 					F  = pNode->slots[2];
 					break;
 				} else if (pNode->sid == pStore->SID_QTF) {
 					Q  = pNode->slots[0];
-					Tu = pNode->slots[1];
 					Ti = 0;
+					Tu = pNode->slots[1];
 					F  = pNode->slots[2];
 					break;
 				}
@@ -415,11 +453,11 @@ struct gevalContext_t {
 			if (Ti) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iGroup][j] = (pFootprint[Q][j] & ~pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+					pFootprint[iGroup].bits[j] = (pFootprint[Q].bits[j] & ~pFootprint[Tu].bits[j]) ^ (~pFootprint[Q].bits[j] & pFootprint[F].bits[j]);
 			} else {
 				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iGroup][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+					pFootprint[iGroup].bits[j] = (pFootprint[Q].bits[j] & pFootprint[Tu].bits[j]) ^ (~pFootprint[Q].bits[j] & pFootprint[F].bits[j]);
 			}
 		}
 
@@ -430,26 +468,26 @@ struct gevalContext_t {
 			std::string name;
 			std::string transform;
 
-			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
 			const uint32_t Ri = pTree->roots[iRoot] & IBIT;
+			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
 
 			// display root name
 			printf("%s: ", pTree->rootNames[iRoot].c_str());
 
 			// display footprint
-			if (pTree->ostart - pTree->kstart == MAXSLOTS) {
+			if (pTree->nstart - pTree->kstart <= MAXSLOTS) {
 				// `eval` compatibility, display footprint
 				if (Ri) {
 					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j] ^ ~0U);
+						printf("%016lx ", pFootprint[Ru].bits[j] ^ ~0U);
 				} else {
 					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j]);
+						printf("%016lx ", pFootprint[Ru].bits[j]);
 				}
 			}
 
 			// display CRC
-			unsigned crc32 = calccrc32(pFootprint[Ru], opt_dataSize);
+			unsigned crc32 = calccrc32(pFootprint[Ru].bits, opt_dataSize);
 			// Inverted `T` is a concept not present in footprints. As a compromise, invert the result.
 			if (Ri)
 				crc32 ^= 0xffffffff;
