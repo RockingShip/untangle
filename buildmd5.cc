@@ -474,7 +474,7 @@ struct buildmd5Context_t {
 		addC3(V, o40, bf00, 0xefcdab89);
 	}
 
-	void main(const char *jsonFilename, const char *datFilename) {
+	void main(const char *jsonFilename) {
 		/*
 		 * There are a real long OR/XOR/AND chains
 		 */
@@ -485,7 +485,6 @@ struct buildmd5Context_t {
 		 * allocate and initialise placeholder/helper array references to variables
 		 */
 		NODE *V = (NODE *) malloc(ELAST * sizeof V[0]);
-
 
 		/*
 		 * Allocate the build tree containing the complete formula
@@ -532,21 +531,18 @@ struct buildmd5Context_t {
 		validateAll();
 
 		/*
-		 * Save the tree
-		 */
-
-		gTree->saveFile(datFilename);
-
-		/*
 		 * Create the meta json
 		 */
 
 		json_t *jOutput = json_object();
 
 		// add tree meta
-		gTree->headerInfo(jOutput);
+		gTree->summaryInfo(jOutput);
 		// add names/history
 		gTree->extraInfo(jOutput);
+
+		// contents as multi-rooted
+		json_object_set_new_nocheck(jOutput, "raw", json_string_nocheck(gTree->saveString(0, NULL, true).c_str()));
 		// add validations tests
 		json_object_set_new_nocheck(jOutput, "tests", gTests);
 
@@ -565,9 +561,8 @@ struct buildmd5Context_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(datFilename));
-			gTree->headerInfo(jResult);
-			gTree->extraInfo(jResult);
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(jsonFilename));
+			gTree->summaryInfo(jResult);
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -736,11 +731,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	char *jsonFilename;
-	char *datFilename;
 
-	if (argc - optind >= 2) {
+	if (argc - optind >= 1) {
 		jsonFilename = argv[optind++];
-		datFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -753,14 +746,12 @@ int main(int argc, char *argv[]) {
 		struct stat sbuf;
 		if (!stat(jsonFilename, &sbuf))
 			ctx.fatal("%s already exists. Use --force to overwrite\n", jsonFilename);
-		if (!stat(datFilename, &sbuf))
-			ctx.fatal("%s already exists. Use --force to overwrite\n", datFilename);
 	}
 
 	/*
 	 * Main
 	 */
-	app.main(jsonFilename, datFilename);
+	app.main(jsonFilename);
 
 	return 0;
 }

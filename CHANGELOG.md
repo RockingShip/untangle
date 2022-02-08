@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-08 13:56:41 Changed: All system builders (`build*`) export json only, use a loader to convert to a tree.
 2022-02-08 01:27:56 Added: `context_t::MAGICMASK_SYSTEM` and upgraded flags in json to text.
 2022-02-07 22:55:25 Changed `geval` supports files as input.
 2022-02-07 17:39:08 Changed: Allow multi-rooted `groupTree_t` trees as strings.

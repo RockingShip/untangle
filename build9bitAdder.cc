@@ -216,7 +216,7 @@ struct build9bitAdderContext_t {
 		gTree->roots[gTree->ostart + 4] = C3;
 	}
 
-	void main(const char *jsonFilename, const char *datFilename) {
+	void main(const char *jsonFilename) {
 		/*
 		 * Allocate the build tree containing the complete formula
 		 */
@@ -247,21 +247,18 @@ struct build9bitAdderContext_t {
 		validateAll();
 
 		/*
-		 * Save the tree
-		 */
-
-		gTree->saveFile(datFilename);
-
-		/*
 		 * Create the meta json
 		 */
 
 		json_t *jOutput = json_object();
 
 		// add tree meta
-		gTree->headerInfo(jOutput);
+		gTree->summaryInfo(jOutput);
 		// add names/history
 		gTree->extraInfo(jOutput);
+
+		// contents as multi-rooted
+		json_object_set_new_nocheck(jOutput, "data", json_string_nocheck(gTree->saveString(0, NULL, true).c_str()));
 		// add validations tests
 		json_object_set_new_nocheck(jOutput, "tests", gTests);
 
@@ -280,9 +277,8 @@ struct build9bitAdderContext_t {
 
 		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
 			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(datFilename));
-			gTree->headerInfo(jResult);
-			gTree->extraInfo(jResult);
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(jsonFilename));
+			gTree->summaryInfo(jResult);
 			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -299,7 +295,7 @@ struct build9bitAdderContext_t {
 build9bitAdderContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.json>\n", argv[0]);
 	if (verbose) {
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
@@ -456,11 +452,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	char *jsonFilename;
-	char *datFilename;
 
-	if (argc - optind >= 2) {
+	if (argc - optind >= 1) {
 		jsonFilename = argv[optind++];
-		datFilename  = argv[optind++];
 	} else {
 		usage(argv, false);
 		exit(1);
@@ -473,14 +467,12 @@ int main(int argc, char *argv[]) {
 		struct stat sbuf;
 		if (!stat(jsonFilename, &sbuf))
 			ctx.fatal("%s already exists. Use --force to overwrite\n", jsonFilename);
-		if (!stat(datFilename, &sbuf))
-			ctx.fatal("%s already exists. Use --force to overwrite\n", datFilename);
 	}
 
 	/*
 	 * Main
 	 */
-	app.main(jsonFilename, datFilename);
+	app.main(jsonFilename);
 
 	return 0;
 }

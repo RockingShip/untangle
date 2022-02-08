@@ -3104,53 +3104,13 @@ struct baseTree_t {
 	 * Return string is static allocated
 	 *
 	 * NOTE: `std::string` usage exception because this is NOT speed critical code AND strings can become gigantically large
+	 * 
+	 * @date 2022-02-08 03:50:57
+	 * if `allRoots` is true, then ignore `id` and output all roots. 
 	 */
-	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
+	std::string saveString(uint32_t id, std::string *pTransform = NULL, bool allRoots = false) {
 
 		std::string name;
-
-		/*
-		 * Endpoints are simple
-		 */
-		if ((id & ~IBIT) < this->nstart) {
-			if (pTransform) {
-				pTransform->clear();
-				if ((id & ~IBIT) == 0) {
-					name += '0';
-				} else {
-					uint32_t value = (id & ~IBIT) - this->kstart;
-
-					if (value < 26) {
-						*pTransform += (char) ('a' + value);
-					} else {
-						encodePrefix(*pTransform, value / 26);
-						*pTransform += (char) ('a' + (value % 26));
-					}
-
-					name += 'a';
-				}
-
-			} else {
-				if ((id & ~IBIT) == 0) {
-					name += '0';
-				} else {
-					uint32_t value = (id & ~IBIT) - this->kstart;
-					if (value < 26) {
-						name += (char) ('a' + value);
-					} else {
-						encodePrefix(name, value / 26);
-						name += (char) ('a' + (value % 26));
-					}
-				}
-			}
-
-
-			// test for invert
-			if (id & IBIT)
-				name += '~';
-
-			return name;
-		}
 
 		uint32_t nextPlaceholder = this->kstart;
 		uint32_t nextNode        = this->nstart;
@@ -3167,28 +3127,44 @@ struct baseTree_t {
 		}
 
 		// starting point
-		pStack[numStack++] = id & ~IBIT;
+		if (allRoots) {
+			// push all roots in reverse order
+			for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+				pStack[numStack++] = this->roots[this->numRoots - 1 - iRoot];
+		} else {
+			// push single id
+			pStack[numStack++] = id;
+		}
 
 		do {
 			// pop stack
-			uint32_t curr = pStack[--numStack];
-
-			assert(curr != 0);
+			uint32_t Ru = pStack[--numStack];
+			uint32_t Ri = Ru & IBIT;
+			Ru &= ~IBIT;
 
 			// if endpoint then emit
-			if (curr < this->nstart) {
+			if (Ru == 0) {
+				// zero
+				name += '0';
+
+				if (Ri)
+					name + '~';
+
+				continue;
+
+			} else if (Ru < this->nstart) {
 				uint32_t value;
 
 				if (!pTransform) {
 					// endpoint
-					value = curr - this->kstart;
+					value = Ru - this->kstart;
 				} else {
 					// placeholder
-					if (pVersion[curr] != thisVersion) {
-						pVersion[curr] = thisVersion;
-						pMap[curr]     = nextPlaceholder++;
+					if (pVersion[Ru] != thisVersion) {
+						pVersion[Ru] = thisVersion;
+						pMap[Ru]     = nextPlaceholder++;
 
-						value = curr - this->kstart;
+						value = Ru - this->kstart;
 						if (value < 26) {
 							*pTransform += (char) ('a' + value);
 						} else {
@@ -3197,7 +3173,7 @@ struct baseTree_t {
 						}
 					}
 
-					value = pMap[curr] - this->kstart;
+					value = pMap[Ru] - this->kstart;
 				}
 
 				// convert id to (prefixed) letter
@@ -3208,23 +3184,26 @@ struct baseTree_t {
 					name += (char) ('a' + (value % 26));
 				}
 
+				if (Ri)
+					name + '~';
+
 				continue;
 			}
 
-			const baseNode_t *pNode = this->N + curr;
+			const baseNode_t *pNode = this->N + Ru;
 			const uint32_t   Q      = pNode->Q;
 			const uint32_t   Tu     = pNode->T & ~IBIT;
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
 			// determine if node already handled
-			if (pVersion[curr] != thisVersion) {
+			if (pVersion[Ru] != thisVersion) {
 				// first time
-				pVersion[curr] = thisVersion;
-				pMap[curr]     = 0;
+				pVersion[Ru] = thisVersion;
+				pMap[Ru]     = 0;
 
 				// push id so it visits again after expanding
-				pStack[numStack++] = curr;
+				pStack[numStack++] = Ru;
 
 				// push non-zero endpoints
 				if (F >= this->kstart)
@@ -3235,10 +3214,11 @@ struct baseTree_t {
 					pStack[numStack++] = Q;
 
 				assert(numStack < maxNodes);
+				continue;
 
-			} else if (pMap[curr] == 0) {
+			} else if (pMap[Ru] == 0) {
 				// node complete, output operator
-				pMap[curr] = nextNode++;
+				pMap[Ru] = nextNode++;
 
 				if (Ti) {
 					if (Tu == 0) {
@@ -3272,7 +3252,7 @@ struct baseTree_t {
 
 			} else {
 				// back-reference to earlier node
-				uint32_t dist = nextNode - pMap[curr];
+				uint32_t dist = nextNode - pMap[Ru];
 
 				// convert id to (prefixed) back-link
 				if (dist < 10) {
@@ -3283,13 +3263,12 @@ struct baseTree_t {
 				}
 			}
 
+			if (Ri)
+				name + '~';
+
 		} while (numStack > 0);
 
 		assert(nextPlaceholder <= this->nstart);
-
-		// test for inverted-root
-		if (id & IBIT)
-			name += '~';
 
 		freeMap(pMap);
 		freeMap(pStack);
@@ -4947,6 +4926,28 @@ struct baseTree_t {
 			for (uint32_t iName = 0; iName < numNames; iName++)
 				rootNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
 		}
+	}
+
+
+	/*
+	 * Extract details into json
+	 */
+	json_t *summaryInfo(json_t *jResult) {
+		if (jResult == NULL)
+			jResult = json_object();
+
+		json_object_set_new_nocheck(jResult, "flags", ctx.flagsToJson(this->flags));
+		json_object_set_new_nocheck(jResult, "kstart", json_integer(this->kstart));
+		json_object_set_new_nocheck(jResult, "ostart", json_integer(this->ostart));
+		json_object_set_new_nocheck(jResult, "estart", json_integer(this->estart));
+		json_object_set_new_nocheck(jResult, "nstart", json_integer(this->nstart));
+		json_object_set_new_nocheck(jResult, "ncount", json_integer(this->ncount));
+		json_object_set_new_nocheck(jResult, "numroots", json_integer(this->numRoots));
+		json_object_set_new_nocheck(jResult, "size", json_integer(this->ncount - this->nstart));
+		json_object_set_new_nocheck(jResult, "numhistory", json_integer(this->numHistory));
+		json_object_set_new_nocheck(jResult, "poshistory", json_integer(this->posHistory));
+
+		return jResult;
 	}
 
 	/*
