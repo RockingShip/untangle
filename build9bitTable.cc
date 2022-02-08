@@ -194,7 +194,7 @@ struct build9bitTableContext_t {
 				}
 			}
 
-			gTree->roots[gTree->ostart + iBit] = lastRow;
+			gTree->roots[iBit] = lastRow;
 		}
 	}
 
@@ -203,18 +203,18 @@ struct build9bitTableContext_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, OSTART, /*nstart=*/OSTART, /*numRoots=*/NSTART - OSTART, opt_maxNode, opt_flags);
 
 		// setup entry names
-		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++)
-			gTree->entryNames[iEntry] = allNames[iEntry];
+		gTree->entryNames.resize(OSTART - KSTART);
+		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++)
+			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
 
 		// setup root names
-		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
-			gTree->rootNames[iRoot] = allNames[iRoot];
-
-			gTree->roots[iRoot] = iRoot;
-		}
+		gTree->numRoots = NSTART - OSTART;
+		gTree->rootNames.resize(gTree->numRoots);
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++)
+			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
 
 		/*
 		 * setup nodes

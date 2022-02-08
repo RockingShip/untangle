@@ -209,11 +209,11 @@ struct build9bitAdderContext_t {
 		add(&C3, &O3, L3, R3, C2);
 
 		// store result
-		gTree->roots[gTree->ostart + 0] = O0;
-		gTree->roots[gTree->ostart + 1] = O1;
-		gTree->roots[gTree->ostart + 2] = O2;
-		gTree->roots[gTree->ostart + 3] = O3;
-		gTree->roots[gTree->ostart + 4] = C3;
+		gTree->roots[0] = O0;
+		gTree->roots[1] = O1;
+		gTree->roots[2] = O2;
+		gTree->roots[3] = O3;
+		gTree->roots[4] = C3;
 	}
 
 	void main(const char *jsonFilename) {
@@ -221,18 +221,18 @@ struct build9bitAdderContext_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART/*estart*/, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, OSTART, /*nstart=*/OSTART, /*numRoots=*/NSTART - OSTART, opt_maxNode, opt_flags);
 
 		// setup entry names
-		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++)
-			gTree->entryNames[iEntry] = allNames[iEntry];
+		gTree->entryNames.resize(OSTART - KSTART);
+		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++)
+			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
 
 		// setup root names
-		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
-			gTree->rootNames[iRoot] = allNames[iRoot];
-
-			gTree->roots[iRoot] = iRoot;
-		}
+		gTree->numRoots = NSTART - OSTART;
+		gTree->rootNames.resize(gTree->numRoots);
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++)
+			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
 
 		/*
 		 * setup nodes

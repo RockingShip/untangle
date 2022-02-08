@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * buildtest0.cc
@@ -152,18 +152,18 @@ struct buildtest0Context_t {
 		 * Allocate the build tree containing the complete formula
 		 */
 
-		gTree = new baseTree_t(ctx, KSTART, OSTART, NSTART, NSTART, NSTART/*numRoots*/, opt_maxNode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, OSTART, /*nstart=*/OSTART, /*numRoots=*/NSTART - OSTART, opt_maxNode, opt_flags);
 
 		// setup entry names
-		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++)
-			gTree->entryNames[iEntry] = allNames[iEntry];
+		gTree->entryNames.resize(OSTART - KSTART);
+		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++)
+			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
 
 		// setup root names
-		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
-			gTree->rootNames[iRoot] = allNames[iRoot];
-
-			gTree->roots[iRoot] = iRoot;
-		}
+		gTree->numRoots = NSTART - OSTART;
+		gTree->rootNames.resize(gTree->numRoots);
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++)
+			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
 
 		// setup nodes
 
@@ -172,23 +172,22 @@ struct buildtest0Context_t {
 		// gTree->roots[2] =  gTree->N[k3] ? ! 0                : gTree->roots[0]  ;
 		// because there is no operator overload available for the above
 
-		uint32_t N0 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k2;
 		gTree->N[gTree->ncount].T = k1 ^ IBIT;
 		gTree->N[gTree->ncount].F = k0;
-		gTree->roots[o0] = gTree->ncount++; // o0 referenced once
+		gTree->roots[0] = gTree->ncount++; // o0 referenced once
 
 //		uint32_t N1 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k2;
 		gTree->N[gTree->ncount].T = k0;
 		gTree->N[gTree->ncount].F = k1;
-		gTree->roots[o1] = gTree->ncount++ ^ IBIT; // o1 referenced twice
+		gTree->roots[1] = gTree->ncount++ ^ IBIT; // o1 referenced twice
 
 //		uint32_t N2 = gTree->ncount;
 		gTree->N[gTree->ncount].Q = k3;
 		gTree->N[gTree->ncount].T = opt_error ? kError : IBIT;
-		gTree->N[gTree->ncount].F = N0;
-		gTree->roots[o2] = gTree->ncount++; // o2 referenced once
+		gTree->N[gTree->ncount].F = gTree->roots[0];
+		gTree->roots[2] = gTree->ncount++; // o2 referenced once
 
 		/*
 		 * Create tests as json object

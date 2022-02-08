@@ -337,25 +337,30 @@ struct buildspongentContext_t {
 		 * NOTE: use NSTART because this is the last intermediate as gTree->nstart might point to ESTART)
 		 */
 		NODE *V = (NODE *) malloc(VLAST * sizeof V[0]);
-
+		V[0] = 0;
+		for (unsigned iEntry = 1; iEntry < KSTART; iEntry++)
+			V[iEntry].id = kError;
+		
 		/*
 		 * Allocate the build tree containing the complete formula
 		 */
-		gTree = new baseTree_t(ctx, KSTART, OSTART, ESTART, ESTART/*NSTART*/, ESTART/*numRoots*/, opt_maxNode, opt_flags);
+		gTree = new baseTree_t(ctx, KSTART, OSTART, OSTART, OSTART/*NSTART*/, ESTART - OSTART/*numRoots*/, opt_maxNode, opt_flags);
 
 		// setup entry names
-		for (unsigned iEntry = 0; iEntry < gTree->nstart; iEntry++) {
+		gTree->entryNames.resize(OSTART - KSTART);
+		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++) {
 			// key name
-			gTree->entryNames[iEntry] = allNames[iEntry];
+			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
 
 			// key variable
 			V[iEntry].id = iEntry;
 		}
 
 		// setup root names
+		gTree->numRoots = ESTART - OSTART;
 		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++) {
 			// key name
-			gTree->rootNames[iRoot] = allNames[iRoot];
+			gTree->rootNames[iRoot] = allNames[OSTART + iRoot];
 
 			// root result
 			gTree->roots[iRoot] = iRoot;
@@ -367,9 +372,8 @@ struct buildspongentContext_t {
 		/*
 		 * Assign the roots/entrypoints.
 		 */
-		gTree->numRoots = gTree->estart;
-		for (unsigned iRoot = 0; iRoot < gTree->estart; iRoot++)
-			gTree->roots[iRoot] = V[iRoot].id;
+		for (unsigned iRoot = 0; iRoot < gTree->numRoots; iRoot++)
+			gTree->roots[iRoot] = V[OSTART + iRoot].id;
 
 		/*
 		 * Create tests as json object

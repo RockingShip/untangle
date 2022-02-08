@@ -5486,7 +5486,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 * 
 	 * NOTE: id/references are as-is and not updated to latest
 	 */
-	std::string saveString(uint32_t id, std::string *pTransform = NULL) {
+	std::string saveString(uint32_t id, std::string *pTransform = NULL, bool allRoots = false) {
 
 		uint32_t        nextPlaceholder  = this->kstart;        // next placeholder for `pTransform`
 		uint32_t        nextExportNodeId = this->nstart;        // next nodeId for exported name
@@ -5497,12 +5497,29 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		// bump version number
 		pVersion->nextVersion();
 
-		// call core code
-		saveStringNode(id & ~IBIT, nextExportNodeId, name, pVersion, pMap, pTransform, nextPlaceholder);
+		if (allRoots) {
+			assert(this->numRoots > 0);
+			for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++) {
+				uint32_t Ru = this->roots[iRoot];
+				uint32_t Ri = Ru & IBIT;
+				Ru &= ~IBIT;
+				
+				// call core code
+				saveStringNode(Ru, nextExportNodeId, name, pVersion, pMap, pTransform, nextPlaceholder);
 
-		// test for inverted-root
-		if (id & IBIT)
-			name += '~';
+				// test for inverted-root
+				if (Ri)
+					name += '~';
+				
+			}	
+		} else {
+			// call core code
+			saveStringNode(id & ~IBIT, nextExportNodeId, name, pVersion, pMap, pTransform, nextPlaceholder);
+
+			// test for inverted-root
+			if (id & IBIT)
+				name += '~';
+		}
 
 		freeMap(pMap);
 		freeVersion(pVersion);

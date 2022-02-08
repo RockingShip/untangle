@@ -3129,7 +3129,8 @@ struct baseTree_t {
 		// starting point
 		if (allRoots) {
 			// push all roots in reverse order
-			for (uint32_t iRoot = 0; iRoot < this->numRoots; iRoot++)
+			assert(this->numRoots > 0);
+			for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
 				pStack[numStack++] = this->roots[this->numRoots - 1 - iRoot];
 		} else {
 			// push single id
@@ -3148,7 +3149,7 @@ struct baseTree_t {
 				name += '0';
 
 				if (Ri)
-					name + '~';
+					name += '~';
 
 				continue;
 
@@ -3185,7 +3186,7 @@ struct baseTree_t {
 				}
 
 				if (Ri)
-					name + '~';
+					name += '~';
 
 				continue;
 			}
@@ -3203,7 +3204,7 @@ struct baseTree_t {
 				pMap[Ru]     = 0;
 
 				// push id so it visits again after expanding
-				pStack[numStack++] = Ru;
+				pStack[numStack++] = Ru ^ Ri;
 
 				// push non-zero endpoints
 				if (F >= this->kstart)
@@ -3264,7 +3265,7 @@ struct baseTree_t {
 			}
 
 			if (Ri)
-				name + '~';
+				name += '~';
 
 		} while (numStack > 0);
 
@@ -4779,34 +4780,30 @@ struct baseTree_t {
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
-		if (numRoots < estart) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("numroots out of range"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
-			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
-		rootNames.resize(numRoots);
+		if (entryNames.size() < nstart)
+			entryNames.resize(nstart);
+		if (rootNames.size() < numRoots)
+			rootNames.resize(numRoots);
 
 		/*
 		 * Reserved names
 		 */
-		entryNames[0]            = "0";
-		entryNames[1 /*KERROR*/] = "KERROR";
+
+		entryNames[0] = "0";
+
+		for (uint32_t iEntry = 1; iEntry < this->kstart; iEntry++)
+			entryNames[iEntry] = "ERROR";
 
 		/*
-		 * import knames
+		 * import entryNames
 		 */
 
-		json_t *jNames = json_object_get(jInput, "knames");
+		json_t *jNames = json_object_get(jInput, "entrynames");
 		if (!jNames) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'knames'"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'entrynames'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
@@ -4815,7 +4812,7 @@ struct baseTree_t {
 		unsigned numNames = json_array_size(jNames);
 		if (numNames != ostart - kstart) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of knames"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of entrynames"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			json_object_set_new_nocheck(jError, "expected", json_integer(ostart - kstart));
 			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
@@ -4824,110 +4821,35 @@ struct baseTree_t {
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
-		 * import onames
+		 * import rootnames
 		 */
 
-		jNames = json_object_get(jInput, "onames");
+		jNames = json_object_get(jInput, "rootnames");
 		if (!jNames) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'onames'"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'rootnames'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
 
 		numNames = json_array_size(jNames);
-		if (numNames != estart - ostart) {
+		if (numNames != numRoots) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of onames"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of rootnames"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(estart - ostart));
+			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots));
 			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
 
-		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
-
-		/*
-		 * import enames
-		 */
-
-		jNames = json_object_get(jInput, "enames");
-		if (!jNames) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'enames'"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-
-		numNames = json_array_size(jNames);
-		if (numNames != nstart - estart) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of enames"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(nstart - estart));
-			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-
-		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
-
-		/*
-		 * import rnames (extended root names)
-		 */
-
-		// copy fixed part
-		for (unsigned iRoot = 0; iRoot < estart; iRoot++)
-			rootNames[iRoot] = entryNames[iRoot];
-
-		jNames = json_object_get(jInput, "rnames");
-		if (!jNames) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'rnames'"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-
-		numNames = json_array_size(jNames);
-
-		if (json_is_string(jNames) && strcasecmp(json_string_value(jNames), "enames") == 0) {
-			// roots identical to keys
-			if (nstart != numRoots) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("rnames == enames AND nstart != numRoots"));
-				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-				json_object_set_new_nocheck(jError, "nstart", json_integer(nstart));
-				json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
-				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				exit(1);
-			}
-			// copy collection
-			rootNames = entryNames;
-		} else if (numNames != numRoots - estart) {
-			// count mismatch
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of rnames"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots - estart));
-			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		} else {
-			// load root names
-			for (uint32_t iName = 0; iName < numNames; iName++)
-				rootNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
-		}
+		for (uint32_t iName = 0; iName < numRoots; iName++)
+			rootNames[iName] = json_string_value(json_array_get(jNames, iName));
 	}
-
 
 	/*
 	 * Extract details into json
@@ -4987,48 +4909,19 @@ struct baseTree_t {
 		/*
 		 * entry/root names
 		 */
-		json_t *jEntrynames = json_array();
+		json_t *jEntryNames = json_array();
 
 		// input entry names
-		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "knames", jEntrynames);
+		for (unsigned iEntry = 0; iEntry < ostart - kstart; iEntry++)
+			json_array_append_new(jEntryNames, json_string_nocheck(entryNames[iEntry].c_str()));
+		json_object_set_new_nocheck(jResult, "entrynames", jEntryNames);
 
-		jEntrynames = json_array();
+		json_t *jRootNames = json_array();
 
 		// output entry names
-		for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "onames", jEntrynames);
-
-		jEntrynames = json_array();
-
-		// extended entry names
-		for (unsigned iEntry = estart; iEntry < nstart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "enames", jEntrynames);
-
-		// extended root names (which might be identical to enames)
-		bool rootsDiffer = (nstart != numRoots);
-		if (!rootsDiffer) {
-			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
-				if (entryNames[iEntry].compare(rootNames[iEntry]) != 0) {
-					rootsDiffer = true;
-					break;
-				}
-			}
-		}
-
-		if (rootsDiffer) {
-			// either roots are different or an empty set.
-			jEntrynames = json_array();
-
-			for (unsigned iRoot = estart; iRoot < numRoots; iRoot++)
-				json_array_append_new(jEntrynames, json_string_nocheck(rootNames[iRoot].c_str()));
-			json_object_set_new_nocheck(jResult, "rnames", jEntrynames);
-		} else {
-			json_object_set_new_nocheck(jResult, "rnames", json_string_nocheck("enames"));
-		}
+		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
+			json_array_append_new(jRootNames, json_string_nocheck(rootNames[iRoot].c_str()));
+		json_object_set_new_nocheck(jResult, "rootnames", jRootNames);
 
 #if 0
 
