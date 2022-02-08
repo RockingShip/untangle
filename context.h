@@ -26,15 +26,16 @@
  */
 
 #include <assert.h>
+#include <jansson.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <cstring>
-#include <string>
 #include <time.h>
 #include <unistd.h>
+#include <cstring>
+#include <string>
 
 /**
  * Which bit of node/entry/root ID's is reserved to flag that the result needs to be inverted
@@ -91,12 +92,14 @@ struct context_t {
 		MAGICFLAG_AINF          = 3,    // add-if-not-found, signatures/imprints contain false duplicates
 		MAGICFLAG_CASCADE       = 4,    // Enable level-3 normalisation: cascaded OR/NE/AND
 		MAGICFLAG_REWRITE       = 5,    // Enable level-4 normalisation: Database lookup/rewrite
+		MAGICFLAG_SYSTEM        = 6,    // For trees, indicating a single root containing the balanced system
 
 		MAGICMASK_PARANOID      = 1 << MAGICFLAG_PARANOID,
 		MAGICMASK_PURE          = 1 << MAGICFLAG_PURE,
 		MAGICMASK_AINF          = 1 << MAGICFLAG_AINF,
 		MAGICMASK_CASCADE       = 1 << MAGICFLAG_CASCADE,
 		MAGICMASK_REWRITE       = 1 << MAGICFLAG_REWRITE,
+		MAGICMASK_SYSTEM        = 1 << MAGICFLAG_SYSTEM,
 		// @formatter:on
 	};
 
@@ -214,13 +217,14 @@ struct context_t {
 	 * Display creation flags
 	 */
 	void logFlags(uint32_t flags) {
-		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s%s%s\n", timeAsString(),
+		fprintf(stderr, "[%s] FLAGS [%x]:%s%s%s%s%s%s\n", timeAsString(),
 			flags,
 			(flags & context_t::MAGICMASK_PARANOID) ? " PARANOID" : "",
 			(flags & context_t::MAGICMASK_PURE) ? " PURE" : "",
 			(flags & context_t::MAGICMASK_AINF) ? " AINF" : "",
 			(flags & context_t::MAGICMASK_CASCADE) ? " CASCADE" : "",
-			(flags & context_t::MAGICMASK_REWRITE) ? " REWRITE" : ""
+			(flags & context_t::MAGICMASK_REWRITE) ? " REWRITE" : "",
+		        (flags & context_t::MAGICMASK_SYSTEM) ? " SYSTEM" : ""
 		);
 	}
 
@@ -481,9 +485,71 @@ struct context_t {
 			if (flags)
 				txt += '|';
 		}
+		if (flags & MAGICMASK_SYSTEM) {
+			txt += "SYSTEM";
+			flags &= ~MAGICMASK_SYSTEM;
+			if (flags)
+				txt += '|';
+		}
 
 		return txt;
 	}
+
+	/*
+	 * @date 2022-02-08 00:35:14
+	 * Convert flags to json
+	 */
+	json_t *flagsToJson(uint32_t flags) {
+		json_t *jData = json_array();
+
+		if (flags & context_t::MAGICMASK_PARANOID)
+			json_array_append(jData, json_string_nocheck("paranoid"));
+		if (flags & context_t::MAGICMASK_PURE)
+			json_array_append(jData, json_string_nocheck("pure"));
+		if (flags & context_t::MAGICMASK_AINF)
+			json_array_append(jData, json_string_nocheck("ainf"));
+		if (flags & context_t::MAGICMASK_CASCADE)
+			json_array_append(jData, json_string_nocheck("cascade"));
+		if (flags & context_t::MAGICMASK_REWRITE)
+			json_array_append(jData, json_string_nocheck("rewrite"));
+		if (flags & context_t::MAGICMASK_SYSTEM)
+			json_array_append(jData, json_string_nocheck("system"));
+
+		return jData;
+	}
+
+	/**
+	 * @date 2021-07-22 20:07:36
+	 *
+	 * Create flags from json
+	 */
+	unsigned flagsFromJson(json_t *jInput) {
+
+		unsigned mask = 0;
+
+		for (unsigned i=0; i< json_array_size(jInput); i++) {
+			const char *pFlag = json_string_value(json_array_get(jInput, i));
+
+			if (strcmp(pFlag, "paranoid") == 0)
+				mask |= context_t::MAGICMASK_PARANOID;
+			else if (strcmp(pFlag, "pure") == 0)
+				mask |= context_t::MAGICMASK_PURE;
+			else if (strcmp(pFlag, "ainf") == 0)
+				mask |= context_t::MAGICMASK_AINF;
+			else if (strcmp(pFlag, "cascade") == 0)
+				mask |= context_t::MAGICMASK_CASCADE;
+			else if (strcmp(pFlag, "rewrite") == 0)
+				mask |= context_t::MAGICMASK_REWRITE;
+			else if (strcmp(pFlag, "system") == 0)
+				mask |= context_t::MAGICMASK_SYSTEM;
+			else
+				fatal("\n{\"error\":\"unsupported flag\",\"where\":\"%s:%s:%d\",\"flag\":\"%s\"}\n",
+					  __FUNCTION__, __FILE__, __LINE__, pFlag);
+		}
+
+		return mask;
+	}
+
 
 	/**
 	 * @date 2020-03-24 00:15:48

@@ -3334,7 +3334,7 @@ struct database_t {
 	json_t *jsonInfo(json_t *jResult) {
 		if (jResult == NULL)
 			jResult = json_object();
-		json_object_set_new_nocheck(jResult, "flags", json_integer(this->creationFlags));
+		json_object_set_new_nocheck(jResult, "flags", ctx.flagsToJson(this->creationFlags));
 		{
 			char hex[10];
 			sprintf(hex, "%08x", fileHeader.magic_sidCRC);

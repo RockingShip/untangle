@@ -214,7 +214,7 @@ struct gfoldContext_t {
 				json_object_set_new_nocheck(jResult, "kstart", json_integer(pOldTree->kstart));
 				json_object_set_new_nocheck(jResult, "nstart", json_integer(pOldTree->nstart));
 				json_object_set_new_nocheck(jResult, "ncount", json_integer(pOldTree->ncount));
-				json_object_set_new_nocheck(jResult, "numnodes", json_integer(pOldTree->ncount - pOldTree->nstart));
+				json_object_set_new_nocheck(jResult, "size", json_integer(pOldTree->ncount - pOldTree->nstart));
 
 				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				json_delete(jResult);

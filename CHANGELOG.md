@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-08 01:27:56 Added: `context_t::MAGICMASK_SYSTEM` and upgraded flags in json to text.
 2022-02-07 22:55:25 Changed `geval` supports files as input.
 2022-02-07 17:39:08 Changed: Allow multi-rooted `groupTree_t` trees as strings.
 2022-02-07 22:11:44 Fixed: Code indenting in `groupTree_t::addNode()`.

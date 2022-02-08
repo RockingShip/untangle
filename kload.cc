@@ -136,6 +136,7 @@ struct kloadContext_t {
 
 		baseTree_t newTree(ctx, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, jsonTree.numRoots, opt_maxNode, opt_flags);
 
+		newTree.flags      = jsonTree.flags;
 		newTree.entryNames = jsonTree.entryNames;
 		newTree.rootNames  = jsonTree.rootNames;
 

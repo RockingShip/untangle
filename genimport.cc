@@ -388,7 +388,7 @@ int main(int argc, char *argv[]) {
 
 	store.interleave         = json_integer_value(json_object_get(jInput, "interleave"));
 
-	ctx.flags		 = app.flagsFromJson(json_object_get(jInput, "flags"));
+	ctx.flags		 = ctx.flagsFromJson(json_object_get(jInput, "flags"));
 
 	// find matching `interleaveStep`
 	const metricsInterleave_t *pMetrics = getMetricsInterleave(MAXSLOTS, store.interleave);

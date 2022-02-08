@@ -252,6 +252,11 @@ struct genportContext_t : dbtool_t {
 				fprintf(f, ",");
 			fprintf(f, "\"rewrite\"");
 		}
+		if (pStore->creationFlags & context_t::MAGICMASK_SYSTEM) {
+			if (cnt++)
+				fprintf(f, ",");
+			fprintf(f, "\"system\"");
+		}
 		fprintf(f, "]\n");
 
 		fprintf(f, ",\"%s\":%u\n", "maxSignature", pStore->numSignature);
@@ -266,36 +271,6 @@ struct genportContext_t : dbtool_t {
 		fprintf(f, ",\"%s\":%u\n", "maxMember", pStore->numMember);
 		fprintf(f, ",\"%s\":%u\n", "memberIndexSize", pStore->memberIndexSize);
 
-	}
-
-	/**
-	 * @date 2021-07-22 20:07:36
-	 *
-	 * Create flags from json
-	 */
-	unsigned flagsFromJson(json_t *jInput) {
-
-		unsigned mask = 0;
-
-		for (unsigned i=0; i< json_array_size(jInput); i++) {
-			const char *pFlag = json_string_value(json_array_get(jInput, i));
-
-			if (strcmp(pFlag, "paranoid") == 0)
-				mask |= context_t::MAGICMASK_PARANOID;
-			else if (strcmp(pFlag, "pure") == 0)
-				mask |= context_t::MAGICMASK_PURE;
-			else if (strcmp(pFlag, "ainf") == 0)
-				mask |= context_t::MAGICMASK_AINF;
-			else if (strcmp(pFlag, "cascade") == 0)
-				mask |= context_t::MAGICMASK_CASCADE;
-			else if (strcmp(pFlag, "rewrite") == 0)
-				mask |= context_t::MAGICMASK_REWRITE;
-			else
-				ctx.fatal("\n{\"error\":\"unsupported flag\",\"where\":\"%s:%s:%d\",\"flag\":\"%s\"}\n",
-					  __FUNCTION__, __FILE__, __LINE__, pFlag);
-		}
-
-		return mask;
 	}
 
 	/*

@@ -4744,6 +4744,11 @@ struct baseTree_t {
 			ctx.fatal("baseTree_t::loadFileJson() on non-initial tree\n");
 
 		/*
+		 * import flags
+		 */
+		flags = ctx.flagsFromJson(json_object_get(jInput, "flags"));
+
+		/*
 		 * import dimensions
 		 */
 		kstart   = json_integer_value(json_object_get(jInput, "kstart"));
@@ -4954,7 +4959,7 @@ struct baseTree_t {
 		char crcstr[32];
 		sprintf(crcstr, "%08x", fileHeader->crc32);
 
-		json_object_set_new_nocheck(jResult, "flags", json_integer(fileHeader->magic_flags));
+		json_object_set_new_nocheck(jResult, "flags", ctx.flagsToJson(fileHeader->magic_flags));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
 		json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
 		json_object_set_new_nocheck(jResult, "kstart", json_integer(fileHeader->kstart));
@@ -4962,8 +4967,8 @@ struct baseTree_t {
 		json_object_set_new_nocheck(jResult, "estart", json_integer(fileHeader->estart));
 		json_object_set_new_nocheck(jResult, "nstart", json_integer(fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
-		json_object_set_new_nocheck(jResult, "numnodes", json_integer(fileHeader->ncount - fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "numroots", json_integer(fileHeader->numRoots));
+		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->ncount - fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "system", json_integer(fileHeader->system));
 		json_object_set_new_nocheck(jResult, "numhistory", json_integer(fileHeader->numHistory));
 		json_object_set_new_nocheck(jResult, "poshistory", json_integer(fileHeader->posHistory));

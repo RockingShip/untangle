@@ -7125,7 +7125,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		if (jResult == NULL)
 			jResult = json_object();
 
-		json_object_set_new_nocheck(jResult, "flags", json_integer(fileHeader->magic_flags));
+		json_object_set_new_nocheck(jResult, "flags", ctx.flagsToJson(fileHeader->magic_flags));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->offEnd));
 		json_object_set_new_nocheck(jResult, "maxdepth", json_integer(fileHeader->maxDepth));
 		{
@@ -7138,8 +7138,8 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		json_object_set_new_nocheck(jResult, "estart", json_integer(fileHeader->estart));
 		json_object_set_new_nocheck(jResult, "nstart", json_integer(fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
-		json_object_set_new_nocheck(jResult, "numnodes", json_integer(fileHeader->ncount - fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "numroots", json_integer(fileHeader->numRoots));
+		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->ncount - fileHeader->nstart));
 		json_object_set_new_nocheck(jResult, "system", json_integer(fileHeader->system));
 		json_object_set_new_nocheck(jResult, "numhistory", json_integer(fileHeader->numHistory));
 		json_object_set_new_nocheck(jResult, "poshistory", json_integer(fileHeader->posHistory));
