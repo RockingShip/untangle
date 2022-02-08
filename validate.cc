@@ -182,11 +182,11 @@ struct validateContext_t {
 		for (unsigned iTest = 0; iTest < gNumTests; iTest++) {
 			// extract test element
 			json_t     *jTest    = json_array_get(jTests, iTest);
-			const char *strKeys  = json_string_value(json_array_get(jTest, 0));
+			const char *strEntry = json_string_value(json_array_get(jTest, 0));
 			const char *strRoots = json_string_value(json_array_get(jTest, 1));
 
 			// simple validation
-			if (!strKeys || !strRoots) {
+			if (!strEntry || !strRoots) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incomplete test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
@@ -201,9 +201,9 @@ struct validateContext_t {
 			unsigned iBit   = 0;
 
 			// convert
-			for (unsigned iPos = 0; iPos < strlen(strKeys); /* increment in loop */ ) {
+			for (unsigned iPos = 0; iPos < strlen(strEntry); /* increment in loop */ ) {
 				// skip spaces
-				if (isspace(strKeys[iPos])) {
+				if (isspace(strEntry[iPos])) {
 					iPos++;
 					continue;
 				}
@@ -211,7 +211,7 @@ struct validateContext_t {
 				unsigned byte = 0;
 
 				for (int iNibble = 0; iNibble < 2; iNibble++) {
-					char ch = strKeys[iPos++]; // loop decrement happens here
+					char ch = strEntry[iPos++]; // loop decrement happens here
 
 					byte *= 16;
 
@@ -226,7 +226,7 @@ struct validateContext_t {
 						json_object_set_new_nocheck(jError, "error", json_string_nocheck("bad key data in test entry"));
 						json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
 						json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-						json_object_set_new_nocheck(jError, "key-data", json_string_nocheck(strKeys));
+						json_object_set_new_nocheck(jError, "key-data", json_string_nocheck(strEntry));
 						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 					}
 				}
@@ -332,7 +332,7 @@ struct validateContext_t {
 		}
 
 		// check dimensions
-		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.numRoots < estart) {
+		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.numRoots != numRoots) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
 			json_object_set_new_nocheck(jError, "filename", json_string(fname));
@@ -354,7 +354,7 @@ struct validateContext_t {
 		}
 
 		// check names
-		for (uint32_t iName = kstart; iName < estart; iName++) {
+		for (uint32_t iName = 0; iName < estart - kstart; iName++) {
 			if (entryNames[iName].compare(tree.entryNames[iName]) != 0) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
@@ -365,7 +365,7 @@ struct validateContext_t {
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 		}
-		for (unsigned iName = kstart; iName < estart; iName++) {
+		for (unsigned iName = 0; iName < numRoots; iName++) {
 			if (rootNames[iName].compare(tree.rootNames[iName]) != 0) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
@@ -389,9 +389,8 @@ struct validateContext_t {
 			if (tree.system) {
 				json_array_append_new(jList, json_string_nocheck("system"));
 			} else {
-				for (unsigned iRoot = kstart; iRoot < estart; iRoot++) {
-					if (tree.roots[iRoot] != iRoot)
-						json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
+				for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
+					json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
 				}
 			}
 
@@ -429,8 +428,9 @@ struct validateContext_t {
 			 * For validation, either all bits are set or all bits are clear
 			 */
 
-			for (unsigned iEntry = 0; iEntry < tree.ncount; iEntry++)
-				pFull[iEntry] = 0x5a5a5a5a; // set to invalid value
+			// set everything to an invalidation marker
+			for (unsigned iNode = 0; iNode < tree.ncount; iNode++)
+				pFull[iNode] = 0x5a5a5a5a; // set to invalid value
 
 			pFull[0] = 0; // only zero is defined
 
@@ -449,8 +449,8 @@ struct validateContext_t {
 			 * Copy undefined-roots to data vector.
 			 * If roots defined, then they are not allowed to be read.
 			 */
-			for (unsigned iRoot = 0; iRoot < nstart; iRoot++)
-				pEval[iRoot] = (tree.roots[iRoot] == iRoot) ? pFull[iRoot] : 0x5a5a5a5a;
+//			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
+//				pEval[iRoot] = (tree.roots[iRoot] == iRoot) ? pFull[iRoot] : 0x5a5a5a5a;
 
 			/*
 			 * Run the test
@@ -542,11 +542,11 @@ struct validateContext_t {
 			/*
 			 * Compare the results for the provides
 			 */
-			for (unsigned iRoot = kstart; iRoot < nstart; iRoot++) {
+			for (unsigned iRoot = 0; iRoot < nstart- kstart; iRoot++) {
 				uint32_t R = tree.roots[iRoot];
 
-				if (R == iRoot)
-					continue; // skip unused root
+//				if (R == iRoot)
+//					continue; // skip unused root
 
 				// test for undefined. Initial value `pEval[]` is 0x5a5a5a5a.
 				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {

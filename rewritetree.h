@@ -62,6 +62,18 @@ struct rewriteTree_t : baseTree_t {
 		db(db) {
 	}
 
+	/**
+	  * @date 2022-02-08 20:36:48
+	  *
+	  * Constructor
+	  *
+	  * @param {context_t} ctx - I/O context
+	  * @param {database_t} db - Database for signature/member lookups
+	  */
+	rewriteTree_t(context_t &ctx, database_t &db, const char *pName, uint32_t maxNodes, uint32_t flags) :
+		baseTree_t(ctx, pName, maxNodes, flags),
+		db(db) {
+	}
 
 	/**
 	 * @date 2021-10-08 00:00:19

@@ -518,7 +518,7 @@ struct groupTree_t {
 			allocFlags |= ALLOCMASK_INDEX;
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
+		entryNames.resize(nstart - kstart);
 
 		// setup default entrypoints
 		memset(this->N + 0, 0, sizeof(*this->N));
@@ -537,6 +537,163 @@ struct groupTree_t {
 			pNode->sid      = db.SID_SELF;
 			pNode->slots[0] = iEntry;
 		}
+	}
+
+	/*
+	 * @date 2022-02-08 20:39:32
+	 * 
+	 * Create tree from string.
+	 */
+	groupTree_t(context_t &ctx, database_t &db, const char *pName, uint32_t maxNodes, uint32_t flags) :
+		ctx(ctx),
+		db(db),
+		hndl(-1),
+		rawData(NULL),
+		fileHeader(NULL),
+		// meta
+		flags(flags),
+		allocFlags(0),
+		system(0),
+		maxDepth(DEFAULT_MAXDEPTH),
+		speed(DEFAULT_SPEED),
+		useExpandMember(DEFAULT_EXPANDMEMBER),
+		// primary fields
+		kstart(0),
+		ostart(0),
+		estart(0),
+		nstart(0),
+		ncount(0),
+		gcount(0),
+		maxNodes(maxNodes),
+		numRoots(0),
+		// names
+		entryNames(),
+		rootNames(),
+		// primary storage (allocated by storage context)
+		N((groupNode_t *) ctx.myAlloc("groupTree_t::N", maxNodes, sizeof *N)),
+		roots((uint32_t *) ctx.myAlloc("groupTree_t::roots", maxNodes, sizeof *roots)),
+		// history
+		numHistory(0),
+		posHistory(0),
+		history((uint32_t *) ctx.myAlloc("groupTree_t::history", nstart, sizeof *history)),
+		// node index  NOTE: reserve 4G for the node+version index
+		nodeIndexSize(536870879), // first prime number before 0x20000000-8 (so that 4*this does not exceed 0x80000000-32),
+		nodeIndex((uint32_t *) ctx.myAlloc("groupTree_t::nodeIndex", nodeIndexSize, sizeof *nodeIndex)),
+		nodeIndexVersion((uint32_t *) ctx.myAlloc("groupTree_t::nodeIndexVersion", nodeIndexSize, sizeof *nodeIndexVersion)),
+		nodeIndexVersionNr(1), // own version because longer life span
+		// pools
+		numPoolMap(0),
+		pPoolMap((uint32_t **) ctx.myAlloc("groupTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
+		numPoolVersion(0),
+		pPoolVersion((versionMemory_t **) ctx.myAlloc("groupTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
+		// slots
+		slotMap(allocMap()),
+		slotVersion(allocMap()),  // allocate as node-id map because of local version numbering
+		slotVersionNr(1),
+		// statistics
+		cntOutdated(0),
+		cntRestart(0),
+		cntUpdateGroupCollapse(0),
+		cntUpdateGroupMerge(0),
+		cntApplySwapping(0),
+		cntApplyFolding(0),
+		cntMergeGroups(0),
+		cntAddNormaliseNode(0),
+		cntAddBasicNode(0),
+		cntUpdateGroup(0),
+		cntValidate(0),
+		cntCproduct(0),
+		overflowGroup()
+	{
+		/*
+		 * Create Load string
+		 */
+
+		unsigned   highest     = highestEndpoint(ctx, pName); // get highest entrypoint
+		const char *pTransform = strchr(pName, '/'); // get transform
+
+		// Prepare tree
+		this->kstart = 2;
+		this->ostart = this->kstart + highest + 1; // inputs
+		this->estart = this->ostart;
+		this->nstart = this->ostart;
+
+		rewind();
+
+		// setup default entrypoints
+		memset(this->N + 0, 0, sizeof(*this->N));
+		this->N[0].sid = db.SID_ZERO;
+
+		for (unsigned iEntry = 1; iEntry < this->nstart; iEntry++) {
+			groupNode_t *pNode = this->N + iEntry;
+
+			memset(pNode, 0, sizeof(*pNode));
+
+			pNode->gid      = iEntry;
+			pNode->next     = iEntry;
+			pNode->prev     = iEntry;
+			pNode->weight   = 1;
+			pNode->hiSlotId = iEntry;
+			pNode->sid      = db.SID_SELF;
+			pNode->slots[0] = iEntry;
+		}
+
+		// load string with separate roots
+		uint32_t *pRoots = allocMap();
+
+		if (pTransform) {
+			this->numRoots = this->loadStringSafe(pName, pTransform + 1, pRoots);
+		} else {
+			this->numRoots = this->loadStringSafe(pName, NULL, pRoots);
+		}
+
+		/*
+		 * Entrypoints
+		 */
+
+		this->entryNames.resize(this->nstart - this->kstart);
+
+		for (unsigned iEntry = this->kstart; iEntry < this->nstart; iEntry++) {
+			std::string name;
+			uint32_t value = iEntry - this->kstart;
+
+			if ((iEntry - this->kstart) >= 26)
+				this->encodePrefix(name, value / 26);
+			name += (char) ('a' + (value % 26));
+
+			this->entryNames[iEntry - this->kstart] = name;
+		}
+
+		/*
+		 * Allocate roots
+		 */
+
+		this->roots = (uint32_t *) ctx.myAlloc("baseTree_t::roots", numRoots, sizeof *roots);
+		this->rootNames.resize(this->numRoots);
+
+		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++) {
+			char name[16];
+
+			sprintf(name, "r%d", iRoot);
+			this->rootNames[iRoot] = name;
+
+			this->roots[iRoot] = pRoots[iRoot];
+		}
+
+		freeMap(pRoots);
+
+		/*
+		 * finalise
+		 */
+
+		if (this->N)
+			allocFlags |= ALLOCMASK_NODES;
+		if (this->roots)
+			allocFlags |= ALLOCMASK_ROOTS;
+		if (this->history)
+			allocFlags |= ALLOCMASK_HISTORY;
+		if (this->nodeIndex)
+			allocFlags |= ALLOCMASK_INDEX;
 	}
 
 	/*
@@ -5582,10 +5739,29 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			assert (this->N[nid].sid != db.SID_SELF);
 		}
 
+		groupNode_t *pNode = this->N + nid;
+		
+		/*
+		 * Was it already processed
+		 */
+		if (pVersion->mem[pNode->gid] == thisVersion) {
+			// back-reference to earlier node
+			uint32_t dist = nextExportNodeId - pMap[pNode->gid];
+
+			// convert id to (prefixed) back-link
+			if (dist < 10) {
+				exportName += (char) ('0' + dist);
+			} else {
+				encodePrefix(exportName, dist / 10);
+				exportName += (char) ('0' + (dist % 10));
+			}
+			return;
+		}
+
 		/*
 		 * Load string
 		 */
-		for (const char *pattern = db.signatures[this->N[nid].sid].name; *pattern; pattern++) {
+		for (const char *pattern = db.signatures[pNode->sid].name; *pattern; pattern++) {
 
 			switch (*pattern) {
 			case '0': //
@@ -5631,7 +5807,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				// @formatter:on
 			{
 				// get node id of export
-				uint32_t gid = this->N[nid].slots[(unsigned) (*pattern - 'a')];
+				uint32_t gid = pNode->slots[(unsigned) (*pattern - 'a')];
 
 				// if endpoint then emit
 				if (gid < this->nstart) {
@@ -5711,6 +5887,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				assert(0);
 			}
 		}
+
+		// mark group processed
+		assert(pVersion->mem[pNode->gid] != thisVersion);
+		pVersion->mem[pNode->gid] = thisVersion;
+		pMap[pNode->gid]          = nextExportNodeId - 1; // last *assigned* nodeId 
 	}
 
 	/*
@@ -5926,7 +6107,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 * Import/add a string into tree.
 	 * root names remain unchanged, Caller needs to add the missing
 	 */
-	void loadStringSafe(const char *pName, const char *pSkin = NULL) {
+	uint32_t loadStringSafe(const char *pName, const char *pSkin = NULL, uint32_t *pRoots = NULL) {
 		assert(pName[0]); // disallow empty name
 
 		// modify if transform is present
@@ -5940,9 +6121,9 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * Now, 
 		 */
 
-		uint32_t numStack = this->numRoots;
+		uint32_t numStack = 0;
 		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = roots;
+		uint32_t *pStack  = pRoots ? pRoots : allocMap();
 		uint32_t *pMap    = allocMap();
 		uint32_t nid;
 
@@ -6178,12 +6359,28 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			if (numStack > this->maxNodes)
 				ctx.fatal("[stack overflow]\n");
 		}
-		
-		this->numRoots = numStack;
 
+		uint32_t ret;
+
+		if (pRoots) {
+			// loaded multi-rooted tree
+			ret = numStack;
+		} else {
+			// return single expression
+			if (numStack != 1)
+				ctx.fatal("[stack not empty]\n");
+
+			ret = pStack[numStack - 1];
+		}
+
+
+		if (pRoots == NULL)
+			freeMap(pStack);
 		freeMap(pMap);
 		if (transformList)
 			ctx.myFree("groupTree_t::transformList", transformList);
+
+		return ret;
 	}
 
 	/*
@@ -6308,14 +6505,14 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		slotVersionNr = 1;
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
+		entryNames.resize(nstart - kstart);
 		rootNames.resize(numRoots);
 
 		// slice names
 		{
 			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
-			for (unsigned iEntry  = 0; iEntry < nstart; iEntry++) {
+			for (unsigned iEntry = 0; iEntry < nstart - kstart; iEntry++) {
 				assert(*pData != 0);
 				entryNames[iEntry] = pData;
 				pData += strlen(pData) + 1;
@@ -6401,7 +6598,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		header.offNames = fpos;
 
 		// write entryNames
-		for (uint32_t i = 0; i < nstart; i++) {
+		for (uint32_t i = 0; i < nstart - kstart; i++) {
 			size_t len = entryNames[i].length() + 1;
 			assert(len > 1);
 			fwrite(entryNames[i].c_str(), len, 1, outf);
@@ -6986,18 +7183,9 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
-		if (numRoots < estart) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("numroots out of range"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
-			json_object_set_new_nocheck(jError, "estart", json_integer(estart));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
+		entryNames.resize(nstart - kstart);
 		rootNames.resize(numRoots);
 
 		/*
@@ -7007,13 +7195,13 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		entryNames[1 /*KERROR*/] = "KERROR";
 
 		/*
-		 * import knames
+		 * import entryNames
 		 */
 
-		json_t *jNames = json_object_get(jInput, "knames");
+		json_t *jNames = json_object_get(jInput, "entrynames");
 		if (!jNames) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'knames'"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'entrynames'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
@@ -7022,7 +7210,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		unsigned numNames = json_array_size(jNames);
 		if (numNames != ostart - kstart) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of knames"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of entrynames"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			json_object_set_new_nocheck(jError, "expected", json_integer(ostart - kstart));
 			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
@@ -7031,108 +7219,55 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		}
 
 		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[kstart + iName] = json_string_value(json_array_get(jNames, iName));
+			entryNames[iName] = json_string_value(json_array_get(jNames, iName));
 
 		/*
-		 * import onames
+		 * import rootnames
 		 */
 
-		jNames = json_object_get(jInput, "onames");
+		jNames = json_object_get(jInput, "rootnames");
 		if (!jNames) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'onames'"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'rootnames'"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
 
 		numNames = json_array_size(jNames);
-		if (numNames != estart - ostart) {
+		if (numNames != numRoots) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of onames"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of rootnames"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(estart - ostart));
+			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots));
 			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
 		}
 
-		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[ostart + iName] = json_string_value(json_array_get(jNames, iName));
+		for (uint32_t iName = 0; iName < numRoots; iName++)
+			rootNames[iName] = json_string_value(json_array_get(jNames, iName));
+	}
 
-		/*
-		 * import enames
-		 */
+	/*
+	 * Extract details into json
+	 */
+	json_t *summaryInfo(json_t *jResult) {
+		if (jResult == NULL)
+			jResult = json_object();
 
-		jNames = json_object_get(jInput, "enames");
-		if (!jNames) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'enames'"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
+		json_object_set_new_nocheck(jResult, "flags", ctx.flagsToJson(this->flags));
+		json_object_set_new_nocheck(jResult, "kstart", json_integer(this->kstart));
+		json_object_set_new_nocheck(jResult, "ostart", json_integer(this->ostart));
+		json_object_set_new_nocheck(jResult, "estart", json_integer(this->estart));
+		json_object_set_new_nocheck(jResult, "nstart", json_integer(this->nstart));
+		json_object_set_new_nocheck(jResult, "ncount", json_integer(this->ncount));
+		json_object_set_new_nocheck(jResult, "numroots", json_integer(this->numRoots));
+		json_object_set_new_nocheck(jResult, "size", json_integer(this->ncount - this->nstart));
+		json_object_set_new_nocheck(jResult, "numhistory", json_integer(this->numHistory));
+		json_object_set_new_nocheck(jResult, "poshistory", json_integer(this->posHistory));
 
-		numNames = json_array_size(jNames);
-		if (numNames != nstart - estart) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of enames"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(nstart - estart));
-			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-
-		for (uint32_t iName = 0; iName < numNames; iName++)
-			entryNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
-
-		/*
-		 * import rnames (extended root names)
-		 */
-
-		// copy fixed part
-		for (unsigned iRoot = 0; iRoot < estart; iRoot++)
-			rootNames[iRoot] = entryNames[iRoot];
-
-		jNames = json_object_get(jInput, "rnames");
-		if (!jNames) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Missing tag 'rnames'"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		}
-
-		numNames = json_array_size(jNames);
-
-		if (json_is_string(jNames) && strcasecmp(json_string_value(jNames), "enames") == 0) {
-			// roots identical to keys
-			if (nstart != numRoots) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("rnames == enames AND nstart != numRoots"));
-				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-				json_object_set_new_nocheck(jError, "nstart", json_integer(nstart));
-				json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
-				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				exit(1);
-			}
-			// copy collection
-			rootNames = entryNames;
-		} else if (numNames != numRoots - estart) {
-			// count mismatch
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("Incorrect number of rnames"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "expected", json_integer(numRoots - estart));
-			json_object_set_new_nocheck(jError, "encountered", json_integer(numNames));
-			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			exit(1);
-		} else {
-			// load root names
-			for (uint32_t iName = 0; iName < numNames; iName++)
-				rootNames[estart + iName] = json_string_value(json_array_get(jNames, iName));
-		}
+		return jResult;
 	}
 
 	/*

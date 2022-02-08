@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * gload.cc
@@ -109,7 +109,7 @@ struct gloadContext_t {
 		 */
 
 		// load json
-		FILE *f              = fopen(inputFilename, "r");
+		FILE *f = fopen(inputFilename, "r");
 		if (!f) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("fopen()"));
@@ -121,7 +121,7 @@ struct gloadContext_t {
 		}
 
 		json_error_t jLoadError;
-		json_t       *jInput = json_loadf(f, 0, &jLoadError);
+		json_t *jInput = json_loadf(f, 0, &jLoadError);
 		if (jInput == 0) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to decode json"));
@@ -141,22 +141,6 @@ struct gloadContext_t {
 		jsonTree.loadFileJson(jInput, inputFilename);
 
 		/*
-		 * Create a real tree
-		 */
-
-		groupTree_t newTree(ctx, *pStore, jsonTree.kstart, jsonTree.ostart, jsonTree.estart, jsonTree.nstart, opt_maxNode, ctx.flags);
-
-		newTree.flags      = jsonTree.flags;
-		newTree.entryNames = jsonTree.entryNames;
-		newTree.rootNames  = jsonTree.rootNames;
-
-		/*
-		 * Set defaults
-		 */
-		for (unsigned iRoot = 0; iRoot < newTree.numRoots; iRoot++)
-			newTree.roots[iRoot] = iRoot;
-
-		/*
 		 * Import the roots
 		 */
 		json_t *jData = json_object_get(jInput, "data");
@@ -166,48 +150,26 @@ struct gloadContext_t {
 			return 0;
 		}
 
+		const char *dataValue = json_string_value(jData);
+
 		/*
-		 * Iterate through all roots
+		 * Create a real tree
 		 */
-		void *iter = json_object_iter(jData);
-		while (iter) {
-			const char *rootName = json_object_iter_key(iter);
-			json_t     *value    = json_object_iter_value(iter);
 
-			if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-				fprintf(stderr, "[%s] %s\n", ctx.timeAsString(), rootName);
+		groupTree_t newTree(ctx, *pStore, dataValue, opt_maxNode, ctx.flags);
 
-			/*
-			 * decode name
-			 */
-			bool     found = false;
-			unsigned iRoot = 0;
-			for (iRoot = 0; iRoot < newTree.numRoots; iRoot++) {
-				if (strcmp(rootName, newTree.rootNames[iRoot].c_str()) == 0) {
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("Unknown root name in 'data'"));
-				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-				json_object_set_new_nocheck(jError, "root", json_string(rootName));
-				printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				exit(1);
-			}
+		newTree.flags      = jsonTree.flags;
+		newTree.entryNames = jsonTree.entryNames;
+		newTree.rootNames  = jsonTree.rootNames;
 
-			/*
-			 * Load string
-			 */
-			const char *rootValue = json_string_value(value);
-
-			// is there a transform?
-			const char *pSlash = strchr(rootValue, '/');
-			newTree.loadStringSafe(rootValue, pSlash ? pSlash + 1 : NULL);
-
-			/* use key and value ... */
-			iter = json_object_iter_next(jData, iter);
+		if (newTree.numRoots != jsonTree.numRoots) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("numRoots mismatch"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "expected", json_integer(jsonTree.numRoots));
+			json_object_set_new_nocheck(jError, "encountered", json_integer(newTree.numRoots));
+			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			exit(1);
 		}
 
 		/*
@@ -227,6 +189,13 @@ struct gloadContext_t {
 		 * Save data
 		 */
 		newTree.saveFile(outputFilename);
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_WARNING) {
+			json_t *jResult = json_object();
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(outputFilename));
+			newTree.headerInfo(jResult);
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
 
 		json_delete(jInput);
 		return 0;

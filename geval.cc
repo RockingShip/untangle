@@ -218,70 +218,13 @@ struct gevalContext_t {
 			 * Load from string
 			 */
 
-			unsigned   highest     = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
-			const char *pTransform = strchr(inputName, '/'); // get transform
-
-			/*
-			 * Create tree
-			 */
-
-			uint32_t kstart = 2;
-			uint32_t nstart = kstart + highest + 1; // inputs
-
-			pTree = new groupTree_t(ctx, *pStore, kstart, /*ostart=*/nstart, /*estart*/nstart, nstart, opt_maxNode, ctx.flags);
-			pTree->maxDepth = this->opt_maxDepth;
-			pTree->speed    = this->opt_speed;
-
-			if (pTransform) {
-				pTree->loadStringSafe(inputName, pTransform + 1);
-			} else {
-				pTree->loadStringSafe(inputName);
-			}
-
-			/*
-			 * Setup entry/root names
-			 */
-
-			pTree->entryNames[0] = "0";
-
-			// add errors
-			for (unsigned iEntry = 1; iEntry < pTree->kstart; iEntry++)
-				pTree->entryNames[iEntry] = "ERROR";
-
-			// add default names
-			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
-				std::string name;
-				uint32_t value = iEntry - pTree->kstart;
-
-				if ((iEntry - pTree->kstart) >= 26)
-					pTree->encodePrefix(name, value / 26);
-				name += (char) ('a' + (value % 26));
-
-				pTree->entryNames[iEntry] = name;
-			}
-
-			// add root names
-
-			if (pTree->numRoots > pTree->rootNames.size())
-				pTree->rootNames.resize(pTree->numRoots);
-
-			for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
-				char name[16];
-
-				sprintf(name, "r%d", iRoot);
-				pTree->rootNames[iRoot] = name;
-			}
+			pTree = new groupTree_t(ctx, *pStore, inputName, opt_maxNode, /*flags=*/0);
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
 				json_t *jResult = json_object();
 
 				jResult = json_object();
-
-				json_object_set_new_nocheck(jResult, "kstart", json_integer(pTree->kstart));
-				json_object_set_new_nocheck(jResult, "nstart", json_integer(pTree->nstart));
-				json_object_set_new_nocheck(jResult, "ncount", json_integer(pTree->ncount));
-				json_object_set_new_nocheck(jResult, "size", json_integer(pTree->ncount - pTree->nstart));
-
+				pTree->summaryInfo(jResult);
 				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				json_delete(jResult);
 			}
@@ -338,11 +281,11 @@ struct gevalContext_t {
 			srand(opt_seed);
 
 			// fill rest with random patterns
-			for (uint32_t iKey = pTree->kstart; iKey < pTree->nstart; iKey++) {
-				uint64_t *v = (uint64_t *) (pFootprint + iKey);
+			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
+				uint64_t *v = (uint64_t *) (pFootprint + iEntry);
 
 				// craptastic random fill
-				for (unsigned i = 0; i < QUADPERFOOTPRINT; i++) {
+				for (unsigned i = 0; i < opt_dataSize; i++) {
 					v[i] = (uint64_t) rand();
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
 					v[i] = (v[i] << 16) ^ (uint64_t) rand();
@@ -351,7 +294,7 @@ struct gevalContext_t {
 			}
 
 			// erase v[0]
-			for (unsigned i = 0; i < QUADPERFOOTPRINT; i++)
+			for (unsigned i = 0; i < opt_dataSize; i++)
 				pFootprint[0].bits[i] = 0;
 		}
 

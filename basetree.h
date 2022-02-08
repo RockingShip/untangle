@@ -155,6 +155,10 @@ struct baseTree_t {
 		ALLOCMASK_INDEX   = 1 << ALLOCFLAG_INDEX,
 		//@formatter:on
 	};
+	
+	enum {
+		KERROR = 1, // N[0] is reserved for ZERO, N[1] is reserved for ERROR
+	};
 
 	// resources
 	context_t                &ctx;                  // resource context
@@ -346,7 +350,7 @@ struct baseTree_t {
 			allocFlags |= ALLOCMASK_INDEX;
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
+		entryNames.resize(nstart - kstart);
 		rootNames.resize(numRoots);
 
 		// setup default entrypoints
@@ -358,11 +362,152 @@ struct baseTree_t {
 
 		// setup default roots
 		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
-			roots[iRoot] = iRoot;
+			roots[iRoot] = KERROR;
 
 #if ENABLE_BASEEVALUATOR
 		gBaseEvaluator = new baseEvaluator_t(kstart, ostart, nstart, maxNodes);
 #endif
+	}
+
+	/*
+	 * @date 2022-02-08 20:39:32
+	 * 
+	 * Create tree from string.
+	 */
+	baseTree_t(context_t &ctx, const char *pName, uint32_t maxNodes, uint32_t flags) :
+	//@formatter:off
+		ctx(ctx),
+		hndl(-1),
+		rawData(NULL),
+		fileHeader(NULL),
+		// meta
+		flags(flags),
+		allocFlags(0),
+		unused1(0),
+		system(0),
+		// primary fields
+		kstart(0),
+		ostart(0),
+		estart(0),
+		nstart(0),
+		ncount(nstart),
+		maxNodes(maxNodes),
+		numRoots(0),
+		// names
+		entryNames(),
+		rootNames(),
+		// primary storage (allocated by storage context)
+		N((baseNode_t *) ctx.myAlloc("baseTree_t::N", maxNodes, sizeof *N)),
+		roots(NULL),
+		// history
+		numHistory(0),
+		posHistory(0),
+		history((uint32_t *) ctx.myAlloc("baseTree_t::history", nstart, sizeof *history)),
+		// node index  NOTE: reserve 4G for the node+version index
+		nodeIndexSize(536870879), // first prime number before 0x20000000-8 (so that 4*this does not exceed 0x80000000-32),
+		nodeIndex((uint32_t *) ctx.myAlloc("baseTree_t::nodeIndex", nodeIndexSize, sizeof *nodeIndex)),
+		nodeIndexVersion((uint32_t *) ctx.myAlloc("baseTree_t::nodeIndexVersion", nodeIndexSize, sizeof *nodeIndexVersion)),
+		nodeIndexVersionNr(1), // own version because longer life span
+		// pools
+		numPoolMap(0),
+		pPoolMap((uint32_t **) ctx.myAlloc("baseTree_t::pPoolMap", MAXPOOLARRAY, sizeof(*pPoolMap))),
+		numPoolVersion(0),
+		pPoolVersion( (uint32_t **) ctx.myAlloc("baseTree_t::pPoolVersion", MAXPOOLARRAY, sizeof(*pPoolVersion))),
+		mapVersionNr(0),
+		// structure based compare (NOTE: needs to go after pools!)
+		stackL(allocMap()),
+		stackR(allocMap()),
+		compBeenWhatL(allocMap()),
+		compBeenWhatR(allocMap()),
+		compVersionL(allocMap()), // allocate as node-id map because of local version numbering
+		compVersionR(allocMap()),  // allocate as node-id map because of local version numbering
+		compVersionNr(1),
+		numCompare(0),
+		// rewrite normalisation
+		rewriteMap(allocMap()),
+		rewriteVersion(allocMap()), // allocate as node-id map because of local version numbering
+		iVersionRewrite(1),
+		numRewrite(0)
+	//@formatter:on
+	{
+		/*
+		 * Create Load string
+		 */
+
+		unsigned   highest     = highestEndpoint(ctx, pName); // get highest entrypoint
+		const char *pTransform = strchr(pName, '/'); // get transform
+
+ 		// Prepare tree
+		this->kstart = 2;
+		this->ostart = this->kstart + highest + 1; // inputs
+		this->estart = this->ostart;
+		this->nstart = this->ostart;
+
+		rewind();
+
+		// setup default entrypoints
+		for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
+			N[iEntry].Q = 0;
+			N[iEntry].T = IBIT;
+			N[iEntry].F = iEntry;
+		}
+
+		// load string with separate roots
+		uint32_t *pRoots = allocMap();
+
+		if (pTransform) {
+			this->numRoots = this->loadStringSafe(pName, pTransform + 1, pRoots);
+		} else {
+			this->numRoots = this->loadStringSafe(pName, NULL, pRoots);
+		}
+
+		/*
+		 * Entrypoints
+		 */
+
+		this->entryNames.resize(this->nstart - this->kstart);
+
+		for (unsigned iEntry = this->kstart; iEntry < this->nstart; iEntry++) {
+			std::string name;
+			uint32_t value = iEntry - this->kstart;
+
+			if ((iEntry - this->kstart) >= 26)
+				this->encodePrefix(name, value / 26);
+			name += (char) ('a' + (value % 26));
+
+			this->entryNames[iEntry - this->kstart] = name;
+		}
+
+		/*
+		 * Allocate roots
+		 */
+
+		this->roots = (uint32_t *) ctx.myAlloc("baseTree_t::roots", numRoots, sizeof *roots);
+		this->rootNames.resize(this->numRoots);
+
+		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++) {
+			char name[16];
+
+			sprintf(name, "r%d", iRoot);
+			this->rootNames[iRoot] = name;
+
+			this->roots[iRoot] = pRoots[iRoot];
+		}
+
+		freeMap(pRoots);
+
+		/*
+		 * finalise
+		 */
+
+		if (this->N)
+			allocFlags |= ALLOCMASK_NODES;
+		if (this->roots)
+			allocFlags |= ALLOCMASK_ROOTS;
+		if (this->history)
+			allocFlags |= ALLOCMASK_HISTORY;
+		if (this->nodeIndex)
+			allocFlags |= ALLOCMASK_INDEX;
 	}
 
 	/*
@@ -3419,7 +3564,7 @@ struct baseTree_t {
 
 		// invalidate all entries
 		for (uint32_t i = kstart; i < nstart; i++)
-			transformList[i] = 1 /* KERROR */;
+			transformList[i] = KERROR;
 
 		// start decoding
 		for (uint32_t t = kstart; t < nstart; t++) {
@@ -3464,7 +3609,7 @@ struct baseTree_t {
 	 * Import/add a string into tree.
 	 * NOTE: Will use `normaliseNode()`.
 	 */
-	uint32_t loadStringSafe(const char *pName, const char *pSkin = NULL) {
+	uint32_t loadStringSafe(const char *pName, const char *pSkin = NULL, uint32_t *pRoots = NULL) {
 
 		assert(pName[0]); // disallow empty name
 
@@ -3479,7 +3624,7 @@ struct baseTree_t {
 
 		uint32_t numStack = 0;
 		uint32_t nextNode = this->nstart;
-		uint32_t *pStack  = allocMap();
+		uint32_t *pStack  = pRoots ? pRoots : allocMap();
 		uint32_t *pMap    = allocMap();
 		uint32_t nid;
 
@@ -3506,7 +3651,7 @@ struct baseTree_t {
 
 				if (v < this->nstart || v >= nextNode)
 					ctx.fatal("[node out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if (numStack >= this->maxNodes)
 					ctx.fatal("[stack overflow]\n");
 
 				pStack[numStack++] = pMap[v];
@@ -3531,7 +3676,7 @@ struct baseTree_t {
 
 				if (v < this->kstart || v >= this->nstart)
 					ctx.fatal("[endpoint out of range: %d]\n", v);
-				if (numStack >= this->ncount)
+				if (numStack >= this->maxNodes)
 					ctx.fatal("[stack overflow]\n");
 
 				if (transformList)
@@ -3567,7 +3712,7 @@ struct baseTree_t {
 
 					if (v < this->nstart || v >= nextNode)
 						ctx.fatal("[node out of range: %d]\n", v);
-					if (numStack >= this->ncount)
+					if (numStack >= this->maxNodes)
 						ctx.fatal("[stack overflow]\n");
 
 					pStack[numStack++] = pMap[v];
@@ -3579,7 +3724,7 @@ struct baseTree_t {
 
 					if (v < this->kstart || v >= this->nstart)
 						ctx.fatal("[endpoint out of range: %d]\n", v);
-					if (numStack >= this->ncount)
+					if (numStack >= this->maxNodes)
 						ctx.fatal("[stack overflow]\n");
 
 					if (transformList)
@@ -3696,15 +3841,26 @@ struct baseTree_t {
 			if (numStack > maxNodes)
 				ctx.fatal("[stack overflow]\n");
 		}
-		if (numStack != 1)
-			ctx.fatal("[stack not empty]\n");
 
-		uint32_t ret = pStack[numStack - 1];
+		uint32_t ret;
 
-		freeMap(pStack);
+		if (pRoots) {
+			// loaded multi-rooted tree
+			ret = numStack;
+		} else {
+			// return single expression
+			if (numStack != 1)
+				ctx.fatal("[stack not empty]\n");
+
+			ret = pStack[numStack - 1];
+		}
+
+
+		if (pRoots == NULL)
+			freeMap(pStack);
 		freeMap(pMap);
 		if (transformList)
-			freeMap(transformList);
+			ctx.myFree("groupTree_t::transformList", transformList);
 
 		return ret;
 	}
@@ -3955,7 +4111,7 @@ struct baseTree_t {
 		freeMap(pStack);
 		freeMap(pMap);
 		if (transformList)
-			freeMap(transformList);
+			ctx.myFree("groupTree_t::transformList", transformList);
 
 		return ret;
 	}
@@ -4328,14 +4484,14 @@ struct baseTree_t {
 		compVersionNr = 1;
 
 		// make all `entryNames`+`rootNames` indices valid
-		entryNames.resize(nstart);
+		entryNames.resize(nstart - kstart);
 		rootNames.resize(numRoots);
 
 		// slice names
 		{
 			const char *pData = (const char *) (rawData + fileHeader->offNames);
 
-			for (unsigned iEntry  = 0; iEntry < nstart; iEntry++) {
+			for (unsigned iEntry = 0; iEntry < nstart - kstart; iEntry++) {
 				assert(*pData != 0);
 				entryNames[iEntry] = pData;
 				pData += strlen(pData) + 1;
@@ -4414,7 +4570,7 @@ struct baseTree_t {
 		header.offNames = fpos;
 
 		// write entryNames
-		for (uint32_t i = 0; i < nstart; i++) {
+		for (uint32_t i = 0; i < nstart - kstart; i++) {
 			size_t len = entryNames[i].length() + 1;
 			assert(len > 1);
 			fwrite(entryNames[i].c_str(), len, 1, outf);
@@ -4782,8 +4938,8 @@ struct baseTree_t {
 		}
 
 		// make all `entryNames`+`rootNames` indices valid
-		if (entryNames.size() < nstart)
-			entryNames.resize(nstart);
+		if (entryNames.size() < nstart - kstart)
+			entryNames.resize(nstart - kstart);
 		if (rootNames.size() < numRoots)
 			rootNames.resize(numRoots);
 
@@ -4954,7 +5110,7 @@ struct baseTree_t {
 
 
 		for (uint32_t i = 0; i < this->numHistory; i++) {
-			json_array_append_new(jHistory, json_string_nocheck(entryNames[this->history[i]].c_str()));
+			json_array_append_new(jHistory, json_string_nocheck(entryNames[this->history[i] - this->kstart].c_str()));
 		}
 
 		json_object_set_new_nocheck(jResult, "history", jHistory);
@@ -4985,7 +5141,7 @@ struct baseTree_t {
 
 		for (unsigned iEntry = this->kstart; iEntry < this->nstart; iEntry++) {
 			if (pRefCount[iEntry])
-				json_object_set_new_nocheck(jRefCount, entryNames[iEntry].c_str(), json_integer(pRefCount[iEntry]));
+				json_object_set_new_nocheck(jRefCount, entryNames[iEntry - this->kstart].c_str(), json_integer(pRefCount[iEntry]));
 		}
 		json_object_set_new_nocheck(jResult, "refcount", jRefCount);
 

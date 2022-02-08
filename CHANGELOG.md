@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-08 22:14:56 Changed: Improved file/string for `baseTree_t` and `groupTree_t` arguments.
 2022-02-08 16:26:58 Changed: Modernised system builders with entrypoints/roots.
 2022-02-08 13:56:41 Changed: All system builders (`build*`) export json only, use a loader to convert to a tree.
 2022-02-08 01:27:56 Added: `context_t::MAGICMASK_SYSTEM` and upgraded flags in json to text.

@@ -181,100 +181,53 @@ struct bevalContext_t {
 	 *
 	 * Create/load tree based on arguments
 	 */
-	rewriteTree_t *main(unsigned numArgs, char *inputArgs[]) {
+	void handleArgument(const char *inputName) {
 
 		/*
-		 * Determine number of keys
+		 * Open input tree
 		 */
-		unsigned      numKeys = 0;
-		for (unsigned iArg    = 0; iArg < numArgs; iArg++) {
-			unsigned highest = baseTree_t::highestEndpoint(ctx, inputArgs[iArg]);
+		rewriteTree_t *pTree;
 
-			if (highest + 1 > numKeys)
-				numKeys = highest + 1;
-		}
+		if (strchr(inputName, '.') != NULL) {
 
-		// number of keys must be at least that of `tinyTree_t` so that CRC's are compatible
-		if (numKeys < MAXSLOTS)
-			numKeys = MAXSLOTS;
+			pTree = new rewriteTree_t(ctx, *pStore);
 
-		/*
-		 * Create tree
-		 */
-		uint32_t kstart = 2;
-		uint32_t ostart = kstart + numKeys;
-		uint32_t estart = ostart + numArgs;
-		uint32_t nstart = estart;
-
-		rewriteTree_t *pTree = new rewriteTree_t(ctx, *pStore, kstart, ostart, estart, nstart, nstart/*numRoots*/, opt_maxNode, ctx.flags);
-
-		/*
-		 * Setup entry/root names
-		 */
-		pTree->entryNames[0] = "ZERO";
-		pTree->entryNames[1] = "ERROR";
-
-		/*
-		 * entrypoints
-		 */
-		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++) {
-			// creating is right-to-left. Storage to reverse
-			char     stack[10], *pStack = stack;
-			// value to be encoded
-			uint32_t value = iEntry - pTree->kstart;
-
-			// push terminator
-			*pStack++ = 0;
-
-			*pStack++ = 'a' + (value % 26);
-			value /= 26;
-
-			// process the value
-			while (value) {
-				*pStack++ = 'A' + (value % 26);
-				value /= 26;
+			/*
+			 * Load from file
+			 */
+			if (pTree->loadFile(inputName)) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputName));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 
-			// append, including trailing zero
-			while (*--pStack) {
-				pTree->entryNames[iEntry] += *pStack;
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+				json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputName));
+				pTree->headerInfo(jResult);
+				pTree->extraInfo(jResult);
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
+
+		} else {
+			/*
+			 * Load from string
+			 */
+
+			pTree = new rewriteTree_t(ctx, *pStore, inputName, opt_maxNode, /*flags=*/0);
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+
+				jResult = json_object();
+				pTree->summaryInfo(jResult);
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
 			}
 		}
 
-		/*
-		 * Outputs
-		 */
-		for (unsigned iEntry = ostart; iEntry < estart; iEntry++) {
-			char str[16];
-
-			sprintf(str, "o%d", iEntry - ostart);
-			pTree->entryNames[iEntry] = str;
-		}
-
-		pTree->rootNames = pTree->entryNames;
-
-		/*
-		 * Load arguments
-		 */
-		for (unsigned iArg = 0; iArg < numArgs; iArg++) {
-			// find transform delimiter
-			const char *pTransform = strchr(inputArgs[iArg], '/');
-
-			if (pTransform)
-				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg], pTransform + 1);
-			else
-				pTree->roots[ostart + iArg] = pTree->loadStringSafe(inputArgs[iArg]);
-		}
-
-		return pTree;
-	}
-
-	/**
-	 * @date 2021-06-08 21:01:18
-	 *
-	 * What `eval` does
-	 */
-	int main(rewriteTree_t *pTree) {
 		/*
 		 * Record footprints for each node to maintain the results to compare trees
 		 * Each bit is an independent test.
@@ -282,38 +235,44 @@ struct bevalContext_t {
 		 */
 
 		// setup a data vector for evaluation
-		uint64_t **pFootprint = (uint64_t **) ctx.myAlloc("pFootprint", pTree->ncount, sizeof(*pFootprint));
-
-		for (unsigned i = 0; i < pTree->ncount; i++) {
-			pFootprint[i] = (uint64_t *) ctx.myAlloc("pFootprint", opt_dataSize, sizeof(**pFootprint));
-		}
+		footprint_t *pFootprint = (footprint_t *) ctx.myAlloc("pFootprint", pTree->ncount, sizeof(*pFootprint));
 
 		/*
 		 * Initialise data/footprint vector
 		 */
-		if (pTree->ostart - pTree->kstart == MAXSLOTS) {
+		if (pTree->nstart - pTree->kstart <= MAXSLOTS) {
 			/*
 			 * If there are MAXSLOTS keys, then be `eval`/`tinyTree_t` compatible
 			 */
-			unsigned kstart = pTree->kstart;
+			uint32_t kstart = pTree->kstart;
+			uint32_t nstart = pTree->nstart;
+
+			uint64_t *v = (uint64_t *) pFootprint;
 
 			// set 64bit slice to zero
-			for (unsigned j = 0; j < QUADPERFOOTPRINT; j++)
-				pFootprint[0][j] = 0;
+			memset(pFootprint, 0, kstart * sizeof(*pFootprint));
 
 			// set footprint for 64bit slice
 			assert(MAXSLOTS == 9);
 			for (unsigned i = 0; i < (1 << MAXSLOTS); i++) {
-				// v[(i/64)+0*4] should be 0
-				if (i & (1 << 0)) pFootprint[kstart + 0][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 1)) pFootprint[kstart + 1][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 2)) pFootprint[kstart + 2][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 3)) pFootprint[kstart + 3][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 4)) pFootprint[kstart + 4][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 5)) pFootprint[kstart + 5][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 6)) pFootprint[kstart + 6][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 7)) pFootprint[kstart + 7][(i / 64)] |= 1LL << (i % 64);
-				if (i & (1 << 8)) pFootprint[kstart + 8][(i / 64)] |= 1LL << (i % 64);
+				if (kstart + 0 < nstart)
+					if (i & (1 << 0)) v[(i / 64) + (kstart + 0) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 1 < nstart)
+					if (i & (1 << 1)) v[(i / 64) + (kstart + 1) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 2 < nstart)
+					if (i & (1 << 2)) v[(i / 64) + (kstart + 2) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 3 < nstart)
+					if (i & (1 << 3)) v[(i / 64) + (kstart + 3) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 4 < nstart)
+					if (i & (1 << 4)) v[(i / 64) + (kstart + 4) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 5 < nstart)
+					if (i & (1 << 5)) v[(i / 64) + (kstart + 5) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 6 < nstart)
+					if (i & (1 << 6)) v[(i / 64) + (kstart + 6) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 7 < nstart)
+					if (i & (1 << 7)) v[(i / 64) + (kstart + 7) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
+				if (kstart + 8 < nstart)
+					if (i & (1 << 8)) v[(i / 64) + (kstart + 8) * QUADPERFOOTPRINT] |= 1LL << (i % 64);
 			}
 
 		} else {
@@ -321,7 +280,7 @@ struct bevalContext_t {
 
 			// fill rest with random patterns
 			for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
-				uint64_t *v = pFootprint[iEntry];
+				uint64_t *v = (uint64_t *) (pFootprint + iEntry);
 
 				// craptastic random fill
 				for (unsigned i = 0; i < opt_dataSize; i++) {
@@ -334,7 +293,7 @@ struct bevalContext_t {
 
 			// erase v[0]
 			for (unsigned i = 0; i < opt_dataSize; i++)
-				pFootprint[0][i] = 0;
+				pFootprint[0].bits[i] = 0;
 		}
 
 		/*
@@ -352,41 +311,41 @@ struct bevalContext_t {
 			if (Ti) {
 				// `QnTF` for each bit in the chunk, apply the operator `"Q ? !T : F"`
 				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iNode][j] = (pFootprint[Q][j] & ~pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+					pFootprint[iNode].bits[j] = (pFootprint[Q].bits[j] & ~pFootprint[Tu].bits[j]) ^ (~pFootprint[Q].bits[j] & pFootprint[F].bits[j]);
 			} else {
 				// `QTF` for each bit in the chunk, apply the operator `"Q ? T : F"`
 				for (unsigned j = 0; j < opt_dataSize; j++)
-					pFootprint[iNode][j] = (pFootprint[Q][j] & pFootprint[Tu][j]) ^ (~pFootprint[Q][j] & pFootprint[F][j]);
+					pFootprint[iNode].bits[j] = (pFootprint[Q].bits[j] & pFootprint[Tu].bits[j]) ^ (~pFootprint[Q].bits[j] & pFootprint[F].bits[j]);
 			}
 		}
 
 		uint32_t firstcrc = 0;
-		bool     differ = false;
+		bool     differ   = false;
 
-		for (unsigned iRoot = pTree->ostart; iRoot < pTree->estart; iRoot++) {
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
 			std::string name;
 			std::string transform;
 
-			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
 			const uint32_t Ri = pTree->roots[iRoot] & IBIT;
+			const uint32_t Ru = pTree->roots[iRoot] & ~IBIT;
 
 			// display root name
 			printf("%s: ", pTree->rootNames[iRoot].c_str());
 
 			// display footprint
-			if (pTree->ostart - pTree->kstart == MAXSLOTS) {
+			if (pTree->nstart - pTree->kstart <= MAXSLOTS) {
 				// `eval` compatibility, display footprint
 				if (Ri) {
 					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j] ^ ~0U);
+						printf("%016lx ", pFootprint[Ru].bits[j] ^ ~0U);
 				} else {
 					for (unsigned j = 0; j < opt_dataSize; j++)
-						printf("%016lx ", pFootprint[Ru][j]);
+						printf("%016lx ", pFootprint[Ru].bits[j]);
 				}
 			}
 
 			// display CRC
-			unsigned crc32 = calccrc32(pFootprint[Ru], opt_dataSize);
+			unsigned crc32 = calccrc32(pFootprint[Ru].bits, opt_dataSize);
 			// Inverted `T` is a concept not present in footprints. As a compromise, invert the result.
 			if (Ri)
 				crc32 ^= 0xffffffff;
@@ -419,7 +378,7 @@ struct bevalContext_t {
 		if (differ)
 			exit(1);
 
-		return 0;
+		delete pTree;
 	}
 
 };
@@ -640,22 +599,25 @@ int main(int argc, char *argv[]) {
 		::alarm(ctx.opt_timer);
 	}
 
-		// Open database
+	// Open database
 	database_t db(ctx);
 
 	db.open(app.opt_databaseName);
 	app.pStore = &db;
-	
+
 	// set flags
 	ctx.flags = db.creationFlags;
 	ctx.flags |= app.opt_flagsSet;
 	ctx.flags &= ~app.opt_flagsClr;
-	
+
 	// display system flags when database was created
 	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
 		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
 
-	rewriteTree_t *pTree = app.main(argc - optind, argv + optind);
+	while (optind < argc) {
+		app.handleArgument(argv[optind]);
+		optind++;
+	}
 
-	return app.main(pTree);
+	return 0;
 }

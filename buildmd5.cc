@@ -542,7 +542,7 @@ struct buildmd5Context_t {
 		gTree->extraInfo(jOutput);
 
 		// contents as multi-rooted
-		json_object_set_new_nocheck(jOutput, "raw", json_string_nocheck(gTree->saveString(0, NULL, true).c_str()));
+		json_object_set_new_nocheck(jOutput, "data", json_string_nocheck(gTree->saveString(0, NULL, true).c_str()));
 		// add validations tests
 		json_object_set_new_nocheck(jOutput, "tests", gTests);
 

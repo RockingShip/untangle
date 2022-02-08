@@ -185,37 +185,13 @@ struct gfoldContext_t {
 			 * Load from string
 			 */
 
-			unsigned highest = groupTree_t::highestEndpoint(ctx, inputName); // get highest entrypoint
-			const char *pTransform = strchr(inputName, '/'); // get transform
-
-			/*
-			 * Create tree
-			 */
-			uint32_t kstart = 2;
-			uint32_t ostart = kstart + highest;
-			uint32_t estart = ostart + highest;
-			uint32_t nstart = estart;
-
-			pOldTree = new groupTree_t(ctx, *pStore, kstart, ostart, estart, nstart, opt_maxNode, ctx.flags);
-//			pTree->maxDepth = this->opt_maxDepth;
-//			pTree->speed = this->opt_speed;
-
-			if (pTransform) {
-				pOldTree->loadStringSafe(inputName, pTransform + 1);
-			} else {
-				pOldTree->loadStringSafe(inputName);
-			}
+			pOldTree = new groupTree_t(ctx, *pStore, inputName, opt_maxNode, /*flags=*/0);
 
 			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
 				json_t *jResult = json_object();
 
 				jResult = json_object();
-
-				json_object_set_new_nocheck(jResult, "kstart", json_integer(pOldTree->kstart));
-				json_object_set_new_nocheck(jResult, "nstart", json_integer(pOldTree->nstart));
-				json_object_set_new_nocheck(jResult, "ncount", json_integer(pOldTree->ncount));
-				json_object_set_new_nocheck(jResult, "size", json_integer(pOldTree->ncount - pOldTree->nstart));
-
+				pOldTree->summaryInfo(jResult);
 				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				json_delete(jResult);
 			}
