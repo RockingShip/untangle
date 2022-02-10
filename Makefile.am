@@ -142,12 +142,12 @@ validateprefix_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for extraction of information
 ##
 
-PROGRAMS_PART3 = bfold bsystem kextract
+PROGRAMS_PART3 = bextract bfold bsystem 
 EXTRA_PART3 =
 
 # @date 2021-06-05 21:35:41
-kextract_SOURCES = kextract.cc basetree.h context.h
-kextract_LDADD = $(LDADD) $(AM_LDADD)
+bextract_SOURCES = bextract.cc basetree.h context.h
+bextract_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-05 23:43:44
 bfold_SOURCES = bfold.cc basetree.h context.h rewritetree.h

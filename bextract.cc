@@ -1,7 +1,7 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kextract.cc
+ * bextract.cc
  *      Extract a key from a system
  *
  * 	Keys are extracted by removing them from the system.
@@ -71,7 +71,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kextractContext_t {
+struct bextractContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -83,7 +83,7 @@ struct kextractContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	kextractContext_t() {
+	bextractContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -117,9 +117,16 @@ struct kextractContext_t {
 			json_delete(jResult);
 		}
 
-		if (pOldTree->system == 0) {
+		if (!(pOldTree->flags & context_t::MAGICMASK_SYSTEM)) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree does not contain a system"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree does not contain a balanced system"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
+
+		if (pOldTree->numRoots != 1) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree has multiple roots"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
@@ -129,7 +136,7 @@ struct kextractContext_t {
 		 */
 		uint32_t argEntry = 0;
 		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->estart; iEntry++) {
-			if (pOldTree->entryNames[iEntry].compare(entryName) == 0) {
+			if (pOldTree->entryNames[iEntry - pOldTree->kstart].compare(entryName) == 0) {
 				argEntry = iEntry;
 				break;
 			}
@@ -145,26 +152,41 @@ struct kextractContext_t {
 		/*
 		 * Create new tree
 		 */
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
+		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart - 1, pOldTree->estart - 1, pOldTree->nstart - 1, /*numRoots=*/1, opt_maxNode, opt_flags);
 
 		/*
 		 * Setup entry/root names
+		 * relocate argument from entry to (single) root
 		 */
 
-		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
-			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
+		pNewTree->entryNames.resize(pNewTree->nstart - pNewTree->kstart);
+		unsigned iName = 0;
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->ostart; iEntry++) {
+			if (iEntry != argEntry)
+				pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
+		}
 
-		// root has same names as keys
-		pNewTree->rootNames = pNewTree->entryNames;
+		pNewTree->rootNames.resize(1);
+		pNewTree->rootNames[0] = pOldTree->entryNames[argEntry - pOldTree->kstart];
 
 		/*
-		 * Crete map and zero key
+		 * Create conversion map
 		 */
+
 		uint32_t *pMap = pOldTree->allocMap();
 
-		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
-			pMap[iEntry] = iEntry;
+		uint32_t iNode = 0;
+		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++) {
+			if (iEntry != argEntry)
+				pMap[iEntry] = iNode++;
+		}
+		assert(iNode == pNewTree->nstart);
 
+		/*
+		 * @date 2022-02-10 19:57:59
+		 * Set argument to zero.
+		 * Because this is a balanced tree, the outcome of the modified expression is the argument. 
+		 */
 		pMap[argEntry] = 0;
 
 		/*
@@ -180,12 +202,8 @@ struct kextractContext_t {
 			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
-		// all roots are defaults
-		for (unsigned iRoot = pNewTree->kstart; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->roots[iRoot] = iRoot;
-
 		// requested key equals unbalanced system
-		pNewTree->roots[argEntry] = pMap[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
+		pNewTree->roots[0] = pMap[pOldTree->roots[0] & ~IBIT] ^ (pOldTree->roots[0] & IBIT);
 
 		/*
 		 * Save data
@@ -212,9 +230,9 @@ struct kextractContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kextractContext_t} Application context
+ * @global {bextractContext_t} Application context
  */
-kextractContext_t app;
+bextractContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.dat> <entryname>\n", argv[0]);
