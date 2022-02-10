@@ -71,7 +71,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = bload bsave build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0 kjoin kslice spongent validate validateprefix
+PROGRAMS_PART2 = bload bsave build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0 bvalidate kjoin kslice spongent validateprefix
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-07-21 11:04:05
@@ -110,6 +110,10 @@ buildspongent_LDADD = $(LDADD) $(AM_LDADD)
 buildtest0_SOURCES = buildtest0.cc basetree.h context.h
 buildtest0_LDADD = $(LDADD) $(AM_LDADD)
 
+# @date 2021-05-13 15:47:59
+bvalidate_SOURCES = bvalidate.cc basetree.h context.h
+bvalidate_LDADD = $(LDADD) $(AM_LDADD)
+
 # @date 2021-05-20 22:51:00
 kjoin_SOURCES = kjoin.cc basetree.h context.h
 kjoin_LDADD = $(LDADD) $(AM_LDADD)
@@ -129,10 +133,6 @@ kslice_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-05-17 14:21:07
 spongent_SOURCES = spongent.cc spongent.h
 spongent_CXXFLAGS = -D_SPONGENT088080008_
-
-# @date 2021-05-13 15:47:59
-validate_SOURCES = validate.cc basetree.h context.h
-validate_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-22 18:54:24
 validateprefix_SOURCES = validateprefix.cc basetree.h context.h

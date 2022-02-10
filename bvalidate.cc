@@ -2,7 +2,7 @@
 
 /*
  * validate.cc
- * 	validate a `baseTree` file against the tests stored in the matching json
+ * 	Validate a `baseTree` file against the tests stored in the matching json
  */
 
 /*
@@ -65,7 +65,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct validateContext_t {
+struct bvalidateContext_t {
 
 	/// @var {number} --onlyifset, only validate non-zero root (consider them a cascading of OR intermediates)
 	unsigned opt_onlyIfSet;
@@ -82,7 +82,7 @@ struct validateContext_t {
 	// test data
 	unsigned gNumTests;
 
-	validateContext_t() {
+	bvalidateContext_t() {
 		opt_onlyIfSet = 0;
 		pInputTree    = NULL;
 
@@ -493,9 +493,9 @@ struct validateContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {validateContext_t} Application context
+ * @global {bvalidateContext_t} Application context
  */
-validateContext_t app;
+bvalidateContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);

@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-10 20:46:09 Changed: Renamed `validate` to `bvalidate`.
 2022-02-10 20:44:20 Changed: Modernised `kextract` and renamed to `bextract`.
 2022-02-10 18:42:23 Changed: Renamed `eval`/`kload`/`ksave`/`ksystem`.
 2022-02-10 18:37:04 Changed: Modernised `entryNames`/`rootNames`/`system`.
