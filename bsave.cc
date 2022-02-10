@@ -1,7 +1,7 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * ksave.cc
+ * bsave.cc
  *      Export a baseTree_t` file as textual json file (or C code)
  *      Store the data nodes as 'data' tag.
  */
@@ -66,7 +66,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct ksaveContext_t {
+struct bsaveContext_t {
 
 	/// @var {number} --code, Output as C code
 	unsigned opt_code;
@@ -76,7 +76,7 @@ struct ksaveContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	ksaveContext_t() {
+	bsaveContext_t() {
 		opt_code  = 0;
 		opt_force = 0;
 	}
@@ -238,9 +238,9 @@ struct ksaveContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {ksaveContext_t} Application context
+ * @global {bsaveContext_t} Application context
  */
-ksaveContext_t app;
+bsaveContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <input.dat>\n", argv[0]);

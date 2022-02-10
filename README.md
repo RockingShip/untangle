@@ -745,52 +745,6 @@ The databsae sections are:
 The resulting set is the primary data with all fractal similarity removed.
 The ordering of nodes should be independent of the equation stored.
 
-operator Beweging
-waarde NULL 
-
-wat het ook doet is een dataset omzetten naar een formule.
-de interface aantal bits in en bits uit.
-bijverschijsel je kan expressie herstructureren. 
-alleen essentie wordt toegevoegd, de rest is een transformatie van reeds bekend.
- 
-@date 2021-10-21 01:55:50
-
-`genpattern` first test run for 4n9.
-
-34311523 structures of which 5901064 are unique.
-need to apply sid swapping
-algebra redundancy
-verwijdert alle spiegelingen en transformaties.
-op lage level
-architectuur expressies uitrekenen afgewisseld met acties.
-logic niveau 3 operatoren. 
-wij hebben gekozen om informatie in termen van algebra te beschrijven en op te slaan, 
-daar zijn we voleddig op geconditioneerd.
-er is ook een ander manier, ...
-algebra legt de nadruk op variatie in operators.
-information storage like x^^^0
- 
-
-----
-groupTree_t is the sid based 4n9 storage. (how it stores) 
-baseTree_t is the QTF (what it does) 
-groupTree has the advantage that all structures have tid=0
-Dataset for groupTree is provided by genpattern.
-Dataset for baseTree is provided by genmember.
-`Selftest` demonstrates by brutefocing all possibilities that the code is correct.
-buildX reerence implementation of examples such as hashes(md5,des), lookups(9bit) and integer numbers(adder,counter).
-`full`,`mixed`,`pure` setting for the actual QnTF (fractal) operator.
-GLOSSARY is a list of words used and their explantion.
-The list needs to be updated
-beval/beval/eval.    
-
-Complexity difference of both `compare()` implementations 
-
-groupTree also detects possible collapses between nodes.
-merging nodes trigger ripple detection across 4 recursive layers.
- 
-
-
 ## Manifest
 
 Resource context:
@@ -805,7 +759,7 @@ Database creation:
 [database.h](database.h)  
 [datadef.h](datadef.h)  
 [dbtool.h](dbtool.h)  
-[eval.cc](eval.cc)  
+[evaluate.cc](evaluate.cc)  
 [generator.h](generator.h)  
 [genhint.cc](genhint.cc)  
 [genmember.cc](genmember.cc)  

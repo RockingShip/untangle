@@ -1,7 +1,7 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kfold.cc
+ * bfold.cc
  *      Fold trees
  *
  * @date 2021-08-19 20:26:41
@@ -81,7 +81,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kfoldContext_t {
+struct bfoldContext_t {
 
 	/// @var {context_t} I/O context
 	context_t &ctx;
@@ -100,7 +100,7 @@ struct kfoldContext_t {
 	/// @var {database_t} - Database store to place results
 	database_t    *pStore;
 
-	kfoldContext_t(context_t &ctx) : ctx(ctx) {
+	bfoldContext_t(context_t &ctx) : ctx(ctx) {
 		opt_databaseName = "untangle.db";
 		opt_flagsSet     = 0;
 		opt_flagsClr     = 0;
@@ -132,7 +132,7 @@ struct kfoldContext_t {
 
 		const fold_t *pFoldL = static_cast<const fold_t *>(lhs);
 		const fold_t *pFoldR = static_cast<const fold_t *>(rhs);
-//		kfoldContext_t *pApp   = static_cast<kfoldContext_t *>(arg);
+//		bfoldContext_t *pApp   = static_cast<bfoldContext_t *>(arg);
 
 		return pFoldR->count - pFoldL->count;
 	}
@@ -630,7 +630,7 @@ struct kfoldContext_t {
 
 				std::string strOld = pOldTree->saveString(iOldNode, NULL);
 				std::string strNew = pNewTree->saveString(pNewTree->roots[iOldNode], NULL);
-				printf("../eval \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldNode);
+				printf("../evaluate \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldNode);
 
 				pNewTree->freeMap(pNewRefCount);
 			}
@@ -751,9 +751,9 @@ struct kfoldContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kfoldContext_t} Application context
+ * @global {bfoldContext_t} Application context
  */
-kfoldContext_t app(ctx);
+bfoldContext_t app(ctx);
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.dat>\n", argv[0]);

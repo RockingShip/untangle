@@ -250,7 +250,7 @@ struct tinyTree_t {
 	 * @date 2021-07-19 23:48:11
 	 *
 	 * With latest insights: compare structure first, then endpoints.
-	 * Make compatible with implementation in `eval.c`
+	 * Make compatible with implementation in `evaluate.c`
 	 * ordering of dyadics should work now `./slookup --member 'abc!de^^f^'`
 	 *
 	 * @date 2021-08-30 00:39:38

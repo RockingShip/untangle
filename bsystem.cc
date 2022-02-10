@@ -70,7 +70,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kextractContext_t {
+struct bsystemContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -82,7 +82,7 @@ struct kextractContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	kextractContext_t() {
+	bsystemContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -242,9 +242,9 @@ struct kextractContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kextractContext_t} Application context
+ * @global {bsystemContext_t} Application context
  */
-kextractContext_t app;
+bsystemContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.dat>\n", argv[0]);

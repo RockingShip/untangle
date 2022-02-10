@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-10 18:42:23 Changed: renamed `eval`/`kload`/`ksave`/`ksystem`.
 2022-02-10 18:37:04 Changed: Modernised `entryNames`/`rootNames`/`system`.
 2022-02-08 22:14:56 Changed: Improved file/string for `baseTree_t` and `groupTree_t` arguments.
 2022-02-08 16:26:58 Changed: Modernised system builders with entrypoints/roots.
@@ -754,7 +755,7 @@ Normalisations:
  
 Features:
 
-  - Level 1+2 query `eval`
+  - Level 1+2 query `evaluate`
   - Level 3+4 query `slookup`
   - Skin/transform query `tlookup`
   - Database creation `gentransform` `gensignature` `genmember`

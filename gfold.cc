@@ -670,7 +670,7 @@ struct gfoldContext_t {
 
 				std::string strOld = pOldTree->saveString(iOldGroup, NULL);
 				std::string strNew = pNewTree->saveString(pNewTree->roots[iOldGroup], NULL);
-				printf("../eval \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldGroup);
+				printf("../evaluate \"%s\" \"%s\"  # %d\n", strOld.c_str(), strNew.c_str(), iOldGroup);
 
 				pNewTree->freeMap(pNewRefCount);
 			}

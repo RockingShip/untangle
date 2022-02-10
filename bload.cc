@@ -1,7 +1,7 @@
 #pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kload.cc
+ * bload.cc
  *      Create a tree file based on json meta data
  *      Load the optional 'data' tag to populate the nodes.
  */
@@ -68,7 +68,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kloadContext_t {
+struct bloadContext_t {
 
 	/// @var {number} header flags
 	uint32_t opt_flags;
@@ -80,7 +80,7 @@ struct kloadContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	kloadContext_t() {
+	bloadContext_t() {
 		opt_flags   = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
@@ -197,9 +197,9 @@ struct kloadContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kloadContext_t} Application context
+ * @global {bloadContext_t} Application context
  */
-kloadContext_t app;
+bloadContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.json>\n", argv[0]);

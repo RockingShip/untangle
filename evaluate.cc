@@ -9,10 +9,10 @@
 /*
  * @date 2020-03-06 16:56:25
  *
- * `eval` is the reference implementation of the basic concepts of this project
+ * `evaluate` is the reference implementation of the basic concepts of this project
  * and is therefore the authoritative outcome in cases of dispute during regression testing.
  *
- *  `eval` self-test demonstrates:
+ *  `evaluate` self-test demonstrates:
  *   - Decoding and encoding of postfix notations
  *   - Constructing trees
  *   - Normalisations: 1:inverting, 1:function grouping, 2:dyadic ordering
@@ -22,7 +22,7 @@
  *  @date 2020-03-29 15:17:13
  *
  *  There is a known issue that `encode()` with a entrypoint other than te root might not properly order endpoints.
- *  `"./eval 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
+ *  `"./evaluate 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
  */
 
 /*
@@ -586,7 +586,7 @@ struct tree_t {
 		 *  [18] a ?  b : b -> b
 		 *  [19] a ?  b : c                  "?" QTF
 		 *
-		 * ./eval --fast 'a00!' 'a0a!' 'a0b!' 'aa0!' 'aaa!' 'aab!' 'ab0!' 'aba!' 'abb!' 'abc!' 'a00?' 'a0a?' 'a0b?' 'aa0?' 'aaa?' 'aab?' 'ab0?' 'aba?' 'abb?' 'abc?'
+		 * ./evaluate --fast 'a00!' 'a0a!' 'a0b!' 'aa0!' 'aaa!' 'aab!' 'ab0!' 'aba!' 'abb!' 'abc!' 'a00?' 'a0a?' 'a0b?' 'aa0?' 'aaa?' 'aab?' 'ab0?' 'aba?' 'abb?' 'abc?'
 		 */
 
 		if (T & IBIT) {
@@ -705,7 +705,7 @@ struct tree_t {
 		 *
 		 * a ?  b : c -> a?~(a?~b:c):c  "?" QTF
 		 *
-		 * ./eval --pure 'ab&' 'abc?'
+		 * ./evaluate --pure 'ab&' 'abc?'
 		 */
 
 		if (opt_pure && !(T & IBIT)) {
@@ -1914,7 +1914,7 @@ struct tree_t {
 	 * @date 2020-03-29 15:17:13
 	 *
 	 *  There is a known issue that `saveString()` with a entrypoint other than te root might not properly order endpoints.
-	 *  `"./eval 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
+	 *  `"./evaluate 'ab+bc+a12!!' --Q --skin"`. You will find `"ca+"`
 	 *
 	 * @param {number} id - entrypoint
 	 * @param {boolean} withPlaceholders - true for "placeholder/skin" notation
@@ -2045,7 +2045,7 @@ struct tree_t {
          *
 	 * @param {vector[]} v - the evaluated result of the unified operators
 	 */
-	inline void eval(footprint_t *v) const {
+	inline void evaluate(footprint_t *v) const {
 		// for all operators eligible for evaluation...
 		for (unsigned i = nstart; i < this->count; i++) {
 			// point to the first chunk of the `"question"`
@@ -2262,7 +2262,7 @@ unsigned mainloop(const char *origPattern, tree_t *pTree, footprint_t *pEval) {
 	/*
 	 * Evaluate tree
 	 */
-	pTree->eval(pEval);
+	pTree->evaluate(pEval);
 
 	/*
 	 * Calculate crc of entry point
@@ -2431,7 +2431,7 @@ void performSelfTest(tree_t *pTree, footprint_t *pEval) {
 			pEval[pTree->kstart + 2].bits[0] = 0b11110000; // v[3]
 
 			// evaluate
-			pTree->eval(pEval);
+			pTree->evaluate(pEval);
 
 			/*
 			 * The footprint contains the tree outcome for every possible value combination the endpoints can have

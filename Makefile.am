@@ -16,7 +16,7 @@ bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_
 ## This section for dataset creation utilities
 ##
 
-PROGRAMS_PART1 = eval genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
+PROGRAMS_PART1 = evaluate genmember genrestartdata gensignature genswap gentransform selftest slookup tlookup
 EXTRA_PART1 =
 
 # genrestartdata is slow and output is small, include in distribution
@@ -34,7 +34,7 @@ AM_LDADD = $(LIBJANSSON_LIBS)
 AM_CXXFLAGS =  -Wall -Werror -funroll-loops -finline -msse4
 
 # @date 2020-03-06 16:56:25
-eval_SOURCES = eval.cc
+evaluate_SOURCES = evaluate.cc
 
 # @date 2020-03-30 17:19:24
 genmember_SOURCES = genmember.cc genmember.h database.h datadef.h context.h tinytree.h dbtool.h generator.h metrics.h restartdata.h
@@ -71,7 +71,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0 kjoin kload ksave kslice spongent validate validateprefix
+PROGRAMS_PART2 = bload bsave build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0 kjoin kslice spongent validate validateprefix
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-07-21 11:04:05
@@ -115,12 +115,12 @@ kjoin_SOURCES = kjoin.cc basetree.h context.h
 kjoin_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-26 23:42:25
-kload_SOURCES = kload.cc basetree.h context.h
-kload_LDADD = $(LDADD) $(AM_LDADD)
+bload_SOURCES = bload.cc basetree.h context.h
+bload_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-21 00:41:38
-ksave_SOURCES = ksave.cc basetree.h context.h
-ksave_LDADD = $(LDADD) $(AM_LDADD)
+bsave_SOURCES = bsave.cc basetree.h context.h
+bsave_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-19 14:20:16
 kslice_SOURCES = kslice.cc basetree.h context.h
@@ -142,7 +142,7 @@ validateprefix_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for extraction of information
 ##
 
-PROGRAMS_PART3 = kextract kfold ksystem
+PROGRAMS_PART3 = bfold bsystem kextract
 EXTRA_PART3 =
 
 # @date 2021-06-05 21:35:41
@@ -150,12 +150,12 @@ kextract_SOURCES = kextract.cc basetree.h context.h
 kextract_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-05 23:43:44
-kfold_SOURCES = kfold.cc basetree.h context.h rewritetree.h
-kfold_LDADD = $(LDADD) $(AM_LDADD)
+bfold_SOURCES = bfold.cc basetree.h context.h rewritetree.h
+bfold_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-06-05 13:58:33
-ksystem_SOURCES = ksystem.cc basetree.h context.h
-ksystem_LDADD = $(LDADD) $(AM_LDADD)
+bsystem_SOURCES = bsystem.cc basetree.h context.h
+bsystem_LDADD = $(LDADD) $(AM_LDADD)
 
 ##
 ## This section for baseTree optimisations

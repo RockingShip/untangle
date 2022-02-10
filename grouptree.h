@@ -5909,7 +5909,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		sprintf(itxt, "%u", gid);
 		std::string ret = "dumpgroup=";
 		ret += itxt;
-		ret += " ./eval";
+		ret += " ./evaluate";
 
 		for (uint32_t iNode = this->N[gid].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			ret += " \"";
