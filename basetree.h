@@ -4944,15 +4944,6 @@ struct baseTree_t {
 			rootNames.resize(numRoots);
 
 		/*
-		 * Reserved names
-		 */
-
-		entryNames[0] = "0";
-
-		for (uint32_t iEntry = 1; iEntry < this->kstart; iEntry++)
-			entryNames[iEntry] = "ERROR";
-
-		/*
 		 * import entryNames
 		 */
 

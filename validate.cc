@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * validate.cc
@@ -29,6 +29,7 @@
 #include <jansson.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <map>
 
 #include "context.h"
 #include "basetree.h"
@@ -72,36 +73,21 @@ struct validateContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	// json data
-	uint32_t                 kstart;
-	uint32_t                 ostart;
-	uint32_t                 estart;
-	// NOTE: Trees may have additional extended keys which will effect the following 
-	uint32_t                 nstart;
-	uint32_t                 numRoots;
-	std::vector<std::string> entryNames;
-	std::vector<std::string> rootNames;
-
+	std::vector<std::string>        testNames;   // The names of the entries
+	std::map<std::string, unsigned> testLookup;  // Name lookup	
+	std::vector<uint32_t>           testData;    // Test values
+	std::vector<uint32_t>           entryMap;    // How tree entrypoints map onto test data
+	std::vector<uint32_t>           rootMap;     // How tree roots map onto test data
 
 	// test data
 	unsigned gNumTests;
-	uint8_t  *gTestKeys;
-	uint8_t  *gTestRoots;
 
 	validateContext_t() {
 		opt_onlyIfSet = 0;
 		pInputTree    = NULL;
 
-		kstart   = 0;
-		ostart   = 0;
-		estart   = 0;
-		nstart   = 0;
-		numRoots = 0;
-
 		// test data
 		gNumTests  = 0;
-		gTestKeys  = NULL;
-		gTestRoots = NULL;
 	}
 
 
@@ -110,12 +96,11 @@ struct validateContext_t {
 	 *
 	 * Load dimensions and metrics from json
 	 */
-	void loadJson(const char *jsonFilename) {
+	void main(const char *jsonFilename, const char *treeFilename) {
 		/*
 		 * Load json
 		 */
 
-		// load json
 		FILE *f = fopen(jsonFilename, "r");
 
 		if (!f) {
@@ -149,18 +134,90 @@ struct validateContext_t {
 		jsonTree.loadFileJson(jInput, jsonFilename);
 
 		/*
-		 * import dimensions
+		 * load tree
 		 */
-		kstart     = jsonTree.kstart;
-		ostart     = jsonTree.ostart;
-		estart     = jsonTree.estart;
-		nstart     = jsonTree.nstart;
-		numRoots   = jsonTree.numRoots;
-		entryNames = jsonTree.entryNames;
-		rootNames  = jsonTree.rootNames;
+
+		baseTree_t tree(ctx);
+
+		if (tree.loadFile(treeFilename)) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+			json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+			json_t *jResult = json_object();
+			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(treeFilename));
+			tree.headerInfo(jResult);
+			tree.extraInfo(jResult);
+			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			json_delete(jResult);
+		}
+
+		if (tree.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
+			ctx.logFlags(tree.flags);
 
 		/*
-		 * Import tests
+		 * Determine json entry/root names
+		 */
+
+		for (unsigned iEntry = jsonTree.kstart; iEntry < jsonTree.nstart; iEntry++) {
+			std::string name = jsonTree.entryNames[iEntry - jsonTree.kstart];
+
+			testLookup[name] = testNames.size();
+			testNames.push_back(name);
+		}
+		for (unsigned iRoot = 0; iRoot < jsonTree.numRoots; iRoot++) {
+			std::string name = jsonTree.rootNames[iRoot];
+
+			testLookup[name] = testNames.size();
+			testNames.push_back(name);
+		}
+
+		/*
+		 * Now map the tree entry/roots onto the json 
+		 */
+		entryMap.resize(tree.nstart);
+		for (unsigned iEntry = tree.kstart; iEntry < tree.nstart; iEntry++) {
+			std::string name = tree.entryNames[iEntry - tree.kstart];
+			std::map<std::string, unsigned>::iterator it;
+
+			it = testLookup.find(name);
+			if (it == testLookup.end()) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("entryName not found"));
+				json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+				json_object_set_new_nocheck(jError, "name", json_string(name.c_str()));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
+
+			// make connection
+			entryMap[iEntry] = it->second;
+		}
+
+		if (!(tree.flags & context_t::MAGICMASK_SYSTEM)) {
+			rootMap.resize(tree.numRoots);
+			for (unsigned iRoot = 0; iRoot < tree.numRoots; iRoot++) {
+				std::string name = tree.rootNames[iRoot];
+				std::map<std::string, unsigned>::iterator it;
+
+				it = testLookup.find(name);
+				if (it == testLookup.end()) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("rootName not found"));
+					json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+					json_object_set_new_nocheck(jError, "name", json_string(name.c_str()));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+
+				// make connection
+				rootMap[iRoot] = it->second;
+			}
+		}
+
+		/*
+		 * Load and perform tests
 		 */
 
 		json_t *jTests = json_object_get(jInput, "tests");
@@ -172,14 +229,32 @@ struct validateContext_t {
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
-		// allocate buffers for keys/roots
-		gTestKeys = (uint8_t *) calloc(gNumTests, ostart - kstart);
-		assert(gTestKeys);
-		gTestRoots = (uint8_t *) calloc(gNumTests, estart - ostart);
-		assert(gTestRoots);
+		/*
+		 * Perform tests
+		 */
+
+		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
+			json_t *jList = json_array();
+
+			/*
+			 * Which roots are not keys
+			 */
+			for (unsigned iRoot = 0; iRoot < tree.numRoots; iRoot++) {
+				json_array_append_new(jList, json_string_nocheck(tree.rootNames[iRoot].c_str()));
+			}
+
+			fprintf(stderr, "Validating: %s\n", json_dumps(jList, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			json_delete(jList);
+		}
+
+		uint32_t *pEval = tree.allocMap(); // evaluation stack
 
 		// convert ascii to hex and inject at the appropriate location
 		for (unsigned iTest = 0; iTest < gNumTests; iTest++) {
+			/*
+			 * Load/decode the test 
+			 */
+
 			// extract test element
 			json_t     *jTest    = json_array_get(jTests, iTest);
 			const char *strEntry = json_string_value(json_array_get(jTest, 0));
@@ -195,10 +270,10 @@ struct validateContext_t {
 			}
 
 			/*
-			 * decode key data
+			 * decode entrypoint/root data
 			 */
-			uint8_t  *pData = gTestKeys + iTest * (ostart - kstart);
 			unsigned iBit   = 0;
+			testData.resize(testNames.size());
 
 			// convert
 			for (unsigned iPos = 0; iPos < strlen(strEntry); /* increment in loop */ ) {
@@ -223,7 +298,7 @@ struct validateContext_t {
 						byte += ch - 'a' + 10;
 					else {
 						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("bad key data in test entry"));
+						json_object_set_new_nocheck(jError, "error", json_string_nocheck("bad entry data in test entry"));
 						json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
 						json_object_set_new_nocheck(jError, "test", json_integer(iTest));
 						json_object_set_new_nocheck(jError, "key-data", json_string_nocheck(strEntry));
@@ -232,25 +307,20 @@ struct validateContext_t {
 				}
 
 				for (unsigned k = 0; k < 8; k++) {
-					if (iBit < nstart - kstart)
-						pData[iBit++] = byte & (1 << k);
+					if (iBit < jsonTree.nstart - jsonTree.kstart)
+						testData[iBit++] = (byte & (1 << k)) ? ~0U : 0U;
 				}
 			}
-			if (iBit < ostart - kstart) {
+
+			if (iBit < jsonTree.nstart - jsonTree.kstart) {
 				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key data too short in test entry"));
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("entry data too short in test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
 				json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-				json_object_set_new_nocheck(jError, "expected", json_integer(ostart - kstart));
+				json_object_set_new_nocheck(jError, "expected", json_integer(jsonTree.nstart - jsonTree.kstart));
 				json_object_set_new_nocheck(jError, "encountered", json_integer(iBit));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
-
-			/*
-			 * decode root data
-			 */
-			pData = gTestRoots + iTest * (estart - ostart);
-			iBit  = 0;
 
 			// convert
 			for (unsigned iPos = 0; iPos < strlen(strRoots); /* increment in loop */ ) {
@@ -284,173 +354,34 @@ struct validateContext_t {
 				}
 
 				for (unsigned k = 0; k < 8; k++) {
-					if (iBit < estart - ostart)
-						pData[iBit++] = byte & (1 << k);
+					if (iBit < tree.nstart - tree.kstart + tree.numRoots)
+						testData[iBit++] = (byte & (1 << k)) ? ~0U : 0U;
 				}
 			}
 
-			if (iBit < estart - ostart) {
+			if (iBit < tree.numRoots) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root data too short in test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
 				json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-				json_object_set_new_nocheck(jError, "expected", json_integer(estart - ostart));
-				json_object_set_new_nocheck(jError, "numroots", json_integer(numRoots));
+				json_object_set_new_nocheck(jError, "expected", json_integer(tree.numRoots));
+				json_object_set_new_nocheck(jError, "numroots", json_integer(iBit));
 				json_object_set_new_nocheck(jError, "encountered", json_integer(iBit));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
-		}
-
-		fprintf(stderr, "Loaded %d tests\n", gNumTests);
-
-		json_delete(jInput);
-	}
-
-	/*
-	 * @date
-	 *
-	 * Load baseTree file and compare against imported json
-	 */
-	void validateData(const char *fname) {
-		// load tree
-		baseTree_t tree(ctx);
-
-		if (tree.loadFile(fname)) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
-			json_object_set_new_nocheck(jError, "filename", json_string(fname));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
-			json_t *jResult = json_object();
-			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(fname));
-			tree.headerInfo(jResult);
-			tree.extraInfo(jResult);
-			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			json_delete(jResult);
-		}
-
-		// check dimensions
-		if (tree.kstart != kstart || tree.ostart != ostart || tree.estart != estart || tree.numRoots != numRoots) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
-			json_object_set_new_nocheck(jError, "filename", json_string(fname));
-			json_t *jMeta = json_object();
-			json_object_set_new_nocheck(jMeta, "kstart", json_integer(kstart));
-			json_object_set_new_nocheck(jMeta, "ostart", json_integer(ostart));
-			json_object_set_new_nocheck(jMeta, "estart", json_integer(estart));
-			json_object_set_new_nocheck(jMeta, "nstart", json_integer(nstart));
-			json_object_set_new_nocheck(jMeta, "numroots", json_integer(numRoots));
-			json_object_set_new_nocheck(jError, "meta", jMeta);
-			json_t *jData = json_object();
-			json_object_set_new_nocheck(jData, "kstart", json_integer(tree.kstart));
-			json_object_set_new_nocheck(jData, "ostart", json_integer(tree.ostart));
-			json_object_set_new_nocheck(jData, "estart", json_integer(tree.estart));
-			json_object_set_new_nocheck(jData, "nstart", json_integer(tree.nstart));
-			json_object_set_new_nocheck(jData, "numroots", json_integer(tree.numRoots));
-			json_object_set_new_nocheck(jError, "data", jData);
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
-
-		// check names
-		for (uint32_t iName = 0; iName < estart - kstart; iName++) {
-			if (entryNames[iName].compare(tree.entryNames[iName]) != 0) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
-				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "kid", json_integer(iName));
-				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(entryNames[iName].c_str()));
-				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.entryNames[iName].c_str()));
-				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			}
-		}
-		for (unsigned iName = 0; iName < numRoots; iName++) {
-			if (rootNames[iName].compare(tree.rootNames[iName]) != 0) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
-				json_object_set_new_nocheck(jError, "filename", json_string(fname));
-				json_object_set_new_nocheck(jError, "rid", json_integer(iName));
-				json_object_set_new_nocheck(jError, "expected", json_string_nocheck(rootNames[iName].c_str()));
-				json_object_set_new_nocheck(jError, "encountered", json_string_nocheck(tree.rootNames[iName].c_str()));
-				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			}
-		}
-
-		if (tree.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY)
-			ctx.logFlags(tree.flags);
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_ACTIONS) {
-			json_t *jList = json_array();
 
 			/*
-			 * Which roots are not keys
-			 */
-			if (tree.system) {
-				json_array_append_new(jList, json_string_nocheck("system"));
-			} else {
-				for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
-					json_array_append_new(jList, json_string_nocheck(rootNames[iRoot].c_str()));
-				}
-			}
-
-			fprintf(stderr, "Validating: %s\n", json_dumps(jList, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			json_delete(jList);
-		}
-
-		ctx.setupSpeed(gNumTests);
-		ctx.tick = 0;
-
-		uint32_t *pFull = tree.allocMap(); // all keys defined based on text data
-		uint32_t *pEval = tree.allocMap(); // only defined for non-root keys
-
-		for (uint32_t iTest = 0; iTest < gNumTests; iTest++) {
-			ctx.progress++;
-
-			if (ctx.tick && ctx.opt_verbose >= ctx.VERBOSE_TICK) {
-				int perSecond = ctx.updateSpeed();
-
-				int eta  = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
-
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% %3d:%02d:%02d",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS);
-
-				ctx.tick = 0;
-			}
-
-			/*
-			 * Load the test data
-			 * For validation, either all bits are set or all bits are clear
+			 * Prepare evaluator
 			 */
 
 			// set everything to an invalidation marker
 			for (unsigned iNode = 0; iNode < tree.ncount; iNode++)
-				pFull[iNode] = 0x5a5a5a5a; // set to invalid value
+				pEval[iNode] = 0x5a5a5a5a; // set to invalid value
 
-			pFull[0] = 0; // only zero is defined
+			pEval[0] = 0; // only zero is defined
 
-			// load the test data
-			uint8_t *pData = gTestKeys + iTest * (ostart - kstart);
-
-			for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
-				pFull[iEntry] = pData[iEntry - kstart] ? ~0U : 0;
-
-			pData = gTestRoots + iTest * (estart - ostart);
-
-			for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
-				pFull[iEntry] = pData[iEntry - ostart] ? ~0U : 0;
-
-			/*
-			 * Copy undefined-roots to data vector.
-			 * If roots defined, then they are not allowed to be read.
-			 */
-//			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
-//				pEval[iRoot] = (tree.roots[iRoot] == iRoot) ? pFull[iRoot] : 0x5a5a5a5a;
+			for (unsigned iEntry = tree.kstart; iEntry < tree.nstart; iEntry++)
+				pEval[iEntry] = testData[entryMap[iEntry]];
 
 			/*
 			 * Run the test
@@ -458,19 +389,20 @@ struct validateContext_t {
 			for (uint32_t iNode = tree.nstart; iNode < tree.ncount; iNode++) {
 				const baseNode_t *pNode = tree.N + iNode;
 				const uint32_t   Q      = pNode->Q;
-				const uint32_t   Tu     = pNode->T & ~IBIT;
 				const uint32_t   Ti     = pNode->T & IBIT;
+				const uint32_t   Tu     = pNode->T & ~IBIT;
 				const uint32_t   F      = pNode->F;
 
 				// test range
 				if (Q >= tree.ncount || Tu >= tree.ncount || F >= tree.ncount) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node references out-of-range"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
 					json_t *jNode = json_object();
 					json_object_set_new_nocheck(jNode, "q", json_integer(Q));
+					json_object_set_new_nocheck(jNode, "ti", json_integer(Ti ? 1 : 0));
 					json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
 					json_object_set_new_nocheck(jNode, "f", json_integer(F));
 					json_object_set_new_nocheck(jError, "node", jNode);
@@ -478,22 +410,22 @@ struct validateContext_t {
 				}
 
 				// test for undefined
-				if ((pEval[Q] != 0 && pEval[Q] != ~0U) ||
-				    (pEval[Tu] != 0 && pEval[Tu] != ~0U) ||
-				    (pEval[F] != 0 && pEval[F] != ~0U)) {
+				if ((pEval[Q] != 0 && pEval[Q] != ~0U) || (pEval[Tu] != 0 && pEval[Tu] != ~0U) || (pEval[F] != 0 && pEval[F] != ~0U)) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node values out-of-range"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
 					json_t *jNode = json_object();
 					json_object_set_new_nocheck(jNode, "q", json_integer(Q));
+					json_object_set_new_nocheck(jNode, "ti", json_integer(Ti ? 1 : 0));
 					json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
 					json_object_set_new_nocheck(jNode, "f", json_integer(F));
 					json_object_set_new_nocheck(jError, "node", jNode);
 					json_t *jValue = json_object();
 					json_object_set_new_nocheck(jValue, "q", json_integer(pEval[Q]));
-					json_object_set_new_nocheck(jValue, "tu", json_integer(pEval[Tu]));
+					json_object_set_new_nocheck(jValue, "ti", json_integer(pEval[Tu] & IBIT ? 1 : 0));
+					json_object_set_new_nocheck(jValue, "tu", json_integer(pEval[Tu] & ~IBIT));
 					json_object_set_new_nocheck(jValue, "f", json_integer(pEval[F]));
 					json_object_set_new_nocheck(jError, "value", jValue);
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -513,116 +445,48 @@ struct validateContext_t {
 				}
 			}
 
-			if (tree.system) {
-				uint32_t R = tree.system;
-
-				// test for undefined
-				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
-					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("System loads undefined"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
-					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "value", json_integer(pEval[R & ~IBIT]));
-					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				}
-
-				uint32_t val = (R & IBIT) ? pEval[R & ~IBIT] ^ ~0U : pEval[R & ~IBIT];
-				if (val != 0) {
-					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("System unbalanced"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
-					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "value", json_integer(val));
-					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				}
-
-				continue;
-			}
-
 			/*
 			 * Compare the results for the provides
 			 */
-			for (unsigned iRoot = 0; iRoot < nstart- kstart; iRoot++) {
+			for (unsigned iRoot = 0; iRoot < tree.numRoots; iRoot++) {
+				uint32_t expected = (tree.flags & context_t::MAGICMASK_SYSTEM) ? 0 : testData[rootMap[iRoot]];
 				uint32_t R = tree.roots[iRoot];
-
-//				if (R == iRoot)
-//					continue; // skip unused root
+				uint32_t encountered = pEval[R & ~IBIT];
+				if (R & IBIT)
+					encountered ^= ~0U;
 
 				// test for undefined. Initial value `pEval[]` is 0x5a5a5a5a.
 				if (pEval[R & ~IBIT] != 0 && pEval[R & ~IBIT] != ~0U) {
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("Root loads undefined"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
 					json_object_set_new_nocheck(jError, "root", json_string(tree.rootNames[iRoot].c_str()));
 					json_object_set_new_nocheck(jError, "value", json_integer(pEval[R & ~IBIT]));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 
-				/*
-				 * @date 2021-05-30 12:57:24
-				 * The expression has been applied to all bits the register.
-				 * The final result is either all bits clear (0) or all bits set (~0U)
-				 */
-
-				uint32_t expected    = pFull[iRoot];
-				uint32_t encountered = (R & IBIT) ? pEval[R & ~IBIT] ^ ~0U : pEval[R & ~IBIT];
-
 				if ((!opt_onlyIfSet || encountered) && expected != encountered) {
-					// convert outputs to hex string
-					char     strExpected[estart / 4 + 2];
-					unsigned strExpectedLen    = 0;
-					char     strEncountered[estart / 4 + 2];
-					unsigned strEncounteredLen = 0;
-
-					for (unsigned i = tree.kstart; i <= (estart - 1) / 8 * 8; i += 8) {
-						unsigned byte;
-
-						byte = 0;
-						for (unsigned j = 0; j < 8; j++)
-							byte |= (i + j < estart && pFull[i + j]) ? 1 << j : 0;
-
-						strExpected[strExpectedLen++] = "0123456789abcdef"[byte >> 4];
-						strExpected[strExpectedLen++] = "0123456789abcdef"[byte & 15];
-
-						byte = 0;
-						for (unsigned j = 0; j < 8; j++) {
-							if (i + j < estart) {
-								uint32_t r2 = tree.roots[i + j];
-								if (r2 & IBIT)
-									byte |= pEval[r2 & ~IBIT] ? 0 : 1 << j;
-								else
-									byte |= pEval[r2] ? 1 << j : 0;
-							}
-						}
-
-						strEncountered[strEncounteredLen++] = "0123456789abcdef"[byte >> 4];
-						strEncountered[strEncounteredLen++] = "0123456789abcdef"[byte & 15];
-					}
-
-					strExpected[strExpectedLen++]       = 0;
-					strEncountered[strEncounteredLen++] = 0;
-
 					json_t *jError = json_object();
 					json_object_set_new_nocheck(jError, "error", json_string_nocheck("validation failed"));
-					json_object_set_new_nocheck(jError, "filename", json_string(fname));
+					json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
 					json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
-					json_object_set_new_nocheck(jError, "bit", json_string(rootNames[iRoot].c_str()));
-					json_object_set_new_nocheck(jError, "expected", json_string(strExpected));
-					json_object_set_new_nocheck(jError, "encountered", json_string(strEncountered));
+					if (tree.flags & context_t::MAGICMASK_SYSTEM)
+						json_object_set_new_nocheck(jError, "root", json_string(tree.rootNames[iRoot].c_str()));
+					else
+						json_object_set_new_nocheck(jError, "root", json_string(testNames[rootMap[iRoot]].c_str()));
+					json_object_set_new_nocheck(jError, "expected", json_integer(expected));
+					json_object_set_new_nocheck(jError, "encountered", json_integer(encountered));
 					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 				}
 			}
 		}
 
-		tree.freeMap(pFull);
+		fprintf(stderr, "Passed %d tests\n", gNumTests);
+
 		tree.freeMap(pEval);
-
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\n");
-
+		json_delete(jInput);
 	}
-
 };
 
 /*
@@ -759,20 +623,13 @@ int main(int argc, char *argv[]) {
 		::alarm(ctx.opt_timer);
 	}
 
-	/*
-	 * Load json into context
-	 */
-	app.loadJson(jsonFilename);
-
-	/*
-	 * Validate files
-	 */
-	app.validateData(dataFilename);
+	app.main(jsonFilename, dataFilename);
 
 
 	json_t *jError = json_object();
 	json_object_set_new_nocheck(jError, "passed", json_string_nocheck("true"));
 	json_object_set_new_nocheck(jError, "filename", json_string(dataFilename));
+	json_object_set_new_nocheck(jError, "numtests", json_integer(app.gNumTests));
 	printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 
 	return 0;

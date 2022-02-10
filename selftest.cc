@@ -343,7 +343,7 @@ struct selftestContext_t : dbtool_t {
 		/*
 		 * Preset entrypoints as how `normaliseQTF()` returns folded arguments.
 		 */
-		for (uint32_t iEntry = 0; iEntry < tree.TINYTREE_NSTART; iEntry++)
+		for (unsigned iEntry = 0; iEntry < tree.TINYTREE_NSTART; iEntry++)
 			tree.N[iEntry].Q = tree.N[iEntry].T = tree.N[iEntry].F = iEntry;
 
 		/*

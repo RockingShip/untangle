@@ -1,4 +1,4 @@
-//#pragma GCC optimize ("O0") // optimize on demand
+#pragma GCC optimize ("O0") // optimize on demand
 
 /*
  * kextrac.cc
@@ -116,7 +116,7 @@ struct kextractContext_t {
 			json_delete(jResult);
 		}
 
-		if (pOldTree->system) {
+		if (pOldTree->flags * context_t::MAGICMASK_SYSTEM) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree already a balanced system"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
@@ -126,17 +126,29 @@ struct kextractContext_t {
 		/*
 		 * Create new tree
 		 */
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
+		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart + pOldTree->numRoots, pOldTree->estart + pOldTree->numRoots, pOldTree->nstart + pOldTree->numRoots, 1, opt_maxNode, opt_flags | context_t::MAGICMASK_SYSTEM);
 
 		/*
 		 * Setup entry/root names
 		 */
 
-		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
-			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
+		// copy entry names
+		unsigned iName = 0;
+
+		pNewTree->entryNames.resize(pNewTree->nstart - pNewTree->kstart);
+
+		// append names
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->ostart; iEntry++)
+			pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
+		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++)
+			pNewTree->entryNames[iName++] = pOldTree->rootNames[iRoot];
+		for (unsigned iEntry = pOldTree->ostart; iEntry < pOldTree->nstart; iEntry++)
+			pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
+		assert(pNewTree->nstart - pNewTree->kstart == iName);
 
 		// root has same names as keys
-		pNewTree->rootNames = pNewTree->entryNames;
+		pNewTree->rootNames.resize(1);
+		pNewTree->rootNames[0] = "system";
 
 		/*
 		 * Allocate map
@@ -182,29 +194,28 @@ struct kextractContext_t {
 
 			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
-
+		
+		pNewTree->roots[0] = 0;
+		
 		// merge all entrypoints into system
-		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
-			uint32_t R  = pOldTree->roots[iEntry];
+		// roots get transform to entrypoints, which start at oldTree->nstart
+		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
+			uint32_t R  = pOldTree->roots[iRoot];
 			uint32_t Ru = R & ~IBIT;
 			uint32_t Ri = R & IBIT;
 
-			if (R != iEntry) {
-				// create `keyN ^ roots[keyN]`
-				uint32_t term = pNewTree->addNormaliseNode(iEntry, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
+			if (R != iRoot) {
+				// create `rootN ^ roots[rootN]`
+				uint32_t term = pNewTree->addNormaliseNode(pOldTree->nstart + iRoot, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
 
 				// append term as `OR` to system
-				pNewTree->system = pNewTree->addNormaliseNode(pNewTree->system, IBIT, term);
+				pNewTree->roots[0] = pNewTree->addNormaliseNode(pNewTree->roots[0], IBIT, term);
 			}
 		}
 
 		// remove ticker
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
-
-		// all roots are defaults
-		for (unsigned iRoot = pNewTree->kstart; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->roots[iRoot] = iRoot;
 
 		/*
 		 * Save data

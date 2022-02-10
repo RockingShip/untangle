@@ -120,26 +120,8 @@ struct ksaveContext_t {
 			// add names/history
 			pTree->extraInfo(jOutput);
 
-			// roots
-			json_t *jData = json_object();
-
-			for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
-				if (pTree->roots[iRoot] != iRoot) {
-					// export root
-					std::string expr = pTree->saveString(pTree->roots[iRoot]);
-					// save
-					json_object_set_new_nocheck(jData, pTree->rootNames[iRoot].c_str(), json_string_nocheck(expr.c_str()));
-				}
-			}
-
 			// add data as strings
-			json_object_set_new_nocheck(jOutput, "data", jData);
-
-			// system
-			if (pTree->system) {
-				std::string expr = pTree->saveString(pTree->system);
-				json_object_set_new_nocheck(jOutput, "system", json_string_nocheck(expr.c_str()));
-			}
+			json_object_set_new_nocheck(jOutput, "data", json_string_nocheck(pTree->saveString(0, NULL, true).c_str()));
 
 			FILE *f = fopen(outputFilename, "w");
 			if (!f)
@@ -181,8 +163,6 @@ struct ksaveContext_t {
 		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++)
 			pRootRef[pTree->roots[iRoot] & ~IBIT]++;
 
-		pRootRef[pTree->system & ~IBIT]++;
-
 		fprintf(f, "N[]=");
 		for (unsigned iEntry = 0; iEntry < pTree->kstart; iEntry++)
 			fprintf(f, "%c%d", (iEntry ? ',' : '{'), iEntry);
@@ -207,13 +187,6 @@ struct ksaveContext_t {
 							fprintf(f, "~");
 						fprintf(f, ":");
 					}
-				}
-				// system
-				if ((pTree->system & ~IBIT) == iNode) {
-					fprintf(f, "system");
-					if (pTree->system & IBIT)
-						fprintf(f, "~");
-					fprintf(f, ":");
 				}
 				fprintf(f, "\n");
 			}
@@ -245,12 +218,6 @@ struct ksaveContext_t {
 					fprintf(f, "%s=N[%d]", pTree->rootNames[iRoot].c_str(), R);
 				}
 			}
-		}
-
-		// system
-		if (pTree->system) {
-			fprintf(f, ",\n");
-			fprintf(f, "system=N[%d]", pTree->system);
 		}
 
 		fprintf(f, "\n})\n");

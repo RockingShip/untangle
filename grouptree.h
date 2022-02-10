@@ -239,7 +239,7 @@ struct groupTree_t {
  	 * @constant {number} GROUPTREE_DEFAULT_MAXDEPTH
 	 */
 	#if !defined(GROUPTREE_DEFAULT_MAXDEPTH)
-	#define GROUPTREE_DEFAULT_MAXDEPTH 5
+	#define GROUPTREE_DEFAULT_MAXDEPTH 12
 	#endif
 
 	/**
@@ -269,7 +269,8 @@ struct groupTree_t {
 	#endif
 
 	/**
-	 * Speed setting to balance highly expensive weight calculations for 1n9 nodes
+	 * Speed setting to balance highly expensive weight calculations for 1n9 nodes.
+	 * You might need to change `depth` for the various settings.
 	 * Speed expressed as `addNormalisedNode()/second
 	 * 
 	 * 0/1 = Tiny trees
@@ -7187,12 +7188,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		// make all `entryNames`+`rootNames` indices valid
 		entryNames.resize(nstart - kstart);
 		rootNames.resize(numRoots);
-
-		/*
-		 * Reserved names
-		 */
-		entryNames[0]            = "0";
-		entryNames[1 /*KERROR*/] = "KERROR";
 
 		/*
 		 * import entryNames

@@ -225,8 +225,8 @@ struct build9bitAdderContext_t {
 
 		// setup entry names
 		gTree->entryNames.resize(OSTART - KSTART);
-		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++)
-			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
+		for (unsigned iEntry = KSTART; iEntry < OSTART; iEntry++)
+			gTree->entryNames[iEntry - KSTART] = allNames[iEntry];
 
 		// setup root names
 		gTree->numRoots = NSTART - OSTART;

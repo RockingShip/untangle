@@ -348,11 +348,10 @@ struct buildspongentContext_t {
 
 		// setup entry names
 		gTree->entryNames.resize(OSTART - KSTART);
-		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++) {
-			// key name
-			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
-
-			// key variable
+		for (unsigned iEntry = KSTART; iEntry < OSTART; iEntry++) {
+			// name
+			gTree->entryNames[iEntry - KSTART] = allNames[iEntry];
+			// add to vector
 			V[iEntry].id = iEntry;
 		}
 

@@ -2543,11 +2543,10 @@ _b7 = (V[A##2])^V[A##7]^V[B##2]^V[B##3]^V[B##4]^V[B##5]^V[B##6]^V[C##3]^V[C##4]^
 
 		// setup entry names
 		gTree->entryNames.resize(OSTART - KSTART);
-		for (unsigned iEntry = 0; iEntry < OSTART - KSTART; iEntry++) {
-			// key name
-			gTree->entryNames[iEntry] = allNames[KSTART + iEntry];
-
-			// key variable
+		for (unsigned iEntry = KSTART; iEntry < OSTART; iEntry++) {
+			// name
+			gTree->entryNames[iEntry - KSTART] = allNames[iEntry];
+			// add to vector
 			V[iEntry].id = iEntry;
 		}
 
