@@ -73,12 +73,6 @@ struct bvalidateContext_t {
 	/// @var {baseTree_t*} input tree
 	baseTree_t *pInputTree;
 
-	std::vector<std::string>        testNames;   // The names of the entries
-	std::map<std::string, unsigned> testLookup;  // Name lookup	
-	std::vector<uint32_t>           testData;    // Test values
-	std::vector<uint32_t>           entryMap;    // How tree entrypoints map onto test data
-	std::vector<uint32_t>           rootMap;     // How tree roots map onto test data
-
 	// test data
 	unsigned gNumTests;
 
@@ -162,6 +156,12 @@ struct bvalidateContext_t {
 		 * Determine json entry/root names
 		 */
 
+		std::vector<std::string>        testNames;   // The names of the entries
+		std::map<std::string, unsigned> testLookup;  // Name lookup	
+		std::vector<uint32_t>           testData;    // Test values
+		std::vector<uint32_t>           entryMap;    // How tree entrypoints map onto test data
+		std::vector<uint32_t>           rootMap;     // How tree roots map onto test data
+
 		for (unsigned iEntry = jsonTree.kstart; iEntry < jsonTree.nstart; iEntry++) {
 			std::string name = jsonTree.entryNames[iEntry - jsonTree.kstart];
 
@@ -178,7 +178,7 @@ struct bvalidateContext_t {
 		/*
 		 * Now map the tree entry/roots onto the json 
 		 */
-		entryMap.resize(tree.nstart);
+		entryMap.resize(tree.nstart - tree.kstart);
 		for (unsigned iEntry = tree.kstart; iEntry < tree.nstart; iEntry++) {
 			std::string name = tree.entryNames[iEntry - tree.kstart];
 			std::map<std::string, unsigned>::iterator it;
@@ -193,7 +193,7 @@ struct bvalidateContext_t {
 			}
 
 			// make connection
-			entryMap[iEntry] = it->second;
+			entryMap[iEntry - tree.kstart] = it->second;
 		}
 
 		if (!(tree.flags & context_t::MAGICMASK_SYSTEM)) {
@@ -354,17 +354,17 @@ struct bvalidateContext_t {
 				}
 
 				for (unsigned k = 0; k < 8; k++) {
-					if (iBit < tree.nstart - tree.kstart + tree.numRoots)
+					if (iBit < (jsonTree.nstart - jsonTree.kstart) + jsonTree.numRoots)
 						testData[iBit++] = (byte & (1 << k)) ? ~0U : 0U;
 				}
 			}
 
-			if (iBit < tree.numRoots) {
+			if (iBit < jsonTree.numRoots) {
 				json_t *jError = json_object();
 				json_object_set_new_nocheck(jError, "error", json_string_nocheck("root data too short in test entry"));
 				json_object_set_new_nocheck(jError, "filename", json_string(jsonFilename));
 				json_object_set_new_nocheck(jError, "test", json_integer(iTest));
-				json_object_set_new_nocheck(jError, "expected", json_integer(tree.numRoots));
+				json_object_set_new_nocheck(jError, "expected", json_integer(jsonTree.numRoots));
 				json_object_set_new_nocheck(jError, "numroots", json_integer(iBit));
 				json_object_set_new_nocheck(jError, "encountered", json_integer(iBit));
 				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
@@ -378,10 +378,10 @@ struct bvalidateContext_t {
 			for (unsigned iNode = 0; iNode < tree.ncount; iNode++)
 				pEval[iNode] = 0x5a5a5a5a; // set to invalid value
 
-			pEval[0] = 0; // only zero is defined
+			pEval[0] = 0; // only zero is well-defined
 
 			for (unsigned iEntry = tree.kstart; iEntry < tree.nstart; iEntry++)
-				pEval[iEntry] = testData[entryMap[iEntry]];
+				pEval[iEntry] = testData[entryMap[iEntry - tree.kstart]];
 
 			/*
 			 * Run the test

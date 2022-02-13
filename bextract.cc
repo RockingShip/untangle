@@ -94,7 +94,7 @@ struct bextractContext_t {
 	 *
 	 * Main entrypoint
 	 */
-	int main(const char *outputFilename, const char *inputFilename, const char *entryName) {
+	int main(const char *outputFilename, const char *inputFilename, const char *argName) {
 
 		/*
 		 * Open input tree
@@ -135,17 +135,17 @@ struct bextractContext_t {
 		 * Find key
 		 */
 		uint32_t argEntry = 0;
-		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->estart; iEntry++) {
-			if (pOldTree->entryNames[iEntry - pOldTree->kstart].compare(entryName) == 0) {
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
+			if (pOldTree->entryNames[iEntry - pOldTree->kstart].compare(argName) == 0) {
 				argEntry = iEntry;
 				break;
 			}
 		}
 		if (!argEntry) {
 			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("key not found"));
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("name to extract not found"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			json_object_set_new_nocheck(jError, "key", json_string(entryName));
+			json_object_set_new_nocheck(jError, "name", json_string(argName));
 			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 		}
 
@@ -161,7 +161,7 @@ struct bextractContext_t {
 
 		pNewTree->entryNames.resize(pNewTree->nstart - pNewTree->kstart);
 		unsigned iName = 0;
-		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->ostart; iEntry++) {
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
 			if (iEntry != argEntry)
 				pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
 		}
@@ -171,27 +171,34 @@ struct bextractContext_t {
 
 		/*
 		 * Create conversion map
-		 */
-
-		uint32_t *pMap = pOldTree->allocMap();
-
-		uint32_t iNode = 0;
-		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++) {
-			if (iEntry != argEntry)
-				pMap[iEntry] = iNode++;
-		}
-		assert(iNode == pNewTree->nstart);
-
-		/*
+		 * 
 		 * @date 2022-02-10 19:57:59
+		 * 
 		 * Set argument to zero.
 		 * Because this is a balanced tree, the outcome of the modified expression is the argument. 
 		 */
-		pMap[argEntry] = 0;
+
+		uint32_t *pMap = pOldTree->allocMap();
+		
+		pMap[0] = 0;
+		for (uint32_t iNode = 1; iNode < pOldTree->kstart; iNode++)
+			pMap[iNode] = baseTree_t::KERROR;
+
+		uint32_t iNode = pNewTree->kstart;
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
+			if (iEntry == argEntry)
+				pMap[iEntry] = 0; // set argument to zero
+			else
+				pMap[iEntry] = iNode++;
+		}
+		assert(iNode == pNewTree->nstart); // must align to output tree
 
 		/*
 		 * Copy all nodes
 		 */
+		
+		bool isUsed = false; // test if argument is actually used
+
 		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
 			const baseNode_t *pNode = pOldTree->N + iNode;
 			const uint32_t   Q      = pNode->Q;
@@ -199,11 +206,25 @@ struct bextractContext_t {
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
+			if (Q == argEntry || Tu == argEntry || F == argEntry)
+				isUsed = true;
+
 			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 		}
 
+		if ((pOldTree->roots[0] & ~IBIT) == argEntry)
+			isUsed = true;
+
 		// requested key equals unbalanced system
 		pNewTree->roots[0] = pMap[pOldTree->roots[0] & ~IBIT] ^ (pOldTree->roots[0] & IBIT);
+
+		if (!isUsed) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("name to extract not used"));
+			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+			json_object_set_new_nocheck(jError, "name", json_string(argName));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
 
 		/*
 		 * Save data

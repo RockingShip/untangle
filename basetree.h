@@ -1134,19 +1134,15 @@ struct baseTree_t {
 			assert(Q != F);               // Q/F fold
 			assert(T != F);               // T/F fold
 
-			assert((T & ~IBIT) != F || this->compare(Q, this, F) < 0);     // NE ordering
-			assert(F != 0 || (T & IBIT) || this->compare(Q, this, T) < 0); // AND ordering
-			assert(T != IBIT || this->compare(Q, this, F) < 0);            // OR ordering
-
-			// OR ordering and basic chain
-			if (T == IBIT)
-				assert(this->compare(Q, this, F) < 0);
-			// NE ordering
-			if ((T & ~IBIT) == F)
-				assert(this->compare(Q, this, F) < 0);
-			// AND ordering
-			if (F == 0 && !(T & IBIT))
-				assert(this->compare(Q, this, T) < 0);
+			if (this->flags & ctx.MAGICMASK_CASCADE) {
+				assert(T != IBIT || this->compare(Q, this, F, CASCADE_OR) < 0);             // OR ordering
+				assert((T & ~IBIT) != F || this->compare(Q, this, F, CASCADE_NE) < 0);      // NE ordering
+				assert(F != 0 || (T & IBIT) || this->compare(Q, this, T, CASCADE_AND) < 0); // AND ordering
+			} else {
+				assert(T != IBIT || this->compare(Q, this, F) < 0);            // OR ordering
+				assert((T & ~IBIT) != F || this->compare(Q, this, F) < 0);     // NE ordering
+				assert(F != 0 || (T & IBIT) || this->compare(Q, this, T) < 0); // AND ordering
+			}
 
 			if (this->flags & ctx.MAGICMASK_CASCADE) {
 				if (T == IBIT)
@@ -1529,7 +1525,6 @@ struct baseTree_t {
 						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
 							// *Q,*T,*F changed or folded, D no longer assumed highest
 							// append last placeholder
-							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
 							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
 							*T = IBIT;
 							*F = D;
@@ -1562,7 +1557,6 @@ struct baseTree_t {
 						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
-							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
 							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
 							*T = IBIT;
 							*F = B;
@@ -2302,7 +2296,6 @@ struct baseTree_t {
 						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
 							// *Q,*T,*F changed or folded, D no longer assumed highest
 							// append last placeholder
-							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
 							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
 							*T = D;
 							*F = 0;
@@ -2335,7 +2328,6 @@ struct baseTree_t {
 						if (cascadeQTF(Q, T, F, pFailCount, depth)) {
 							// *Q,*T,*F changed or folded, B no longer assumed highest
 							// append last placeholder
-							assert(0); // @date 2021-09-16 16:03:55 Haven't found test data yet
 							*Q = addNormaliseNode(*Q, *T, *F, pFailCount, depth);
 							*T = B;
 							*F = 0;
@@ -4132,9 +4124,8 @@ struct baseTree_t {
 		unsigned numCount = this->nstart;
 
 		// select the heads
-		// add artificial root for system
-		for (unsigned iRoot = this->kstart; iRoot <= this->numRoots; iRoot++) {
-			uint32_t R = (iRoot < this->numRoots) ?  this->roots[iRoot] :  this->system;
+		for (unsigned iRoot = this->kstart; iRoot < this->numRoots; iRoot++) {
+			uint32_t R = this->roots[iRoot];
 			uint32_t Ru = R & ~IBIT;
 
 			if (Ru >= this->nstart && pSelect[Ru] != thisVersion) {
@@ -4184,6 +4175,7 @@ struct baseTree_t {
 		/*
 		 * Select  active nodes
 		 */
+		this->rewind();
 
 		uint32_t *pMap       = RHS->allocMap();
 		uint32_t *pSelect    = RHS->allocVersion();
@@ -4201,8 +4193,6 @@ struct baseTree_t {
 
 		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++)
 			pSelect[RHS->roots[iRoot] & ~IBIT] = thisVersion;
-
-		pSelect[RHS->system & ~IBIT]               = thisVersion;
 
 		for (uint32_t iNode = RHS->ncount - 1; iNode >= RHS->nstart; --iNode) {
 			if (pSelect[iNode] == thisVersion) {
@@ -4240,7 +4230,8 @@ struct baseTree_t {
 		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
 			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
 
-		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
+		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
+			assert((this->roots[iRoot] & ~IBIT) < this->ncount);
 
 		RHS->freeVersion(pSelect);
 		RHS->freeMap(pMap);
@@ -4348,13 +4339,7 @@ struct baseTree_t {
 
 			this->roots[iRoot] = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
-
-		if (RHS->system) {
-			uint32_t Ru = RHS->system & ~IBIT;
-			uint32_t Ri = RHS->system & IBIT;
-
-			this->system = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
-		}
+		this->numRoots = RHS->numRoots;
 
 		RHS->freeMap(pMapSet);
 		RHS->freeMap(pMapClr);

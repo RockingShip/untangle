@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST = \
 	LICENSE.txt BUILD.md CHANGELOG.md GLOSSARY.md README.md \
-	.gitignore $(EXTRA_PART1) $(EXTRA_PART2) $(EXTRA_PART3) $(EXTRA_PART4)
+	.gitignore $(EXTRA_PART1) $(EXTRA_PART2) $(EXTRA_PART3) $(EXTRA_PART4) $(EXTRA_PART5) $(EXTRA_PART6)
 
 MAINTAINERCLEANFILES = restartdata.h
 DISTCLEANFILES =
@@ -10,7 +10,7 @@ CLEANFILES =
 BUILT_SOURCES = genrestartdata rewritedata.h
 
 noinst_PROGRAMS =
-bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4) $(PROGRAMS_PART5)
+bin_PROGRAMS = $(PROGRAMS_PART1) $(PROGRAMS_PART2) $(PROGRAMS_PART3) $(PROGRAMS_PART4) $(PROGRAMS_PART5) $(PROGRAMS_PART6)
 
 ##
 ## This section for dataset creation utilities
@@ -71,7 +71,7 @@ tlookup_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for creation of examples
 ##
 
-PROGRAMS_PART2 = bload bsave build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0 bvalidate kjoin kslice spongent validateprefix
+PROGRAMS_PART2 = build7bitCount build9bitAdder build9bitTable buildaes builddes buildmd5 buildspongent buildtest0
 EXTRA_PART2 = genvalidateaes.js genvalidatedes.js genvalidatemd5.js genvalidatespongent.js
 
 # @date 2021-07-21 11:04:05
@@ -110,13 +110,16 @@ buildspongent_LDADD = $(LDADD) $(AM_LDADD)
 buildtest0_SOURCES = buildtest0.cc basetree.h context.h
 buildtest0_LDADD = $(LDADD) $(AM_LDADD)
 
-# @date 2021-05-13 15:47:59
-bvalidate_SOURCES = bvalidate.cc basetree.h context.h
-bvalidate_LDADD = $(LDADD) $(AM_LDADD)
+##
+## This section for creation of tools for `baseTree_t`
+##
+
+PROGRAMS_PART3 = bjoin bload bsave bvalidate kslice validateprefix
+EXTRA_PART3 =
 
 # @date 2021-05-20 22:51:00
-kjoin_SOURCES = kjoin.cc basetree.h context.h
-kjoin_LDADD = $(LDADD) $(AM_LDADD)
+bjoin_SOURCES = bjoin.cc basetree.h context.h
+bjoin_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2021-05-26 23:42:25
 bload_SOURCES = bload.cc basetree.h context.h
@@ -126,13 +129,13 @@ bload_LDADD = $(LDADD) $(AM_LDADD)
 bsave_SOURCES = bsave.cc basetree.h context.h
 bsave_LDADD = $(LDADD) $(AM_LDADD)
 
+# @date 2021-05-13 15:47:59
+bvalidate_SOURCES = bvalidate.cc basetree.h context.h
+bvalidate_LDADD = $(LDADD) $(AM_LDADD)
+
 # @date 2021-05-19 14:20:16
 kslice_SOURCES = kslice.cc basetree.h context.h
 kslice_LDADD = $(LDADD) $(AM_LDADD)
-
-# @date 2021-05-17 14:21:07
-spongent_SOURCES = spongent.cc spongent.h
-spongent_CXXFLAGS = -D_SPONGENT088080008_
 
 # @date 2021-05-22 18:54:24
 validateprefix_SOURCES = validateprefix.cc basetree.h context.h
@@ -142,8 +145,8 @@ validateprefix_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for extraction of information
 ##
 
-PROGRAMS_PART3 = bextract bfold bsystem 
-EXTRA_PART3 =
+PROGRAMS_PART4 = bextract bfold bsystem 
+EXTRA_PART4 =
 
 # @date 2021-06-05 21:35:41
 bextract_SOURCES = bextract.cc basetree.h context.h
@@ -161,8 +164,8 @@ bsystem_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for baseTree optimisations
 ##
 
-PROGRAMS_PART4 = beval gendepreciate genexport genimport genrewritedata validaterewrite
-EXTRA_PART4 =
+PROGRAMS_PART5 = beval gendepreciate genexport genimport genrewritedata validaterewrite
+EXTRA_PART5 =
 
 rewritedata.c : genrewritedata.cc
 	./genrewritedata > rewritedata.c
@@ -195,8 +198,8 @@ validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for groupTree front-ends
 ##
 
-PROGRAMS_PART5 = genpattern geval gfold gload glookup
-EXTRA_PART5 =
+PROGRAMS_PART6 = genpattern geval gfold gload glookup
+EXTRA_PART6 =
 
 # @date 2021-11-02 22:32:07
 geval_SOURCES = geval.cc grouptree.h context.h

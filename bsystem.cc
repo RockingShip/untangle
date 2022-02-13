@@ -138,12 +138,10 @@ struct bsystemContext_t {
 		pNewTree->entryNames.resize(pNewTree->nstart - pNewTree->kstart);
 
 		// append names
-		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->ostart; iEntry++)
+		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++)
 			pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
 		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++)
 			pNewTree->entryNames[iName++] = pOldTree->rootNames[iRoot];
-		for (unsigned iEntry = pOldTree->ostart; iEntry < pOldTree->nstart; iEntry++)
-			pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
 		assert(pNewTree->nstart - pNewTree->kstart == iName);
 
 		// root has same names as keys

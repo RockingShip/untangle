@@ -36,6 +36,7 @@
 
 #include "context.h"
 #include "basetree.h"
+#include "rewritetree.h"
 
 /*
  * Resource context.
@@ -70,20 +71,27 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  */
 struct bloadContext_t {
 
+	/// @var {string} name of database
+	const char *opt_databaseName;
 	/// @var {number} header flags
-	uint32_t opt_flags;
+	uint32_t opt_flagsSet;
+	/// @var {number} header flags
+	uint32_t opt_flagsClr;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned opt_force;
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
-	/// @var {baseTree_t*} input tree
-	baseTree_t *pInputTree;
+	/// @var {database_t} - Database store to place results
+	database_t    *pStore;
 
 	bloadContext_t() {
-		opt_flags   = 0;
+		opt_databaseName = "untangle.db";
+		opt_flagsSet     = 0;
+		opt_flagsClr     = 0;
 		opt_force   = 0;
 		opt_maxNode = DEFAULT_MAXNODE;
+		pStore = NULL;
 	}
 
 	/**
@@ -146,7 +154,7 @@ struct bloadContext_t {
 		 * Create a real tree
 		 */
 
-		baseTree_t newTree(ctx, dataValue, opt_maxNode, opt_flags);
+		rewriteTree_t newTree(ctx, *pStore, dataValue, opt_maxNode, ctx.flags);
 
 		newTree.flags      = jsonTree.flags;
 		newTree.entryNames = jsonTree.entryNames;
@@ -160,18 +168,6 @@ struct bloadContext_t {
 			json_object_set_new_nocheck(jError, "encountered", json_integer(newTree.numRoots));
 			printf("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			exit(1);
-		}
-
-		/*
-		 * Import balanced system
-		 */
-		json_t *jSystem = json_object_get(jInput, "system");
-		if (jSystem) {
-			const char *systemValue = json_string_value(jSystem);
-
-			// is there a transform?
-			const char *pSlash = strchr(systemValue, '/');
-			newTree.system = newTree.loadStringSafe(systemValue, pSlash ? pSlash + 1 : NULL);
 		}
 
 		/*
@@ -204,16 +200,17 @@ bloadContext_t app;
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.json>\n", argv[0]);
 	if (verbose) {
+		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
 		fprintf(stderr, "\t   --force\n");
 		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", ctx.flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", ctx.flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", ctx.flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", ctx.flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", ctx.flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", ctx.flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -235,11 +232,12 @@ int main(int argc, char *argv[]) {
 		enum {
 			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
-			LO_QUIET = 'q', LO_VERBOSE = 'v'
+			LO_DATABASE = 'D', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
+			{"database",    1, 0, LO_DATABASE},
 			{"debug",       1, 0, LO_DEBUG},
 			{"force",       0, 0, LO_FORCE},
 			{"help",        0, 0, LO_HELP},
@@ -286,6 +284,9 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
+		case LO_DATABASE:
+			app.opt_databaseName = optarg;
+			break;
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 			break;
@@ -309,28 +310,36 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case LO_PARANOID:
-			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_NOPARANOID:
-			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr |= ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_PURE:
-			app.opt_flags |= ctx.MAGICMASK_PURE;
+			app.opt_flagsSet |= ctx.MAGICMASK_PURE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PURE;
 			break;
 		case LO_NOPURE:
-			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsClr |= ctx.MAGICMASK_PURE;
 			break;
 		case LO_REWRITE:
-			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_NOREWRITE:
-			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr |= ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_CASCADE:
-			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_CASCADE;
 			break;
 		case LO_NOCASCADE:
-			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr |= ctx.MAGICMASK_CASCADE;
 			break;
 //			case LO_SHRINK:
 //				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
@@ -381,6 +390,21 @@ int main(int argc, char *argv[]) {
 		signal(SIGALRM, sigalrmHandler);
 		::alarm(ctx.opt_timer);
 	}
+
+	// Open database
+	database_t db(ctx);
+
+	db.open(app.opt_databaseName);
+	app.pStore = &db;
+
+	// set flags
+	ctx.flags = db.creationFlags;
+	ctx.flags |= app.opt_flagsSet;
+	ctx.flags &= ~app.opt_flagsClr;
+
+	// display system flags when database was created
+	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
 
 	return app.main(outputFilename, inputFilename);
 }

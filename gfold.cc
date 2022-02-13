@@ -419,7 +419,6 @@ struct gfoldContext_t {
 					pTemp->rewind();
 					pTemp->importFold(pNewTree, lstFolds[numFolds - 1].key);
 //					printf("count=%u\n", pTemp->countActive());
-					pNewTree->rewind();
 					pNewTree->importActive(pTemp);
 //					printf("%s count=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->countActive());
 
@@ -582,7 +581,6 @@ struct gfoldContext_t {
 						}
 
 						// copy back
-						pNewTree->rewind();
 						pNewTree->importActive(pTemp);
 						pNewTree->posHistory = pTemp->posHistory;
 						pNewTree->numHistory = pTemp->numHistory;
@@ -628,7 +626,6 @@ struct gfoldContext_t {
 							pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
 					}
 
-					pNewTree->rewind();
 					pNewTree->importActive(pTemp);
 					pNewTree->posHistory = pTemp->posHistory;
 					pNewTree->numHistory = pTemp->numHistory;
@@ -656,7 +653,6 @@ struct gfoldContext_t {
 							this->importFold(pTemp, pNewTree, iFold);
 
 							if (pTemp->ncount < pNewTree->ncount) {
-								pNewTree->rewind();
 								pNewTree->importActive(pTemp);
 								printf("X %s count=%u numFold=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->countActive(), numFolds);
 							}

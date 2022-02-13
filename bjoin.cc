@@ -1,7 +1,7 @@
 //#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kjoin.cc
+ * bjoin.cc
  *      Join a collection of smaller trees into a larger
  *      All trees should have identical entry/root allocations
  *      Intermediate extended keys are substituted
@@ -31,6 +31,7 @@
 #include <jansson.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <map>
 
 #include "context.h"
 #include "basetree.h"
@@ -65,7 +66,7 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct kjoinContext_t {
+struct bjoinContext_t {
 
 	/// @var {number} --extend, save extended keys
 	unsigned opt_extend;
@@ -76,7 +77,7 @@ struct kjoinContext_t {
 	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
 	unsigned opt_maxNode;
 
-	kjoinContext_t() {
+	bjoinContext_t() {
 		opt_extend  = 0;
 		opt_flags   = 0;
 		opt_force   = 0;
@@ -91,19 +92,6 @@ struct kjoinContext_t {
 	int main(const char *outputFilename, unsigned numInputs, char **inputFilenames) {
 
 		const char *inputFilename = inputFilenames[0];
-
-		/*
-		 * output file may not exist
-		 */
-		if (!opt_force) {
-			struct stat sbuf;
-			if (!stat(outputFilename, &sbuf)) {
-				json_t *jError = json_object();
-				json_object_set_new_nocheck(jError, "error", json_string_nocheck("file already exists. Use --force to overwrite"));
-				json_object_set_new_nocheck(jError, "filename", json_string(outputFilename));
-				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-			}
-		}
 
 		/*
 		 * Open the first file to extract template data
@@ -126,145 +114,163 @@ struct kjoinContext_t {
 			json_delete(jResult);
 		}
 
-		// save metrics to compare input files
-		uint32_t orig_kstart   = pOldTree->kstart;
-		uint32_t orig_ostart   = pOldTree->ostart;
-		uint32_t orig_estart   = pOldTree->estart;
-		uint32_t orig_nstart   = pOldTree->nstart;
-		uint32_t orig_numRoots = pOldTree->numRoots;
-
-		// allocate
-		// NOTE: these maps are shared (not cleared) for each input tree
-		uint32_t *pKeyRefCount = pOldTree->allocMap(); // counter map to detect 'write-after-read'
-		uint32_t *pEid         = pOldTree->allocMap(); // extended->node translation
-
 		/*
-		 * @date 2021-06-04 21:06:09
-		 *
-		 * `pMap[]` maps extended id to node id
-		 * Normally the first nstart entries of maps are `pMap[i] = i`
-		 * However: when removing extended keys,
-		 *          the first node in the new tree might have the same location as the first extended entry in the old tree.
-		 * This makes `pMap[i] = i` ambiguous.
-		 *
-		 * For this reason, `pEid[]` is used to shadow `pMap[]` with extended id's set to zero
-		 *
+		 * Collect names
 		 */
-		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++) {
-			pKeyRefCount[iEntry] = 0; // init refcount
-			pEid[iEntry] = iEntry; // mark as self
+		std::vector<std::string>        entryNames;              // The names of the entries
+		std::vector<std::string>        rootNames;               // The names of the roots
+		std::vector<std::string>        rootFiles;               // Files declaring roots
+		std::map<std::string, unsigned> entryLookup;             // Name lookup	
+		std::map<std::string, unsigned> rootLookup;              // Name lookup	
+		std::vector<uint32_t>           entryMap;                // How current tree entrypoints map onto entryNames
+		std::vector<uint32_t>           rootMap;                 // How current tree roots map onto rootNames
+		unsigned                        newNumRoots = 0;         // number of roots for last input
+		uint32_t                        newFlags    = ctx.flags; // creation flags
+		uint32_t                        newKstart   = 0;         // kstart of last input
+
+		for (unsigned iFile = 0; iFile < numInputs; iFile++) {
+
+			/*
+			 * Load input
+			 */
+
+			inputFilename = inputFilenames[iFile];
+			pOldTree      = new baseTree_t(ctx);
+
+			if (pOldTree->loadFile(inputFilename)) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
+
+			if ((pOldTree->flags & context_t::MAGICMASK_SYSTEM) && iFile < numInputs - 1) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("only last input may be a system"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+			}
+
+			if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
+				json_t *jResult = json_object();
+				json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
+				pOldTree->headerInfo(jResult);
+				pOldTree->extraInfo(jResult);
+				fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				json_delete(jResult);
+			}
+
+			// get number of roots for last input
+			if (iFile == numInputs - 1) {
+				newNumRoots = pOldTree->numRoots;
+				newKstart   = pOldTree->kstart;
+			}
+
+			// is last a system
+			if (pOldTree->flags & context_t::MAGICMASK_SYSTEM)
+				newFlags |= context_t::MAGICMASK_SYSTEM;
+
+			/*
+			 * add entrypoints (inputs)
+			 */
+			for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
+				std::string name = pOldTree->entryNames[iEntry - pOldTree->kstart];
+				std::map<std::string, unsigned>::iterator it;
+
+				// does name exist as root
+				it = rootLookup.find(name);
+				if (it != rootLookup.end())
+					continue; // yes
+
+				// does name exist as entrypoint
+				it = entryLookup.find(name);
+				if (it != entryLookup.end())
+					continue; // yes
+
+				// add as new name	
+				entryLookup[name] = entryNames.size();
+				entryNames.push_back(name);
+			}
+
+			/*
+			 * add roots (outs)
+			 */
+			for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
+				std::string name = pOldTree->rootNames[iRoot];
+				std::map<std::string, unsigned>::iterator it;
+
+				// does name exist as entrypoint
+				it = entryLookup.find(name);
+				if (it != entryLookup.end()) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("root shadows an entrypoint"));
+					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+					json_object_set_new_nocheck(jError, "name", json_string(name.c_str()));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+
+				// does name exist as root
+				it = rootLookup.find(name);
+				if (it != rootLookup.end()) {
+					json_t *jError = json_object();
+					json_object_set_new_nocheck(jError, "error", json_string_nocheck("root already declared"));
+					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+					json_object_set_new_nocheck(jError, "name", json_string(name.c_str()));
+					json_object_set_new_nocheck(jError, "previous", json_string(rootFiles[it->second].c_str()));
+					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+				}
+
+				rootLookup[name] = rootNames.size();
+				rootNames.push_back(name);
+				rootFiles.push_back(inputFilename);
+			}
 		}
-		for (unsigned iEntry = pOldTree->estart; iEntry < pOldTree->nstart; iEntry++)
-			pEid[iEntry] = 0; // mark as undefined
+
+		uint32_t newNstart = newKstart + entryNames.size();
+
+		// prepare global map
+		entryMap.resize(entryNames.size());
+		rootMap.resize(rootNames.size());
+
+		for (unsigned iEntry = newKstart; iEntry < newNstart; iEntry++)
+			entryMap[iEntry - newKstart] = iEntry;
 
 		/*
-		 * Create newTree
+		 * Create new tree
 		 */
 
-		baseTree_t *pNewTree;
-		if (opt_extend)
-			pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, opt_flags);
-		else
-			pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart, pOldTree->estart, opt_maxNode, opt_flags);
+		baseTree_t *pNewTree = new baseTree_t(ctx, newKstart, newNstart, newNstart, newNstart, newNumRoots, opt_maxNode, newFlags);
 
-		// Setup entry/root names
-		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
-			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
+		/*
+		 * Setup entry names
+		 * NOTE: root names are later when loading the last input
+		 */
 
-		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++)
-			pNewTree->rootNames[iRoot] = pOldTree->rootNames[iRoot];
+		pNewTree->entryNames.resize(entryNames.size());
+		for (unsigned iName = 0; iName < entryNames.size(); iName++)
+			pNewTree->entryNames[iName] = entryNames[iName];
 
-		// default roots
-		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->roots[iRoot] = iRoot;
-
-		// allocate a node remapper
-		uint32_t *pMap = pNewTree->allocMap();
-
-		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
-			pMap[iEntry] = iEntry; // mark as self
+		/*
+		 * Load inputs
+		 */
 
 		// reset ticker
 		ctx.setupSpeed(numInputs);
 		ctx.tick = 0;
 
-		/*
-		 * Include input trees
-		 */
+		// allocate a node remapper
+		uint32_t *pMap = pNewTree->allocMap();
+
 		for (unsigned iFile = 0; iFile < numInputs; iFile++) {
 
-			/*
-			 * Load input (except first)
-			 */
-			if (iFile > 0) {
-				inputFilename = inputFilenames[iFile];
-				pOldTree      = new baseTree_t(ctx);
+			inputFilename = inputFilenames[iFile];
+			pOldTree      = new baseTree_t(ctx);
 
-				if (pOldTree->loadFile(inputFilename)) {
-					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
-					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				}
-
-				if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
-					json_t *jResult = json_object();
-					json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
-					pOldTree->headerInfo(jResult);
-					pOldTree->extraInfo(jResult);
-					fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					json_delete(jResult);
-				}
-
-				// check dimensions
-				if (pOldTree->kstart != orig_kstart ||
-				    pOldTree->ostart != orig_ostart ||
-				    pOldTree->estart != orig_estart ||
-				    pOldTree->nstart != orig_nstart ||
-				    pOldTree->numRoots != orig_numRoots) {
-					json_t *jError = json_object();
-					json_object_set_new_nocheck(jError, "error", json_string_nocheck("meta mismatch"));
-					json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-					json_t *jMeta = json_object();
-					json_object_set_new_nocheck(jMeta, "kstart", json_integer(orig_kstart));
-					json_object_set_new_nocheck(jMeta, "ostart", json_integer(orig_ostart));
-					json_object_set_new_nocheck(jMeta, "estart", json_integer(orig_estart));
-					json_object_set_new_nocheck(jMeta, "nstart", json_integer(orig_nstart));
-					json_object_set_new_nocheck(jMeta, "numroots", json_integer(orig_numRoots));
-					json_object_set_new_nocheck(jError, "meta", jMeta);
-					json_t *jFile = json_object();
-					json_object_set_new_nocheck(jFile, "kstart", json_integer(pOldTree->kstart));
-					json_object_set_new_nocheck(jFile, "ostart", json_integer(pOldTree->ostart));
-					json_object_set_new_nocheck(jFile, "estart", json_integer(pOldTree->estart));
-					json_object_set_new_nocheck(jFile, "nstart", json_integer(pOldTree->nstart));
-					json_object_set_new_nocheck(jFile, "numroots", json_integer(pOldTree->numRoots));
-					json_object_set_new_nocheck(jError, "file", jFile);
-					ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-				}
-
-				// check names
-				for (uint32_t iName = 0; iName < pNewTree->nstart; iName++) {
-					if (pOldTree->entryNames[iName].compare(pNewTree->entryNames[iName]) != 0) {
-						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key name mismatch"));
-						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "kid", json_integer(iName));
-						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->entryNames[iName].c_str()));
-						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->entryNames[iName].c_str()));
-						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					}
-				}
-				for (unsigned iName = 0; iName < pNewTree->numRoots; iName++) {
-					if (pOldTree->rootNames[iName].compare(pNewTree->rootNames[iName]) != 0) {
-						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("root name mismatch"));
-						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "rid", json_integer(iName));
-						json_object_set_new_nocheck(jError, "input", json_string_nocheck(pOldTree->rootNames[iName].c_str()));
-						json_object_set_new_nocheck(jError, "output", json_string_nocheck(pNewTree->rootNames[iName].c_str()));
-						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					}
-				}
+			if (pOldTree->loadFile(inputFilename)) {
+				json_t *jError = json_object();
+				json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
+				json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
+				ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			}
 
 			ctx.progress++;
@@ -284,6 +290,35 @@ struct kjoinContext_t {
 				ctx.tick = 0;
 			}
 
+			pMap[0] = 0;
+			for (uint32_t iNode = 1; iNode < pOldTree->kstart; iNode++)
+				pMap[iNode] = baseTree_t::KERROR;
+
+			/*
+			 * Map entrypoints
+			 */
+
+			for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++) {
+				std::string name = pOldTree->entryNames[iEntry - pOldTree->kstart];
+				std::map<std::string, unsigned>::iterator it;
+
+				// does name exist as root
+				it = rootLookup.find(name);
+				if (it != rootLookup.end()) {
+					pMap[iEntry] = rootMap[it->second];
+					continue;
+				}
+
+				// does name exist as entrypoint
+				it = entryLookup.find(name);
+				if (it != entryLookup.end()) {
+					pMap[iEntry] = entryMap[it->second];
+					continue;
+				}
+
+				assert(0); // may not reach here
+			}
+
 			/*
 			 * Walk tree
 			 */
@@ -294,43 +329,6 @@ struct kjoinContext_t {
 				const uint32_t   Ti     = pNode->T & IBIT;
 				const uint32_t   F      = pNode->F;
 
-				/*
-				 * @date 2021-06-04 19:59:24
-				 * oldTree has extended roots and newTree does not
-				 * if estart=194 and nstart=2914 then pMap[2914]=194 (which is a node and not an extended key)
-				 */
-				if (!opt_extend) {
-					// extended keys unavailable
-					if ((Q >= pOldTree->estart && Q < pOldTree->nstart && pEid[Q] == 0) ||
-					    (Tu >= pOldTree->estart && Tu < pOldTree->nstart && pEid[Tu] == 0) ||
-					    (F >= pOldTree->estart && F < pOldTree->nstart && pEid[F] == 0)) {
-						// using extended key that has not been defined
-						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("extended keys unavailable"));
-						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
-						json_t *jNode = json_object();
-						json_object_set_new_nocheck(jNode, "q", json_integer(Q));
-						json_object_set_new_nocheck(jNode, "tu", json_integer(Tu));
-						json_object_set_new_nocheck(jNode, "f", json_integer(F));
-						json_object_set_new_nocheck(jError, "node", jNode);
-						json_t *jEid = json_object();
-						json_object_set_new_nocheck(jEid, "q", json_integer(pEid[Q]));
-						json_object_set_new_nocheck(jEid, "tu", json_integer(pEid[Tu]));
-						json_object_set_new_nocheck(jEid, "f", json_integer(pEid[F]));
-						json_object_set_new_nocheck(jError, "eid", jEid);
-						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					}
-				}
-
-				// count key references
-				if (Q < pOldTree->nstart && pEid[Q] == 0)
-					pKeyRefCount[Q]++;
-				if (Tu < pOldTree->nstart && pEid[Tu] == 0)
-					pKeyRefCount[Tu]++;
-				if (F < pOldTree->nstart && pEid[F] == 0)
-					pKeyRefCount[F]++;
-
 				// create new node
 				pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
 			}
@@ -338,47 +336,55 @@ struct kjoinContext_t {
 			/*
 			 * Process roots
 			 */
-			for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
-				uint32_t R  = pOldTree->roots[iRoot];
-				uint32_t Ru = R & ~IBIT;
 
-				if (R != iRoot) {
+			/*
+			 * Extract the root names
+			 */
 
-					/*
-					 * Root being defined
-					 */
+			if (pOldTree->flags & context_t::MAGICMASK_SYSTEM) {
+				/*
+				 * balanced system and final tree
+				 */
+				assert(iFile == numInputs - 1);
 
-					if (pKeyRefCount[iRoot] > 0) {
-						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key defined after being used"));
-						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "rid", json_string(pOldTree->rootNames[iRoot].c_str()));
-						json_object_set_new_nocheck(jError, "refcount", json_integer(pKeyRefCount[iRoot]));
-						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					}
-					if (pMap[iRoot] != iRoot || (iRoot >= pOldTree->estart && iRoot < pOldTree->nstart && pEid[iRoot] != 0)) {
-						json_t *jError = json_object();
-						json_object_set_new_nocheck(jError, "error", json_string_nocheck("key multiply defined"));
-						json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-						json_object_set_new_nocheck(jError, "rid", json_string(pOldTree->rootNames[iRoot].c_str()));
-						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
-					}
-
-					if (!opt_extend) {
-						// extended keys unavailable
-						if (Ru >= pOldTree->estart && Ru < pOldTree->nstart && pEid[Ru] == 0) {
-							assert(0);
-						}
-					}
-
-					/*
-					 * Update master root with location of extended key
-					 */
-					pMap[iRoot] = pEid[iRoot] = pMap[Ru] ^ (R & IBIT);
+				if (iFile == numInputs - 1) {
+					// copy root names from last input 
+					pNewTree->rootNames.resize(newNumRoots);
+					for (unsigned iRoot = 0; iRoot < newNumRoots; iRoot++)
+						pNewTree->rootNames[iRoot] = pOldTree->rootNames[iRoot];
 				}
 
-				if (iRoot < pNewTree->numRoots)
-					pNewTree->roots[iRoot] = pMap[iRoot];
+				// export final roots to output
+				for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
+					uint32_t R = pOldTree->roots[iRoot];
+
+					pNewTree->roots[iRoot] = pMap[R & ~IBIT] ^ (R & IBIT);
+				}				
+
+			} else {
+				/*
+				 * regular tree, match roots and copy values to global map
+				 */
+
+				if (iFile == numInputs - 1) {
+					// copy root names from last input 
+					pNewTree->rootNames.resize(newNumRoots);
+					for (unsigned iRoot = 0; iRoot < newNumRoots; iRoot++)
+						pNewTree->rootNames[iRoot] = rootNames[iRoot];
+				}
+
+				for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
+					std::string name = pOldTree->rootNames[iRoot];
+					std::map<std::string, unsigned>::iterator it;
+
+					// does name exist as root
+					it = rootLookup.find(name);
+					assert (it != rootLookup.end());
+
+					uint32_t R = pOldTree->roots[iRoot];
+
+					rootMap[it->second] = pMap[R & ~IBIT] ^ (R & IBIT);
+				}
 			}
 
 			//
@@ -390,6 +396,7 @@ struct kjoinContext_t {
 			 */
 			delete pOldTree;
 		}
+
 		// remove ticker
 		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
 			fprintf(stderr, "\r\e[K");
@@ -427,9 +434,9 @@ struct kjoinContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {kjoinContext_t} Application context
+ * @global {bjoinContext_t} Application context
  */
-kjoinContext_t app;
+bjoinContext_t app;
 
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.dat> <input.dat> ...\n", argv[0]);
@@ -598,6 +605,19 @@ int main(int argc, char *argv[]) {
 	} else {
 		usage(argv, false);
 		exit(1);
+	}
+
+	/*
+	 * output file may not exist
+	 */
+	if (!app.opt_force) {
+		struct stat sbuf;
+		if (!stat(outputFilename, &sbuf)) {
+			json_t *jError = json_object();
+			json_object_set_new_nocheck(jError, "error", json_string_nocheck("file already exists. Use --force to overwrite"));
+			json_object_set_new_nocheck(jError, "filename", json_string(outputFilename));
+			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		}
 	}
 
 	/*

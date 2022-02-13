@@ -173,19 +173,6 @@ struct gloadContext_t {
 		}
 
 		/*
-		 * Import balanced system
-		 */
-		json_t *jSystem = json_object_get(jInput, "system");
-		if (jSystem) {
-			const char *systemValue = json_string_value(jSystem);
-
-			// is there a transform?
-			const char *pSlash = strchr(systemValue, '/');
-			assert(!"todo: system");
-			/* newTree.system = */ newTree.loadStringSafe(systemValue, pSlash ? pSlash + 1 : NULL);
-		}
-
-		/*
 		 * Save data
 		 */
 		newTree.saveFile(outputFilename);

@@ -6927,6 +6927,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		/*
 		 * Select  active nodes
 		 */
+		this->rewind();
 
 		uint32_t        *pMap       = RHS->allocMap();
 		versionMemory_t *pSelect    = RHS->allocVersion();
@@ -7287,7 +7288,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
 		json_object_set_new_nocheck(jResult, "numroots", json_integer(fileHeader->numRoots));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->ncount - fileHeader->nstart));
-		json_object_set_new_nocheck(jResult, "system", json_integer(fileHeader->system));
 		json_object_set_new_nocheck(jResult, "numhistory", json_integer(fileHeader->numHistory));
 		json_object_set_new_nocheck(jResult, "poshistory", json_integer(fileHeader->posHistory));
 

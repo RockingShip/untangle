@@ -178,44 +178,62 @@ struct bfoldContext_t {
 		/*
 		 * Create new tree
 		 */
-		rewriteTree_t *pNewTree = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		rewriteTree_t *pResults = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
-		rewriteTree_t *pTemp    = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount/*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pNewTree = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount + pOldTree->numRoots /*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pResults = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount + pOldTree->numRoots /*numRoots*/, opt_maxNode, ctx.flags);
+		rewriteTree_t *pTemp    = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->estart/*nstart*/, pOldTree->ncount + pOldTree->numRoots /*numRoots*/, opt_maxNode, ctx.flags);
 
 		/*
 		 * Setup entry/root names
+		 * 
+		 * @date 2022-02-11 15:08:21
+		 * The roots have a double function.
+		 * The first pOldTree->nstart entries are the equivalent to `pMap[]`, 
+		 * Followed by the original pOldTree->numRoot nodes
 		 */
 
-		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++) {
-			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
-			pResults->entryNames[iEntry] = pOldTree->entryNames[iEntry];
-			pTemp->entryNames[iEntry]    = pOldTree->entryNames[iEntry];
+		for (unsigned iName = 0; iName < pNewTree->nstart - pNewTree->kstart; iName++) {
+			pNewTree->entryNames[iName] = pOldTree->entryNames[iName];
+			pResults->entryNames[iName] = pOldTree->entryNames[iName];
+			pTemp->entryNames[iName]    = pOldTree->entryNames[iName];
 		}
 
 		// Determine entryName length
-		unsigned entryNameLength;
+		unsigned rootNameLength;
 		if (pNewTree->ncount < 10)
-			entryNameLength = 1;
+			rootNameLength = 1;
 		else if (pNewTree->ncount < 100)
-			entryNameLength = 2;
+			rootNameLength = 2;
 		else if (pNewTree->ncount < 1000)
-			entryNameLength = 3;
+			rootNameLength = 3;
 		else if (pNewTree->ncount < 10000)
-			entryNameLength = 4;
+			rootNameLength = 4;
 		else if (pNewTree->ncount < 100000)
-			entryNameLength = 5;
+			rootNameLength = 5;
 		else if (pNewTree->ncount < 1000000)
-			entryNameLength = 6;
+			rootNameLength = 6;
 		else
-			entryNameLength = 7;
+			rootNameLength = 7;
 
-		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->rootNames[iRoot] = pNewTree->entryNames[iRoot];
+		{
+			unsigned iRoot = 0;
+			
+			pNewTree->rootNames[iRoot++] = "0";
 
-		for (unsigned iRoot = pNewTree->estart; iRoot < pNewTree->numRoots; iRoot++) {
-			char sbuf[32];
-			sprintf(sbuf, "n%0*d", entryNameLength, iRoot);
-			pNewTree->rootNames[iRoot] = sbuf;
+			for (unsigned id = 1; id < pOldTree->kstart; id++)
+				pNewTree->rootNames[iRoot++] = "ERROR";
+
+			for (unsigned id = pOldTree->kstart; id < pOldTree->nstart; id++)
+				pNewTree->rootNames[iRoot++] = pNewTree->entryNames[id - pNewTree->kstart];
+
+			for (unsigned id = pOldTree->nstart; id < pOldTree->ncount; id++) {
+				char sbuf[32];
+				sprintf(sbuf, "n%0*d", rootNameLength, id);
+				pNewTree->rootNames[iRoot++] = sbuf;
+			}
+			for (unsigned id = 0; id < pOldTree->numRoots; id++)
+				pNewTree->rootNames[iRoot++] = pOldTree->rootNames[id];
+			
+			assert(iRoot == pNewTree->numRoots);
 		}
 
 		// same with tmp
@@ -224,18 +242,19 @@ struct bfoldContext_t {
 		pTemp->entryNames    = pNewTree->entryNames;
 		pTemp->rootNames     = pNewTree->rootNames;
 
-		// set roots to self-reference
-		for (unsigned iRoot = 0; iRoot < pOldTree->estart; iRoot++) {
+		// set node results to zero
+		pNewTree->roots[0] = 0;
+		pResults->roots[0] = 0;
+		pTemp->roots[0]    = 0;
+		for (unsigned iRoot = 1; iRoot < pNewTree->numRoots; iRoot++) {
+			pNewTree->roots[iRoot] = baseTree_t::KERROR;
+			pResults->roots[iRoot] = baseTree_t::KERROR;
+			pTemp->roots[iRoot]    = baseTree_t::KERROR;
+		}
+		for (unsigned iRoot = pNewTree->kstart; iRoot < pNewTree->nstart; iRoot++) {
 			pNewTree->roots[iRoot] = iRoot;
 			pResults->roots[iRoot] = iRoot;
 			pTemp->roots[iRoot]    = iRoot;
-		}
-
-		// set node results to zero
-		for (unsigned iRoot = pOldTree->estart; iRoot < pOldTree->numRoots; iRoot++) {
-			pNewTree->roots[iRoot] = 0;
-			pResults->roots[iRoot] = 0;
-			pTemp->roots[iRoot]    = 0;
 		}
 
 		/*
@@ -273,7 +292,7 @@ struct bfoldContext_t {
 		 * Two implementations of the main code
 		 */
 
-		if (0) {
+		if (1) {
 			/*
 			 * Original main-loop
 			 */
@@ -307,18 +326,19 @@ struct bfoldContext_t {
 				 * Add single node and release unused roots.
 				 */
 				pNewTree->roots[iOldNode] = pNewTree->addNormaliseNode(pNewTree->roots[Q], pNewTree->roots[Tu] ^ Ti, pNewTree->roots[F]);
+////				pNewTree->numRoots = iOldNode + 1;
 
 				// release root when no longer used
 				--pNodeRefCount[Q];
 				if (Tu != F) --pNodeRefCount[Tu];
 				--pNodeRefCount[F];
 
-				if (pNodeRefCount[Q] == 0)
-					pNewTree->roots[Q]  = Q;
-				if (pNodeRefCount[Tu] == 0)
-					pNewTree->roots[Tu] = Tu;
-				if (pNodeRefCount[F] == 0)
-					pNewTree->roots[F]  = F;
+				if (Q >= pNewTree->nstart && pNodeRefCount[Q] == 0)
+					pNewTree->roots[Q]  = baseTree_t::KERROR;
+				if (Tu >= pNewTree->nstart && pNodeRefCount[Tu] == 0)
+					pNewTree->roots[Tu] = baseTree_t::KERROR;
+				if (F >= pNewTree->nstart && pNodeRefCount[F] == 0)
+					pNewTree->roots[F]  = baseTree_t::KERROR;
 
 //				printf("inject node iNode=%d numNodes=%d\n", iOldNode, pNewTree->ncount - pNewTree->nstart);
 
@@ -649,20 +669,84 @@ struct bfoldContext_t {
 		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
 			uint32_t R = pOldTree->roots[iRoot];
 
-			pNewTree->roots[iRoot] = pNewTree->importNodes(pResults, pResults->roots[R & ~IBIT]) ^ (R & IBIT);
+			/*
+			 * Notes: baseTree_t::  --rewrite
+			 * original path ignores `pResults`
+			 */
+			pNewTree->roots[pOldTree->ncount + iRoot] = pNewTree->roots[R & ~IBIT] ^ (R & IBIT);
 		}
-
-		// and system
-		pNewTree->system = pNewTree->roots[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
+////		pNewTree->numRoots = pOldTree->nstart + pOldTree->numRoots;
 
 		/*
 		 * Copy result to new tree without extended roots
 		 */
 		delete pTemp;
-		pTemp = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, ctx.flags);
+		pTemp = new rewriteTree_t(ctx, *pStore, pOldTree->kstart, pOldTree->ostart, pOldTree->estart, pOldTree->nstart, pOldTree->numRoots, opt_maxNode, pOldTree->flags);
 		pTemp->entryNames = pOldTree->entryNames;
 		pTemp->rootNames  = pOldTree->rootNames;
-		pTemp->importActive(pNewTree);
+		{
+			/*
+			 * Select  active nodes
+			 */
+
+			uint32_t *pMap       = pNewTree->allocMap();
+			uint32_t *pSelect    = pNewTree->allocVersion();
+			uint32_t thisVersion = ++pNewTree->mapVersionNr;
+
+			// clear version map when wraparound
+			if (thisVersion == 0) {
+				::memset(pSelect, 0, pNewTree->maxNodes * sizeof *pSelect);
+				thisVersion = ++pNewTree->mapVersionNr;
+			}
+
+			/*
+			 * mark active
+			 */
+
+			for (unsigned iRoot = pOldTree->ncount; iRoot < pNewTree->numRoots; iRoot++)
+				pSelect[pNewTree->roots[iRoot] & ~IBIT] = thisVersion;
+
+			for (uint32_t iNode = pNewTree->ncount - 1; iNode >= pNewTree->nstart; --iNode) {
+				if (pSelect[iNode] == thisVersion) {
+					const baseNode_t *pNode = pNewTree->N + iNode;
+
+					pSelect[pNode->Q]         = thisVersion;
+					pSelect[pNode->T & ~IBIT] = thisVersion;
+					pSelect[pNode->F]         = thisVersion;
+				}
+			}
+
+			/*
+			 * Copy selected nodes
+			 */
+
+			for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++)
+				pMap[iEntry] = iEntry;
+
+			for (uint32_t iNode = pNewTree->nstart; iNode < pNewTree->ncount; iNode++) {
+				if (pSelect[iNode] == thisVersion) {
+					const baseNode_t *pNode = pNewTree->N + iNode;
+					const uint32_t   Q      = pNode->Q;
+					const uint32_t   Tu     = pNode->T & ~IBIT;
+					const uint32_t   Ti     = pNode->T & IBIT;
+					const uint32_t   F      = pNode->F;
+
+					pMap[iNode] = pTemp->addNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+				}
+			}
+
+			/*
+			 * copy roots
+			 */
+
+			for (unsigned iRoot = 0; iRoot < pTemp->numRoots; iRoot++)
+				pTemp->roots[iRoot] = pMap[pNewTree->roots[pOldTree->ncount + iRoot] & ~IBIT] ^ (pNewTree->roots[pOldTree->ncount + iRoot] & IBIT);
+
+			pNewTree->freeVersion(pSelect);
+			pNewTree->freeMap(pMap);
+
+		}
+//		pTemp->importActive(pNewTree);
 
 		delete pNewTree;
 		pNewTree = NULL;
@@ -740,6 +824,7 @@ struct bfoldContext_t {
 
 			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
+////		pTree->numRoots = RHS->numRoots;
 
 		RHS->freeMap(pMapSet);
 		RHS->freeMap(pMapClr);
@@ -822,8 +907,8 @@ int main(int argc, char *argv[]) {
 		};
 
 		char optstring[64];
-		char *cp                            = optstring;
-		int  option_index                   = 0;
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -912,7 +997,6 @@ int main(int argc, char *argv[]) {
 //			case LO_NOPIVOT3:
 //				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
-
 
 		case '?':
 			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
