@@ -84,9 +84,6 @@ struct gloadContext_t {
 	/// @var {database_t} - Database store to place results
 	database_t *pStore;
 
-	/// @var {groupTree_t*} input tree
-	groupTree_t *pInputTree;
-
 	gloadContext_t() {
 		opt_databaseName = "untangle.db";
 		opt_flagsSet     = 0;
@@ -158,7 +155,8 @@ struct gloadContext_t {
 
 		groupTree_t newTree(ctx, *pStore, dataValue, opt_maxNode, ctx.flags);
 
-		newTree.flags      = jsonTree.flags;
+		newTree.flags |= jsonTree.flags & context_t::MAGICMASK_SYSTEM;
+
 		newTree.entryNames = jsonTree.entryNames;
 		newTree.rootNames  = jsonTree.rootNames;
 

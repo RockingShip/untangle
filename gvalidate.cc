@@ -32,7 +32,7 @@
 #include <map>
 
 #include "context.h"
-#include "basetree.h"
+#include "grouptree.h"
 
 /*
  * Resource context.
@@ -67,17 +67,33 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  */
 struct bvalidateContext_t {
 
+	/// @var {string} name of database
+	const char *opt_databaseName;
+	/// @var {number} header flags
+	uint32_t   opt_flagsSet;
+	/// @var {number} header flags
+	uint32_t   opt_flagsClr;
+	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
+	unsigned   opt_maxNode;
 	/// @var {number} --onlyifset, only validate non-zero root (consider them a cascading of OR intermediates)
-	unsigned opt_onlyIfSet;
+	unsigned   opt_onlyIfSet;
 
 	// test data
 	unsigned gNumTests;
 
+	/// @var {database_t} - Database store to place results
+	database_t    *pStore;
+
 	bvalidateContext_t() {
-		opt_onlyIfSet = 0;
+		opt_databaseName = "untangle.db";
+		opt_flagsSet     = 0;
+		opt_flagsClr     = 0;
+		opt_maxNode      = groupTree_t::DEFAULT_MAXNODE;
+		opt_onlyIfSet    = 0;
 
 		// test data
-		gNumTests  = 0;
+		gNumTests = 0;
+		pStore    = NULL;
 	}
 
 
@@ -119,7 +135,7 @@ struct bvalidateContext_t {
 		/*
 		 * Create an incomplete tree based on json
 		 */
-		baseTree_t jsonTree(ctx);
+		groupTree_t jsonTree(ctx, *pStore);
 
 		jsonTree.loadFileJson(jInput, jsonFilename);
 
@@ -127,7 +143,7 @@ struct bvalidateContext_t {
 		 * load tree
 		 */
 
-		baseTree_t tree(ctx);
+		groupTree_t tree(ctx, *pStore);
 
 		if (tree.loadFile(treeFilename)) {
 			json_t *jError = json_object();
@@ -382,12 +398,74 @@ struct bvalidateContext_t {
 			/*
 			 * Run the test
 			 */
+			// find group headers
+			for (uint32_t iGroup = tree.nstart; iGroup < tree.ncount; iGroup++) {
+				if (tree.N[iGroup].gid != iGroup)
+					continue; // not a group header
+
+				bool once = true;
+
+				// walk through group list in search of a `1n9` node
+				for (uint32_t iNode = tree.N[iGroup].next; iNode != iGroup; iNode = tree.N[iNode].next) {
+					groupNode_t *pNode = tree.N + iNode;
+
+					for (unsigned iSlot = 0; iSlot < pStore->signatures[pNode->sid].numPlaceholder; iSlot++) {
+						uint32_t id = pNode->slots[iSlot];
+						
+						// test range
+						if (id == 0 || id >= tree.ncount) {
+							json_t *jError = json_object();
+							json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node references out-of-range"));
+							json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+							json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
+							json_object_set_new_nocheck(jError, "gid", json_integer(iGroup));
+							json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+							json_object_set_new_nocheck(jError, "slot", json_integer(iSlot));
+							json_object_set_new_nocheck(jError, "id", json_integer(id));
+							ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+						}
+
+						// test for undefined
+						if (pEval[id] != 0 && pEval[id] != ~0U) {
+							json_t *jError = json_object();
+							json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node values out-of-range"));
+							json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+							json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
+							json_object_set_new_nocheck(jError, "gid", json_integer(iGroup));
+							json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+							json_object_set_new_nocheck(jError, "slot", json_integer(iSlot));
+							json_object_set_new_nocheck(jError, "id", json_integer(id));
+							json_object_set_new_nocheck(jError, "value", json_integer(pEval[id]));
+							ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+						}
+					}
+
+					uint32_t ev = tree.evalNode(iNode, pEval);
+
+					if (once) {
+						pEval[iGroup] = ev;
+						once = false;
+					} else if (pEval[iGroup] != ev) {
+						json_t *jError = json_object();
+						json_object_set_new_nocheck(jError, "error", json_string_nocheck("Node values out-of-range"));
+						json_object_set_new_nocheck(jError, "filename", json_string(treeFilename));
+						json_object_set_new_nocheck(jError, "testnr", json_integer(iTest));
+						json_object_set_new_nocheck(jError, "gid", json_integer(iGroup));
+						json_object_set_new_nocheck(jError, "nid", json_integer(iNode));
+						json_object_set_new_nocheck(jError, "expected", json_integer(pEval[iGroup]));
+						json_object_set_new_nocheck(jError, "encountered", json_integer(ev));
+						ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+					}
+				}
+			}
+			
+#if 0
 			for (uint32_t iNode = tree.nstart; iNode < tree.ncount; iNode++) {
-				const baseNode_t *pNode = tree.N + iNode;
-				const uint32_t   Q      = pNode->Q;
-				const uint32_t   Ti     = pNode->T & IBIT;
-				const uint32_t   Tu     = pNode->T & ~IBIT;
-				const uint32_t   F      = pNode->F;
+				const groupNode_t *pNode = tree.N + iNode;
+				const uint32_t   Q      = 0;
+				const uint32_t   Ti     = 0;
+				const uint32_t   Tu     = 0;
+				const uint32_t   F      = 0;
 
 				// test range
 				if (Q >= tree.ncount || Tu >= tree.ncount || F >= tree.ncount) {
@@ -440,6 +518,7 @@ struct bvalidateContext_t {
 					pEval[iNode] = (pEval[Q] & pEval[Tu]) ^ (~pEval[Q] & pEval[F]);
 				}
 			}
+#endif
 
 			/*
 			 * Compare the results for the provides
@@ -496,6 +575,8 @@ bvalidateContext_t app;
 void usage(char *argv[], bool verbose) {
 	fprintf(stderr, "usage: %s <output.json> <output.dat>\n", argv[0]);
 	if (verbose) {
+		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
+		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
 		fprintf(stderr, "\t-v --verbose\n");
 		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
@@ -519,25 +600,41 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_ONLYIFSET,
-			LO_QUIET = 'q', LO_VERBOSE = 'v'
+			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_MAXNODE, LO_ONLYIFSET,
+			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
+			LO_DATABASE = 'D', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
-			{"debug",     1, 0, LO_DEBUG},
-			{"help",      0, 0, LO_HELP},
-			{"onlyifset", 0, 0, LO_ONLYIFSET},
-			{"quiet",     2, 0, LO_QUIET},
-			{"timer",     1, 0, LO_TIMER},
-			{"verbose",   2, 0, LO_VERBOSE},
-
-			{NULL,        0, 0, 0}
+			{"database",    1, 0, LO_DATABASE},
+			{"debug",       1, 0, LO_DEBUG},
+			{"help",        0, 0, LO_HELP},
+			{"maxnode",     1, 0, LO_MAXNODE},
+			{"onlyifset",   0, 0, LO_ONLYIFSET},
+			{"quiet",       2, 0, LO_QUIET},
+			{"timer",       1, 0, LO_TIMER},
+			{"verbose",     2, 0, LO_VERBOSE},
+			//
+			{"paranoid",    0, 0, LO_PARANOID},
+			{"no-paranoid", 0, 0, LO_NOPARANOID},
+			{"pure",        0, 0, LO_PURE},
+			{"no-pure",     0, 0, LO_NOPURE},
+			{"rewrite",     0, 0, LO_REWRITE},
+			{"no-rewrite",  0, 0, LO_NOREWRITE},
+			{"cascade",     0, 0, LO_CASCADE},
+			{"no-cascade",  0, 0, LO_NOCASCADE},
+//			{"shrink",      0, 0, LO_SHRINK},
+//			{"no-shrink",   0, 0, LO_NOSHRINK},
+//			{"pivot3",      0, 0, LO_PIVOT3},
+//			{"no-pivot3",   0, 0, LO_NOPIVOT3},
+			//
+			{NULL,          0, 0, 0}
 		};
 
 		char optstring[64];
-		char *cp                            = optstring;
-		int  option_index                   = 0;
+		char *cp          = optstring;
+		int  option_index = 0;
 
 		for (int i = 0; long_options[i].name; i++) {
 			if (isalpha(long_options[i].val)) {
@@ -557,12 +654,18 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
+		case LO_DATABASE:
+			app.opt_databaseName = optarg;
+			break;
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 			break;
 		case LO_HELP:
 			usage(argv, true);
 			exit(0);
+		case LO_MAXNODE:
+			app.opt_maxNode = (unsigned) strtoul(optarg, NULL, 10);
+			break;
 		case LO_ONLYIFSET:
 			app.opt_onlyIfSet++;
 			break;
@@ -575,6 +678,51 @@ int main(int argc, char *argv[]) {
 		case LO_VERBOSE:
 			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose + 1;
 			break;
+
+		case LO_PARANOID:
+			app.opt_flagsSet |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_NOPARANOID:
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr |= ctx.MAGICMASK_PARANOID;
+			break;
+		case LO_PURE:
+			app.opt_flagsSet |= ctx.MAGICMASK_PURE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PURE;
+			break;
+		case LO_NOPURE:
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsClr |= ctx.MAGICMASK_PURE;
+			break;
+		case LO_REWRITE:
+			app.opt_flagsSet |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_NOREWRITE:
+			app.opt_flagsSet &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr |= ctx.MAGICMASK_REWRITE;
+			break;
+		case LO_CASCADE:
+			app.opt_flagsSet |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_CASCADE;
+			break;
+		case LO_NOCASCADE:
+			app.opt_flagsSet &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr |= ctx.MAGICMASK_CASCADE;
+			break;
+//			case LO_SHRINK:
+//				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
+//				break;
+//			case LO_NOSHRINK:
+//				app.opt_flags &=  ~ctx.MAGICMASK_SHRINK;
+//				break;
+//			case LO_PIVOT3:
+//				app.opt_flags |=  ctx.MAGICMASK_PIVOT3;
+//				break;
+//			case LO_NOPIVOT3:
+//				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
+//				break;
 
 		case '?':
 			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
@@ -595,14 +743,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * Create storage
-	 */
-
-	/*
-	 * Create components
-	 */
-
-	/*
 	 * Statistics
 	 */
 
@@ -619,8 +759,22 @@ int main(int argc, char *argv[]) {
 		::alarm(ctx.opt_timer);
 	}
 
-	app.main(jsonFilename, dataFilename);
+	// Open database
+	database_t db(ctx);
 
+	db.open(app.opt_databaseName);
+	app.pStore = &db;
+
+	// set flags
+	ctx.flags = db.creationFlags;
+	ctx.flags |= app.opt_flagsSet;
+	ctx.flags &= ~app.opt_flagsClr;
+
+	// display system flags when database was created
+	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
+
+	app.main(jsonFilename, dataFilename);
 
 	json_t *jError = json_object();
 	json_object_set_new_nocheck(jError, "passed", json_string_nocheck("true"));

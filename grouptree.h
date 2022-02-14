@@ -5686,6 +5686,330 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		return name;
 	}
 
+	/*
+	 * @date 2022-02-13 15:56:45
+	 * Evaluate a node
+	 */
+	footprint_t evalNode(uint32_t nid, footprint_t *pFeet) {
+		assert(nid);
+
+		uint32_t    numStack = 0;
+		uint32_t    nextNode = this->nstart;
+		footprint_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // evaluator stack
+		footprint_t backref[tinyTree_t::TINYTREE_MAXNODES]; // back references
+
+		groupNode_t *pNode = this->N + nid;
+
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = db.signatures[this->N[nid].sid].name; *pattern; pattern++) {
+
+			const footprint_t *pQ, *pTu, *pF;
+
+			switch (*pattern) {
+			case '0': //
+				/*
+				 * Push zero
+				 */
+				stack[numStack++] = pFeet[0];
+				continue; // for
+
+				// @formatter:off
+			case '1': case '2': case '3':
+			case '4': case '5': case '6':
+			case '7': case '8': case '9':
+				// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				assert (v >= this->nstart && v < nextNode);
+				assert (numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+
+				stack[numStack++] = backref[v - this->nstart];
+				continue; // for
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = *pattern - 'a';
+				assert (v <= db.signatures[pNode->sid].numPlaceholder);
+				
+				v = pNode->slots[v];
+
+				assert (v >= this->kstart && v < this->ncount);
+				assert (numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+
+				stack[numStack++] = pFeet[v];
+				continue; // for
+			}
+
+			case '+': {
+				// OR (appreciated)
+				assert (numStack >= 2);
+
+				pF = &stack[--numStack];
+				pQ = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = pQ->bits[i] | pF->bits[i];
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+				assert (numStack >= 2);
+
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = pQ->bits[i] & ~pTu->bits[i];
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
+				assert (numStack >= 2);
+
+				pF = &stack[--numStack];
+				pQ = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = pQ->bits[i] ^ pF->bits[i];
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+				assert (numStack >= 3);
+
+				pF  = &stack[--numStack];
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = (pQ->bits[i] & ~pTu->bits[i]) | (~pQ->bits[i] & pF->bits[i]);
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+				assert (numStack >= 2);
+
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = pQ->bits[i] & pTu->bits[i];
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+				assert (numStack >= 3);
+
+				pF  = &stack[--numStack];
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				for (unsigned i = 0; i < footprint_t::QUADPERFOOTPRINT; i++)
+					stack[numStack].bits[i] = (pQ->bits[i] & pTu->bits[i]) | (~pQ->bits[i] & pF->bits[i]);
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+
+			default:
+				assert(!"bad token");
+			}
+
+			assert(numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+			assert(nextNode - this->nstart <= tinyTree_t::TINYTREE_MAXNODES);
+		}
+
+		assert(numStack == 1);
+		return stack[0];
+	}
+
+	/*
+	 * @date 2022-02-13 15:56:45
+	 * Evaluate a node
+	 */
+	uint32_t evalNode(uint32_t nid, uint32_t *pFeet) {
+		assert(nid);
+
+		uint32_t numStack = 0;
+		uint32_t nextNode = this->nstart;
+		uint32_t stack[tinyTree_t::TINYTREE_MAXSTACK]; // evaluator stack
+		uint32_t backref[tinyTree_t::TINYTREE_MAXNODES]; // back references
+
+		groupNode_t *pNode = this->N + nid;
+
+		/*
+		 * Load string
+		 */
+		for (const char *pattern = db.signatures[this->N[nid].sid].name; *pattern; pattern++) {
+
+			const uint32_t *pQ, *pTu, *pF;
+
+			switch (*pattern) {
+			case '0': //
+				/*
+				 * Push zero
+				 */
+				stack[numStack++] = pFeet[0];
+				continue; // for
+
+				// @formatter:off
+			case '1': case '2': case '3':
+			case '4': case '5': case '6':
+			case '7': case '8': case '9':
+				// @formatter:on
+			{
+				/*
+				 * Push back-reference
+				 */
+				uint32_t v = nextNode - (*pattern - '0');
+
+				assert (v >= this->nstart && v < nextNode);
+				assert (numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+
+				stack[numStack++] = backref[v - this->nstart];
+				continue; // for
+			}
+
+				// @formatter:off
+			case 'a': case 'b': case 'c': case 'd':
+			case 'e': case 'f': case 'g': case 'h':
+			case 'i': case 'j': case 'k': case 'l':
+			case 'm': case 'n': case 'o': case 'p':
+			case 'q': case 'r': case 's': case 't':
+			case 'u': case 'v': case 'w': case 'x':
+			case 'y': case 'z':
+				// @formatter:on
+			{
+				/*
+				 * Push endpoint
+				 */
+				uint32_t v = *pattern - 'a';
+				assert (v <= db.signatures[pNode->sid].numPlaceholder);
+				
+				v = pNode->slots[v];
+
+				assert (v >= this->kstart && v < this->ncount);
+				assert (numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+
+				stack[numStack++] = pFeet[v];
+				continue; // for
+			}
+
+			case '+': {
+				// OR (appreciated)
+				assert (numStack >= 2);
+
+				pF = &stack[--numStack];
+				pQ = &stack[--numStack];
+
+				stack[numStack] = *pQ | *pF;
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '>': {
+				// GT (appreciated)
+				assert (numStack >= 2);
+
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				stack[numStack] = *pQ & ~*pTu;
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '^': {
+				// XOR/NE (appreciated)
+				assert (numStack >= 2);
+
+				pF = &stack[--numStack];
+				pQ = &stack[--numStack];
+
+				stack[numStack] = *pQ ^ *pF;
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '!': {
+				// QnTF (appreciated)
+				assert (numStack >= 3);
+
+				pF  = &stack[--numStack];
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				stack[numStack] = (*pQ & ~*pTu) | (~*pQ & *pF);
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '&': {
+				// AND (depreciated)
+				assert (numStack >= 2);
+
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				stack[numStack] = *pQ & *pTu;
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+			case '?': {
+				// QTF (depreciated)
+				assert (numStack >= 3);
+
+				pF  = &stack[--numStack];
+				pTu = &stack[--numStack];
+				pQ  = &stack[--numStack];
+
+				stack[numStack] = (*pQ & *pTu) | (~*pQ & *pF);
+
+				backref[nextNode++ - this->nstart] = stack[numStack++];
+				break;
+			}
+
+			default:
+				assert(!"bad token");
+			}
+
+			assert(numStack <= tinyTree_t::TINYTREE_MAXSTACK);
+			assert(nextNode - this->nstart <= tinyTree_t::TINYTREE_MAXNODES);
+		}
+
+		assert(numStack == 1);
+		return stack[0];
+	}
+
 	/**
 	 * @date 2021-12-12 12:24:22
 	 * 
@@ -6366,6 +6690,14 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		if (pRoots) {
 			// loaded multi-rooted tree
 			ret = numStack;
+
+			/*
+			 * @date 2022-02-14 00:23:00
+			 * It could be that after loading the last root, the first has become outdated
+			 */
+			for (unsigned iRoot = 0; iRoot < numStack; iRoot++)
+				pStack[iRoot] = updateToLatest(pStack[iRoot] & ~IBIT) | (pStack[iRoot] & IBIT);
+				
 		} else {
 			// return single expression
 			if (numStack != 1)
@@ -7134,6 +7466,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			ctx.fatal("groupTree_t::loadFileJson() on non-initial tree\n");
 
 		/*
+		 * import flags
+		 */
+		flags = ctx.flagsFromJson(json_object_get(jInput, "flags"));
+
+		/*
 		 * import dimensions
 		 */
 		kstart   = json_integer_value(json_object_get(jInput, "kstart"));
@@ -7280,6 +7617,8 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			char crcstr[32];
 			sprintf(crcstr, "%08x", fileHeader->crc32);
 			json_object_set_new_nocheck(jResult, "crc", json_string_nocheck(crcstr));
+			sprintf(crcstr, "%08x", fileHeader->sidCRC);
+			json_object_set_new_nocheck(jResult, "sidcrc", json_string_nocheck(crcstr));
 		}
 		json_object_set_new_nocheck(jResult, "kstart", json_integer(fileHeader->kstart));
 		json_object_set_new_nocheck(jResult, "ostart", json_integer(fileHeader->ostart));

@@ -89,9 +89,9 @@ struct bloadContext_t {
 		opt_databaseName = "untangle.db";
 		opt_flagsSet     = 0;
 		opt_flagsClr     = 0;
-		opt_force   = 0;
-		opt_maxNode = DEFAULT_MAXNODE;
-		pStore = NULL;
+		opt_force        = 0;
+		opt_maxNode      = DEFAULT_MAXNODE;
+		pStore           = NULL;
 	}
 
 	/**
@@ -155,6 +155,8 @@ struct bloadContext_t {
 		 */
 
 		rewriteTree_t newTree(ctx, *pStore, dataValue, opt_maxNode, ctx.flags);
+
+		newTree.flags |= jsonTree.flags & context_t::MAGICMASK_SYSTEM;
 
 		newTree.flags      = jsonTree.flags;
 		newTree.entryNames = jsonTree.entryNames;
@@ -230,7 +232,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
