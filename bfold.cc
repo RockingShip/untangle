@@ -388,7 +388,6 @@ struct bfoldContext_t {
 					while (numFolds > 0 && lstFolds[numFolds - 1].version == 0) {
 						fold_t *pFold = &lstFolds[numFolds - 1];
 
-						pTemp->rewind();
 						pTemp->importFold(pNewTree, pFold->key);
 						pFold->count   = pTemp->countActive();
 						pFold->version = 1;
@@ -401,10 +400,8 @@ struct bfoldContext_t {
 //					uint32_t iFold = lstFolds[numFolds - 1].key;
 //					printf("%d fold %s %d\n", numFolds, pNewTree->entryNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
-					pTemp->rewind();
 					pTemp->importFold(pNewTree, lstFolds[numFolds - 1].key);
 //					printf("count=%u\n", pTemp->countActive());
-					pNewTree->rewind();
 					pNewTree->importActive(pTemp);
 //					printf("%s count=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->countActive());
 
@@ -533,7 +530,6 @@ struct bfoldContext_t {
 					for (unsigned iHistory  = 0; iHistory < pNewTree->posHistory; iHistory++) {
 						uint32_t key = pNewTree->history[iHistory];
 
-						pTemp->rewind();
 						this->importFold(pTemp, pNewTree, key);
 						unsigned cnt = pTemp->countActive();
 
@@ -545,7 +541,6 @@ struct bfoldContext_t {
 
 					if (bestKey) {
 						// fold
-						pTemp->rewind();
 						this->importFold(pTemp, pNewTree, bestKey);
 
 						// update history
@@ -562,7 +557,6 @@ struct bfoldContext_t {
 						}
 
 						// copy back
-						pNewTree->rewind();
 						pNewTree->importActive(pTemp);
 						pNewTree->posHistory = pTemp->posHistory;
 						pNewTree->numHistory = pTemp->numHistory;
@@ -578,7 +572,6 @@ struct bfoldContext_t {
 					while (numFolds > 0 && lstFolds[numFolds - 1].version == 0) {
 						fold_t *pFold = &lstFolds[numFolds - 1];
 
-						pTemp->rewind();
 						this->importFold(pTemp, pNewTree, pFold->key);
 						pFold->count   = pTemp->countActive();
 						pFold->version = 1;
@@ -591,7 +584,6 @@ struct bfoldContext_t {
 					uint32_t iFold = lstFolds[numFolds - 1].key;
 //					printf("%d fold %s %d\n", numFolds, pNewTree->entryNames[iFold].c_str(), lstFolds[numFolds - 1].count);
 
-					pTemp->rewind();
 					this->importFold(pTemp, pNewTree, iFold);
 //					printf("count=%u\n", pTemp->countActive());
 
@@ -608,7 +600,6 @@ struct bfoldContext_t {
 							pTemp->history[pTemp->numHistory++] = pNewTree->history[j];
 					}
 
-					pNewTree->rewind();
 					pNewTree->importActive(pTemp);
 					pNewTree->posHistory = pTemp->posHistory;
 					pNewTree->numHistory = pTemp->numHistory;
@@ -632,11 +623,9 @@ struct bfoldContext_t {
 
 					for (uint32_t iFold = pNewTree->kstart; iFold < pNewTree->nstart; iFold++) {
 						if (pNewRefCount[iFold] > 0) {
-							pTemp->rewind();
 							this->importFold(pTemp, pNewTree, iFold);
 
 							if (pTemp->ncount < pNewTree->ncount) {
-								pNewTree->rewind();
 								pNewTree->importActive(pTemp);
 								printf("X %s count=%u numFold=%u\n", pNewTree->rootNames[iFold].c_str(), pNewTree->countActive(), numFolds);
 							}
