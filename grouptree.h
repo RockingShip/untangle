@@ -289,6 +289,7 @@ struct groupTree_t {
 		DEFAULT_MAXNODE      = GROUPTREE_DEFAULT_MAXNODE,
 		DEFAULT_SPEED        = GROUPTREE_DEFAULT_SPEED,
 		MAXPOOLARRAY         = GROUPTREE_DEFAULT_MAXPOOLARRAY,
+		KERROR               = 1, // N[0] is reserved for ZERO, N[1] is reserved for ERROR
 	};
 
 	/*
@@ -2394,7 +2395,7 @@ struct groupTree_t {
 
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT; // return collapse
+				return IBIT ^ (IBIT - 1); // return silently-ignore
 			}
 
 			if (T == F) {
@@ -2677,26 +2678,21 @@ struct groupTree_t {
 			uint32_t Tu = T & ~IBIT;
 			uint32_t Ti = T & IBIT;
 
-			/*
-			 * use the latest lists
-			 */
-
-			// get latest group
-			Q  = updateToLatest(Q);
-			Tu = updateToLatest(Tu);
-			F  = updateToLatest(F);
-
 			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
-				assert(Ri == 0); // unknown how to handle this
+				if (pInvert) {
+					*pInvert = Ri; // return if result in inverted
+				} else {
+					assert(Ri == 0); // unknown how to handle this
+				}
 
 				freeMap(pStack);
 				freeMap(pMap);
-				return IBIT; // return collapse
+				return IBIT ^ (IBIT - 1); // return silently-ignore
 			}
 
-			if (T == F) {
+			if (Q == F) {
 				// collapse
 
 				// Push onto stack
@@ -2825,49 +2821,6 @@ struct groupTree_t {
 	 */
 	uint32_t addNode (uint32_t sid, const uint32_t *pSlots, uint32_t *pInvert = NULL) {
 
-		if ((ctx.flags & context_t::MAGICMASK_PARANOID) && sid != db.SID_SELF && pInvert == NULL) {
-			unsigned numPlaceholder = db.signatures[sid].numPlaceholder;
-			// may not be zero
-			assert(numPlaceholder < 1 || pSlots[0] != 0);
-			assert(numPlaceholder < 2 || pSlots[1] != 0);
-			assert(numPlaceholder < 3 || pSlots[2] != 0);
-			assert(numPlaceholder < 4 || pSlots[3] != 0);
-			assert(numPlaceholder < 5 || pSlots[4] != 0);
-			assert(numPlaceholder < 6 || pSlots[5] != 0);
-			assert(numPlaceholder < 7 || pSlots[6] != 0);
-			assert(numPlaceholder < 8 || pSlots[7] != 0);
-			assert(numPlaceholder < 9 || pSlots[8] != 0);
-			// test referencing to group headers
-			assert(N[pSlots[0]].gid == pSlots[0]);
-			assert(N[pSlots[1]].gid == pSlots[1]);
-			assert(N[pSlots[2]].gid == pSlots[2]);
-			assert(N[pSlots[3]].gid == pSlots[3]);
-			assert(N[pSlots[4]].gid == pSlots[4]);
-			assert(N[pSlots[5]].gid == pSlots[5]);
-			assert(N[pSlots[6]].gid == pSlots[6]);
-			assert(N[pSlots[7]].gid == pSlots[7]);
-			assert(N[pSlots[8]].gid == pSlots[8]);
-			// they may not be orphaned
-			assert(pSlots[0] < nstart || N[pSlots[0]].next != pSlots[0]);
-			assert(pSlots[1] < nstart || N[pSlots[1]].next != pSlots[1]);
-			assert(pSlots[2] < nstart || N[pSlots[2]].next != pSlots[2]);
-			assert(pSlots[3] < nstart || N[pSlots[3]].next != pSlots[3]);
-			assert(pSlots[4] < nstart || N[pSlots[4]].next != pSlots[4]);
-			assert(pSlots[5] < nstart || N[pSlots[5]].next != pSlots[5]);
-			assert(pSlots[6] < nstart || N[pSlots[6]].next != pSlots[6]);
-			assert(pSlots[7] < nstart || N[pSlots[7]].next != pSlots[7]);
-			assert(pSlots[8] < nstart || N[pSlots[8]].next != pSlots[8]);
-			// Single occurrences only
-			assert(pSlots[1] == 0 || (pSlots[1] != pSlots[0]));
-			assert(pSlots[2] == 0 || (pSlots[2] != pSlots[0] && pSlots[2] != pSlots[1]));
-			assert(pSlots[3] == 0 || (pSlots[3] != pSlots[0] && pSlots[3] != pSlots[1] && pSlots[3] != pSlots[2]));
-			assert(pSlots[4] == 0 || (pSlots[4] != pSlots[0] && pSlots[4] != pSlots[1] && pSlots[4] != pSlots[2] && pSlots[4] != pSlots[3]));
-			assert(pSlots[5] == 0 || (pSlots[5] != pSlots[0] && pSlots[5] != pSlots[1] && pSlots[5] != pSlots[2] && pSlots[5] != pSlots[3] && pSlots[5] != pSlots[4]));
-			assert(pSlots[6] == 0 || (pSlots[6] != pSlots[0] && pSlots[6] != pSlots[1] && pSlots[6] != pSlots[2] && pSlots[6] != pSlots[3] && pSlots[6] != pSlots[4] && pSlots[6] != pSlots[5]));
-			assert(pSlots[7] == 0 || (pSlots[7] != pSlots[0] && pSlots[7] != pSlots[1] && pSlots[7] != pSlots[2] && pSlots[7] != pSlots[3] && pSlots[7] != pSlots[4] && pSlots[7] != pSlots[5] && pSlots[7] != pSlots[6]));
-			assert(pSlots[8] == 0 || (pSlots[8] != pSlots[0] && pSlots[8] != pSlots[1] && pSlots[8] != pSlots[2] && pSlots[8] != pSlots[3] && pSlots[8] != pSlots[4] && pSlots[8] != pSlots[5] && pSlots[8] != pSlots[6] && pSlots[8] != pSlots[7]));
-		}
-
 		groupLayer_t layer(*this, NULL);
 
 		if (!this->useExpandMember) {
@@ -2879,8 +2832,9 @@ struct groupTree_t {
 			uint32_t Ri   = 0;
 
 			for (uint32_t mid = db.signatures[sid].firstMember; mid != 0; mid = db.members[mid].nextMember) {
-				expandMember(layer, mid, pSlots, 0, pInvert);
-				assert(layer.gid != IBIT); // top-level calls should not be ignored
+				uint32_t ret = expandMember(layer, mid, pSlots, 0, pInvert);
+				if (ret == (IBIT ^ (IBIT - 1)))
+					continue; // silently-ignore
 
 				if (pInvert) {
 					if (once) {
@@ -2894,6 +2848,8 @@ struct groupTree_t {
 				}
 			}
 		}
+
+		assert(layer.gid != IBIT); // top-level calls should not be ignored
 
 		// finalise
 		flushLayer(layer);
@@ -2916,13 +2872,17 @@ struct groupTree_t {
 	 * 
 	 * NOTE: this code has been brute-force validated with `selftest.cc::performSelfTestNormaliseQTF()`.
 	 */
-	static uint32_t normaliseQTF(uint32_t &Q, uint32_t &T, uint32_t &F) {
+	uint32_t normaliseQTF(uint32_t &Q, uint32_t &T, uint32_t &F) {
 
 		const uint32_t I  = IBIT;
-		const uint32_t Qu = Q & ~I; // Q with side-channel Invert-bit removed
-		const uint32_t Tu = T & ~I; // T with side-channel Invert-bit removed
-		const uint32_t Fu = F & ~I; // F with side-channel Invert-bit removed
+		uint32_t       Qu = Q & ~I; // Q with side-channel Invert-bit removed
+		uint32_t       Tu = T & ~I; // T with side-channel Invert-bit removed
+		uint32_t       Fu = F & ~I; // F with side-channel Invert-bit removed
 		uint32_t       Ri; // output polarity
+
+		Qu = updateToLatest(Qu);
+		Tu = updateToLatest(Tu);
+		Fu = updateToLatest(Fu);
 
 		/*
 		 * Friendly reminder:
@@ -2950,21 +2910,21 @@ struct groupTree_t {
 /*---------------------------------------------------*/ /* Q  T  F  -> logical-> Q  T  F  Ri */ /*--------*/
 
 // @formatter:off
-if (Q&I) if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)	/* Q~ T~ F~ -> qft?~  -> Q  F  T  I  */         Q&=~I,T=Fu,F=Tu,Ri=I; // fallthrough
-else							/* Q~ T~ 0~ -> tq>~   -> T  Q~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (T=Q,Q=Tu,F=0,I);
-else if (Fu)						/* Q~ T~ F  -> qft!~  -> Q  F~ T  I  */         Q&=~I,T=Fu|I,F=Tu,Ri=I; // fallthrough
-else							/* Q~ T~ 0  -> qt+~   -> Q  0~ T  I  */  return (Qu==Tu) ? (Q=T=F=Qu,I) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,I) : (Q&=~I,T=I,F=Tu,I);
-else if (F&I) if (Fu)					/* Q~ 0~ F~ -> fq&~   -> Q  F  0  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=I) : (Q&=~I,T=Fu,F=0,Ri=I);
+if (Q&I) if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)	/* Q~ T~ F~ -> qft?~  -> Q  F  T  I  */         Q=Qu,T=Fu,F=Tu,Ri=I; // fallthrough
+else							/* Q~ T~ 0~ -> tq>~   -> T  Q~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (T=Qu|I,Q=Tu,F=0,I);
+else if (Fu)						/* Q~ T~ F  -> qft!~  -> Q  F~ T  I  */         Q=Qu,T=Fu|I,F=Tu,Ri=I; // fallthrough
+else							/* Q~ T~ 0  -> qt+~   -> Q  0~ T  I  */  return (Qu==Tu) ? (Q=T=F=Qu,I) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,I) : (Q=Qu,T=I,F=Tu,I);
+else if (F&I) if (Fu)					/* Q~ 0~ F~ -> fq&~   -> Q  F  0  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=I) : (Q=Qu,T=Fu,F=0,Ri=I);
 else							/* Q~ 0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
-else if (Fu)						/* Q~ 0~ F  -> qf>~   -> Q  F~ 0  I  */  return (Qu==Fu) ? (Q=T=F=0,I) : (Q&=~I,T=Fu|I,F=0,I);
+else if (Fu)						/* Q~ 0~ F  -> qf>~   -> Q  F~ 0  I  */  return (Qu==Fu) ? (Q=T=F=0,I) : (Q=Qu,T=Fu|I,F=0,I);
 else							/* Q~ 0~ 0  -> q~     -> Q  Q  Q  I  */  return Q=T=F=Qu,I;
-else if (Tu) if (F&I) if (Fu) 				/* Q~ T  F~ -> qft!   -> Q  F~ T  0  */         Q&=~I,T=F,F=Tu,Ri=0; // fallthrough
-else							/* Q~ T  0~ -> qt+    -> Q  0~ T  0  */  return (Qu==Tu) ? (Q=T=F=Qu,0) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,0) : (Q&=~I,T=I,F=Tu,0);
-else if (Fu)						/* Q~ T  F  -> qft?   -> Q  F  T  0  */         Q&=~I,T=F,F=Tu,Ri=0; // fallthrough
-else							/* Q~ T  0  -> tq>    -> T  Q~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (T=Q,Q=Tu,F=0,0);
-else if (F&I) if (Fu)					/* Q~ 0  F~ -> qf>    -> Q  F~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q&=~I,T=F,F=0,0);
+else if (Tu) if (F&I) if (Fu) 				/* Q~ T  F~ -> qft!   -> Q  F~ T  0  */         Q=Qu,T=Fu|I,F=Tu,Ri=0; // fallthrough
+else							/* Q~ T  0~ -> qt+    -> Q  0~ T  0  */  return (Qu==Tu) ? (Q=T=F=Qu,0) : (Qu>Tu) ? (Q=Tu,T=I,F=Qu,0) : (Q=Qu,T=I,F=Tu,0);
+else if (Fu)						/* Q~ T  F  -> qft?   -> Q  F  T  0  */         Q=Qu,T=Fu,F=Tu,Ri=0; // fallthrough
+else							/* Q~ T  0  -> tq>    -> T  Q~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (T=Qu|I,Q=Tu,F=0,0);
+else if (F&I) if (Fu)					/* Q~ 0  F~ -> qf>    -> Q  F~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q=Qu,T=Fu|I,F=0,0);
 else							/* Q~ 0  0~ -> q      -> Q  Q  Q  0  */  return Q=T=F=Qu,0;
-else if (Fu)						/* Q~ 0  F  -> fq&    -> Q  F  0  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=0) : (Q&=~I,T=Fu,F=0,Ri=0);
+else if (Fu)						/* Q~ 0  F  -> fq&    -> Q  F  0  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=Qu,F=0,Ri=0) : (Q=Qu,T=Fu,F=0,Ri=0);
 else							/* Q~ 0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 else if (T&I) if (Tu) if (F&I) if (Fu)			/* 0~ T~ F~ -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
 else							/* 0~ T~ 0~ -> t~     -> T  T  T  I  */  return Q=T=F=Tu,I;
@@ -2982,21 +2942,21 @@ else if (F&I) if (Fu)					/* 0~ 0  F~ -> 0      -> 0  0  0  0  */  return Q=T=F=
 else							/* 0~ 0  0~ -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 else if (Fu)						/* 0~ 0  F  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 else							/* 0~ 0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
-else if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)		/* Q  T~ F~ -> qtf?~  -> Q  T  F  I  */         T&=~I,F&=~I,Ri=I; // fallthrough
-else							/* Q  T~ 0~ -> qt&~   -> Q  T  0  I  */  return (Qu==Tu) ? (Q=T=F=Tu,I) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=I) : (T=Tu,F=0,Ri=I);
-else if (Fu)						/* Q  T~ F  -> qtf!   -> Q  T~ F  0  */         Ri=0; // fallthrough
-else							/* Q  T~ 0  -> qt>    -> Q  T~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (Q&=~I,F=0,0);
+else if (Qu) if (T&I) if (Tu) if (F&I) if (Fu)		/* Q  T~ F~ -> qtf?~  -> Q  T  F  I  */         Q=Qu,T=Tu,F=Fu,Ri=I; // fallthrough
+else							/* Q  T~ 0~ -> qt&~   -> Q  T  0  I  */  return (Qu==Tu) ? (Q=T=F=Tu,I) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=I) : (Q=Qu,T=Tu,F=0,Ri=I);
+else if (Fu)						/* Q  T~ F  -> qtf!   -> Q  T~ F  0  */         Q=Qu,T=Tu|I,F=Fu,Ri=0; // fallthrough
+else							/* Q  T~ 0  -> qt>    -> Q  T~ 0  0  */  return (Qu==Tu) ? (Q=T=F=0,0) : (Q=Qu,T=Tu|I,F=0,0);
 else if (F&I) if (Fu)					/* Q  0~ F~ -> fq>~   -> F  Q~ 0  I  */  return (Qu==Fu) ? (Q=T=F=0,I) : (Q=Fu,T=Qu|I,F=0,I);
 else							/* Q  0~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
-else if (Fu)						/* Q  0~ F  -> fq+    -> Q  0~ F  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,0) : (Q&=~I,T=I,F=Fu,0);
+else if (Fu)						/* Q  0~ F  -> fq+    -> Q  0~ F  0  */  return (Qu==Fu) ? (Q=T=F=Qu,0) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,0) : (Q=Qu,T=I,F=Fu,0);
 else							/* Q  0~ 0  -> q      -> Q  Q  Q  0  */  return Q=T=F=Qu,0;
-else if (Tu) if (F&I) if (Fu)				/* Q  T  F~ -> qtf!~  -> Q  T~ F  I  */         T|=I,F&=~I,Ri=I; // fallthrough
-else							/* Q  T  0~ -> qt>~   -> Q  T~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (T|=I,F=0,I);
-else if (Fu)						/* Q  T  F  -> qtf?   -> Q  T  F  0  */         Ri=0; // fallthrough
-else							/* Q  T  0  -> qt&    -> Q  T  0  0  */  return (Qu==Tu) ? (Q=T=F=Tu,0) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=0) : (T=Tu,F=0,Ri=0);
-else if (F&I) if (Fu)					/* Q  0  F~ -> fq+~   -> Q  0~ F  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,I) : (Q&=~I,T=I,F=Fu,I);
+else if (Tu) if (F&I) if (Fu)				/* Q  T  F~ -> qtf!~  -> Q  T~ F  I  */         Q=Qu,T=Tu|I,F=Fu,Ri=I; // fallthrough
+else							/* Q  T  0~ -> qt>~   -> Q  T~ 0  I  */  return (Qu==Tu) ? (Q=T=F=0,I) : (Q=Qu,T=Tu|I,F=0,I);
+else if (Fu)						/* Q  T  F  -> qtf?   -> Q  T  F  0  */         Q=Qu,T=Tu,F=Fu,Ri=0; // fallthrough
+else							/* Q  T  0  -> qt&    -> Q  T  0  0  */  return (Qu==Tu) ? (Q=T=F=Tu,0) : (Qu>Tu) ? (Q=Tu,T=Qu,F=0,Ri=0) : (Q=Qu,T=Tu,F=0,Ri=0);
+else if (F&I) if (Fu)					/* Q  0  F~ -> fq+~   -> Q  0~ F  I  */  return (Qu==Fu) ? (Q=T=F=Qu,I) : (Qu>Fu) ? (Q=Fu,T=I,F=Qu,I) : (Q=Qu,T=I,F=Fu,I);
 else							/* Q  0  0~ -> q~     -> Q  Q  Q  I  */  return Q=T=F=Qu,I;
-else if (Fu)						/* Q  0  F  -> fq>    -> F  Q~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q=F,T=Qu|I,F=0,0);
+else if (Fu)						/* Q  0  F  -> fq>    -> F  Q~ 0  0  */  return (Qu==Fu) ? (Q=T=F=0,0) : (Q=Fu,T=Qu|I,F=0,0);
 else							/* Q  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 else if (T&I) if (Tu) if (F&I) if (Fu)			/* 0  T~ F~ -> f~     -> F  F  F  I  */  return Q=T=F=Fu,I;
 else							/* 0  T~ 0~ -> 0~     -> 0  0  0  I  */  return Q=T=F=0,I;
@@ -3345,6 +3305,22 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				validateTree(__LINE__);
 		}
 
+		assert(!(Q & IBIT));                       // Q not inverted
+//		assert((T & IBIT) || !(this->flags & context_t::MAGICMASK_PURE)); // todo: too early, should be after expandMember(). database lookup resolve alternatives.
+		assert(!(F & IBIT));                       // F not inverted
+		assert(Q != 0);                            // Q not zero
+		assert(!(Ti == 0 && Tu == 0));             // Q?0:F -> F?!Q:0
+		assert(!(Ti != 0 && Tu == 0 && F == 0));   // Q?!0:0 -> Q WARNING: this might change in favor of `0?!0:Q`
+		assert(Q != Tu);                           // Q/T fold
+		assert(Q != F);                            // Q/F fold
+		assert(!(Ti == 0 && Tu == F));             // T/F fold
+		assert(Q < this->ncount);
+		assert(Tu < this->ncount);
+		assert(F < this->ncount);
+		assert(this->N[Q].gid == Q);
+		assert(this->N[Tu].gid == Tu);
+		assert(this->N[F].gid == F);
+
 		assert(depth < 30);
 
 		// should be latest
@@ -3360,7 +3336,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 		// is it an argument-collapse?
 		if (Q == layer.gid || Tu == layer.gid || F == layer.gid)
-			return IBIT; // yes
+			return IBIT ^ (IBIT - 1); // return silently-ignore
 
 		if (ctx.opt_debug & context_t::DEBUGMASK_CARTESIAN) {
 			printf("%.*sQ=%u T=%u%s F=%u",
@@ -3804,7 +3780,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					if (layer.gid > latest) {
 						mergeGroups(layer, latest);
 						return IBIT;
-						
 					}
 
 					addOldNode(layer, nid);
@@ -3862,7 +3837,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					 * were groups merged that now becomes a self-collapse? 
 					 */
 					if (layer.gid == Q || layer.gid == Tu || layer.gid == F || layer.gid < this->nstart)
-						 return IBIT; // endpoint/entrypoint-collapse
+						return IBIT; // endpoint/entrypoint-collapse
 
 					/*
 					 * did node reference in slots change group?
@@ -3941,7 +3916,6 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 					if (layer.gid > latest) {
 						mergeGroups(layer, latest);
 						return IBIT;
-						
 					}
 
 					addOldNode(layer, nid);
@@ -4526,6 +4500,13 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 							else if (layer.gid < *pRestartId)
 								*pRestartId = layer.gid;
 						}
+						
+						/*
+						 * @date 2022-02-16 23:50:31
+						 * Entrypoint collapse
+						 */
+						if (layer.gid < this->nstart)
+							return;
 
 						// restart
 						goto restart;
@@ -4942,6 +4923,20 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		}
 	}
 
+	void __attribute__((used)) listTree(void) {
+		for (uint32_t iGroup = this->nstart; iGroup < this->ncount; iGroup++) {
+			if (this->N[iGroup].gid != iGroup)
+				continue;
+
+			for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
+				groupNode_t *pNode = this->N + iNode;
+
+				showLine(pNode->gid, iNode, NULL, NULL, NULL);
+				printf("\n");
+			}
+		}
+	}
+
 	void __attribute__((used)) listGroup(uint32_t iGroup) {
 		if (this->N[iGroup].gid != iGroup || this->N[iGroup].next == iGroup)
 			return;
@@ -5125,6 +5120,16 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		assert(numPlaceholder < 7 || pSlots[6] != 0);
 		assert(numPlaceholder < 8 || pSlots[7] != 0);
 		assert(numPlaceholder < 9 || pSlots[8] != 0);
+		// may not be inverted
+		assert(!(pSlots[0] & IBIT));
+		assert(!(pSlots[1] & IBIT));
+		assert(!(pSlots[2] & IBIT));
+		assert(!(pSlots[3] & IBIT));
+		assert(!(pSlots[4] & IBIT));
+		assert(!(pSlots[5] & IBIT));
+		assert(!(pSlots[6] & IBIT));
+		assert(!(pSlots[7] & IBIT));
+		assert(!(pSlots[8] & IBIT));
 		// test referencing to group headers
 		assert(N[pSlots[0]].gid == pSlots[0]);
 		assert(N[pSlots[1]].gid == pSlots[1]);
@@ -5539,7 +5544,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 
 						bool nodeOk = true;
 
-						for (unsigned iSlot  = 0; iSlot < numPlaceholder; iSlot++) {
+						for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
 							uint32_t id = updateToLatest(pNode->slots[iSlot]);
 							if (pVersion->mem[id] != thisVersion) {
 								nodeOk = false;
@@ -5588,7 +5593,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				}
 			}
 			if (found)
-				exit(1);
+				anyError = true;
 		}
 
 		/*
@@ -7191,8 +7196,8 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 	 */
 	uint32_t getBestNode(uint32_t iGroup) {
 		assert(this->N[iGroup].gid == iGroup); // must be a group header
-		
-		uint32_t nid = this->N[iGroup].next;
+
+		uint32_t nid = 0;
 
 		for (uint32_t iNode = this->N[iGroup].next; iNode != this->N[iNode].gid; iNode = this->N[iNode].next) {
 			if (this->N[iNode].weight == this->N[iGroup].weight) {
@@ -7200,6 +7205,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				break;
 			}
 		}
+		assert(nid);
 
 		assert (this->N[nid].sid != db.SID_SELF);
 		return nid;
@@ -7215,10 +7221,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		unsigned numCount = this->nstart;
 
 		// select the heads
-		// add artificial root for system
-		for (unsigned iRoot = this->kstart; iRoot <= this->numRoots; iRoot++) {
-			uint32_t R  = (iRoot < this->numRoots) ? this->roots[iRoot] : this->system;
+		for (unsigned iRoot = this->kstart; iRoot < this->numRoots; iRoot++) {
+			uint32_t R  = this->roots[iRoot];
 			uint32_t Ru = R & ~IBIT;
+
+			Ru = updateToLatest(Ru);
 
 			if (Ru >= this->nstart && pSelect->mem[Ru] != thisVersion) {
 				numCount++;
@@ -7269,10 +7276,12 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * mark active
 		 */
 
-		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++)
-			pSelect->mem[RHS->roots[iRoot] & ~IBIT] = thisVersion;
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
+			Ru = RHS->updateToLatest(Ru);
 
-		pSelect->mem[RHS->system & ~IBIT] = thisVersion;
+			pSelect->mem[Ru] = thisVersion;
+		}
 
 		for (uint32_t iGroup = RHS->ncount - 1; iGroup >= RHS->nstart; --iGroup) {
 			if (pSelect->mem[iGroup] == thisVersion) {
@@ -7280,8 +7289,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 				const groupNode_t *pNode         = RHS->N + iNode;
 				unsigned          numPlaceholder = db.signatures[pNode->sid].numPlaceholder;
 
-				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++)
-					pSelect->mem[pNode->slots[iSlot]] = thisVersion;
+				for (unsigned iSlot = 0; iSlot < numPlaceholder; iSlot++) {
+					uint32_t id = pNode->slots[iSlot];
+					id = updateToLatest(id);
+					pSelect->mem[id] = thisVersion;
+				}
 			}
 		}
 
@@ -7313,10 +7325,11 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		 * copy roots
 		 */
 
-		for (unsigned iRoot = 0; iRoot < this->numRoots; iRoot++)
-			this->roots[iRoot] = pMap[RHS->roots[iRoot] & ~IBIT] ^ (RHS->roots[iRoot] & IBIT);
-
-		this->system = pMap[RHS->system & ~IBIT] ^ (RHS->system & IBIT);
+		for (unsigned iRoot = 0; iRoot < RHS->numRoots; iRoot++) {
+			uint32_t R = RHS->roots[iRoot];
+			this->roots[iRoot] = updateToLatest(pMap[R & ~IBIT]) ^ (R & IBIT);
+		}
+		this->numRoots = RHS->numRoots;
 
 		RHS->freeVersion(pSelect);
 		RHS->freeMap(pMap);
@@ -7372,7 +7385,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			}
 		}
 
-		uint32_t ret = pMap[nodeId & ~IBIT] ^ (nodeId & IBIT);
+		uint32_t ret = updateToLatest(pMap[nodeId & ~IBIT]) ^ (nodeId & IBIT);
 
 		RHS->freeVersion(pSelect);
 		RHS->freeMap(pMap);
@@ -7440,15 +7453,12 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			uint32_t Ru = RHS->roots[iRoot] & ~IBIT;
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
-			this->roots[iRoot] = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
+			if (pMapSet[Ru] == pMapClr[Ru] && Ri == 0)
+				this->roots[iRoot] = pMapSet[Ru];
+			else
+				this->roots[iRoot] = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
-
-		if (RHS->system) {
-			uint32_t Ru = RHS->system & ~IBIT;
-			uint32_t Ri = RHS->system & IBIT;
-
-			this->system = this->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
-		}
+		this->numRoots = RHS->numRoots;
 
 		RHS->freeMap(pMapSet);
 		RHS->freeMap(pMapClr);
@@ -7643,48 +7653,19 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		/*
 		 * entry/root names
 		 */
-		json_t *jEntrynames = json_array();
+		json_t *jEntryNames = json_array();
 
 		// input entry names
-		for (unsigned iEntry = kstart; iEntry < ostart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "knames", jEntrynames);
+		for (unsigned iEntry = kstart; iEntry < nstart; iEntry++)
+			json_array_append_new(jEntryNames, json_string_nocheck(entryNames[iEntry - kstart].c_str()));
+		json_object_set_new_nocheck(jResult, "entrynames", jEntryNames);
 
-		jEntrynames = json_array();
+		json_t *jRootNames = json_array();
 
 		// output entry names
-		for (unsigned iEntry = ostart; iEntry < estart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "onames", jEntrynames);
-
-		jEntrynames = json_array();
-
-		// extended entry names
-		for (unsigned iEntry = estart; iEntry < nstart; iEntry++)
-			json_array_append_new(jEntrynames, json_string_nocheck(entryNames[iEntry].c_str()));
-		json_object_set_new_nocheck(jResult, "enames", jEntrynames);
-
-		// extended root names (which might be identical to enames)
-		bool rootsDiffer = (nstart != numRoots);
-		if (!rootsDiffer) {
-			for (unsigned iEntry = 0; iEntry < nstart; iEntry++) {
-				if (entryNames[iEntry].compare(rootNames[iEntry]) != 0) {
-					rootsDiffer = true;
-					break;
-				}
-			}
-		}
-
-		if (rootsDiffer) {
-			// either roots are different or an empty set.
-			jEntrynames = json_array();
-
-			for (unsigned iRoot = estart; iRoot < numRoots; iRoot++)
-				json_array_append_new(jEntrynames, json_string_nocheck(rootNames[iRoot].c_str()));
-			json_object_set_new_nocheck(jResult, "rnames", jEntrynames);
-		} else {
-			json_object_set_new_nocheck(jResult, "rnames", json_string_nocheck("enames"));
-		}
+		for (unsigned iRoot = 0; iRoot < numRoots; iRoot++)
+			json_array_append_new(jRootNames, json_string_nocheck(rootNames[iRoot].c_str()));
+		json_object_set_new_nocheck(jResult, "rootnames", jRootNames);
 
 		/*
 		 * History

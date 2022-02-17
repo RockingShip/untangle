@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-17 12:53:49 Added: `gsave` and `gsystem`. 
 2022-02-14 00:30:38 Added: `gvalidate`.
 2022-02-13 02:37:35 Changed: Fix `bfold`/`bjoin`/`bload`/`bsystem`/`bvalidate`.
 2022-02-10 20:46:09 Changed: Renamed `validate` to `bvalidate`.

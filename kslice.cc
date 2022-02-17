@@ -140,9 +140,6 @@ struct ksliceContext_t {
 		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++)
 			pRefCount[pOldTree->roots[iRoot] & ~IBIT] = opt_threshold;
 
-		// mark system
-		pRefCount[pOldTree->system & ~IBIT] = opt_threshold;
-
 		// start counting
 		for (uint32_t iNode = pOldTree->ncount - 1; iNode >= pOldTree->nstart; --iNode) {
 			if (pRefCount[iNode] > 0) {
@@ -402,10 +399,6 @@ struct ksliceContext_t {
 						fprintf(stderr, "\r\e[K%s: %s\n", pOldTree->rootNames[iRoot].c_str(), filename);
 				}
 			}
-
-			// system
-			if ((pOldTree->system & ~IBIT) == iHead)
-				pNewTree->system = pMap[iHead] ^ (pOldTree->system & IBIT);
 
 			/*
 			 * Save tree

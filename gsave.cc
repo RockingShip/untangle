@@ -1,13 +1,9 @@
-#pragma GCC optimize ("O0") // optimize on demand
+//#pragma GCC optimize ("O0") // optimize on demand
 
 /*
- * kextrac.cc
- *      Convert a tree into a balanced system.
- *
- *      release all roots and rewrite tree to
- *      system = (key0 ^ roots[key0]) OR (key1 ^ roots[key1]) ...
- *
- *      Evaluating a balanced system should always result in zero.
+ * gsave.cc
+ *      Export a groupTree_t` file as textual json file (or C code)
+ *      Store the data nodes as 'data' tag.
  */
 
 /*
@@ -37,7 +33,7 @@
 #include <unistd.h>
 
 #include "context.h"
-#include "basetree.h"
+#include "grouptree.h"
 
 /*
  * Resource context.
@@ -70,26 +66,33 @@ void sigalrmHandler(int __attribute__ ((unused)) sig) {
  * Main program logic as application context
  * It is contained as an independent `struct` so it can be easily included into projects/code
  */
-struct bsystemContext_t {
+struct gsaveContext_t {
 
+	/// @var {string} name of database
+	const char *opt_databaseName;
 	/// @var {number} header flags
-	uint32_t opt_flags;
+	uint32_t   opt_flagsSet;
+	/// @var {number} header flags
+	uint32_t   opt_flagsClr;
+	/// @var {number} --code, Output as C code
+	unsigned opt_code;
 	/// @var {number} --force, force overwriting of outputs if already exists
 	unsigned opt_force;
-	/// @var {number} --maxnode, Maximum number of nodes for `baseTree_t`.
-	unsigned opt_maxNode;
 
-	/// @var {baseTree_t*} input tree
-	baseTree_t *pInputTree;
+	/// @var {database_t} - Database store to place results
+	database_t *pStore;
 
-	bsystemContext_t() {
-		opt_flags   = 0;
-		opt_force   = 0;
-		opt_maxNode = DEFAULT_MAXNODE;
+	gsaveContext_t() {
+		opt_databaseName = "untangle.db";
+		opt_flagsSet     = 0;
+		opt_flagsClr     = 0;
+		opt_code         = 0;
+		opt_force        = 0;
+		pStore           = NULL;
 	}
 
 	/**
-	 * @date 2021-06-05 14:03:20
+	 * @date 2021-05-20 23:15:36
 	 *
 	 * Main entrypoint
 	 */
@@ -98,9 +101,9 @@ struct bsystemContext_t {
 		/*
 		 * Open input tree
 		 */
-		baseTree_t *pOldTree = new baseTree_t(ctx);
+		groupTree_t *pTree = new groupTree_t(ctx, *pStore);
 
-		if (pOldTree->loadFile(inputFilename)) {
+		if (pTree->loadFile(inputFilename)) {
 			json_t *jError = json_object();
 			json_object_set_new_nocheck(jError, "error", json_string_nocheck("failed to load"));
 			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
@@ -110,126 +113,133 @@ struct bsystemContext_t {
 		if (ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) {
 			json_t *jResult = json_object();
 			json_object_set_new_nocheck(jResult, "filename", json_string_nocheck(inputFilename));
-			pOldTree->headerInfo(jResult);
-			pOldTree->extraInfo(jResult);
+			pTree->headerInfo(jResult);
+			pTree->extraInfo(jResult);
 			fprintf(stderr, "%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
 			json_delete(jResult);
 		}
 
-		if (pOldTree->flags & context_t::MAGICMASK_SYSTEM) {
-			json_t *jError = json_object();
-			json_object_set_new_nocheck(jError, "error", json_string_nocheck("tree already a balanced system"));
-			json_object_set_new_nocheck(jError, "filename", json_string(inputFilename));
-			ctx.fatal("%s\n", json_dumps(jError, JSON_PRESERVE_ORDER | JSON_COMPACT));
+		/*
+		 * Save the tree
+		 */
+		if (!opt_code) {
+			json_t *jOutput = json_object();
+
+			// add tree meta
+			pTree->headerInfo(jOutput);
+			// add names/history
+			pTree->extraInfo(jOutput);
+
+			// add data as strings
+			json_object_set_new_nocheck(jOutput, "data", json_string_nocheck(pTree->saveString(0, NULL, true).c_str()));
+
+			FILE *f = fopen(outputFilename, "w");
+			if (!f)
+				ctx.fatal("fopen(%s) returned: %m\n", outputFilename);
+
+			fprintf(f, "%s\n", json_dumps(jOutput, JSON_PRESERVE_ORDER | JSON_COMPACT));
+
+			if (fclose(f))
+				ctx.fatal("fclose(%s) returned: %m\n", outputFilename);
+
+			return 0;
 		}
 
-		/*
-		 * Create new tree
-		 */
-		baseTree_t *pNewTree = new baseTree_t(ctx, pOldTree->kstart, pOldTree->ostart + pOldTree->numRoots, pOldTree->estart + pOldTree->numRoots, pOldTree->nstart + pOldTree->numRoots, 1, opt_maxNode, opt_flags | context_t::MAGICMASK_SYSTEM);
+		FILE *f = fopen(outputFilename, "w");
+		if (!f)
+			ctx.fatal("fopen(%s) returned: %m\n", outputFilename);
 
 		/*
-		 * Setup entry/root names
+		 * Save the tree as C code
 		 */
+		fprintf(f, "({\n");
+		fprintf(f, "unsigned\n");
 
-		// copy entry names
-		unsigned iName = 0;
-
-		pNewTree->entryNames.resize(pNewTree->nstart - pNewTree->kstart);
-
-		// append names
-		for (unsigned iEntry = pOldTree->kstart; iEntry < pOldTree->nstart; iEntry++)
-			pNewTree->entryNames[iName++] = pOldTree->entryNames[iEntry - pOldTree->kstart];
-		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++)
-			pNewTree->entryNames[iName++] = pOldTree->rootNames[iRoot];
-		assert(pNewTree->nstart - pNewTree->kstart == iName);
-
-		// root has same names as keys
-		pNewTree->rootNames.resize(1);
-		pNewTree->rootNames[0] = "system";
+		fprintf(f, "kstart=%d,\n", pTree->kstart);
+		fprintf(f, "ostart=%d,\n", pTree->ostart);
+		fprintf(f, "estart=%d,\n", pTree->estart);
+		fprintf(f, "nstart=%d,\n", pTree->nstart);
+		fprintf(f, "ncount=%d,\n", pTree->ncount);
+		fprintf(f, "numRoots=%d,\n", pTree->numRoots);
 
 		/*
-		 * Allocate map
+		 * Perform a node reference count
 		 */
+		uint32_t *pRootRef = pTree->allocMap();
 
-		uint32_t *pMap = pOldTree->allocMap();
+		for (uint32_t iNode = 0; iNode < pTree->ncount; iNode++)
+			pRootRef[iNode] = 0;
 
-		for (unsigned iEntry = 0; iEntry < pOldTree->nstart; iEntry++)
-			pMap[iEntry] = iEntry;
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++)
+			pRootRef[pTree->roots[iRoot] & ~IBIT]++;
 
-		/*
-		 * (Simple) Copy all nodes
-		 */
+		fprintf(f, "N[]=");
+		for (unsigned iEntry = 0; iEntry < pTree->kstart; iEntry++)
+			fprintf(f, "%c%d", (iEntry ? ',' : '{'), iEntry);
+		fprintf(f, ",\n");
 
-		// reset ticker
-		ctx.setupSpeed(pOldTree->ncount - pOldTree->nstart);
-		ctx.tick     = 0;
-		ctx.progress = 0;
+		for (unsigned iEntry = pTree->kstart; iEntry < pTree->nstart; iEntry++) {
+			fprintf(f, "%s,", pTree->entryNames[iEntry].c_str());
+		}
+		fprintf(f, "\n");
 
-		for (uint32_t iNode = pOldTree->nstart; iNode < pOldTree->ncount; iNode++) {
-			ctx.progress++;
-			if (ctx.tick && ctx.opt_verbose >= ctx.VERBOSE_TICK) {
-				int perSecond = ctx.updateSpeed();
+		for (uint32_t iNode = pTree->nstart; iNode < pTree->ncount; iNode++) {
+			// write labels
+			if (pRootRef[iNode]) {
+				fprintf(f, "// ");
+				// scan roots
+				for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
+					int32_t R = pTree->roots[iRoot];
 
-				int eta  = (int) ((ctx.progressHi - ctx.progress) / perSecond);
-				int etaH = eta / 3600;
-				eta %= 3600;
-				int etaM = eta / 60;
-				eta %= 60;
-				int etaS = eta;
-
-				fprintf(stderr, "\r\e[K[%s] %lu(%7d/s) %.5f%% %3d:%02d:%02d ncount=%d",
-					ctx.timeAsString(), ctx.progress, perSecond, ctx.progress * 100.0 / ctx.progressHi, etaH, etaM, etaS, pNewTree->ncount);
-
-				ctx.tick = 0;
+					if ((R & ~IBIT) == iNode) {
+						fprintf(f, "%s", pTree->rootNames[iRoot].c_str());
+						if (R & IBIT)
+							fprintf(f, "~");
+						fprintf(f, ":");
+					}
+				}
+				fprintf(f, "\n");
 			}
 
-			const baseNode_t *pNode = pOldTree->N + iNode;
+#if 0
+			const groupNode_t *pNode = pTree->N + iNode;
 			const uint32_t   Q      = pNode->Q;
 			const uint32_t   Tu     = pNode->T & ~IBIT;
 			const uint32_t   Ti     = pNode->T & IBIT;
 			const uint32_t   F      = pNode->F;
 
-			pMap[iNode] = pNewTree->addNormaliseNode(pMap[Q], pMap[Tu] ^ Ti, pMap[F]);
+			if (Ti) {
+				fprintf(f, "/*%d*/N[%d]?!N[%d]:N[%d],\n", iNode, Q, Tu, F);
+			} else {
+				fprintf(f, "/*%d*/N[%d]?N[%d]:N[%d],\n", iNode, Q, Tu, F);
+			}
+#endif
 		}
-		
-		pNewTree->roots[0] = 0;
-		
-		// merge all entrypoints into system
-		// roots get transform to entrypoints, which start at oldTree->nstart
-		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
-			uint32_t R  = pOldTree->roots[iRoot];
-			uint32_t Ru = R & ~IBIT;
-			uint32_t Ri = R & IBIT;
+		fprintf(f, "}");
+
+		// roots
+		for (unsigned iRoot = 0; iRoot < pTree->numRoots; iRoot++) {
+			uint32_t R = pTree->roots[iRoot];
 
 			if (R != iRoot) {
-				// create `rootN ^ roots[rootN]`
-				uint32_t term = pNewTree->addNormaliseNode(pOldTree->nstart + iRoot, pMap[Ru] ^ Ri ^ IBIT, pMap[Ru] ^ Ri);
+				fprintf(f, ",\n");
 
-				// append term as `OR` to system
-				pNewTree->roots[0] = pNewTree->addNormaliseNode(pNewTree->roots[0], IBIT, term);
+				if (R & IBIT) {
+					fprintf(f, "%s=N[%d]^0x80000000", pTree->rootNames[iRoot].c_str(), R & ~IBIT);
+				} else {
+					fprintf(f, "%s=N[%d]", pTree->rootNames[iRoot].c_str(), R);
+				}
 			}
 		}
 
-		// remove ticker
-		if (ctx.opt_verbose >= ctx.VERBOSE_TICK)
-			fprintf(stderr, "\r\e[K");
+		fprintf(f, "\n})\n");
 
-		/*
-		 * Save data
-		 */
-		pNewTree->saveFile(outputFilename);
+		pTree->freeMap(pRootRef);
+		delete pTree;
 
-		if (ctx.opt_verbose >= ctx.VERBOSE_SUMMARY) {
-			json_t *jResult = json_object();
-			pNewTree->headerInfo(jResult);
-			pNewTree->extraInfo(jResult);
-			printf("%s\n", json_dumps(jResult, JSON_PRESERVE_ORDER | JSON_COMPACT));
-		}
+		if (fclose(f))
+			ctx.fatal("fclose(%s) returned: %m\n", outputFilename);
 
-		pOldTree->freeMap(pMap);
-		delete pOldTree;
-		delete pNewTree;
 		return 0;
 	}
 
@@ -240,24 +250,25 @@ struct bsystemContext_t {
  * Application context.
  * Needs to be global to be accessible by signal handlers.
  *
- * @global {bsystemContext_t} Application context
+ * @global {gsaveContext_t} Application context
  */
-bsystemContext_t app;
+gsaveContext_t app;
 
 void usage(char *argv[], bool verbose) {
-	fprintf(stderr, "usage: %s <output.dat> <input.dat>\n", argv[0]);
+	fprintf(stderr, "usage: %s <output.json> <input.dat>\n", argv[0]);
 	if (verbose) {
+		fprintf(stderr, "\t-D --database=<filename>   Database to query [default=%s]\n", app.opt_databaseName);
+		fprintf(stderr, "\t-c --code\n");
 		fprintf(stderr, "\t   --force\n");
-		fprintf(stderr, "\t   --maxnode=<number> [default=%d]\n", app.opt_maxNode);
 		fprintf(stderr, "\t-q --quiet\n");
-		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
 		fprintf(stderr, "\t-v --verbose\n");
-		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", app.opt_flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", app.opt_flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
-		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", app.opt_flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
-//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", app.opt_flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --timer=<seconds> [default=%d]\n", ctx.opt_timer);
+		fprintf(stderr, "\t   --[no-]paranoid [default=%s]\n", ctx.flags & ctx.MAGICMASK_PARANOID ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]pure [default=%s]\n", ctx.flags & ctx.MAGICMASK_PURE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]rewrite [default=%s]\n", ctx.flags & ctx.MAGICMASK_REWRITE ? "enabled" : "disabled");
+		fprintf(stderr, "\t   --[no-]cascade [default=%s]\n", ctx.flags & ctx.MAGICMASK_CASCADE ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]shrink [default=%s]\n", ctx.flags &  ctx.MAGICMASK_SHRINK ? "enabled" : "disabled");
+//		fprintf(stderr, "\t   --[no-]pivot3 [default=%s]\n", ctx.flags &  ctx.MAGICMASK_PIVOT3 ? "enabled" : "disabled");
 	}
 }
 
@@ -277,17 +288,18 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
-			LO_QUIET = 'q', LO_VERBOSE = 'v'
+			LO_DATABASE = 'D', LO_CODE = 'c', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};
 
 		static struct option long_options[] = {
 			/* name, has_arg, flag, val */
+			{"database",    1, 0, LO_DATABASE},
+			{"code",        0, 0, LO_CODE},
 			{"debug",       1, 0, LO_DEBUG},
 			{"force",       0, 0, LO_FORCE},
 			{"help",        0, 0, LO_HELP},
-			{"maxnode",     1, 0, LO_MAXNODE},
 			{"quiet",       2, 0, LO_QUIET},
 			{"timer",       1, 0, LO_TIMER},
 			{"verbose",     2, 0, LO_VERBOSE},
@@ -330,6 +342,12 @@ int main(int argc, char *argv[]) {
 			break;
 
 		switch (c) {
+		case LO_DATABASE:
+			app.opt_databaseName = optarg;
+			break;
+		case LO_CODE:
+			app.opt_code++;
+			break;
 		case LO_DEBUG:
 			ctx.opt_debug = (unsigned) strtoul(optarg, NULL, 8); // OCTAL!!
 			break;
@@ -339,9 +357,6 @@ int main(int argc, char *argv[]) {
 		case LO_HELP:
 			usage(argv, true);
 			exit(0);
-		case LO_MAXNODE:
-			app.opt_maxNode = (unsigned) strtoul(optarg, NULL, 10);
-			break;
 		case LO_QUIET:
 			ctx.opt_verbose = optarg ? (unsigned) strtoul(optarg, NULL, 10) : ctx.opt_verbose - 1;
 			break;
@@ -353,28 +368,36 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case LO_PARANOID:
-			app.opt_flags |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet |= ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_NOPARANOID:
-			app.opt_flags &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PARANOID;
+			app.opt_flagsClr |= ctx.MAGICMASK_PARANOID;
 			break;
 		case LO_PURE:
-			app.opt_flags |= ctx.MAGICMASK_PURE;
+			app.opt_flagsSet |= ctx.MAGICMASK_PURE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_PURE;
 			break;
 		case LO_NOPURE:
-			app.opt_flags &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_PURE;
+			app.opt_flagsClr |= ctx.MAGICMASK_PURE;
 			break;
 		case LO_REWRITE:
-			app.opt_flags |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet |= ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_NOREWRITE:
-			app.opt_flags &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_REWRITE;
+			app.opt_flagsClr |= ctx.MAGICMASK_REWRITE;
 			break;
 		case LO_CASCADE:
-			app.opt_flags |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet |= ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr &= ~ctx.MAGICMASK_CASCADE;
 			break;
 		case LO_NOCASCADE:
-			app.opt_flags &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsSet &= ~ctx.MAGICMASK_CASCADE;
+			app.opt_flagsClr |= ctx.MAGICMASK_CASCADE;
 			break;
 //			case LO_SHRINK:
 //				app.opt_flags |=  ctx.MAGICMASK_SHRINK;
@@ -388,7 +411,6 @@ int main(int argc, char *argv[]) {
 //			case LO_NOPIVOT3:
 //				app.opt_flags &=  ~ctx.MAGICMASK_PIVOT3;
 //				break;
-
 
 		case '?':
 			ctx.fatal("Try `%s --help' for more information.\n", argv[0]);
@@ -426,6 +448,21 @@ int main(int argc, char *argv[]) {
 		signal(SIGALRM, sigalrmHandler);
 		::alarm(ctx.opt_timer);
 	}
+
+	// Open database
+	database_t db(ctx);
+
+	db.open(app.opt_databaseName);
+	app.pStore = &db;
+
+	// set flags
+	ctx.flags = db.creationFlags;
+	ctx.flags |= app.opt_flagsSet;
+	ctx.flags &= ~app.opt_flagsClr;
+
+	// display system flags when database was created
+	if ((ctx.opt_verbose >= ctx.VERBOSE_VERBOSE) || (ctx.flags && ctx.opt_verbose >= ctx.VERBOSE_SUMMARY))
+		fprintf(stderr, "[%s] FLAGS [%s]\n", ctx.timeAsString(), ctx.flagsToText(ctx.flags).c_str());
 
 	return app.main(outputFilename, inputFilename);
 }

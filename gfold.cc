@@ -208,56 +208,76 @@ struct gfoldContext_t {
 		 * Setup entry/root names
 		 */
 
-		for (unsigned iEntry = 0; iEntry < pNewTree->nstart; iEntry++) {
-			pNewTree->entryNames[iEntry] = pOldTree->entryNames[iEntry];
-			pResults->entryNames[iEntry] = pOldTree->entryNames[iEntry];
-			pTemp->entryNames[iEntry]    = pOldTree->entryNames[iEntry];
+		for (unsigned iName = 0; iName < pNewTree->nstart - pNewTree->kstart; iName++) {
+			pNewTree->entryNames[iName] = pOldTree->entryNames[iName];
+			pResults->entryNames[iName] = pOldTree->entryNames[iName];
+			pTemp->entryNames[iName]    = pOldTree->entryNames[iName];
 		}
 
 		// Determine entryName length
-		unsigned entryNameLength;
+		unsigned rootNameLength;
 		if (pNewTree->ncount < 10)
-			entryNameLength = 1;
+			rootNameLength = 1;
 		else if (pNewTree->ncount < 100)
-			entryNameLength = 2;
+			rootNameLength = 2;
 		else if (pNewTree->ncount < 1000)
-			entryNameLength = 3;
+			rootNameLength = 3;
 		else if (pNewTree->ncount < 10000)
-			entryNameLength = 4;
+			rootNameLength = 4;
 		else if (pNewTree->ncount < 100000)
-			entryNameLength = 5;
+			rootNameLength = 5;
 		else if (pNewTree->ncount < 1000000)
-			entryNameLength = 6;
+			rootNameLength = 6;
 		else
-			entryNameLength = 7;
+			rootNameLength = 7;
 
-		for (unsigned iRoot = 0; iRoot < pNewTree->nstart; iRoot++)
-			pNewTree->rootNames[iRoot] = pNewTree->entryNames[iRoot];
+		/*
+		 * @date 2022-02-14 00:46:25
+		 * 
+		 * Roots should be a shadow copy of all the nodes starting from 0
+		 * Original roots start directly after
+		 */
+		{
+			unsigned iRoot = 0;
 
-		for (unsigned iRoot = pNewTree->estart; iRoot < pNewTree->numRoots; iRoot++) {
-			char sbuf[32];
-			sprintf(sbuf, "n%0*d", entryNameLength, iRoot);
-			pNewTree->rootNames[iRoot] = sbuf;
+			pNewTree->rootNames.resize(pOldTree->ncount + pOldTree->numRoots);
+			
+			pNewTree->rootNames[iRoot++] = "0";
+
+			for (unsigned id = 1; id < pOldTree->kstart; id++)
+				pNewTree->rootNames[iRoot++] = "ERROR";
+
+			for (unsigned id = pOldTree->kstart; id < pOldTree->nstart; id++)
+				pNewTree->rootNames[iRoot++] = pNewTree->entryNames[id - pNewTree->kstart];
+
+			for (unsigned id = pOldTree->nstart; id < pOldTree->ncount; id++) {
+				char sbuf[32];
+				sprintf(sbuf, "n%0*d", rootNameLength, id);
+				pNewTree->rootNames[iRoot++] = sbuf;
+			}
+			for (unsigned id = 0; id < pOldTree->numRoots; id++)
+				pNewTree->rootNames[iRoot++] = pOldTree->rootNames[id];
+
+			pNewTree->numRoots = iRoot;
 		}
 
 		// same with tmp
 		pResults->entryNames = pNewTree->entryNames;
 		pResults->rootNames  = pNewTree->rootNames;
+		pResults->numRoots   = pNewTree->numRoots;
 		pTemp->entryNames    = pNewTree->entryNames;
 		pTemp->rootNames     = pNewTree->rootNames;
+		pTemp->numRoots      = pNewTree->numRoots;
 
-		// set roots to self-reference
-		for (unsigned iRoot = 0; iRoot < pNewTree->numRoots; iRoot++) {
-			pNewTree->roots[iRoot] = iRoot;
-			pResults->roots[iRoot] = iRoot;
-			pTemp->roots[iRoot]    = iRoot;
-		}
 
-		// set default output values to zero
-		for (unsigned iRoot = pNewTree->nstart; iRoot < pNewTree->numRoots; iRoot++) {
-			pNewTree->roots[iRoot] = 0;
-			pResults->roots[iRoot] = 0;
-			pTemp->roots[iRoot]    = 0;
+		// set node results to zero
+		pNewTree->roots[0] = 0;
+		pResults->roots[0] = 0;
+		pTemp->roots[0]    = 0;
+		for (unsigned iRoot = 1; iRoot < pNewTree->numRoots; iRoot++) {
+			pNewTree->roots[iRoot] = groupTree_t::KERROR;
+			pResults->roots[iRoot] = groupTree_t::KERROR;
+			pTemp->roots[iRoot]    = groupTree_t::KERROR;
 		}
 
 		/*
@@ -265,8 +285,8 @@ struct gfoldContext_t {
 		 */
 		uint32_t *pNodeRefCount = pOldTree->allocMap();
 
-		for (unsigned iEntry = 0; iEntry < pOldTree->ncount; iEntry++)
-			pNodeRefCount[iEntry] = 0;
+		for (unsigned iNode = 0; iNode < pOldTree->ncount; iNode++)
+			pNodeRefCount[iNode] = 0;
 
 		for (uint32_t iGroup = pOldTree->nstart; iGroup < pOldTree->ncount; iGroup++) {
 
@@ -297,7 +317,7 @@ struct gfoldContext_t {
 		 * Two implementations of the main code
 		 */
 
-		if (0) {
+		if (1) {
 			/*
 			 * Original main-loop
 			 */
@@ -350,7 +370,7 @@ struct gfoldContext_t {
 					--pNodeRefCount[id];
 
 					if (pNodeRefCount[id] == 0)
-						pNewTree->roots[id] = id;
+						pNewTree->roots[id] = groupTree_t::KERROR;
 				}
 
 //				printf("inject node iNode=%d numNodes=%d\n", iOldNode, pNewTree->ncount - pNewTree->nstart);
@@ -685,11 +705,8 @@ struct gfoldContext_t {
 		for (unsigned iRoot = 0; iRoot < pOldTree->numRoots; iRoot++) {
 			uint32_t R = pOldTree->roots[iRoot];
 
-			pNewTree->roots[iRoot] = pNewTree->importNodes(pResults, pResults->roots[R & ~IBIT]) ^ (R & IBIT);
+			pNewTree->roots[pOldTree->ncount + iRoot] = pNewTree->importNodes(pResults, pResults->roots[R & ~IBIT]) ^ (R & IBIT);
 		}
-
-		// and system
-		pNewTree->system = pNewTree->roots[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
 
 		/*
 		 * Copy result to new tree without extended roots
@@ -785,13 +802,6 @@ struct gfoldContext_t {
 			uint32_t Ri = RHS->roots[iRoot] & IBIT;
 
 			pTree->roots[iRoot] = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
-		}
-
-		if (RHS->system) {
-			uint32_t Ru = RHS->system & ~IBIT;
-			uint32_t Ri = RHS->system & IBIT;
-
-			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
 		RHS->freeMap(pMapSet);

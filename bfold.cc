@@ -216,7 +216,7 @@ struct bfoldContext_t {
 
 		{
 			unsigned iRoot = 0;
-			
+
 			pNewTree->rootNames[iRoot++] = "0";
 
 			for (unsigned id = 1; id < pOldTree->kstart; id++)
@@ -232,7 +232,7 @@ struct bfoldContext_t {
 			}
 			for (unsigned id = 0; id < pOldTree->numRoots; id++)
 				pNewTree->rootNames[iRoot++] = pOldTree->rootNames[id];
-			
+
 			assert(iRoot == pNewTree->numRoots);
 		}
 
@@ -818,14 +818,6 @@ struct bfoldContext_t {
 			pTree->roots[iRoot] = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
 		}
 
-		if (RHS->system) {
-			uint32_t Ru = RHS->system & ~IBIT;
-			uint32_t Ri = RHS->system & IBIT;
-
-			pTree->system = pTree->addNormaliseNode(iFold, pMapSet[Ru], pMapClr[Ru]) ^ Ri;
-		}
-////		pTree->numRoots = RHS->numRoots;
-
 		RHS->freeMap(pMapSet);
 		RHS->freeMap(pMapClr);
 	}
@@ -874,7 +866,7 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		enum {
-			LO_HELP  = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
+			LO_HELP = 1, LO_DEBUG, LO_TIMER, LO_FORCE, LO_MAXNODE,
 			LO_PARANOID, LO_NOPARANOID, LO_PURE, LO_NOPURE, LO_REWRITE, LO_NOREWRITE, LO_CASCADE, LO_NOCASCADE, LO_SHRINK, LO_NOSHRINK, LO_PIVOT3, LO_NOPIVOT3,
 			LO_DATABASE = 'D', LO_QUIET = 'q', LO_VERBOSE = 'v'
 		};

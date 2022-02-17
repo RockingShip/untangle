@@ -162,9 +162,9 @@ struct slookupContext_t {
 
 		if (opt_swap) {
 			if (pStore->numSwap == 0) {
-				printf(" swaps=missing");
+				printf(" swap=missing");
 			} else {
-				printf(" swaps=[");
+				printf(" swap=[");
 				const swap_t  *pSwap = pStore->swaps + pSignature->swapId;
 				for (unsigned j      = 0; j < swap_t::MAXENTRY && pSwap->tids[j]; j++) {
 					if (j)

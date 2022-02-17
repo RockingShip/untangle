@@ -387,10 +387,6 @@ struct bjoinContext_t {
 				}
 			}
 
-			//
-			if (pOldTree->system)
-				pNewTree->system = pMap[pOldTree->system & ~IBIT] ^ (pOldTree->system & IBIT);
-
 			/*
 			 * Release input
 			 */

@@ -379,7 +379,7 @@ struct selftestContext_t : dbtool_t {
 			/*
 			 * Perform test
 			 */
-			uint32_t invert = groupTree_t::normaliseQTF(Q, T, F);
+			uint32_t invert = tree.normaliseQTF(Q, T, F);
 
 			/*
 			 * Process outcome

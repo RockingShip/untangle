@@ -463,6 +463,8 @@ struct gevalContext_t {
 				exit(1);
 		}
 
+		ctx.myFree("pFootprint", pFootprint);
+
 		delete pTree;
 	}
 

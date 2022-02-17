@@ -198,7 +198,7 @@ validaterewrite_LDADD = $(LDADD) $(AM_LDADD)
 ## This section for groupTree front-ends
 ##
 
-PROGRAMS_PART6 = genpattern geval gfold gload glookup gvalidate
+PROGRAMS_PART6 = genpattern geval gfold gload glookup gsave gsystem gvalidate
 EXTRA_PART6 =
 
 # @date 2021-11-02 22:32:07
@@ -220,6 +220,14 @@ gload_LDADD = $(LDADD) $(AM_LDADD)
 # @date 2021-11-26 23:18:07
 glookup_SOURCES = glookup.cc database.h datadef.h dbtool.h context.h tinytree.h basetree.h grouptree.h
 glookup_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2022-02-16 23:15:33
+gsave_SOURCES = gsave.cc grouptree.h context.h database.h datadef.h dbtool.h 
+gsave_LDADD = $(LDADD) $(AM_LDADD)
+
+# @date 2022-02-16 22:47:04
+gsystem_SOURCES = gsystem.cc grouptree.h context.h database.h datadef.h dbtool.h 
+gsystem_LDADD = $(LDADD) $(AM_LDADD)
 
 # @date 2022-02-13 15:31:19
 gvalidate_SOURCES = gvalidate.cc grouptree.h context.h database.h datadef.h dbtool.h 

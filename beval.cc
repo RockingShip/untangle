@@ -375,6 +375,8 @@ struct bevalContext_t {
 				fprintf(stderr, "crc same\n");
 		}
 
+		ctx.myFree("pFootprint", pFootprint);
+
 		if (differ)
 			exit(1);
 

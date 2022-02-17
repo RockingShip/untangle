@@ -4682,12 +4682,10 @@ struct baseTree_t {
 			 * @date 2021-06-05 18:24:37
 			 *
 			 * trace roots, one at a time.
-			 * Last root is a artificial root representing "system"
 			 */
-			for (unsigned iRoot = 0; iRoot <= numRoots; iRoot++) {
+			for (unsigned iRoot = 0; iRoot < numRoots; iRoot++) {
 
-				uint32_t R = (iRoot < numRoots) ? roots[iRoot] : system;
-
+				uint32_t R = roots[iRoot];
 				numStack = 0;
 				pStack[numStack++] = R & ~IBIT;
 
@@ -5024,7 +5022,6 @@ struct baseTree_t {
 		json_object_set_new_nocheck(jResult, "ncount", json_integer(fileHeader->ncount));
 		json_object_set_new_nocheck(jResult, "numroots", json_integer(fileHeader->numRoots));
 		json_object_set_new_nocheck(jResult, "size", json_integer(fileHeader->ncount - fileHeader->nstart));
-		json_object_set_new_nocheck(jResult, "system", json_integer(fileHeader->system));
 		json_object_set_new_nocheck(jResult, "numhistory", json_integer(fileHeader->numHistory));
 		json_object_set_new_nocheck(jResult, "poshistory", json_integer(fileHeader->posHistory));
 
