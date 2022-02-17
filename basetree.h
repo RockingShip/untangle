@@ -112,7 +112,7 @@ struct baseTreeHeader_t {
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
 	uint32_t unused1;             //
-	uint32_t system;              // node of balanced system (0 if none)
+	uint32_t unused2;             //
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 
 	// primary fields
@@ -169,7 +169,7 @@ struct baseTree_t {
 	uint32_t                 flags;                 // creation constraints
 	uint32_t                 allocFlags;            // memory constraints
 	uint32_t                 unused1;               //
-	uint32_t                 system;                // node of balanced system
+	uint32_t                 unused2;               //
 	// primary fields
 	uint32_t                 kstart;                // first input key id.
 	uint32_t                 ostart;                // first output key id.
@@ -235,7 +235,7 @@ struct baseTree_t {
 		flags(0),
 		allocFlags(0),
 		unused1(0),
-		system(0),
+		unused2(0),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -294,7 +294,7 @@ struct baseTree_t {
 		flags(flags),
 		allocFlags(0),
 		unused1(0),
-		system(0),
+		unused2(0),
 		// primary fields
 		kstart(kstart),
 		ostart(ostart),
@@ -384,7 +384,7 @@ struct baseTree_t {
 		flags(flags),
 		allocFlags(0),
 		unused1(0),
-		system(0),
+		unused2(0),
 		// primary fields
 		kstart(0),
 		ostart(0),
@@ -4439,7 +4439,7 @@ struct baseTree_t {
 
 		flags      = fileHeader->magic_flags;
 		unused1    = fileHeader->unused1;
-		system     = fileHeader->system;
+		unused2    = fileHeader->unused2;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
 		estart     = fileHeader->estart;
@@ -4805,7 +4805,7 @@ struct baseTree_t {
 		header.magic       = BASETREE_MAGIC;
 		header.magic_flags = flags;
 		header.unused1     = unused1;
-		header.system      = pMap[system & ~IBIT] ^ (system & IBIT);
+		header.unused2     = unused2;
 		header.crc32       = crc32;
 		header.kstart      = kstart;
 		header.ostart      = ostart;

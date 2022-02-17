@@ -169,7 +169,7 @@ struct groupTreeHeader_t {
 	uint32_t magic;               // magic+version
 	uint32_t magic_flags;         // conditions it was created
 	uint32_t sidCRC;              // CRC of database containing sid descriptions
-	uint32_t system;              // node of balanced system (0 if none)
+	uint32_t unused;              //
 	uint32_t crc32;               // crc of nodes/roots, calculated during save
 	uint32_t maxDepth;            // maxDepth for `expandSignature()`. NOTE: Loaded trees are read-only 
 
@@ -318,7 +318,7 @@ struct groupTree_t {
 	// meta
 	uint32_t                 flags;                 // creation constraints
 	uint32_t                 allocFlags;            // memory constraints
-	uint32_t                 system;                // node of balanced system
+	uint32_t                 unused;                //
 	unsigned                 maxDepth;              // Max node expansion depth
 	unsigned		 speed;			// Speed setting
 	bool			 useExpandMember;	// select between `expandSignature()`/`expandMember()`.
@@ -392,7 +392,7 @@ struct groupTree_t {
 		// meta
 		flags(0),
 		allocFlags(0),
-		system(0),
+		unused(0),
 		maxDepth(DEFAULT_MAXDEPTH),
 		speed(DEFAULT_SPEED),
 		useExpandMember(DEFAULT_EXPANDMEMBER),
@@ -458,7 +458,7 @@ struct groupTree_t {
 		// meta
 		flags(flags),
 		allocFlags(0),
-		system(0),
+		unused(0),
 		maxDepth(DEFAULT_MAXDEPTH),
 		speed(DEFAULT_SPEED),
 		useExpandMember(DEFAULT_EXPANDMEMBER),
@@ -555,7 +555,7 @@ struct groupTree_t {
 		// meta
 		flags(flags),
 		allocFlags(0),
-		system(0),
+		unused(0),
 		maxDepth(DEFAULT_MAXDEPTH),
 		speed(DEFAULT_SPEED),
 		useExpandMember(DEFAULT_EXPANDMEMBER),
@@ -6813,7 +6813,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 			ctx.fatal("baseTree size mismatch. Expected %lu, Encountered %lu\n", fileHeader->offEnd, (uint64_t) stbuf.st_size);
 
 		flags      = fileHeader->magic_flags;
-		system     = fileHeader->system;
+		unused     = fileHeader->unused;
 		maxDepth   = fileHeader->maxDepth;
 		kstart     = fileHeader->kstart;
 		ostart     = fileHeader->ostart;
@@ -7144,7 +7144,7 @@ else							/* 0  0  0  -> 0      -> 0  0  0  0  */  return Q=T=F=0,0;
 		header.magic       = GROUPTREE_MAGIC;
 		header.magic_flags = flags;
 		header.sidCRC      = db.fileHeader.magic_sidCRC;
-		header.system      = pMap[system & ~IBIT] ^ (system & IBIT);
+		header.unused      = unused;
 		header.crc32       = crc32;
 		header.maxDepth    = this->maxDepth;
 		header.kstart      = kstart;
