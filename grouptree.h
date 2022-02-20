@@ -2391,7 +2391,11 @@ struct groupTree_t {
 			// did a deeper component merge groups that triggers an endpoint-collapse now?
 			if (Q == layer.gid || Tu == layer.gid || F == layer.gid) {
 				// yes
-				assert(Ri == 0); // unknown how to handle this
+				if (pInvert) {
+					*pInvert = Ri;
+				} else {
+					assert(Ri == 0); // unknown how to handle this
+				}
 
 				freeMap(pStack);
 				freeMap(pMap);
@@ -2479,8 +2483,11 @@ struct groupTree_t {
 				freeMap(pStack);
 				freeMap(pMap);
 
-				if (pInvert)
+				if (pInvert) {
 					*pInvert = Ri;
+				} else {
+					assert(Ri == 0); // unknown how to handle this
+				}
 
 				return ret;
 			}
@@ -2773,8 +2780,11 @@ struct groupTree_t {
 				freeMap(pStack);
 				freeMap(pMap);
 
-				if (pInvert)
+				if (pInvert) {
 					*pInvert = Ri;
+				} else {
+					assert(Ri == 0); // unknown how to handle this
+				}
 
 				return ret;
 			}
@@ -2847,6 +2857,14 @@ struct groupTree_t {
 					}
 				}
 			}
+			
+			/*
+			 * @date 2022-02-20 00:53:32
+			 * Some members might be skipped, in which case *pInvert might be invalid.
+			 * Give it a defined value
+			 */
+			if (pInvert)
+				*pInvert = Ri;
 		}
 
 		assert(layer.gid != IBIT); // top-level calls should not be ignored

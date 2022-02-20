@@ -12,6 +12,7 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+2022-02-20 01:26:44 Fixed: Handling invert in `groupTree_t::addNode()`.
 2022-02-17 13:43:00 Changed: `ImportFold()` and `importActive()` do an implicit `rewind()`.
 2022-02-17 12:59:19 Deleted: `baseTree_t::system and `grouptree_t::system`.
 2022-02-17 12:53:49 Added: `gsave` and `gsystem`. 
