@@ -12,6 +12,13 @@ TODO: genpattern list
 ## [Unreleased]
 
 ```
+```
+
+## 2023-04-27 14:49:20 [Version 2.14.0]
+
+End of version 2, switching to version 3, introducing prime structures.
+
+```
 2022-02-20 01:26:44 Fixed: Handling invert in `groupTree_t::addNode()`.
 2022-02-17 13:43:00 Changed: `ImportFold()` and `importActive()` do an implicit `rewind()`.
 2022-02-17 12:59:19 Deleted: `baseTree_t::system and `grouptree_t::system`.
@@ -52,7 +59,6 @@ Some known issues:
  - Sometimes it throws an assert at unexpected moments, even after hours worth of crunch
  - An alternative non-destructive layer merging mechanism is on the agenda
  - A better speed/weight balancing system: save the top-N best weights of each signature size to limit the C-products
-  
 
 ```
 2022-01-27 19:30:26 Fixed: Faster... Better... Working...
@@ -769,7 +775,9 @@ Features:
   - Database creation `gentransform` `gensignature` `genmember`
   - Build tool `genrestartdata`
 
-[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.12.0...HEAD
+[Unreleased]: https://git.rockingship.org/RockingShip/untangle/compare/v2.14.0...HEAD
+[Version 2.14.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.13.0...v2.14.0
+[Version 2.13.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.12.0...v2.13.0
 [Version 2.12.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.11.0...v2.12.0
 [Version 2.11.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.10.0...v2.11.0
 [Version 2.10.0]: https://git.rockingship.org/RockingShip/untangle/compare/v2.9.0...v2.10.0
